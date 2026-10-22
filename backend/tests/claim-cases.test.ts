@@ -25,8 +25,7 @@ import {canonicalize} from '../src/canonical.js';
 import {processRecoveryOutbox,type RecoveryPublisher} from '../src/domain/recovery-journal.js';
 import {processPolicyRecoveryOutbox} from '../src/domain/policy-recovery.js';
 import {restoreFreshRecoveryDatabase} from '../src/domain/recovery-restore.js';
-import {createPgliteDatabase} from '../src/db/pglite.js';
-import {migrate} from '../src/db/migrate.js';
+import {openFreshRestoreTestDatabase} from './fresh-restore-test-database.js';
 import {requireRecentClaimAuthentication} from '../src/http/claim-cases-router.js';
 import type {AppDependencies} from '../src/app.js';
 import type {Request} from 'express';
@@ -201,29 +200,34 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
  });
  it('reconstructs exact claim identities and revision history in a fresh fenced database',async()=>{
   await preserve();
-  const target=await createPgliteDatabase();
+  const target=await openFreshRestoreTestDatabase();
   try{
-   await migrate(target.db);await target.db.query('CREATE ROLE packproof_restore_claims NOLOGIN NOSUPERUSER NOBYPASSRLS');
-   await target.db.query('GRANT USAGE ON SCHEMA public TO packproof_restore_claims');
-   await target.db.query('GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO packproof_restore_claims');
-   await target.db.query('GRANT USAGE,SELECT,UPDATE ON ALL SEQUENCES IN SCHEMA public TO packproof_restore_claims');
-   await target.db.query('SET ROLE packproof_restore_claims');
-   const database=(await target.db.query<{name:string}>('SELECT current_database() AS name')).rows[0].name;
+   const database=target.database;
+   const identity=(await target.db.query("SELECT current_user AS role,current_database() AS database,current_schema() AS schema,r.rolsuper,r.rolbypassrls,has_schema_privilege(current_user,'public','CREATE') AS can_create FROM pg_roles r WHERE r.rolname=current_user")).rows[0];
+   expect(identity).toEqual({role:target.restoreRole,database,schema:'public',rolsuper:false,rolbypassrls:false,can_create:false});
+   if(process.env.PACKPROOF_TEST_DATABASE_URL)expect(target.engine).toBe('postgresql');
    const core=[...objects].filter(([key])=>key.startsWith('recovery/v1/')).map(([,body])=>body),policy=[...objects].filter(([key])=>key.startsWith('recovery/policy/v1/')).map(([,body])=>body);
    await h.db.query('UPDATE recovery_writer_fence SET writes_enabled=false WHERE singleton=1');
-   const restoreInput:Parameters<typeof restoreFreshRecoveryDatabase>[1]={expectedDatabase:database,restoreRole:'packproof_restore_claims',isolatedTargetReference:'synthetic-claim-target',oldWriterFenceReference:'synthetic-source-closed',targetWriterGeneration:'claim-replay-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,recipients:protection.reader,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key,ref?.versionId?{versionId:ref.versionId}:undefined):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}};
+   const restoreInput:Parameters<typeof restoreFreshRecoveryDatabase>[1]={expectedDatabase:database,restoreRole:target.restoreRole,isolatedTargetReference:'synthetic-claim-target',oldWriterFenceReference:'synthetic-source-closed',targetWriterGeneration:'claim-replay-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,recipients:protection.reader,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key,ref?.versionId?{versionId:ref.versionId}:undefined):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}};
    const output=[...protectedFiles.objects].find(([key])=>key.endsWith('/artifact.json'))?.[1];
+   if(process.env.PACKPROOF_TEST_DATABASE_URL)expect(output,'PostgreSQL restore must include rendered and approved recipient files').toBeDefined();
    if(output){const original=output.bytes;output.bytes=Buffer.from('altered artifact');
     await expect(restoreFreshRecoveryDatabase(target.db,restoreInput)).rejects.toMatchObject({code:'EXPORT_PROTECTION_MISMATCH'});
     expect((await target.db.query('SELECT id FROM proofs')).rows).toHaveLength(0);output.bytes=original;
    }
-   await restoreFreshRecoveryDatabase(target.db,restoreInput);
+   const protectedWrites=protectedFiles.calls.filter(c=>c.operation==='put').length;
+   const restored=await restoreFreshRecoveryDatabase(target.db,restoreInput);
+   expect(restored.trafficMayOpen).toBe(false);expect(restored.writersEnabled).toBe(false);
+   expect(protectedFiles.calls.filter(c=>c.operation==='put')).toHaveLength(protectedWrites);
    for(const table of ['claim_cases','claim_case_revisions'])expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows);
    if((await h.db.query('SELECT id FROM recipient_export_jobs')).rows.length)for(const table of ['recipient_export_jobs','recipient_export_preservations','recipient_export_approvals','signature_cases','signature_snapshots']){
     const order=table.includes('preservations')||table.includes('approvals')?'job_id':'id';
     expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY ${order}`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY ${order}`)).rows);
    }
    expect((await target.db.query<{writes_enabled:boolean}>('SELECT writes_enabled FROM recovery_writer_fence')).rows[0].writes_enabled).toBe(false);
+   const restoredClaim=(await target.db.query<{id:string}>('SELECT id FROM claim_cases WHERE proof_id=$1 LIMIT 1',[proofA])).rows[0];
+   await expect(getClaimCase(target.db,opA,proofA,restoredClaim.id)).rejects.toThrow();
+   console.info(JSON.stringify({event:'recipient_fresh_restore_test',engine:target.engine,database:target.database,restoreRole:target.restoreRole,counts:restored.counts,protectedWritesDuringRestore:0,writersEnabled:restored.writersEnabled,trafficMayOpen:restored.trafficMayOpen,revokedOperatorDenied:true,storage:'synthetic-versioned-fixture'}));
   }finally{await target.close();}
  },60000);
 });
