@@ -260,6 +260,7 @@ export interface AppDependencies {
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
   manifestSigning?: ManifestSigningRuntime;
+  recipientPreservation?: import("./export/recipient-preservation.js").RecipientPreservationRuntime;
   requireDurableReceipts?: boolean;
   readinessProbes?: DependencyProbe[];
   billing?: StripeBillingAdapter | null;

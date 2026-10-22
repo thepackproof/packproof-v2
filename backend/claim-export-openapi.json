@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PackProof merchant claim review exports",
-    "version": "2026-10-22.1",
-    "description": "Additive, disabled-by-default first-party human workflow. Both PACKPROOF_ORGANIZATIONS_ENABLED and PACKPROOF_CLAIM_EXPORTS_ENABLED must be true. Current direct merchant membership and contributor access to the finalized Proof are required. Recent authentication (five minutes) is required at these HTTP surfaces. Case data is merchant-reported and unverified by PackProof. The provider account is a registered namespace, not an OAuth connection. No provider submission is supported."
+    "version": "2026-10-22.2",
+    "description": "Additive, disabled-by-default first-party human workflow. Both PACKPROOF_ORGANIZATIONS_ENABLED and PACKPROOF_CLAIM_EXPORTS_ENABLED must be true. Current direct merchant membership and contributor access to the finalized Proof are required. Recent authentication (five minutes) is required at these HTTP surfaces. Case data is merchant-reported and unverified by PackProof. The provider account is a registered namespace, not an OAuth connection. No provider submission is supported. Claim-bound export activation also requires separate protected recipient storage, durable recovery publication and reviewed deployment evidence."
   },
   "servers": [
     {
@@ -1058,6 +1058,7 @@
             "enum": [
               "QUEUED",
               "RENDERING",
+              "PRESERVING",
               "READY",
               "FAILED"
             ]
@@ -1069,6 +1070,7 @@
                 "enum": [
                   "PREPARING",
                   "REVIEW_REQUIRED",
+                  "APPROVAL_PRESERVING",
                   "APPROVED",
                   "FAILED"
                 ]
@@ -1090,6 +1092,69 @@
               "null"
             ],
             "description": "Frozen exact case revision, versioned reason/network profile, scope, source hashes/actors/offsets, gaps and output hashes. Historical approval remains inspectable after the case changes."
+          },
+          "preservation": {
+            "type": "object",
+            "description": "Independent request, result and approval recovery statuses. READY requires result PRESERVED; APPROVED and downloads require approval PRESERVED.",
+            "properties": {
+              "request": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "COMMITTED_PENDING_DURABILITY",
+                      "PRESERVED",
+                      "FAILED",
+                      "LEGACY_UNCONFIRMED"
+                    ]
+                  }
+                }
+              },
+              "result": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "COMMITTED_PENDING_DURABILITY",
+                      "PRESERVED",
+                      "FAILED",
+                      "LEGACY_UNCONFIRMED"
+                    ]
+                  }
+                }
+              },
+              "approval": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "COMMITTED_PENDING_DURABILITY",
+                      "PRESERVED",
+                      "FAILED",
+                      "LEGACY_UNCONFIRMED"
+                    ]
+                  }
+                }
+              }
+            }
           }
         }
       }

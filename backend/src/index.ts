@@ -10,6 +10,7 @@ import { StripeBillingAdapter, stripeBillingConfigFromEnv } from "./billing/stri
 import {processStripeBillingReconciliation} from "./billing/daily-reconciliation.js";
 import {DomainError} from "./domain/errors.js";
 import {observationConfigFromEnv} from "./analytics/observation-router.js";
+import { initializeRecipientPreservation,validateRecipientDeployment } from "./export/recipient-runtime.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
@@ -79,6 +80,7 @@ if(billing){
 const objectStore = createObjectStore(config);
 const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
+const recipientPreservation=initializeRecipientPreservation(config,systemClock);
 const durabilityPolicy=(await opened.db.query<{durability_required:boolean}>('SELECT durability_required FROM policy_recovery_fence WHERE singleton=1')).rows[0];
 if(!durabilityPolicy||durabilityPolicy.durability_required!==(config.requireDurableReceipts===true))
   throw new Error('Runtime durability mode does not match the migration-controlled policy');
@@ -105,6 +107,7 @@ if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(create
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 const readinessProbes=[
+  {name:'recipient-preservation',required:Boolean(recipientPreservation),check:async()=>{if(recipientPreservation)validateRecipientDeployment(config,systemClock);}},
   {name:'policy-recovery',check:()=>assertPolicyAccessSafe(opened.db)},
   {name:'database',check:()=>opened.db.query('SELECT 1')},
   {name:'schema',check:()=>assertSchemaCurrent(opened.db,undefined,true)},
@@ -141,6 +144,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   releaseIdentity: config.release,
   credentialNamespace: config.credentialNamespace,
   requireDurableReceipts: config.requireDurableReceipts,
+  recipientPreservation,
   readinessProbes,
   ebay: ebayRuntime,
   etsy: etsyRuntime,
@@ -182,7 +186,7 @@ if(process.env.PACKPROOF_COMMERCE_WORKER!=="false")jobs.push({name:'commerce',in
 if(process.env.PACKPROOF_CAPTURE_SHIPMENT_WORKER!=="false")jobs.push({name:'capture-shipments',intervalMs:15000,run:()=>dispatchCaptureShipments(opened.db,systemClock,{integrations,credentials:credentialStore,defaultShippoCredentialReference:process.env.PACKPROOF_CAPTURE_SHIPPO_CREDENTIAL_REFERENCE,defaultEasyPostCredentialReference:process.env.PACKPROOF_CAPTURE_EASYPOST_CREDENTIAL_REFERENCE,manifestSigning})});
 jobs.push({name:'ebay-deletion',intervalMs:30000,run:()=>dispatchEbayDeletionCases(opened.db,systemClock,credentialStore)});
 jobs.push({name:'proof-update-notifications',intervalMs:15000,run:()=>dispatchProofPush(opened.db,systemClock)});
-const stopWorkers=config.processRole==='api'?async()=>{}:startOperationsWorkers(opened.db,systemClock,objectStore,config,recoveryPublisher,process.env,jobs);
+const stopWorkers=config.processRole==='api'?async()=>{}:startOperationsWorkers(opened.db,systemClock,objectStore,config,recoveryPublisher,process.env,jobs,recipientPreservation);
 
 let shuttingDown=false;
 const shutdown = async () => {
