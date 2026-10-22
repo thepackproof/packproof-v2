@@ -31,6 +31,8 @@ COPY backend/scripts/measurement-migrate.mjs ./scripts/measurement-migrate.mjs
 COPY backend/scripts/rnd-migrate.mjs ./scripts/rnd-migrate.mjs
 COPY backend/scripts/foundation-migrate.mjs ./scripts/foundation-migrate.mjs
 COPY backend/scripts/foundation-migrate-cli.mjs ./scripts/foundation-migrate-cli.mjs
+COPY backend/scripts/m2-migrate.mjs ./scripts/m2-migrate.mjs
+COPY backend/scripts/m2-migrate-cli.mjs ./scripts/m2-migrate-cli.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
 COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
