@@ -7,8 +7,9 @@ import type { PackProofApi } from '../api/client';
 import { readProofListState, canonicalWorkspacePath, rememberProofListState } from '../proof-list-state';
 import { trackingConnectionLabel } from '../../../mobile/src/copy/tracking-connection';
 afterEach(() => { cleanup(); sessionStorage.clear(); });
-it('starts with actionable work and preserves an explicit or remembered All filter', () => {
-  expect(readProofListState(new URL('https://example.com/proofs')).view).toBe('attention');
+it('starts with all records and preserves explicit attention and remembered filters', () => {
+  expect(readProofListState(new URL('https://example.com/proofs')).view).toBe('all');
+  expect(readProofListState(new URL('https://example.com/proofs?filter=attention')).view).toBe('attention');
   expect(readProofListState(new URL('https://example.com/proofs?filter=all')).view).toBe('all');
   rememberProofListState('seller', { view: 'all', query: '' });
   expect(canonicalWorkspacePath('/proofs', 'seller')).toBe('/proofs?filter=all');

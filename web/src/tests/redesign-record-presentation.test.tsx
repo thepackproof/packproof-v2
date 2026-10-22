@@ -51,6 +51,7 @@ it("shows the participant declaration beside the matching original, with importe
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: () => undefined });
   render(<WorkspaceProofRecord proof={proof} currentUserId="user_seller" loadEvidence={async () => new Blob(["evidence"], { type: "video/mp4" })} />);
   expect(await screen.findByText("The item shown and attached in this Proof is the item I am shipping.")).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
   await userEvent.click(screen.getByText("Order details"));
   expect(screen.getByText("From Etsy. Imported order details are read-only.")).toBeVisible();
 });

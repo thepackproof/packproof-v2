@@ -11,13 +11,15 @@ test('local review build refuses ambiguous source and output identity', () => {
 });
 
 test('local review loads inherited HTTPS authentication without changing production profile', () => {
+  const productionBefore = structuredClone(config.build.production);
   const profile = resolveReviewProfile(config.build);
   assert.equal(profile.distribution, 'internal');
   assert.equal(profile.android.buildType, 'apk');
   assert.equal(profile.env.EXPO_PUBLIC_PACKPROOF_AUTH_MODE, 'cognito');
   assert.equal(profile.env.PACKPROOF_ANDROID_VERSION_CODE, '66');
   assert.equal(profile.env.EXPO_PUBLIC_PACKPROOF_ANDROID_TASK_FIRST, 'true');
-  assert.equal(config.build.production.env.PACKPROOF_ANDROID_VERSION_CODE, '70');
+  assert.deepEqual(config.build.production, productionBefore);
+  assert.ok(Number(config.build.production.env.PACKPROOF_ANDROID_VERSION_CODE) > Number(profile.env.PACKPROOF_ANDROID_VERSION_CODE));
 });
 
 test('local review rejects store output, stale versions and inherited profile loops', () => {

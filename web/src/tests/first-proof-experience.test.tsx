@@ -15,21 +15,21 @@ beforeEach(() => { localStorage.clear(); sessionStorage.clear(); history.replace
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 const home = () => ({firstExperience:true, experience:{status:'FIRST_PROOF'}, reconciled:true, proofs:[], recordings:[], queue:[], loading:false, recordingsLoaded:true, error:null, refreshedAt:'2026-10-11T12:00:00Z',busy:false,notice:null,interactions:{},onGo:vi.fn(),onRetry:vi.fn(),onAction:vi.fn(),onOpen:vi.fn()});
 
-it('shows one first task and voluntary sample only after all account sources settle', () => {
+it('shows the SIGNAL packing entry without labeling an unknown account new', () => {
   const props = home();
   const view = render(<MobileHomeScreen {...props} reconciled={false} experience={{status:'UNKNOWN'}} />);
   expect(screen.queryByRole('heading', {name:'Create your first Proof'})).not.toBeInTheDocument();
   view.rerender(<MobileHomeScreen {...props} />);
-  expect(screen.getByRole('heading', {name:'Create your first Proof'})).toBeInTheDocument();
+  expect(screen.getByRole('heading', {name:'Pack it. Keep the proof.'})).toBeInTheDocument();
   expect(screen.queryByRole('region', {name:'Workspace summary'})).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', {name:'See a sample Proof'}));
-  expect(props.onGo).toHaveBeenCalledWith('/sample-proof');
+  fireEvent.click(screen.getByRole('button', {name:'Pack an item'}));
+  expect(props.onGo).toHaveBeenCalledWith('/new');
 });
 
 it('does not call an old activated account new after a cleared local cache', () => {
   render(<MobileHomeScreen {...home()} experience={{status:'ACTIVE'}} />);
   expect(screen.queryByRole('heading', {name:'Create your first Proof'})).not.toBeInTheDocument();
-  expect(screen.getByRole('button', {name:'Create Proof'})).toBeInTheDocument();
+  expect(screen.getByRole('button', {name:'Pack an item'})).toBeInTheDocument();
 });
 
 it('keeps the established desktop composition except for confirmed empty accounts', () => {
@@ -49,13 +49,13 @@ function creationProps(draftKey:string) {
 it('restores manual fields after leaving or reopening only for the original account', () => {
   const key = draftStorageKey('/api','alice');
   const first = render(<CreateProofScreen {...creationProps(key)} />);
-  fireEvent.change(screen.getByRole('textbox',{name:'What are you shipping?'}),{target:{value:'My ceramic mug'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Item name'}),{target:{value:'My ceramic mug'}});
   first.unmount();
   const second = render(<CreateProofScreen {...creationProps(key)} />);
-  expect(screen.getByRole('textbox',{name:'What are you shipping?'})).toHaveValue('My ceramic mug');
+  expect(screen.getByRole('textbox',{name:'Item name'})).toHaveValue('My ceramic mug');
   second.unmount();
   render(<CreateProofScreen {...creationProps(draftStorageKey('/api','bob'))} />);
-  expect(screen.getByRole('textbox',{name:'What are you shipping?'})).toHaveValue('');
+  expect(screen.getByRole('textbox',{name:'Item name'})).toHaveValue('');
 });
 
 it('retains a stable create identity across response loss without using description as identity', () => {
@@ -105,6 +105,6 @@ it('lets an authenticated account with no optional profile open its original man
   history.replaceState({},'', '/new');
   vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({proofs:[],invitations:[],items:[],marketplaces:[],connections:[],sources:[]} ),{headers:{'content-type':'application/json'}})));
   render(<App />);
-  expect(await screen.findByRole('textbox',{name:'What are you shipping?'})).toBeInTheDocument();
+  expect(await screen.findByRole('textbox',{name:'Item name'})).toBeInTheDocument();
   expect(screen.queryByText('Complete your profile')).not.toBeInTheDocument();
 });

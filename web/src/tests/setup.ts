@@ -1,5 +1,15 @@
 import "@testing-library/jest-dom/vitest";
 
+// jsdom does not implement the native dialog methods used by the profile menu.
+Object.defineProperties(HTMLDialogElement.prototype, {
+  showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true; } },
+  close: { configurable: true, value(this: HTMLDialogElement) {
+    if (!this.open) return;
+    this.open = false;
+    this.dispatchEvent(new Event("close"));
+  } },
+});
+
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
   get length() {

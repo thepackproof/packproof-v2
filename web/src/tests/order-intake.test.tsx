@@ -56,7 +56,7 @@ it("requires review and preserves corrected intake provenance only for that orde
   expect(await screen.findByText("Confirm the currency.")).toBeInTheDocument();
   expect(create).not.toHaveBeenCalled();
   await user.selectOptions(screen.getByRole("combobox", { name: "Currency" }), "CAD");
-  await user.click(screen.getByRole("button", { name: "Open camera" }));
+  await user.click(screen.getByRole("button", { name: /Continue to camera/ }));
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -68,7 +68,7 @@ it("requires review and preserves corrected intake provenance only for that orde
     ),
   );
   await user.click(screen.getByRole("button", {name:"Clear pasted details"}));
-  await user.type(screen.getByLabelText("What are you shipping?"), "Different order");
-  await user.click(screen.getByRole("button", { name: "Open camera" }));
+  await user.type(screen.getByLabelText("Item name"), "Different order");
+  await user.click(screen.getByRole("button", { name: /Continue to camera/ }));
   expect(create.mock.calls.at(-1)![0].metadata).toBeUndefined();
 });

@@ -14,7 +14,8 @@ import { canonicalProof } from './fixtures';
 import { recoverStationCapture } from '../capture-queue';
 import { REMAINING_SHIPMENT_EXPLANATION } from '@packproof/copy/fulfillment-scope';
 
-vi.mock('../capture-queue',()=>({recoverStationCapture:vi.fn(async()=>null),saveStationCapture:vi.fn(async()=>{}),updateStationCaptureScans:vi.fn(async()=>{}),resumeStationRecording:vi.fn(async()=>({completion:'FINALIZED'})),stationCaptureKey:(user:string)=>`${user}:station`}));
+vi.mock('../capture-queue',async original=>({...await original<typeof import('../capture-queue')>(),recoverStationCapture:vi.fn(async()=>null),saveStationCapture:vi.fn(async()=>{}),updateStationCaptureScans:vi.fn(async()=>{}),resumeStationRecording:vi.fn(async()=>({completion:'FINALIZED'})),stationCaptureKey:(user:string)=>`${user}:station`}));
+vi.mock('../signal/Signal', async original => ({ ...await original<typeof import('../signal/Signal')>(), SIGNAL_ENABLED: false }));
 vi.mock('../components/RelayStationPanel',()=>({RelayStationPanel:()=>null}));
 const owner='user_seller';
 const caps={enabled:true,handoffEnabled:true,emailEnabled:false,browserEnabled:false,shippoEnabled:false,mailDomainConfigured:false};
@@ -81,7 +82,7 @@ it('retains the remaining-shipment limit from the ready checklist through record
   expect(screen.getByText(REMAINING_SHIPMENT_EXPLANATION)).toBeVisible();
   await userEvent.click(screen.getByRole('button',{name:'Record packing'}));
   await userEvent.click(await screen.findByRole('button',{name:'Finish recording'}));
-  expect(await screen.findByRole('heading',{name:'Review recording'})).toBeVisible();
+  expect(await screen.findByRole('heading',{name:'Review your take.'})).toBeVisible();
   expect(screen.getByText('Remaining shipment')).toBeVisible();
   expect(screen.getByText(REMAINING_SHIPMENT_EXPLANATION)).toBeVisible();
 });

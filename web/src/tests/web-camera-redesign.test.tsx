@@ -6,7 +6,8 @@ import type { PackProofApi } from "../api/client";
 import { PackingStationScreen } from "../screens/PackingStationScreen";
 import { canonicalProof } from "./fixtures";
 import { recoverStationCapture, saveStationCapture, updateStationCaptureScans, resumeStationRecording } from "../capture-queue";
-vi.mock("../capture-queue",()=>({recoverStationCapture:vi.fn(async()=>null),saveStationCapture:vi.fn(async()=>{}),updateStationCaptureScans:vi.fn(async()=>{}),resumeStationRecording:vi.fn(async()=>({completion:"FINALIZED"})),stationCaptureKey:(user:string)=>`${user}:station`}));
+vi.mock("../capture-queue",async original=>({...await original<typeof import("../capture-queue")>(),recoverStationCapture:vi.fn(async()=>null),saveStationCapture:vi.fn(async()=>{}),updateStationCaptureScans:vi.fn(async()=>{}),resumeStationRecording:vi.fn(async()=>({completion:"FINALIZED"})),stationCaptureKey:(user:string)=>`${user}:station`}));
+vi.mock("../signal/Signal", async original => ({ ...await original<typeof import("../signal/Signal")>(), SIGNAL_ENABLED: false }));
 vi.mock("../components/RelayStationPanel",()=>({RelayStationPanel:()=>null}));
 let recorder: Recorder;
 class Recorder {
@@ -21,7 +22,7 @@ class Recorder {
   stop=vi.fn(()=>{this.state="inactive";this.ondataavailable?.({data:new Blob(["original packing bytes"],{type:this.mimeType})});queueMicrotask(()=>this.onstop?.());});
 }
 function api(){
-  return {recoveryScope:"https://one.test",getProof:vi.fn(async()=>({...canonicalProof,status:"READY_FOR_EVIDENCE",evidence:[],attestations:[],participationPolicy:"COUNTERPARTY_OPTIONAL"})),
+  return {recoveryScope:"https://one.test",getRecoveryStatus:vi.fn(async()=>({proofId:canonicalProof.proofId,evidence:[],declarations:[],finalization:{status:"NOT_FINALIZED",receipt:null}})),getProof:vi.fn(async()=>({...canonicalProof,status:"READY_FOR_EVIDENCE",evidence:[],attestations:[],participationPolicy:"COUNTERPARTY_OPTIONAL"})),
     getCapabilities:vi.fn(async()=>({schemaVersion:1,capture:{protocolVersions:[1],maxBytes:1000000,maxDurationSeconds:120,maxActiveUploads:2},preservation:{receiptVersions:[1],durableReceiptsRequired:true},shippingReview:{requiredForObservedConflicts:true,noLabelAllowed:true},correctionPolicy:{importedFactsReadOnly:true,captureBindingLocksManualDetails:true},sellerAttestation:{contextBindingVersion:1}})),
     featureRequest:vi.fn(async()=>({cancelled:true})),createCaptureSession:vi.fn(async()=>({id:"capture-one",state:"ISSUED",maxRecordingBytes:1000000,maxRecordingSeconds:120})),getCaptureShippingReview:vi.fn(async()=>({currentTrackingNumber:null,reviewRequired:false,observations:[]})),bindCaptureShipping:vi.fn(async()=>({status:"BOUND",trackingNumber:"9400111899223344556677"}))};
 }
@@ -46,9 +47,9 @@ it("opens a preview without recording and stops once into an unsubmitted review"
  await userEvent.dblClick(screen.getByRole("button",{name:"Finish recording"}));
  expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();expect(recorder.stop).toHaveBeenCalledTimes(1);
  expect(vi.mocked(saveStationCapture).mock.calls.at(-1)![0].finishConfirmed).toBe(false);
- expect(resumeStationRecording).not.toHaveBeenCalled();expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeDisabled();
- await userEvent.click(screen.getByRole("checkbox"));await waitFor(()=>expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeEnabled());
- await userEvent.click(screen.getByRole("button",{name:"Confirm and submit"}));expect(await screen.findByRole("heading",{name:"Proof saved"})).toBeInTheDocument();
+ expect(resumeStationRecording).not.toHaveBeenCalled();expect(screen.getByRole("button",{name:"Save to PackProof"})).toBeDisabled();
+ await userEvent.click(screen.getByRole("checkbox"));await waitFor(()=>expect(screen.getByRole("button",{name:"Save to PackProof"})).toBeEnabled());
+ await userEvent.click(screen.getByRole("button",{name:"Save to PackProof"}));expect(await screen.findByRole("heading",{name:"Recording received"})).toBeInTheDocument();
  expect(resumeStationRecording).toHaveBeenCalledTimes(1);
 });
 it("resolves a shipment reference through the server before opening its camera",async()=>{
@@ -74,16 +75,16 @@ it("preserves and reviews final bytes while a barcode request remains in flight"
  await userEvent.click(screen.getByRole("button",{name:"Finish recording"}));
  expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();
  const local=vi.mocked(saveStationCapture).mock.calls.at(-1)![0];expect(await local.file.text()).toBe("original packing bytes");expect(local.shippingScans?.[0].status).toBe("QUEUED");
- await userEvent.click(screen.getByRole("checkbox"));expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeDisabled();
+ await userEvent.click(screen.getByRole("checkbox"));expect(screen.getByRole("button",{name:"Save to PackProof"})).toBeDisabled();
  resolve({status:"BOUND",trackingNumber:"9400111899223344556677"});
- await waitFor(()=>expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeEnabled());
+ await waitFor(()=>expect(screen.getByRole("button",{name:"Save to PackProof"})).toBeEnabled());
  expect(updateStationCaptureScans).toHaveBeenLastCalledWith("user_seller","capture-one",[expect.objectContaining({status:"BOUND"})]);
 });
 it("blocks unresolved label conflicts while retaining the original",async()=>{
  const client=api();client.getCaptureShippingReview.mockResolvedValue({currentTrackingNumber:null,reviewRequired:true,observations:[]});
  const {start}=await open(client);fireEvent.click(start);await userEvent.click(await screen.findByRole("button",{name:"Finish recording"}));
  await screen.findByLabelText("Recorded packing video");await userEvent.click(screen.getByRole("checkbox"));
- expect(screen.getByRole("button",{name:"Confirm and submit"})).toBeDisabled();expect(resumeStationRecording).not.toHaveBeenCalled();
+ expect(screen.getByRole("button",{name:"Save to PackProof"})).toBeDisabled();expect(resumeStationRecording).not.toHaveBeenCalled();
 });
 it("preserves the specific preflight failure before requesting camera permission",async()=>{
  const client=api();client.getCapabilities.mockRejectedValue(new Error("Update PackProof before recording."));

@@ -1,5 +1,7 @@
 # Candidate acceptance record - 20-21 October 2026
 
+For the owner-authorized full-release continuation, client CI repairs, current validation and production rollout prerequisites, see [22 October continuation](RELEASE-CONTINUATION-2026-10-22.md). Earlier results below retain their original source and scope.
+
 Base commit: `cb82e6e57d50c51e4c55c3e1525a3adc61ce15d5`. Candidate identity is the commit containing this report and the linked PR. Local execution: Windows, Node 22.23.2, Vitest 4.1.11, PGlite; shared Express routes invoked in process because localhost socket connections are denied. Media uses the existing test object-store adapter. Tests use synthetic identities and a repository media fixture, not customer recordings.
 
 | Gate | Actual candidate evidence | Status / limit |

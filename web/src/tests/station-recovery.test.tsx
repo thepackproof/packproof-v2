@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { Blob as NodeBlob } from "node:buffer";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { PackProofApi } from "../api/client";
 import { clearStationCapture, recoverStationCapture, saveStationCapture, stationCaptureKey } from "../capture-queue";
@@ -40,11 +40,8 @@ it("restores station bytes and finishes the exact committed recording after a re
     static revokeObjectURL = vi.fn();
   });
   render(<PackingStationScreen api={api as unknown as PackProofApi} userId="user_seller" queue={[]} error={null} onAuthExpired={() => {}} />);
-  const retry = await screen.findByRole("button", { name: "Confirm and submit" });
-  fireEvent.click(await screen.findByRole("checkbox"));
-  await waitFor(() => expect(retry).toBeEnabled());
-  fireEvent.click(retry);
-  expect(await screen.findByRole("heading", {name:"Proof saved"})).toBeInTheDocument();
+  expect(await screen.findByRole("heading", {name:"Recording received"})).toBeInTheDocument();
+  expect(screen.queryByRole("heading", {name:"Proof saved."})).not.toBeInTheDocument();
   expect(api.initializeEvidenceUpload).not.toHaveBeenCalled();
   expect(api.uploadObject).not.toHaveBeenCalled();
   expect(api.commitEvidence).not.toHaveBeenCalled();

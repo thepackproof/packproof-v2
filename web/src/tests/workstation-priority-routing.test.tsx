@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock("../signal/Signal", async original => ({ ...await original<typeof import("../signal/Signal")>(), SIGNAL_ENABLED: false }));
 import { App } from '../App';
 import { saveSession } from '../auth/session';
 import { summary, canonicalProof } from './fixtures';

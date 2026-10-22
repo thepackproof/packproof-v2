@@ -64,30 +64,31 @@ it("keeps an authorized receipt stage actionable while leaving its finalized roo
   expect(mobileHomeState({ ...homeInput(), proofs: [completed] }).recommendation.kind).toBe("continue_proof");
   expect(mobileProofDestination({ ...canonicalProof, ...completed, transaction: canonicalProof.transaction }, "user_seller")).toBe(`/receipt/${draft.proofId}`);
 });
-it("starts an empty account manually without a connection prerequisite and retains Create Proof beside recommendations", () => {
+it("starts an empty account manually without a connection prerequisite and keeps creation beside recommendations", () => {
   const props = homeProps();
   const view = render(<MobileHomeScreen {...props} proofs={[]} />);
-  expect(screen.getByRole("heading", { name: "Create a Proof" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Create Proof" }));
-  expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ kind: "create_proof" }));
+  expect(screen.getByRole("heading", { name: "Pack it. Keep the proof." })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Pack an item" }));
+  expect(props.onGo).toHaveBeenCalledWith("/new");
   view.rerender(<MobileHomeScreen {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: "Create Proof" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pack an item" }));
   expect(props.onGo).toHaveBeenCalledWith("/new");
 });
 it("does not flash first-account copy while loading and labels cached completion after refresh failure", () => {
   const props = homeProps();
   const view = render(<MobileHomeScreen {...props} proofs={[]} loading refreshedAt={null} />);
   expect(screen.queryByRole("heading", { name: "Create your first Proof" })).not.toBeInTheDocument();
-  expect(screen.getByText("Finding your next task…")).toBeInTheDocument();
+  expect(screen.getByText("Checking your records…")).toBeInTheDocument();
   view.rerender(<MobileHomeScreen {...props} error="Cannot refresh" proofs={[{ ...draft, status: "FINALIZED", finalizedAt: "2026-10-09T10:00:00Z" }]} />);
-  expect(screen.getByText(/Cached completion is not a new verification/)).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("Cannot refresh");
+  expect(screen.queryByText("Saved to PackProof")).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Workspace summary" })).not.toBeInTheDocument();
 });
-it("keeps all four primary labels visible and secondary destinations in profile navigation", () => {
+it("keeps the three SIGNAL primary labels visible and secondary destinations in profile navigation", () => {
   Object.defineProperties(HTMLDialogElement.prototype, { close: { configurable: true, value() { this.removeAttribute("open"); } }, showModal: { configurable: true, value() { this.setAttribute("open", ""); } } });
   const session = { userId: "seller", displayName: "Seller", username: "seller", apiBaseUrl: "", authMode: "dev" as const, token: "test", refreshToken: null, accessExpiresAt: null, subject: "seller" };
   render(<MobileNavigation session={session} route="home" adminAllowed={false} onGo={vi.fn()} onSignOut={vi.fn()} />);
-  expect(within(screen.getByRole("navigation", { name: "Primary navigation" })).getAllByRole("link").map(link => link.textContent)).toEqual(["Home", "Proofs", "Pack", "Activity"]);
+  expect(within(screen.getByRole("navigation", { name: "Primary navigation" })).getAllByRole("link").map(link => link.textContent)).toEqual(["Home", "Proofs", "Activity"]);
   expect(screen.getByRole("button", { name: "Open profile menu" })).toBeInTheDocument();
 });
 it("empty Pack queue supports manual creation and unknown scans prefill only after a deliberate action", async () => {
@@ -119,7 +120,7 @@ it("repeated lookup taps join one request and never create duplicate records", a
 it("Activity separates commitment from finalization and exposes stopped upload retry", () => {
   const saved = recording({ committed: true, retryStopped: true });
   render(<MobileActivityScreen api={{} as PackProofApi} userId="seller" recordings={[saved]} recordingsLoaded invitations={[]} error={null} onRefresh={vi.fn()} onChange={vi.fn()} onOpen={vi.fn()} onInvitation={vi.fn()} onCreate={vi.fn()} />);
-  expect(screen.getByText("Evidence committed · finalization pending")).toBeInTheDocument();
+  expect(screen.getByText("Upload paused")).toBeInTheDocument();
   expect(screen.queryByText("Proof finalized")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Retry confirmation" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Resume upload" })).toBeInTheDocument();
 });

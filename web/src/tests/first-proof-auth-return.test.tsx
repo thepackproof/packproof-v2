@@ -47,6 +47,7 @@ it('explicit sign-out clears task return and the visible account even when invok
   saveSession({ ...account, token: 'renewed-fixture' }); history.replaceState({}, '', `/invitations/${invitation.invitationId}`); vi.stubGlobal('fetch', server());
   retainReauthenticationTask(account, '/receipt/previous');
   render(<App />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Open profile menu' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(location.pathname).toBe('/'));
   expect(loadSession()).toBeNull();
