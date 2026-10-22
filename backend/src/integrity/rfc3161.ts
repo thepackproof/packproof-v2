@@ -140,3 +140,14 @@ export function timestampMaterial(request: Uint8Array, response: Uint8Array, val
   check(validation.state === 'VALID' && validation.requestSha256 === sha256(request) && validation.responseSha256 === sha256(response), 'TIMESTAMP_VALIDATION_BINDING');
   return { profile: 'packproof.rfc3161-material.v1', requestBase64: Buffer.from(request).toString('base64'), responseBase64: Buffer.from(response).toString('base64'), validation };
 }
+export async function verifyTimestampMaterial(material: TimestampMaterial, jws: EnvelopeJws, trust: TimestampTrust, now: Date) {
+  check(material?.profile === 'packproof.rfc3161-material.v1' && Object.keys(material).sort().join(',') === 'profile,requestBase64,responseBase64,validation' && jcsBytes(material).length <= 1024 * 1024, 'TIMESTAMP_MATERIAL_INVALID');
+  const decode = (value: string, max: number) => {
+    check(typeof value === 'string' && value.length <= 4 * Math.ceil(max / 3), 'TIMESTAMP_SIZE_LIMIT');
+    const bytes = Buffer.from(value, 'base64');
+    check(bytes.length > 0 && bytes.length <= max && bytes.toString('base64') === value, 'TIMESTAMP_ENCODING_INVALID');
+    return bytes;
+  };
+  // Stored validation is a historical receipt; fresh verification is mandatory.
+  return verifyTimestampResponse({ request: decode(material.requestBase64, 4096), response: decode(material.responseBase64, MAX_RESPONSE), jws, trust, now });
+}

@@ -1,7 +1,7 @@
 name: RFC 3161 timestamp conformance
 on:
   pull_request:
-    paths: ['backend/src/integrity/rfc3161*.ts', 'backend/tests/rfc3161*.ts', 'verifier/timestamp.py', 'verifier/test_timestamp.py', '.github/workflows/timestamp-conformance.yml']
+    paths: ['backend/src/integrity/rfc3161*.ts', 'backend/src/integrity/envelope-package.ts', 'backend/src/integrity/envelope-profile.ts', 'backend/tests/rfc3161*.ts', 'backend/tests/verify-*fixture.py', 'verifier/**', '.github/workflows/timestamp-conformance.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,10 @@ jobs:
         with:
           node-version: 22
       - run: openssl version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r verifier/requirements-envelope.txt
       - run: npm ci
         working-directory: backend
       - run: npm run typecheck

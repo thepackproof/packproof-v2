@@ -2,12 +2,15 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { X509Certificate } from 'node:crypto';
+import { generateKeyPairSync, X509Certificate } from 'node:crypto';
+import { FlattenedSign } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fromBER, Integer } from 'asn1js';
 import { TimeStampReq } from 'pkijs';
 import { createTimestampRequest, inspectTimestampRequest, inspectTimestampResponse, timestampImprint, timestampMaterial, validateTimestampTrust, verifyTimestampResponse, type TimestampTrust } from '../src/integrity/rfc3161.js';
-import { jcsBytes, sha256, type EnvelopeJws } from '../src/integrity/envelope-profile.js';
+import { COVERAGE_PROFILE, ENVELOPE_TYPE, jcsBytes, prepareEnvelope, sha256, type EnvelopeJws, type IntegrityCoverage } from '../src/integrity/envelope-profile.js';
+import { streamEnvelopePackage } from '../src/integrity/envelope-package.js';
+import { collectSmallZip } from '../src/export/zip-stream.js';
 
 const jws: EnvelopeJws = { protected: 'eyJhbGciOiJFUzI1NiJ9', payload: 'eyJwcm9vZklkIjoiZml4dHVyZSJ9', signature: 'c3ludGhldGljLWp3cy1mb3ItZGF0YS1oYXNoLW9ubHk' };
 const policy = '1.3.6.1.4.1.55555.1';
@@ -103,4 +106,42 @@ describe.skipIf(process.platform === 'win32')('RFC 3161 real OpenSSL authority a
     await expect(verify({ response: Buffer.concat([response, Buffer.from([0])]) })).rejects.toThrow('ASN1_INVALID');
     await expect(verify({ response: Buffer.alloc(512 * 1024 + 1) })).rejects.toThrow('SIZE_LIMIT');
   });
+  it('independently verifies real tokens in Python and rejects forged validity claims', async () => {
+    const material = timestampMaterial(request, response, await verify());
+    const python = (patch: Record<string, unknown> = {}) => JSON.parse(execFileSync('python3', ['tests/verify-timestamp-fixture.py'], { input: JSON.stringify({ material, jws, trust, now: new Date().toISOString(), ...patch }), timeout: 30000, maxBuffer: 65536 }).toString());
+    expect(python().state).toBe('VALID');
+    expect(python().messageImprint).toBe(timestampImprint(jws));
+    expect(python({ trust: null }).state).toBe('INVALID');
+    expect(python({ jws: { ...jws, signature: 'b3RoZXI' } }).state).toBe('INVALID');
+    const corrupt = Buffer.from(response); corrupt[corrupt.length - 1] ^= 1;
+    expect(python({ material: { ...material, responseBase64: corrupt.toString('base64'), validation: { state: 'VALID' } } }).state).toBe('INVALID');
+    expect(python({ material: { ...material, responseBase64: Buffer.concat([response, Buffer.from([0])]).toString('base64') } }).state).toBe('INVALID');
+    expect(python({ trust: { ...trust, revokedCertificateSha256: [trust.signerSha256[0]] } }).state).toBe('INVALID');
+  }, 60000);
+  it('exports real timestamp material, verifies the archive independently and aborts on TSA trust changes', async () => {
+    const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const publicKeyPem = pair.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const manifest = Buffer.from('{"synthetic":true}'), at = new Date(Date.now() - 1000).toISOString();
+    const coverage: IntegrityCoverage = { profile: COVERAGE_PROFILE, proofId: 'timestamp-proof', recordType: 'CORE', recordId: 'timestamp-manifest', artifacts: [{ path: 'manifest.json', kind: 'MANIFEST', sha256: sha256(manifest), byteSize: manifest.length, required: true, sourcePath: null, storage: { bucket: 'synthetic', key: 'manifest', versionId: 'original-version' } }], stages: [], omissions: [] };
+    const prepared = prepareEnvelope({ proofId: coverage.proofId, recordType: 'CORE', recordId: coverage.recordId, manifestSchema: 'manifest.v1', manifestPath: 'manifest.json', manifestSha256: sha256(manifest), issuer: 'https://packproof-fixture.test', issuedAt: at, coverage, manifestBytes: manifest });
+    const signed = await new FlattenedSign(prepared.envelopeBytes).setProtectedHeader({ alg: 'ES256', kid: 'fixture-key', typ: ENVELOPE_TYPE }).sign(pair.privateKey);
+    const envelopeJws: EnvelopeJws = { protected: signed.protected!, payload: signed.payload as string, signature: signed.signature };
+    const query = createTimestampRequest(envelopeJws, policy);
+    writeFileSync(join(dir, 'package.tsq'), query);
+    openssl('ts', '-reply', '-config', 'tsa.cnf', '-queryfile', 'package.tsq', '-out', 'package.tsr');
+    const reply = readFileSync(join(dir, 'package.tsr'));
+    const material = timestampMaterial(query, reply, await verifyTimestampResponse({ request: query, response: reply, jws: envelopeJws, trust, now: new Date() }));
+    let currentTrust = trust;
+    const input = { jws: envelopeJws, coverage, trustedKeyId: 'fixture-key', trustedPublicKeyPem: publicKeyPem,
+      openExactObject: async (object: { versionId: string }) => ({ versionId: object.versionId, body: (async function* () { yield manifest; })() }), assertCurrentAccess: async () => {},
+      timestamp: { state: 'PRESENT' as const, material, trust: () => currentTrust, now: () => new Date() } };
+    const archive = await collectSmallZip(await streamEnvelopePackage(input));
+    const keyTrust = { schema: 'packproof.envelope-trust.v1', issuer: 'https://packproof-fixture.test', publishedAt: at, nextReviewAt: trust.nextReviewAt, keys: [{ keyId: 'fixture-key', publicKeyPem, status: 'ACTIVE', validFrom: at, validUntil: null, statusEffectiveAt: null }] };
+    const python = (timestampTrust: TimestampTrust | null) => JSON.parse(execFileSync('python3', ['tests/verify-envelope-fixture.py'], { input: JSON.stringify({ archiveBase64: archive.toString('base64'), trust: keyTrust, timestampTrust, now: new Date().toISOString() }), timeout: 30000, maxBuffer: 65536 }).toString());
+    expect(python(trust)).toMatchObject({ status: 'VERIFIED', issuerSignature: 'VALID', timestamp: 'VALID', truthOfRecordedScene: 'NOT_ASSESSED' });
+    expect(python(null)).toMatchObject({ status: 'INTEGRITY_INCOMPLETE', issuerSignature: 'VALID', timestamp: 'INVALID' });
+    const stream = await streamEnvelopePackage(input);
+    currentTrust = { ...trust, revokedCertificateSha256: [trust.signerSha256[0]] };
+    await expect(collectSmallZip(stream)).rejects.toThrow('TIMESTAMP_TRUST_CHANGED');
+  }, 60000);
 });

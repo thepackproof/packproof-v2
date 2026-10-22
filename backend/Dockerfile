@@ -13,7 +13,7 @@ FROM public.ecr.aws/docker/library/node:22-alpine
 WORKDIR /app/backend
 ENV NODE_ENV=production
 # Alpine's distribution patch fixes CVE-2026-85091 without changing the zlib ABI.
-RUN apk add --no-cache --upgrade 'zlib>=1.3.2-r1' ffmpeg util-linux font-dejavu ca-certificates && command -v prlimit && command -v ffprobe
+RUN apk add --no-cache --upgrade 'zlib>=1.3.2-r1' ffmpeg util-linux font-dejavu ca-certificates openssl && command -v prlimit && command -v ffprobe && openssl version
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/backend/dist ./dist
