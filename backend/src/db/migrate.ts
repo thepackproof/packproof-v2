@@ -16,6 +16,12 @@ export async function assertSchemaCurrent(db:Database,sourceDir=migrationsDir,al
   const expectedIds=new Set(inventory.map(item=>item.id));
   if(applied.some(row=>!expectedIds.has(row.id)&&!isReviewedForwardCompatibleMigration(row)))throw new Error('Database contains migrations outside this release compatibility envelope');
   for(const item of inventory){const row=applied.find(entry=>entry.id===item.id);if(!row&&allowPendingOnboarding&&item.id==='075_onboarding')continue;if(!row||row.checksum!==item.checksum)throw new Error(`Migration required or checksum mismatch: ${item.id}`);}
+  const foundation=applied.filter(row=>/^0(?:88|89|90|91|92)_/.test(row.id));
+  if(foundation.length){
+    if(foundation.length!==5)throw new Error('Partial foundation schema is outside the rollback envelope');
+    const activated=await db.query('SELECT 1 FROM platform_organizations LIMIT 1');
+    if(activated.rows.length)throw new Error('Foundation activation requires the organization-aware application');
+  }
 }
 export async function migrate(db:Database,sourceDir=migrationsDir,options:{adoptLegacyChecksums?:boolean;expectedRole?:string}={}):Promise<void>{
   const lock=async(tx:Database)=>{await tx.query("SET LOCAL lock_timeout = '15s'");await tx.query('SELECT pg_advisory_xact_lock(1347438146,1)');};
