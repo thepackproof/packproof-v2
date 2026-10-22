@@ -1,14 +1,25 @@
 name: Integrity envelope conformance
 on:
   pull_request:
-    paths: ['backend/src/integrity/**', 'backend/tests/envelope-*', 'backend/tests/verify-envelope-fixture.py', 'backend/package*.json', 'verifier/**', '.github/workflows/integrity-envelope.yml']
+    paths: ['backend/src/integrity/**', 'backend/src/domain/recovery-*.ts', 'backend/migrations/**', 'backend/tests/envelope-*', 'backend/tests/recovery-restore.test.ts', 'backend/tests/versioned-memory-object-store.ts', 'backend/tests/verify-envelope-fixture.py', 'backend/package*.json', 'verifier/**', '.github/workflows/integrity-envelope.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   conformance:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: envelope_test
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: envelope_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,8 +31,14 @@ jobs:
       - run: python -m pip install -r verifier/requirements-envelope.txt
       - run: npm ci
         working-directory: backend
+      - name: Install media validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npm run typecheck
         working-directory: backend
-      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts
+      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts tests/envelope-jobs.test.ts tests/envelope-s3-store.test.ts tests/recovery-restore.test.ts
         working-directory: backend
+        env:
+          PACKPROOF_ENVELOPE_TEST_DATABASE_URL: postgres://envelope_test:synthetic_ci_only@localhost:5432/envelope_test
       - run: python -m unittest discover -s verifier -p 'test_*.py'

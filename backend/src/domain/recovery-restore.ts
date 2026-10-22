@@ -9,9 +9,12 @@ import { buildRecoveryReplayPlan, verifyRecoveryEnvelope, type RecoveryPublisher
 import { installPolicyRecoveryReplay, inspectPolicyRecoveryReconciliation, POLICY_RECOVERY_KEYS, verifyPolicyEnvelope, type PolicyParentContext } from "./policy-recovery.js";
 import { verifyManifestIntegrity, type ManifestSignature } from "./manifest-signing.js";
 import { MEDIA_MAX_BYTES } from "./media-admission.js";
+import { envelopeBundleKey, envelopeOperationId, verifyEnvelopeBundle, verifyEnvelopeSource, validateEnvelopeReceipt, type EnvelopeRequest, type EnvelopeWorker, type ProtectedReceipt } from '../integrity/envelope-jobs.js';
+import { jcsBytes } from '../integrity/envelope-profile.js';
 
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
+  integrity_envelope_jobs:['operation_id'], integrity_envelope_results:['operation_id'],
   platform_capture_authorizations:['intent_id'],
   users:["id"], transactions:["id"], transaction_shipping:["id"], transaction_items:["id"], transaction_integration_identities:["id"],
   proofs:["id"], proof_participants:["id"], commerce_receivers:["proof_id"], commerce_stages:["id"], capture_sessions:["id"], capture_intents:["id"], capture_engine_sessions:["session_id"], capture_engine_batches:["session_id","sequence"], capture_session_reports:["id"],
@@ -34,6 +37,7 @@ const ORDER = [
   "proof_access_links","proof_disclosure_grants","proof_notification_subscriptions","proof_receipt_preferences","user_verified_contacts","proof_media_derivatives","support_access_grants","support_access_revocations",
   "proof_retention_holds","proof_retention_assignments","proof_deletion_requests","proof_disposition_state","final_manifests","proof_supplements",
   "platform_proof_ownership","platform_external_bindings","platform_capture_authorizations",
+  "integrity_envelope_jobs","integrity_envelope_results",
 ];
 const SEED_TABLES = new Set(["schema_migrations","recovery_writer_fence","retention_operations_gates","item_history_graph_lock","policy_recovery_fence","policy_recovery_tables"]);
 const failure = (code: string, message: string) => new DomainError(code, message, 409);
@@ -55,6 +59,8 @@ export interface FreshRecoveryRestoreInput {
   policy: {envelopes:Buffer[]; expectedWatermark:Buffer};
   trustedPublicKey: RecoveryPublisher["trustedPublicKey"];
   sourceStore: Pick<ObjectStore,"get"|"head"|"getStream">;
+  /** Required when the admitted journal includes additive envelope records. */
+  envelopes?: Pick<EnvelopeWorker, 'store' | 'trustedPublicKey'>;
 }
 
 /**
@@ -148,6 +154,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
   }
   const media=await verifyMedia(rows,input.sourceStore);
   await verifyFrozenRecords(rows,input.trustedPublicKey);
+  await verifyEnvelopeRecords(rows, core.map(row=>row.event), input);
   const journalVersions=new Map<string,string>();
   for(const {event,bytes} of core){const key=`recovery/v1/${sha256Hex(String(event.operationId))}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
   for(const bytes of input.policy.envelopes){const {event}=await verifyPolicyEnvelope(bytes,input.trustedPublicKey);const key=`recovery/policy/v1/${event.sequence.padStart(20,'0')}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
@@ -190,6 +197,10 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
     const supplementHeads=new Map<string,Row>();
     for(const row of rows.get('proof_supplements')?.values()??[]){const prior=supplementHeads.get(String(row.proof_id));if(!prior||Number(row.sequence)>Number(prior.sequence))supplementHeads.set(String(row.proof_id),row);}
     for(const row of supplementHeads.values())await insert('proof_supplement_heads',{proof_id:row.proof_id,sequence:row.sequence,sha256:row.sha256});
+    for(const row of rows.get('integrity_envelope_jobs')?.values()??[])await insert('integrity_envelope_delivery',{
+      operation_id:row.operation_id, state:rows.get('integrity_envelope_results')?.has(identity('integrity_envelope_results',row))?'ACCEPTED':'PENDING',
+      attempts:0,next_attempt_at:row.created_at,lease_token:null,lease_until:null,error_code:null,
+    });
     const seen=new Set<string>();
     for(const {event,envelope,bytes} of core){
       const operationId=String(event.operationId);if(seen.has(operationId))continue;seen.add(operationId);
@@ -211,6 +222,26 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
 }
 
 function safeIdentifier(value:string){if(!/^[a-z_][a-z0-9_]*$/.test(value))throw failure('RECOVERY_RESTORE_SCHEMA_MISMATCH','Unsupported schema identifier');return `"${value}"`;}
+async function verifyEnvelopeRecords(rows:Map<string,Map<string,Row>>,core:Row[],input:FreshRecoveryRestoreInput){
+  const jobs=[...(rows.get('integrity_envelope_jobs')?.values()??[])],results=rows.get('integrity_envelope_results');
+  if(!jobs.length&&!results?.size)return;
+  if(!input.envelopes)throw failure('RECOVERY_ENVELOPE_VERIFIER_REQUIRED','Envelope reconstruction requires independent issuer trust and exact-version protection checks');
+  for(const row of jobs){
+    const request=JSON.parse(String(row.request_json)) as EnvelopeRequest;
+    if(jcsBytes(request).toString()!==row.request_json||sha256Hex(String(row.request_json))!==row.request_sha256||envelopeOperationId(request)!==row.operation_id||request.proofId!==row.proof_id||request.recordId!==row.record_id||request.recordType!==row.record_type||request.manifestSha256!==row.manifest_sha256)throw failure('RECOVERY_ENVELOPE_CONFLICT','Envelope request identity or immutable bytes conflict');
+    if(!core.some(event=>event.operationId===request.source.operationId&&sha256Hex(canonicalize(event))===request.source.eventSha256)||!core.some(event=>event.operationId===`envelope-request:${row.operation_id}`))throw failure('RECOVERY_ENVELOPE_DEPENDENCY_GAP','Envelope request lacks its accepted source or request journal');
+    await verifyEnvelopeSource(request,{sourceJournal:{store:input.sourceStore as RecoveryPublisher['store'],trustedPublicKey:input.trustedPublicKey}});
+    const result=results?.get(identity('integrity_envelope_results',row));
+    if(!result)continue;
+    if(result.proof_id!==request.proofId||sha256Hex(String(result.bundle_json))!==result.bundle_sha256||!core.some(event=>event.operationId===`envelope-signed:${row.operation_id}`))throw failure('RECOVERY_ENVELOPE_CONFLICT','Envelope result lacks matching accepted recovery evidence');
+    await verifyEnvelopeBundle(request,String(row.operation_id),String(row.request_sha256),Buffer.from(String(result.bundle_json)),input.envelopes);
+    const receipt=result.receipt_json as ProtectedReceipt,artifact={storage:receipt.object,sha256:String(result.bundle_sha256),byteSize:Buffer.byteLength(String(result.bundle_json))};
+    if(receipt.object.bucket!==request.artifactBucket||receipt.object.key!==envelopeBundleKey(String(row.operation_id)))throw failure('RECOVERY_ENVELOPE_CONFLICT','Envelope result object is outside its immutable operation');
+    validateEnvelopeReceipt(receipt,artifact,request.retainUntil);
+    validateEnvelopeReceipt(await input.envelopes.store.verify(artifact,request.retainUntil),artifact,request.retainUntil);
+  }
+  for(const result of results?.values()??[])if(!jobs.some(job=>job.operation_id===result.operation_id))throw failure('RECOVERY_ENVELOPE_DEPENDENCY_GAP','Envelope result has no accepted request');
+}
 async function assertAuthority(db:Database,input:FreshRecoveryRestoreInput){
   const identity=(await db.query<{role:string;database:string;superuser:boolean;bypassrls:boolean}>("SELECT current_user AS role,current_database() AS database,r.rolsuper AS superuser,r.rolbypassrls AS bypassrls FROM pg_roles r WHERE r.rolname=current_user")).rows[0];
   if(!identity||identity.role!==input.restoreRole||identity.database!==input.expectedDatabase||identity.superuser||identity.bypassrls)throw failure('RECOVERY_RESTORE_AUTHORITY_REQUIRED','Use the dedicated non-superuser restore login for the identified isolated database');

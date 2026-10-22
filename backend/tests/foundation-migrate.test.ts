@@ -10,7 +10,7 @@ import {MIGRATIONS,BASELINE_DIGEST,TABLES,digest,inspectInventory,inspectState,i
 import {run} from '../scripts/foundation-migrate-cli.mjs';
 
 let inventory:Awaited<ReturnType<typeof migrationInventory>>;
-beforeAll(async()=>{inventory=await migrationInventory();});
+beforeAll(async()=>{inventory=(await migrationInventory()).filter(row=>row.id<='092_organization_policy_recovery');});
 const source='a'.repeat(40),bridge='sha256:'+'b'.repeat(64),now=new Date('2026-10-22T00:00:00Z');
 const baseline=()=>inventory.filter(r=>!MIGRATIONS.some(m=>m.id===r.id));
 describe('exact foundation migration boundary',()=>{
@@ -28,6 +28,11 @@ describe('exact foundation migration boundary',()=>{
   expect(()=>inspectInventory(inventory,[...baseline(),MIGRATIONS[0]])).toThrow('APPLIED_INVENTORY_MISMATCH');
   expect(()=>inspectInventory(inventory,baseline().map((r,i)=>i?r:{...r,checksum:'f'.repeat(64)}))).toThrow('APPLIED_CHECKSUM_MISMATCH');
   expect(()=>inspectInventory(inventory,[...inventory,{id:'future',checksum:'f'.repeat(64)}])).toThrow('APPLIED_INVENTORY_MISMATCH');
+ });
+ it('does not expand the already executed production operator to newer source migrations',async()=>{
+  const newer=await migrationInventory();
+  expect(newer.some(row=>row.id==='093_integrity_envelope_jobs')).toBe(true);
+  expect(()=>inspectInventory(newer,inventory)).toThrow('CANDIDATE_INVENTORY_MISMATCH');
  });
  it('requires a fresh intact inspection of the same state, source and compatible image',()=>{
   const state=inspectInventory(inventory,baseline()),receipt=inspectionReceipt(state,source,bridge,now);
