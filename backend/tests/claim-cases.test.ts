@@ -38,7 +38,7 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
  const media=new VersionedMemoryObjectStore();
  let h:TestHarness,opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>;
  let admin:string,ownerA:string,ownerB:string,opA:string,opB:string,merchantA:string,memberA:string,accountA:string,accountA2:string,accountB:string,proofA:string,proofB:string,evidenceId:string,packet:Awaited<ReturnType<typeof buildSignatureCase>>,serviceActor:string;
- const facts={reasonCode:'product_unacceptable',network:'MASTERCARD',lifecycleStatus:'needs_response',providerDeadline:'2026-10-25T12:00:00Z',retrievedAt:'2026-10-22T11:00:00Z',allowedActions:['RESPOND']};
+ const facts={reasonCode:'product_unacceptable',network:'MASTERCARD',region:'US',paymentMethod:'CARD',lifecycleStatus:'needs_response',providerDeadline:'2026-10-25T12:00:00Z',retrievedAt:'2026-10-22T11:00:00Z',allowedActions:['RESPOND']};
  const input=(id:string,account=accountA)=>({integrationAccountId:account,disputeId:id,paymentId:'ch_shared',orderLineIds:[],idempotencyKey:`${id}:${account}`,...facts});
  const revision=(c:{snapshotSha256:string},key:string,extra={})=>({...facts,retrievedAt:'2026-10-22T11:30:00Z',expectedSnapshotSha256:c.snapshotSha256,idempotencyKey:key,...extra});
  const exportInput=(c:{claimCaseId:string;snapshotSha256:string},key:string)=>({caseId:packet.caseId,profileId:'stripe-dispute-us-mastercard-v2',idempotencyKey:key,claimCaseId:c.claimCaseId,claimSnapshotSha256:c.snapshotSha256,destinationDeadline:facts.providerDeadline,destinationInstructionsReviewed:true,narrative:'Merchant-selected packing frame for review.',frames:[{evidenceId,offsetMs:0,label:'Selected packing observation'}]});
@@ -94,6 +94,8 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_lines'),orderLineIds:['another-proof-line']})).rejects.toMatchObject({code:'CLAIM_LINE_SCOPE'});
   await expect(createClaimCase(h.db,clock,serviceActor,proofA,input('du_machine'))).rejects.toMatchObject({code:'HUMAN_AUTHENTICATION_REQUIRED'});
   await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_forged'),source:'PROVIDER_VERIFIED'})).rejects.toMatchObject({code:'INVALID_REQUEST'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_region'),region:'GB'})).rejects.toMatchObject({code:'CLAIM_PROFILE_UNSUPPORTED'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_method'),paymentMethod:'BANK'})).rejects.toMatchObject({code:'CLAIM_PROFILE_UNSUPPORTED'});
  });
  it('appends revisions atomically, preserves earlier bytes and rejects stale competing writes',async()=>{
   const c=await createClaimCase(h.db,clock,opA,proofA,input('du_revisions'));

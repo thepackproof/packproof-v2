@@ -14,8 +14,8 @@ import { buildProofRecoverySnapshot, enqueueRecoveryEvent, getRecoveryStatus } f
 const fail=(code:string,message:string,status=409)=>new DomainError(code,message,status);
 const STATES=['needs_response','warning_needs_response','under_review','warning_under_review','won','lost','warning_closed','prevented'];
 const NETWORKS=['MASTERCARD','VISA','AMEX','DISCOVER','OTHER','UNKNOWN'];
-const FACT_FIELDS=['reasonCode','network','lifecycleStatus','providerDeadline','retrievedAt','allowedActions'];
-type Facts={reasonCode:string;network:string;lifecycleStatus:string;providerDeadline:string|null;retrievedAt:string;allowedActions:string[]};
+const FACT_FIELDS=['reasonCode','network','region','paymentMethod','lifecycleStatus','providerDeadline','retrievedAt','allowedActions'];
+type Facts={reasonCode:string;network:string;region:'US';paymentMethod:'CARD';lifecycleStatus:string;providerDeadline:string|null;retrievedAt:string;allowedActions:string[]};
 type Identity={id:string;proof_id:string;merchant_id:string;environment:string;integration_account_id:string;provider:string;provider_account_id:string;dispute_id:string;payment_id:string;order_line_ids:string[];created_by:string;created_at:string|Date};
 type Revision={id:string;claim_case_id:string;proof_id:string;revision:number;previous_sha256:string|null;idempotency_key:string;request_sha256:string;snapshot_json:string;snapshot_sha256:string;recorded_by:string;recorded_at:string|Date};
 export interface ClaimSnapshot extends Facts {
@@ -39,13 +39,14 @@ function timestamp(value:unknown,name:string){
  return normalized;
 }
 function facts(input:Record<string,unknown>,clock:Clock):Facts{
+ if(input.region!=='US'||input.paymentMethod!=='CARD')throw fail('CLAIM_PROFILE_UNSUPPORTED','This reviewed manual workflow supports US card disputes only.',400);
  const reasonCode=text(input.reasonCode,'reasonCode',80),network=text(input.network,'network',30),lifecycleStatus=text(input.lifecycleStatus,'lifecycleStatus',60);
  if(!NETWORKS.includes(network)||!STATES.includes(lifecycleStatus))throw fail('CLAIM_INPUT_INVALID','Use a documented network and lifecycle status.',400);
  const retrievedAt=timestamp(input.retrievedAt,'retrievedAt');
  if(Date.parse(retrievedAt)>clock.now().getTime())throw fail('CLAIM_INPUT_INVALID','retrievedAt cannot be in the future.',400);
  const providerDeadline=input.providerDeadline==null?null:timestamp(input.providerDeadline,'providerDeadline');
  if(!Array.isArray(input.allowedActions)||input.allowedActions.length>2||input.allowedActions.some(v=>v!=='RESPOND'&&v!=='ACCEPT'))throw fail('CLAIM_INPUT_INVALID','Report only documented portal actions.',400);
- return {reasonCode,network,lifecycleStatus,providerDeadline,retrievedAt,allowedActions:[...new Set(input.allowedActions as string[])].sort()};
+ return {reasonCode,network,region:'US',paymentMethod:'CARD',lifecycleStatus,providerDeadline,retrievedAt,allowedActions:[...new Set(input.allowedActions as string[])].sort()};
 }
 /** This first export cohort is a current human merchant contributor. A service
  * actor, another merchant, buyer or partner membership is not inferred to own it. */

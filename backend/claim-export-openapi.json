@@ -638,6 +638,12 @@
                 "ACCEPT"
               ]
             }
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
           }
         },
         "required": [
@@ -650,7 +656,9 @@
           "lifecycleStatus",
           "providerDeadline",
           "retrievedAt",
-          "allowedActions"
+          "allowedActions",
+          "region",
+          "paymentMethod"
         ]
       },
       "ClaimRevision": {
@@ -713,6 +721,12 @@
                 "ACCEPT"
               ]
             }
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
           }
         },
         "required": [
@@ -722,7 +736,9 @@
           "lifecycleStatus",
           "providerDeadline",
           "retrievedAt",
-          "allowedActions"
+          "allowedActions",
+          "region",
+          "paymentMethod"
         ]
       },
       "ClaimSnapshot": {
@@ -851,6 +867,12 @@
             "type": "string",
             "format": "date-time",
             "pattern": "Z$"
+          },
+          "region": {
+            "const": "US"
+          },
+          "paymentMethod": {
+            "const": "CARD"
           }
         }
       },
