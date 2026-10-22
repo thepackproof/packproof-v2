@@ -1,0 +1,555 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PackProof additive integrity envelopes",
+    "version": "2026-10-22.1",
+    "description": "Disabled by default. Requires separate API/worker identities, an explicit merchant cohort and cutover, verified storage/DB protection, authenticated key history and deployment acceptance. Envelopes describe received frozen records only. The current package has timestamp NOT_PRESENT and truthOfRecordedScene NOT_ASSESSED. It makes no claim that unseen later records do not exist. Production activation is a separate operational gate."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/proofs/{id}/integrity-envelopes": {
+      "post": {
+        "operationId": "requestIntegrityEnvelope",
+        "security": [
+          {
+            "humanBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "A replay returns the same operation; acceptance does not mean preservation is complete.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store (first party) or no-store (partner)."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeAdmission"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current Proof or organization authority is missing or revoked."
+          },
+          "404": {
+            "description": "Record unavailable in the authorized Proof and explicit deployment cohort."
+          },
+          "409": {
+            "description": "Source not preserved, request policy conflict, result not ready, or stored integrity verification failed."
+          },
+          "429": {
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
+          }
+        },
+        "description": "First-party human admission only. The server derives the frozen source, issuer, key, storage and retention policy. Idempotency is deterministic per frozen record; a changed preservation policy conflicts. There is no legacy backfill or client-selected storage/signing configuration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvelopeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/proofs/{id}/integrity-envelopes/{operationId}": {
+      "get": {
+        "operationId": "getIntegrityEnvelope",
+        "security": [
+          {
+            "humanBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized operation state; READY requires protected result-journal durability.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store (first party) or no-store (partner)."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current Proof or organization authority is missing or revoked."
+          },
+          "404": {
+            "description": "Record unavailable in the authorized Proof and explicit deployment cohort."
+          },
+          "409": {
+            "description": "Source not preserved, request policy conflict, result not ready, or stored integrity verification failed."
+          },
+          "429": {
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/integrity-envelopes/{operationId}/package": {
+      "get": {
+        "operationId": "downloadIntegrityEnvelope",
+        "security": [
+          {
+            "humanBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact-version package; authorization or key revocation during streaming prevents a complete archive.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store (first party) or no-store (partner)."
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current Proof or organization authority is missing or revoked."
+          },
+          "404": {
+            "description": "Record unavailable in the authorized Proof and explicit deployment cohort."
+          },
+          "409": {
+            "description": "Source not preserved, request policy conflict, result not ready, or stored integrity verification failed."
+          },
+          "429": {
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
+          }
+        }
+      }
+    },
+    "/v1/partner/proofs/{proofId}/integrity-envelopes/{operationId}": {
+      "get": {
+        "operationId": "getPartnerIntegrityEnvelope",
+        "security": [
+          {
+            "partnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized operation state; READY requires protected result-journal durability.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store (first party) or no-store (partner)."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current Proof or organization authority is missing or revoked."
+          },
+          "404": {
+            "description": "Record unavailable in the authorized Proof and explicit deployment cohort."
+          },
+          "409": {
+            "description": "Source not preserved, request policy conflict, result not ready, or stored integrity verification failed."
+          },
+          "429": {
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
+          }
+        },
+        "x-required-scope": "exports:read"
+      }
+    },
+    "/v1/partner/proofs/{proofId}/integrity-envelopes/{operationId}/package": {
+      "get": {
+        "operationId": "downloadPartnerIntegrityEnvelope",
+        "security": [
+          {
+            "partnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact-version package; authorization or key revocation during streaming prevents a complete archive.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-store (first party) or no-store (partner)."
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Current Proof or organization authority is missing or revoked."
+          },
+          "404": {
+            "description": "Record unavailable in the authorized Proof and explicit deployment cohort."
+          },
+          "409": {
+            "description": "Source not preserved, request policy conflict, result not ready, or stored integrity verification failed."
+          },
+          "429": {
+            "description": "Request rate limit exceeded."
+          },
+          "503": {
+            "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
+          }
+        },
+        "x-required-scope": "exports:read"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "humanBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing first-party user identity; service principals cannot enqueue signing."
+      },
+      "partnerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Current partner credential with exports:read, merchant binding and applicable delegation."
+      }
+    },
+    "schemas": {
+      "EnvelopeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordType",
+          "recordId"
+        ],
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "CORE",
+              "STAGE",
+              "SUPPLEMENT"
+            ]
+          },
+          "recordId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          }
+        }
+      },
+      "EnvelopeStatus": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "proofId",
+          "recordType",
+          "recordId",
+          "manifestSha256",
+          "state"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "CORE",
+              "STAGE",
+              "SUPPLEMENT"
+            ]
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SIGNED_PENDING_DURABILITY",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "EnvelopeAdmission": {
+        "type": "object",
+        "required": [
+          "operationId",
+          "proofId",
+          "recordType",
+          "recordId",
+          "state",
+          "replayed"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "CORE",
+              "STAGE",
+              "SUPPLEMENT"
+            ]
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SIGNED_PENDING_DURABILITY",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

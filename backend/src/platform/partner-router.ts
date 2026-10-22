@@ -14,6 +14,7 @@ import { createWebhook,listWebhooks,revokeWebhook,protectWebhookResponse,webhook
 import { exportEvidencePackageStream,getEvidenceReview } from '../domain/evidence-review.js';
 import { withPartnerReadGrant } from './proof-read-grant.js';
 import { guardAuthorizedStream } from '../domain/authorized-stream.js';
+import { getProofEnvelope, exportProofEnvelope } from '../integrity/envelope-access.js';
 
 type PartnerRequest=Request & {partnerActor:PartnerActor};
 const route=(fn:(req:PartnerRequest,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req as PartnerRequest,res).catch(next);};
@@ -53,6 +54,15 @@ export function createPartnerRouter(deps:AppDependencies){
  endpoint('post','/proofs/:proofId/external-bindings','proofs:write',(db,a,r)=>addPartnerBinding(db,deps.clock,a,r.params.proofId,r.body),201);
  endpoint('post','/proofs/:proofId/capture-intents','capture:request',(db,a,r)=>requestOperatorCapture(db,deps.clock,a,r.params.proofId,r.body),201,true);
  endpoint('get','/proofs/:proofId/review','exports:read',(db,a,r)=>getEvidenceReview(withPartnerReadGrant(db,deps.clock,a,r.params.proofId,'exports:read'),deps.clock,a.actorUserId,r.params.proofId));
+ endpoint('get','/proofs/:proofId/integrity-envelopes/:operationId','exports:read',(db,a,r)=>getProofEnvelope(withPartnerReadGrant(db,deps.clock,a,r.params.proofId,'exports:read'),a.actorUserId,r.params.proofId,r.params.operationId,deps.envelopes));
+ router.get('/proofs/:proofId/integrity-envelopes/:operationId/package',route(async(req,res)=>{
+  const a=req.partnerActor,id=req.params.proofId;await authorizePartnerProof(deps.db,deps.clock,a,id,'exports:read');
+  const db=withPartnerReadGrant(deps.db,deps.clock,a,id,'exports:read');
+  const stream=await exportProofEnvelope(db,a.actorUserId,id,req.params.operationId,deps.envelopes);
+  await auditOrganization(deps.db,deps.clock,{actor:a,requestId:a.requestId,operation:'ENVELOPE_PACKAGE_EXPORT',resourceId:id});
+  res.type('application/zip');res.setHeader('Content-Disposition','attachment; filename="packproof-integrity.pkpr"');
+  await pipeline(guardAuthorizedStream(stream,()=>reauthorizePartner(deps.db,deps.clock,a,'exports:read')),res);
+ }));
  router.get('/proofs/:proofId/package',route(async(req,res)=>{
   const a=req.partnerActor,id=req.params.proofId;await authorizePartnerProof(deps.db,deps.clock,a,id,'exports:read');
   const db=withPartnerReadGrant(deps.db,deps.clock,a,id,'exports:read');

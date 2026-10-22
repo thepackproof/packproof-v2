@@ -1,7 +1,7 @@
 name: Integrity envelope conformance
 on:
   pull_request:
-    paths: ['backend/src/integrity/**', 'backend/src/domain/recovery-*.ts', 'backend/migrations/**', 'backend/tests/envelope-*', 'backend/tests/recovery-restore.test.ts', 'backend/tests/versioned-memory-object-store.ts', 'backend/tests/verify-envelope-fixture.py', 'backend/scripts/*envelope*', 'infra/partner-foundation/envelope-*', 'backend/package*.json', 'verifier/**', '.github/workflows/integrity-envelope.yml']
+    paths: ['backend/src/integrity/**', 'backend/src/http/envelope*.ts', 'backend/src/platform/partner-router.ts', 'backend/src/domain/recovery-*.ts', 'backend/migrations/**', 'backend/tests/envelope-*', 'backend/tests/recovery-restore.test.ts', 'backend/tests/versioned-memory-object-store.ts', 'backend/tests/verify-envelope-fixture.py', 'backend/scripts/*envelope*', 'infra/partner-foundation/envelope-*', 'backend/package*.json', 'verifier/**', '.github/workflows/integrity-envelope.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -32,9 +32,7 @@ jobs:
       - run: npm ci
         working-directory: backend
       - name: Install media validation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - run: npm run typecheck
         working-directory: backend
       - name: Validate isolated harness and generated template
@@ -43,8 +41,9 @@ jobs:
           node --check backend/scripts/isolated-envelope-acceptance.mjs
           node backend/scripts/generate-envelope-acceptance-infra.mjs
           git diff --exit-code -- infra/partner-foundation/envelope-acceptance-assets.json
-      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts tests/envelope-jobs.test.ts tests/envelope-s3-store.test.ts tests/envelope-trust.test.ts tests/recovery-restore.test.ts
+      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts tests/envelope-jobs.test.ts tests/envelope-s3-store.test.ts tests/envelope-trust.test.ts tests/envelope-publication.test.ts tests/envelope-access.test.ts tests/envelope-runtime.test.ts tests/envelope-budget.test.ts tests/recovery-restore.test.ts
         working-directory: backend
         env:
           PACKPROOF_ENVELOPE_TEST_DATABASE_URL: postgres://envelope_test:synthetic_ci_only@localhost:5432/envelope_test
+          PACKPROOF_TEST_DATABASE_URL: postgres://envelope_test:synthetic_ci_only@localhost:5432/envelope_test
       - run: python -m unittest discover -s verifier -p 'test_*.py'

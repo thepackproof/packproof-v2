@@ -49,6 +49,8 @@ export async function createHarness(
     opened?: { db: Database; close: () => Promise<void> };
     ebayDeletionSignatureVerifier?: EbayDeletionSignatureVerifier;
     manifestSigning?: import("../src/integrity/signing-runtime.js").ManifestSigningRuntime;
+    envelopeTrustPublication?: import("../src/integrity/envelope-publication.js").EnvelopeTrustPublication | null;
+    envelopes?: import("../src/integrity/envelope-access.js").EnvelopeAccessRuntime;
   } = {},
 ): Promise<TestHarness> {
   const resolvedClock = clock ?? systemClock;
@@ -75,6 +77,8 @@ export async function createHarness(
     testFixtures: true,
     corsOrigins: options.corsOrigins,
     manifestSigning: options.manifestSigning,
+    envelopeTrustPublication: options.envelopeTrustPublication,
+    envelopes: options.envelopes,
     credentialStore,
     credentialNamespace: options.credentialNamespace,
     releaseIdentity: options.releaseIdentity,

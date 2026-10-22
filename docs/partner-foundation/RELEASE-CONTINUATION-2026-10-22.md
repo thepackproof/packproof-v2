@@ -1,6 +1,53 @@
-# Full-release continuation - 2026-10-22
+# Full-release continuation — 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
+
+## Gated envelope HTTP and worker implementation - 22 October 2026
+
+The current development candidate adds first-party human admission, status and
+exact-version package downloads, plus scoped partner reads/exports and public
+key-history publication. Admission is limited to an explicit merchant cohort and
+cutover. Worker leases recheck the accepted caller; downloads recheck current
+authority and key trust. Separate process/database identities, protected storage
+and source-bound acceptance evidence gate activation. The API has only the
+read-only envelope adapter; only the worker can initialize the dedicated signer.
+The [profile and configuration](ENVELOPE-PROFILE.md) explain the remaining gates.
+
+Local build and the focused access, runtime, storage and job tests passed: 43
+checks, with one independent-PostgreSQL contention case reserved for CI. The
+public-key publication slice separately passed nine focused checks. Fixtures use
+generated keys, synthetic storage and synthetic bearer authentication. They are
+not evidence of hosted HTTP identity, production protection or a merchant pilot.
+The full CI backend job for the first publication candidate stalled during media
+package installation; the follow-up uses installed tools when present, bounds
+fallback installation and still verifies both media binaries. Updated CI and
+actual-role acceptance remain required before release of this candidate.
+
+The first HTTP candidate, `312431f4347490df2f87b321971697f6641a0365`, then passed
+all 87 envelope conformance checks on PostgreSQL, all 32 legacy Python checks,
+foundation and CodeQL gates, web/mobile, dependency audits and deployment tooling.
+Its container built successfully and verified all five contract paths, 94 exact
+migrations and zero envelope DB calls when disabled. Full CI exposed one secret
+scanner false positive in a fabricated test role name; the reviewed exception is
+limited to that exact historical line. PostgreSQL CI also stalled at unbounded
+media installation, so all matching CI setup steps now use installed binaries or
+bounded installation. An additional admission/download byte-budget check rejects
+oversize work before artifact I/O; its two boundary checks and seven access checks
+passed locally. The updated container from `99e5283be1b117f4cf5a393d1850ccfab5992b58`
+passed packaging and disabled-runtime checks. Its immutable digest is
+`sha256:7c11381d50533186a077af3ed3d95b21b00e290c0eec52a5fc62635af4e9bc4b`;
+the ECR scan completed with no findings at 20:06 UTC. CI found that the publication
+transport had replaced the new test fixture's non-ASCII character. The fixture
+now uses an explicit Unicode escape; all other changed runtime files matched the
+local Git blob hashes. The continuation document's typography is also restored
+using ASCII-escaped JSON during publication. The mobile job timed out downloading
+an Ubuntu package; no mobile assertion failed. Full CI remains required.
+
+Production remains the accepted inactive task revision 49 below. No organizations,
+envelope API, envelope worker or claim export feature has been enabled by this
+implementation. RFC 3161, hosted acceptance, separate production baseline roles,
+physical-device acceptance, human review and a consenting merchant pilot remain
+open. This is engineering progress toward M2, not full-plan completion.
  
 ## Production compatibility bridge and inactive M2 schema - 22 October 2026, 19:17 UTC
 

@@ -2,7 +2,9 @@
 
 `backend/scripts/m2-runtime-privileges.mjs` prepares explicit grants for two
 separately provisioned API and worker database roles after migrations 093-095.
-It is not called by startup or deployment. Production migrations 093-095 have now
+Its grant-application function is not called by startup or deployment. The gated
+envelope runtime calls its read-only verification function before accepting work.
+Production migrations 093-095 have now
 applied through the separate exact M2 operator, with the old runtime's effective
 authority unchanged and no non-owner grants on the six new tables. This privilege
 policy has not been activated in production. See the [inactive migration receipt](m2-inactive-production-migration-2026-10-22.json).

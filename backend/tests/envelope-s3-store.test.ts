@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { createEnvelopeS3Store, type EnvelopeS3Transport } from '../src/integrity/envelope-s3-store.js';
+import { createEnvelopeS3Store, createEnvelopeS3Reader, type EnvelopeS3Transport } from '../src/integrity/envelope-s3-store.js';
 import { sha256 } from '../src/integrity/envelope-profile.js';
 
 const now = new Date('2026-10-22T05:00:00.000Z'), until = '2027-10-22T05:00:00.000Z';
@@ -16,9 +16,35 @@ function fixture() {
   };
   const store = createEnvelopeS3Store({ artifactBucket: 'artifacts', evidenceBuckets: ['originals'], expectedBucketOwner: '123456789012', clock: { now: () => now }, transport });
   const artifact = { storage: { bucket: 'originals', key: 'committed/media', versionId: value.versionId }, sha256: sha256(body), byteSize: body.length };
-  return { calls, value, store, artifact };
+  const reader = createEnvelopeS3Reader({ artifactBucket: 'artifacts', evidenceBuckets: ['originals'], expectedBucketOwner: '123456789012', clock: { now: () => now }, transport });
+  return { calls, value, store, artifact, reader, transport };
 }
 describe('exact-version protected envelope storage adapter', () => {
+  it('exposes only bounded exact-version operations to the API', async () => {
+    const f=fixture();expect(Object.keys(f.reader).sort()).toEqual(['openExact','readExact','verify']);
+    expect((await f.reader.readExact(f.artifact.storage,body.length)).body).toEqual(body);
+    const opened=await f.reader.openExact(f.artifact.storage),chunks:Buffer[]=[];
+    for await(const chunk of opened.body)chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks)).toEqual(body);expect(opened.versionId).toBe('exact-version-1');
+    expect(f.calls.map(c=>c.operation)).toEqual(['get','get']);
+    expect(f.calls.every(c=>c.input.VersionId==='exact-version-1')).toBe(true);
+    await expect(f.reader.readExact(f.artifact.storage,13*1024*1024)).rejects.toThrow('ENVELOPE_OBJECT_BOUND_REQUIRED');
+  });
+  it('closes rejected responses and a download abandoned before iteration', async () => {
+    const f=fixture();let source=Readable.from([body]);
+    f.transport.get=async()=>({$metadata:{},VersionId:'wrong',ContentLength:body.length,Body:source as any});
+    await expect(f.reader.openExact(f.artifact.storage)).rejects.toThrow('ENVELOPE_OBJECT_METADATA_MISMATCH');expect(source.destroyed).toBe(true);
+    source=Readable.from([body]);f.transport.get=async()=>({$metadata:{},VersionId:'exact-version-1',ContentLength:body.length,Body:source as any});
+    const opened=await f.reader.openExact(f.artifact.storage);opened.body.destroy();
+    await new Promise(resolve=>opened.body.once('close',resolve));expect(source.destroyed).toBe(true);
+  });
+  it('rejects a short or oversized stream and closes its underlying body', async () => {
+    const f=fixture();for(const declared of [body.length-1,body.length+1]){
+      const source=Readable.from([body]);f.transport.get=async()=>({$metadata:{},VersionId:'exact-version-1',ContentLength:declared,Body:source as any});
+      const opened=await f.reader.openExact(f.artifact.storage);
+      await expect((async()=>{for await(const _chunk of opened.body){ /* drain */ }})()).rejects.toThrow('ENVELOPE_OBJECT_SIZE_MISMATCH');expect(source.destroyed).toBe(true);
+    }
+  });
   it('checks original bytes and actual compliance retention on the exact version without a latest lookup', async () => {
     const f = fixture(); expect(await f.store.verify(f.artifact, until)).toMatchObject({ object: f.artifact.storage, mode: 'COMPLIANCE', sha256: f.artifact.sha256 });
     expect(f.calls.map(c => c.operation)).toEqual(['get', 'retention']);

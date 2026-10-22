@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { S3Client, HeadObjectCommand, GetObjectCommand, PutObjectCommand, GetObjectRetentionCommand,
   type HeadObjectCommandInput, type HeadObjectCommandOutput, type GetObjectCommandInput, type GetObjectCommandOutput,
   type PutObjectCommandInput, type PutObjectCommandOutput, type GetObjectRetentionCommandInput, type GetObjectRetentionCommandOutput } from '@aws-sdk/client-s3';
@@ -23,14 +24,15 @@ const artifactKey = (key: string) => /^integrity\/v1\/(?:manifests|envelopes)\/[
 /** Separate adapter: it cannot copy originals, select latest media, remove locks,
  * shorten retention or grant itself bucket authority. Protection receipt and IAM
  * review are required before a hosted worker may receive this adapter. */
-export function createEnvelopeS3Store(input: {
+interface EnvelopeReadInput {
   artifactBucket: string; evidenceBuckets: string[]; expectedBucketOwner: string;
-  clock: Clock; transport: EnvelopeS3Transport;
-}): EnvelopeStore {
+  clock: Clock; transport: Pick<EnvelopeS3Transport, 'get' | 'retention'>;
+}
+function createReader(input: EnvelopeReadInput) {
   check(/^[0-9]{12}$/.test(input.expectedBucketOwner) && input.evidenceBuckets.length > 0, 'ENVELOPE_STORAGE_CONFIGURATION');
   const allowed = new Set([input.artifactBucket, ...input.evidenceBuckets]);
   const exactInput = (object: ExactObject) => {
-    check(allowed.has(object.bucket) && typeof object.key === 'string' && object.key.length > 0 && object.key.length <= 1024 && typeof object.versionId === 'string' && object.versionId.length > 0 && object.versionId !== 'null', 'ENVELOPE_EXACT_VERSION_REQUIRED');
+    check(allowed.has(object.bucket) && typeof object.key === 'string' && object.key.length > 0 && object.key.length <= 1024 && (object.bucket !== input.artifactBucket || artifactKey(object.key)) && typeof object.versionId === 'string' && object.versionId.length > 0 && object.versionId.length <= 1024 && object.versionId !== 'null', 'ENVELOPE_EXACT_VERSION_REQUIRED');
     return { Bucket: object.bucket, Key: object.key, VersionId: object.versionId, ExpectedBucketOwner: input.expectedBucketOwner };
   };
   async function read(object: ExactObject, maxBytes: number, collect: boolean) {
@@ -59,6 +61,42 @@ export function createEnvelopeS3Store(input: {
     check(retention?.Mode === 'COMPLIANCE' && retention.RetainUntilDate && retention.RetainUntilDate.getTime() >= Date.parse(retainUntil), 'ENVELOPE_PROTECTION_MISMATCH');
     return { object: { ...artifact.storage }, sha256: stored.sha256, byteSize: stored.byteSize, mode: 'COMPLIANCE', retainUntil: retention!.RetainUntilDate!.toISOString(), verifiedAt: input.clock.now().toISOString() };
   }
+  async function openExact(object: ExactObject) {
+    const response = await input.transport.get(exactInput(object));
+    const source = response.Body as (AsyncIterable<Uint8Array> & { destroy?: () => void }) | undefined;
+    try {
+      check(response.VersionId === object.versionId && source?.[Symbol.asyncIterator] && Number.isSafeInteger(response.ContentLength) && response.ContentLength! >= 0 && response.ContentLength! <= 250000000, 'ENVELOPE_OBJECT_METADATA_MISMATCH');
+    } catch (error) { source?.destroy?.(); throw error; }
+    async function* bounded() {
+      let size = 0;
+      try {
+        for await (const chunk of source!) {
+          size += chunk.byteLength;
+          check(size <= response.ContentLength!, 'ENVELOPE_OBJECT_SIZE_MISMATCH');
+          yield chunk;
+        }
+        check(size === response.ContentLength, 'ENVELOPE_OBJECT_SIZE_MISMATCH');
+      } finally { source?.destroy?.(); }
+    }
+    const body = Readable.from(bounded(), { objectMode: false, highWaterMark: 64 * 1024 });
+    // streamZip also destroys entries rejected before iteration begins.
+    body.once('close', () => source?.destroy?.());
+    return { body, versionId: response.VersionId! };
+  }
+  return { read, verify, openExact };
+}
+/** API capability: exact-version reads only; no discovery, publication or signing. */
+export function createEnvelopeS3Reader(input: EnvelopeReadInput) {
+  const reader = createReader(input);
+  return { verify: reader.verify, openExact: reader.openExact,
+    readExact: async (object: ExactObject, maximumBytes: number) => {
+      check(Number.isSafeInteger(maximumBytes) && maximumBytes > 0 && maximumBytes <= 12 * 1024 * 1024, 'ENVELOPE_OBJECT_BOUND_REQUIRED');
+      return { body: (await reader.read(object, maximumBytes, true)).body, versionId: object.versionId };
+    },
+  };
+}
+export function createEnvelopeS3Store(input: EnvelopeReadInput & { transport: EnvelopeS3Transport }): EnvelopeStore {
+  const { read, verify } = createReader(input);
   async function find(bucket: string, key: string, maxBytes: number) {
     check(bucket === input.artifactBucket && artifactKey(key) && Number.isSafeInteger(maxBytes) && maxBytes > 0 && maxBytes <= 12 * 1024 * 1024, 'ENVELOPE_ARTIFACT_SCOPE');
     let head: HeadObjectCommandOutput;

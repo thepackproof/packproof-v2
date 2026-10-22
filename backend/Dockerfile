@@ -5,6 +5,7 @@ COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
+COPY backend/scripts/m2-runtime-privileges.mjs backend/scripts/m2-runtime-privileges.d.mts ./scripts/
 COPY packages/evidence-contracts /app/packages/evidence-contracts
 RUN npm run build
 
@@ -24,6 +25,7 @@ COPY backend/certs /app/certs
 COPY backend/openapi.json ./openapi.json
 COPY backend/partner-openapi.json ./partner-openapi.json
 COPY backend/claim-export-openapi.json ./claim-export-openapi.json
+COPY backend/envelope-openapi.json ./envelope-openapi.json
 COPY backend/rnd-openapi.json ./rnd-openapi.json
 COPY config/rnd/research-build.json /app/config/rnd/research-build.json
 COPY backend/scripts/onboarding-migrate.mjs ./scripts/onboarding-migrate.mjs
@@ -33,6 +35,7 @@ COPY backend/scripts/foundation-migrate.mjs ./scripts/foundation-migrate.mjs
 COPY backend/scripts/foundation-migrate-cli.mjs ./scripts/foundation-migrate-cli.mjs
 COPY backend/scripts/m2-migrate.mjs ./scripts/m2-migrate.mjs
 COPY backend/scripts/m2-migrate-cli.mjs ./scripts/m2-migrate-cli.mjs
+COPY backend/scripts/m2-runtime-privileges.mjs ./scripts/m2-runtime-privileges.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
 COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
