@@ -1,6 +1,6 @@
 /** Generated protocol fixtures; no Apple/Google hardware assertion is simulated. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, sign, X509Certificate } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,7 +39,11 @@ beforeAll(async () => {
   openssl('x509', '-req', '-in', 'leaf.csr', '-CA', 'intermediate.pem', '-CAkey', 'intermediate.key', '-set_serial', '3', '-out', 'leaf.pem', '-days', '1', '-sha256', '-extfile', 'leaf.ext');
   leafDer = openssl('x509', '-in', 'leaf.pem', '-outform', 'DER'); intermediateDer = openssl('x509', '-in', 'intermediate.pem', '-outform', 'DER'); rootPem = pem('root.pem');
   fixture = { objectBase64: cbor.encode({ fmt: 'apple-appattest', attStmt: { x5c: [leafDer, intermediateDer], receipt: Buffer.from('TEST ONLY RECEIPT') }, authData }).toString('base64'), keyId: keyId.toString('base64'), expectedClientDataHash: binding };
-  policy = { appId, environment: 'development', trustedRootCertificatesPem: [rootPem], trustPolicyId: 'TEST-ONLY-GENERATED-ROOT-v1', trustPolicyExpiresAt: now + 60_000, now, allowedValidationCategories: [3], allowedBundleVersions: ['1.0.1'] };
+  // OpenSSL sets notBefore when issuing each certificate. A module-load clock
+  // can precede that instant if generation crosses a second boundary.
+  const certificateNow = Date.now();
+  Object.assign(window, { now: certificateNow, challengeIssuedAt: certificateNow - 1000, challengeExpiresAt: certificateNow + 60_000 });
+  policy = { appId, environment: 'development', trustedRootCertificatesPem: [rootPem], trustPolicyId: 'TEST-ONLY-GENERATED-ROOT-v1', trustPolicyExpiresAt: certificateNow + 60_000, now: certificateNow, allowedValidationCategories: [3], allowedBundleVersions: ['1.0.1'] };
   key = { keyId: fixture.keyId, publicKeyPem: publicKey.export({ format: 'pem', type: 'spki' }).toString(), appId, environment: 'development', counter: 0, trustPolicyId: policy.trustPolicyId };
 });
 afterAll(() => { if (temporary) rmSync(temporary, { recursive: true, force: true }); });
@@ -61,6 +65,14 @@ describe('App Attest cryptographic protocol fixtures (not Apple hardware qualifi
     expect((await verifyAppAttestAttestation({ ...window, ...fixture })).state).toBe('UNSUPPORTED');
     expect((await verifyAppAttestAttestation({ ...window, ...fixture }, { ...policy, trustPolicyExpiresAt: now })).state).toBe('UNSUPPORTED');
     expect((await verifyAppAttestAttestation({ ...window, ...fixture }, { ...policy, trustedRootCertificatesPem: [pem('leaf.pem')] })).state).toBe('INVALID');
+  });
+  it('rejects certificates immediately before issuance and after expiry without weakening time checks', async () => {
+    const certificate = new X509Certificate(leafDer);
+    for (const at of [Date.parse(certificate.validFrom) - 1, Date.parse(certificate.validTo) + 1]) {
+      const checked = await verifyAppAttestAttestation({ ...fixture, now: at, challengeIssuedAt: at - 1000, challengeExpiresAt: at + 60_000 }, { ...policy, now: at, trustPolicyExpiresAt: at + 60_000 });
+      expect(checked.reasonCodes).toContain('CERTIFICATE_EXPIRED_OR_NOT_YET_VALID');
+      expect(checked.state).toBe('INVALID');
+    }
   });
   it('rejects wrong challenge, app, environment, key identity and revoked key', async () => {
     for (const [input, configured] of [
@@ -149,7 +161,7 @@ describe('Google server-decoded integrity payload policy', () => {
 });
 
 it('Android chain diagnostics fail closed without current roots/revocation and reject revoked certificates', async () => {
-  const input = { certificatesBase64: [leafDer.toString('base64'), intermediateDer.toString('base64')], now };
+  const input = { certificatesBase64: [leafDer.toString('base64'), intermediateDer.toString('base64')], now: window.now };
   expect((await verifyAndroidKeyAttestationChain(input)).state).toBe('UNSUPPORTED');
-  expect((await verifyAndroidKeyAttestationChain(input, { trustedRootCertificatesPem: [rootPem], revocationEntries: { '3': { status: 'REVOKED' } }, revocationValidUntil: now + 60_000, trustPolicyId: 'TEST_ONLY' })).reasonCodes).toContain('ANDROID_ATTESTATION_CERTIFICATE_REVOKED');
+  expect((await verifyAndroidKeyAttestationChain(input, { trustedRootCertificatesPem: [rootPem], revocationEntries: { '3': { status: 'REVOKED' } }, revocationValidUntil: window.now + 60_000, trustPolicyId: 'TEST_ONLY' })).reasonCodes).toContain('ANDROID_ATTESTATION_CERTIFICATE_REVOKED');
 });
