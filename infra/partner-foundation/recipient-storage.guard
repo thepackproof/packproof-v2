@@ -1,0 +1,53 @@
+# Reviewed requirements for this synthetic storage-only acceptance stack.
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let tasks = Resources.*[ Type == 'AWS::ECS::TaskDefinition' ]
+let services = Resources.*[ Type == 'AWS::ECS::Service' ]
+let secrets = Resources.*[ Type == 'AWS::SecretsManager::Secret' ]
+let databases = Resources.*[ Type == 'AWS::RDS::DBInstance' ]
+
+rule private_retained_storage {
+    %buckets {
+        DeletionPolicy == 'Retain'
+        UpdateReplacePolicy == 'Retain'
+        Properties {
+            PublicAccessBlockConfiguration {
+                BlockPublicAcls == true
+                BlockPublicPolicy == true
+                IgnorePublicAcls == true
+                RestrictPublicBuckets == true
+            }
+            VersioningConfiguration.Status == 'Enabled'
+            BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+            OwnershipControls.Rules[*].ObjectOwnership == 'BucketOwnerEnforced'
+        }
+    }
+}
+rule protected_recipient_versions {
+    Resources.RecipientBucket.Properties {
+        ObjectLockEnabled == true
+        ObjectLockConfiguration {
+            ObjectLockEnabled == 'Enabled'
+            Rule.DefaultRetention {
+                Mode == 'COMPLIANCE'
+                Days == 2
+            }
+        }
+    }
+    Parameters.WriterFence.Default == 'CLOSED'
+}
+rule bounded_unprivileged_workloads {
+    %tasks.Properties {
+        Cpu == '256'
+        Memory == '512'
+        NetworkMode == 'awsvpc'
+        ContainerDefinitions[*] {
+            User == '1000:1000'
+            ReadonlyRootFilesystem == true
+            Privileged !exists
+            Secrets !exists
+        }
+    }
+    %services empty
+    %secrets empty
+    %databases empty
+}
