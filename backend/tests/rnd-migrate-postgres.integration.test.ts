@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { createPgDatabase } from '../src/db/postgres.js';
 import { migrate,migrationInventory } from '../src/db/migrate.js';
 import { splitSqlStatements } from '../src/db/sql.js';
-import { MIGRATIONS,RECEIPT_TABLES,inspectState,inspectionReceipt,applyInTransaction,assertMinimalPrivileges } from '../scripts/rnd-migrate.mjs';
+import { MIGRATIONS,RECEIPT_TABLES,inspectInventory,inspectState,inspectionReceipt,applyInTransaction,assertMinimalPrivileges } from '../scripts/rnd-migrate.mjs';
 import type { Database } from '../src/db/database.js';
 
 const databaseUrl=process.env.PACKPROOF_RELEASE_TEST_DATABASE_URL;
@@ -27,7 +27,12 @@ describe.skipIf(!databaseUrl)('receipt migration transaction and authority on re
   await admin.query(`CREATE DATABASE ${database} OWNER ${owner}`);
   const url=new URL(databaseUrl!);url.pathname='/'+database;url.searchParams.set('options',`-c role=${owner}`);
   opened=createPgDatabase(url.toString());directory=await mkdtemp(path.join(tmpdir(),'rnd-baseline-'));
-  inventory=await migrationInventory();
+  const currentInventory=await migrationInventory();
+  // Exercise the retired operator against its exact historical release. It must
+  // continue refusing the current application inventory before any DDL runs.
+  expect(()=>inspectInventory(currentInventory,[])).toThrow('CANDIDATE_INVENTORY_MISMATCH');
+  inventory=currentInventory.filter(row=>row.id<='087_rnd_source_storage_dedup');
+  expect(inventory).toHaveLength(86);
   for(const row of inventory.filter(row=>!MIGRATIONS.some(pin=>pin.id===row.id)))await writeFile(path.join(directory,row.id+'.sql'),row.sql);
   await migrate(opened.db,directory);
   await opened.db.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
