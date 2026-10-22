@@ -1033,5 +1033,117 @@
       }
     ],
     "limit": "Upload-time default retention only; later-stage extension and legal-hold reconciliation require their own checks."
+  },
+  "finalPause": {
+    "observedAt": "2026-10-22T04:40:09.265Z",
+    "status": "PAUSED",
+    "assets": {
+      "assetsStatus": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "ComputeEnabled",
+          "ParameterValue": "false"
+        },
+        {
+          "ParameterKey": "EgressAvailabilityZone",
+          "ParameterValue": "us-east-1a"
+        },
+        {
+          "ParameterKey": "CandidateCommit",
+          "ParameterValue": "ae99e06fb547d49edd223d31901510874c2e0e35"
+        }
+      ],
+      "runningTasks": []
+    },
+    "network": {
+      "projectsFound": [],
+      "projectsAbsent": [
+        "packproof-m1-20261021-runtime"
+      ],
+      "natGateways": [
+        {
+          "id": "nat-03d3790b625d70eeb",
+          "state": "deleted"
+        }
+      ],
+      "routeTables": [
+        {
+          "id": "rtb-05ee97c6869a5baab",
+          "routes": [
+            {
+              "DestinationCidrBlock": "10.42.0.0/16",
+              "GatewayId": "local",
+              "Origin": "CreateRouteTable",
+              "State": "active"
+            }
+          ]
+        }
+      ],
+      "removedResources": []
+    },
+    "closeBuild": "packproof-m1-20261021-runtime:dee6d933-fec7-4048-9914-3789b5d93393",
+    "archive": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/dee6d933-fec7-4048-9914-3789b5d93393/runtime.zip",
+      "versionId": "ZckT8MRtCleVQnrvz.vOvohpAo4XeT22",
+      "sha256": "947d9f5684f794b9a55beaa00bf0f03c65e8c261cb581df435d4aade1e74fa28"
+    },
+    "database": {
+      "source": "99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9",
+      "database": "m1_service_20261021",
+      "writerFence": [
+        {
+          "singleton": 1,
+          "generation": "m1-runtime-20261021",
+          "writes_enabled": false
+        }
+      ],
+      "policyFence": [
+        {
+          "singleton": 1,
+          "mode": "NORMAL",
+          "durability_required": true,
+          "expected_sequence": null,
+          "expected_head_sha256": null,
+          "reconciled_sequence": "307",
+          "reconciled_head_sha256": "8a17ae805eaec3167adfde15b7ddda7fdf19d05b8a729231a93830dc0ae779a6",
+          "baseline_completed": true
+        }
+      ],
+      "roles": [
+        {
+          "rolname": "m1_service_api",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        },
+        {
+          "rolname": "m1_service_worker",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        }
+      ],
+      "coreDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "26"
+        }
+      ],
+      "policyDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "307"
+        }
+      ]
+    }
   }
 }
