@@ -33,3 +33,8 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # Reviewed CI 39817280822 / job 119959325678: exact synthetic database role
 # names, not credentials. Passwords are generated in memory and injected by ECS.
 95e50567292d7a99a631358e30d61cb96664da1d:backend/scripts/isolated-recipient-control.mjs:generic-api-key:26
+
+# Reviewed CI 39826624712 / job 119991499135: apiRole is the synthetic
+# PostgreSQL login name m2_recipient_api_20261022, verified in the closed-role
+# receipt. It is not a password or bearer credential. Exact historical line only.
+333076d58e7b545d2c0d4219fbea91de8b78f746:docs/partner-foundation/recipient-flow-cloud-evidence-2026-10-22.json:generic-api-key:1085
