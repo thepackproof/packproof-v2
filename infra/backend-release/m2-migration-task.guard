@@ -1,0 +1,17 @@
+rule inactive_m2_operator {
+ Resources.*.Type IN ["AWS::Logs::LogGroup", "AWS::IAM::Role", "AWS::ECS::TaskDefinition"]
+ Resources.TaskDefinition.Properties.RequiresCompatibilities == ["FARGATE"]
+ Resources.TaskDefinition.Properties.NetworkMode == "awsvpc"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].ReadonlyRootFilesystem == true
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].User == "1000:1000"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Command == ["node", "scripts/m2-migrate-cli.mjs", "--inspect"]
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_MIGRATE_ON_START" ].Value == "false"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_ORGANIZATIONS_ENABLED" ].Value == "false"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_CLAIM_EXPORTS_ENABLED" ].Value == "false"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_OPERATOR_PURPOSE" ].Value == "m2-inactive-production-migration"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_DB_HOST" ].Value == "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com"
+ Resources.TaskDefinition.Properties.ContainerDefinitions[0].Environment[ Name == "PACKPROOF_DB_SSLMODE" ].Value == "verify-full"
+ Resources.TaskRole.Properties.Policies[0].PolicyDocument.Statement == [{"Effect":"Deny", "Action":"*", "Resource":"*"}]
+ Resources.ExecutionRole.Properties.Policies[0].PolicyDocument.Statement[ Action == "secretsmanager:GetSecretValue" ].Resource == "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96"
+ Resources.Logs.DeletionPolicy == "Retain"
+}

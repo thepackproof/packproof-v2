@@ -38,3 +38,10 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # PostgreSQL login name m2_recipient_api_20261022, verified in the closed-role
 # receipt. It is not a password or bearer credential. Exact historical line only.
 333076d58e7b545d2c0d4219fbea91de8b78f746:docs/partner-foundation/recipient-flow-cloud-evidence-2026-10-22.json:generic-api-key:1085
+
+# Reviewed redacted CodeBuild scan 3e852cf1-54a8-44a2-8fc9-cfd5dc95a945.
+# These exact historical fields are verified CodeBuild project/build locators,
+# not credentials. New records separate the project from the build UUID.
+78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:9
+78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:34
+78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:678

@@ -4,6 +4,12 @@ This additive M2 source implements exact-file preservation and recovery for new
 claim-bound merchant review exports. It does not activate production, submit a
 provider dispute, backfill legacy packets or establish merchant acceptance.
 
+Production migrations 093-095 were applied on 22 October 2026 with claim exports
+disabled. Task revision 49 passed the inactive-schema compatibility boundary;
+all existing records and runtime privileges were preserved. The new tables remain
+empty without non-owner grants. [Execution and cleanup evidence](m2-inactive-production-migration-2026-10-22.json)
+does not activate protected recipient exports or certify production storage.
+
 ## Combined actual-role lifecycle and restore - 22 October 2026
 
 The [combined cloud evidence](recipient-flow-cloud-evidence-2026-10-22.json)

@@ -77,8 +77,10 @@ it('leaves legacy builds/deployment inert before credentials, source uploads or 
  expect(body).toMatch(/^\$ErrorActionPreference = "Stop"\r?\nthrow "LEGACY_BACKEND_DEPLOY_DISABLED:/);
  const escaped=path.join(root,'infra/deploy.ps1').replace(/'/g,"''");
  const command=`$ErrorActionPreference='Stop'; function git { throw 'FORBIDDEN_GIT_CALL' }; function aws { throw 'FORBIDDEN_AWS_CALL' }; try { & '${escaped}' -ReviewedReleaseSha '${'a'.repeat(40)}'; exit 4 } catch { if ($_.Exception.Message.StartsWith('LEGACY_BACKEND_DEPLOY_DISABLED:')) { exit 0 }; Write-Error 'UNEXPECTED_DEPLOY_PATH'; exit 5 }`;
- const result=spawnSync(process.platform==='win32'?'powershell.exe':'pwsh',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],{cwd:root,encoding:'utf8',timeout:15_000});
+ // Cold PowerShell startup exceeded 15 seconds on a shared runner. Keep the
+ // fail-before-cloud assertion unchanged and allow one bounded startup attempt.
+ const result=spawnSync(process.platform==='win32'?'powershell.exe':'pwsh',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],{cwd:root,encoding:'utf8',timeout:60_000});
  expect(result.status,result.error?.message??result.stdout+result.stderr).toBe(0);
  const workflow=await readFile(path.join(root,'.github/workflows/deploy-staging.yml'),'utf8');
  expect(workflow).toContain('workflow_dispatch:');expect(workflow).not.toMatch(/^\s+(?:push|pull_request|schedule|workflow_run):/m);
-});
+},65_000);
