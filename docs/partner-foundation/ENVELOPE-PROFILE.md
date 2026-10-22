@@ -1,6 +1,6 @@
 # Additive integrity profile - engineering preview
 
-This implements the format, KMS adapter, bounded package stream, independent verifier, durable signing state machine and protected-journal reconstruction portion of M2-03. It is **not activated in API routes or production workers**. Production migrations 093-095 were applied on 22 October 2026 behind the inactive compatibility bridge, with 94 exact receipts, unchanged historical records and no non-owner grants on the six new tables. The [production receipt](m2-inactive-production-migration-2026-10-22.json) records execution and cleanup; feature activation remains disabled. Earlier synthetic acceptance below retains its original scope. Actual M2 workload protection, stale-credential fencing, lost-response reconciliation, offline verification and fresh reconstruction passed the scoped cloud acceptance below. Authenticated API admission/export, public key-history distribution and the RFC 3161 provider path remain activation work. Existing production manifests, legacy signatures and package v1 remain unchanged.
+This implements the format, KMS adapter, bounded package stream, independent verifier, durable signing state machine and protected-journal reconstruction portion of M2-03. Authenticated API routes and separate-worker scheduling are implemented behind disabled-by-default gates; **production activation remains disabled**. Production migrations 093-095 were applied on 22 October 2026 behind the inactive compatibility bridge, with 94 exact receipts, unchanged historical records and no non-owner grants on the six new tables. The [production receipt](m2-inactive-production-migration-2026-10-22.json) records execution and cleanup; feature activation remains disabled. Earlier synthetic acceptance below retains its original scope. Actual M2 workload protection, stale-credential fencing, lost-response reconciliation, offline verification and fresh reconstruction passed the scoped cloud acceptance below. Hosted authenticated API admission/export and public key-history acceptance, production workload permissions and the RFC 3161 provider path remain activation work. Existing production manifests, legacy signatures and package v1 remain unchanged.
 
 ## Frozen bytes and signing
 
@@ -16,7 +16,7 @@ The durable operation identity binds profile, Proof, record type, record ID, sch
 
 Migration `093_integrity_envelope_jobs.sql` adds immutable request/result rows and a mutable delivery projection. It grants no runtime authority and rewrites no existing rows. The historical production migration operator remains pinned to migrations 088-092 and refuses this new inventory. The separate exact M2 operator has now applied 093-095, and production task revision 49 is the accepted inactive-schema compatibility bridge. Earlier foundation task revision 48 is incompatible with the 94-receipt inventory. This does not activate the new envelope worker or its permissions.
 
-`enqueueEnvelopeFromRecovery` is an internal, explicit-cohort admission seam. It reads a DURABLE core/stage/supplement recovery event produced by the existing atomic domain outbox. It derives manifest bytes, original object versions and received record scope solely from that frozen snapshot. It never enumerates current evidence to repair a manifest. The request, lease projection, audit and ENVELOPE_REQUESTED recovery event commit together. Signing waits for that request event to become DURABLE. Replays preserve the same request; issuer, bucket, key or retention changes conflict instead of silently replacing it.
+`enqueueEnvelopeFromRecovery` is the internal seam used by explicit-cohort HTTP admission. It reads a DURABLE core/stage/supplement recovery event produced by the existing atomic domain outbox. It derives manifest bytes, original object versions and received record scope solely from that frozen snapshot. It never enumerates current evidence to repair a manifest. The request, lease projection, audit and ENVELOPE_REQUESTED recovery event commit together. Signing waits for that request event to become DURABLE. Replays preserve the same request; issuer, bucket, key or retention changes conflict instead of silently replacing it.
 
 The worker claims a bounded lease under the current writer fence, then releases the transaction. It verifies the source journal signature and exact receipt version, preserves each frozen manifest, and stream-checks every original's exact bucket/key/version, size, digest and COMPLIANCE retention deadline. The S3 adapter uses conditional creation, a SHA-256 upload checksum and expected bucket owner. It relies on deployment-controlled default retention and accepts only after checking actual retention on the returned version. It sends no retention-setting headers and needs no retention-change authority. It has no original-copy, latest-media, retention-shortening or deletion operation. Later stages with insufficient original retention fail; automatic retention extension remains M3-06 work.
 
@@ -24,7 +24,64 @@ KMS consumes the new envelope only after those checks. A conditional object keye
 
 Lost object responses, database rollback after publication, expired leases and fenced workers reconcile from the same stored candidate. The request and accepted result enter complete Proof recovery snapshots; fresh restore verifies their source binding, JWS, coverage and exact object protection using separately supplied trust. It rebuilds pending deliveries without stale lease tokens and restores accepted result bytes without resigning. Restored traffic and writers remain closed. If those verifier/storage dependencies are missing, restore refuses to accept envelope records.
 
-These routines are internal and unscheduled. Before production hosting, wire admission/status/export through current Proof authorization, select an explicit cohort and cutover, configure independently authenticated key history, and provision and verify the production worker key and protected storage. The dedicated synthetic roles passed the recorded crash/fence/restore acceptance; that does not certify production roles or existing production media protection. Legacy stage/supplement signing still needs its own short-transaction boundary review.
+The gated API and scheduler now use these routines. Before production activation, verify the exact hosted source with authenticated admission/status/export, select an explicit cohort and cutover, and provision and verify production workload identities, independently authenticated key history, the worker key and protected storage. The dedicated synthetic roles passed the recorded crash/fence/restore acceptance; that does not certify production roles or existing production media protection. Legacy stage/supplement signing still needs its own short-transaction boundary review.
+
+## Authenticated admission and deployment gates
+
+The contract is served at `GET /v1/envelope-openapi.json`. First-party human users
+can request a frozen CORE, STAGE or SUPPLEMENT through
+`POST /proofs/:id/integrity-envelopes` with only `recordType` and `recordId`.
+Status and package endpoints append `/:operationId` and `/:operationId/package`.
+The server derives exact source versions and preservation policy. Requests are
+deterministically idempotent; a different policy for the same frozen record
+returns 409. Admission requires current Proof access, an enabled organization,
+the explicit merchant cohort and a DURABLE source at or after the cutover.
+Existing partner credentials may read status and export under `exports:read` at
+the corresponding `/v1/partner/proofs/:proofId/integrity-envelopes/...` paths.
+Service principals cannot enqueue signing in this slice.
+
+The accepted human actor enters the immutable request journal. The worker checks
+that actor's current authority before external work, at lease renewals and before
+accepting a result. Completed revocation makes queued work fail without signing.
+Exports verify the exact stored result version and retention, source-journal
+signature, coverage and current independent key history. Every streamed artifact
+uses its exact version, byte count and digest. Revoked access or compromised keys
+prevent a complete ZIP directory. Reads and downloads never call KMS Sign.
+
+`PACKPROOF_ENVELOPES_ENABLED` defaults to `false`. Enabling it requires separate
+`api` and `worker` processes, disabled startup migrations, durable receipts, an
+exact source SHA, separate artifact/original/journal buckets, distinct API/worker
+IAM and database roles, and a dedicated exact KMS key. The organization namespace
+is `sandbox` or `live`, separate from the deployment label; production requires
+`live`. Only the worker creates a signer and schedules `integrity-envelopes`.
+The API receives a read-only storage adapter. Startup and readiness inspect both
+the actual database login and effective M2 privileges; the runtime never grants
+permissions or changes schema.
+
+`PACKPROOF_ENVELOPE_PROTECTION_EVIDENCE_FILE` is a bounded public JSON file pinned
+by `PACKPROOF_ENVELOPE_PROTECTION_EVIDENCE_SHA256`. Its schema is
+`packproof.envelope-deployment.v1`, with `binding` containing `artifactBucket`,
+`evidenceBucket`, `journalBucket`, `account`, `region`, `keyArn`, `keyId`, `issuer`,
+`apiRole`, `workerRole`, `apiDatabaseRole`, `workerDatabaseRole`, `sourceSha`,
+`environment`, `organizationEnvironment`, sorted `merchantIds`, `cutoverAt`,
+`retainUntil` and `writerGeneration`, exactly matching deployment configuration.
+It also requires `reviewedBy`, `evidenceReference`, `verifiedAt`, `expiresAt`, and
+true acceptance fields `versioningVerified`, `complianceRetentionVerified`,
+`originalProtectionVerified`, `conditionalCreationVerified`,
+`exactVersionReadVerified`, `apiWritesDenied`, `apiSigningDenied`,
+`workerDeletionDenied`, `retentionMutationDenied`, `crossBucketAccessDenied`,
+`writerFenceVerified`, `freshRestoreVerified`, `databaseRolesVerified` and
+`authenticatedHttpVerified`. These fields must refer to actual recorded
+acceptance. Self-authored booleans alone do not prove IAM or storage policy.
+Expired, altered or mismatched evidence fails closed at startup and readiness and
+on authenticated operations. No production activation evidence is fabricated.
+
+Focused tests exercise authorization, exact-version downloads, deterministic
+admission, preservation states, changed policy, queued revocation and midstream
+revocation with explicit synthetic storage and generated keys. Local role tests
+use PGlite role switching; CI additionally uses separate PostgreSQL logins. The
+HTTP fixture uses a synthetic bearer adapter and owner-controlled setup, so it
+does not substitute for hosted identity, actual IAM or real-device acceptance.
 
 ## Coverage and package
 

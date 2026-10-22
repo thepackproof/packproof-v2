@@ -1,6 +1,33 @@
 # Full-release continuation - 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
+
+## Gated envelope HTTP and worker implementation - 22 October 2026
+
+The current development candidate adds first-party human admission, status and
+exact-version package downloads, plus scoped partner reads/exports and public
+key-history publication. Admission is limited to an explicit merchant cohort and
+cutover. Worker leases recheck the accepted caller; downloads recheck current
+authority and key trust. Separate process/database identities, protected storage
+and source-bound acceptance evidence gate activation. The API has only the
+read-only envelope adapter; only the worker can initialize the dedicated signer.
+The [profile and configuration](ENVELOPE-PROFILE.md) explain the remaining gates.
+
+Local build and the focused access, runtime, storage and job tests passed: 43
+checks, with one independent-PostgreSQL contention case reserved for CI. The
+public-key publication slice separately passed nine focused checks. Fixtures use
+generated keys, synthetic storage and synthetic bearer authentication. They are
+not evidence of hosted HTTP identity, production protection or a merchant pilot.
+The full CI backend job for the first publication candidate stalled during media
+package installation; the follow-up uses installed tools when present, bounds
+fallback installation and still verifies both media binaries. Updated CI and
+actual-role acceptance remain required before release of this candidate.
+
+Production remains the accepted inactive task revision 49 below. No organizations,
+envelope API, envelope worker or claim export feature has been enabled by this
+implementation. RFC 3161, hosted acceptance, separate production baseline roles,
+physical-device acceptance, human review and a consenting merchant pilot remain
+open. This is engineering progress toward M2, not full-plan completion.
  
 ## Production compatibility bridge and inactive M2 schema - 22 October 2026, 19:17 UTC
 

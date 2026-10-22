@@ -4627,5 +4627,6 @@
       }
     }
   },
-  "x-packproof-organization-contract": "/v1/partner-openapi.json"
+  "x-packproof-organization-contract": "/v1/partner-openapi.json",
+  "x-packproof-envelope-contract": "/v1/envelope-openapi.json"
 }

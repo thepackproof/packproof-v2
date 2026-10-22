@@ -34,7 +34,9 @@ export interface EnvelopeBundle {
 interface JobRow { operation_id: string; proof_id: string; request_json: string; request_sha256: string; attempts: number; }
 export interface EnvelopeWorker {
   writerGeneration: string; store: EnvelopeStore;
-  sourceJournal: Pick<RecoveryPublisher, 'store' | 'trustedPublicKey'>;
+  sourceJournal: { store: Pick<RecoveryPublisher['store'], 'get'>; trustedPublicKey: (keyId: string, signedAt?: string) => Promise<string | null> };
+  /** Hosted scheduling rechecks the accepted caller and cohort between external calls. */
+  authorizeRequest?: (db: Database, operationId: string, request: EnvelopeRequest) => Promise<void>;
   /** Independently pinned, issuer-bound key history; reject compromised/expired keys here. */
   trustedPublicKey: (issuer: string, keyId: string, issuedAt: string) => Promise<string | null>;
   sign: (keyId: string, envelopeBytes: Uint8Array) => Promise<EnvelopeJws>;
@@ -114,6 +116,7 @@ async function lockFence(tx: Database, generation: string) {
  * The source's core transaction already atomically recorded its recovery outbox. */
 export async function enqueueEnvelopeFromRecovery(db: Database, clock: Clock, input: {
   sourceOperationId: string; evidenceBucket: string; artifactBucket: string; issuer: string; keyId: string; retainUntil: string; writerGeneration: string;
+  actorUserId?: string;
 }) {
   return db.transaction(async tx => {
     await lockFence(tx, input.writerGeneration);
@@ -127,8 +130,8 @@ export async function enqueueEnvelopeFromRecovery(db: Database, clock: Clock, in
     if (prior) { check(prior.request_sha256 === requestSha, 'ENVELOPE_OPERATION_CONFLICT'); return { operationId, replayed: true }; }
     await tx.query(`INSERT INTO integrity_envelope_jobs(operation_id,proof_id,record_type,record_id,manifest_sha256,request_json,request_sha256,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, [operationId, request.proofId, request.recordType, request.recordId, request.manifestSha256, requestJson, requestSha, clock.now().toISOString()]);
     await tx.query('INSERT INTO integrity_envelope_delivery(operation_id,next_attempt_at) VALUES($1,$2)', [operationId, clock.now().toISOString()]);
-    await appendAudit(tx,{proofId:request.proofId,actorUserId:null,eventType:'ENVELOPE_SIGNING_REQUESTED',eventData:{operationId,sourceOperationId:request.source.operationId,manifestSha256:request.manifestSha256},at:clock.now()});
-    await enqueueRecoveryEvent(tx, clock, { operationId: requestOperation(operationId), kind: 'ENVELOPE_REQUESTED', proofId: request.proofId, actorUserId: null, payload: await buildProofRecoverySnapshot(tx, request.proofId) });
+    await appendAudit(tx,{proofId:request.proofId,actorUserId:input.actorUserId??null,eventType:'ENVELOPE_SIGNING_REQUESTED',eventData:{operationId,sourceOperationId:request.source.operationId,manifestSha256:request.manifestSha256},at:clock.now()});
+    await enqueueRecoveryEvent(tx, clock, { operationId: requestOperation(operationId), kind: 'ENVELOPE_REQUESTED', proofId: request.proofId, actorUserId: input.actorUserId??null, payload: await buildProofRecoverySnapshot(tx, request.proofId) });
     return { operationId, replayed: false };
   });
 }
@@ -139,14 +142,16 @@ export async function verifyEnvelopeSource(request: EnvelopeRequest, worker: Pic
   const receipt = request.source.receipt;
   const saved = await worker.sourceJournal.store.get(receipt.objectKey, { versionId: receipt.objectVersionId! });
   check(saved && sha256(saved.body) === receipt.envelopeSha256, 'ENVELOPE_SOURCE_VERSION_UNAVAILABLE');
-  const envelope = await verifyRecoveryEnvelope(saved!.body, worker.sourceJournal, request.source.eventSha256);
+  // Use the publication time inside the signed payload, not mutable signature metadata.
+  const sourceSignedAt = JSON.parse(saved!.body.toString('utf8')).publishedAt;
+  const envelope = await verifyRecoveryEnvelope(saved!.body, { trustedPublicKey: id => worker.sourceJournal.trustedPublicKey(id, sourceSignedAt) }, request.source.eventSha256);
   const event = JSON.parse(envelope.eventCanonicalJson);
   const rebuilt = requestFromFrozenEvent(event, { sourceReceipt: receipt, evidenceBucket: request.originals[0]?.storage.bucket ?? '', artifactBucket: request.artifactBucket, issuer: request.issuer, keyId: request.keyId, retainUntil: request.retainUntil });
   check(same(rebuilt, request), 'ENVELOPE_SOURCE_BINDING_MISMATCH');
 }
 /** Validates a stored first result, including independently resolved key and every
  * exact manifest/media version. Reused after lost responses and during restore. */
-export async function verifyEnvelopeBundle(request: EnvelopeRequest, operationId: string, requestSha256: string, bytes: Buffer, worker: Pick<EnvelopeWorker, 'store' | 'trustedPublicKey'>, beforeArtifact?: () => Promise<void>): Promise<EnvelopeBundle> {
+export async function verifyEnvelopeBundle(request: EnvelopeRequest, operationId: string, requestSha256: string, bytes: Buffer, worker: Pick<EnvelopeWorker, 'trustedPublicKey'> & { store: Pick<EnvelopeStore, 'verify'> }, beforeArtifact?: () => Promise<void>): Promise<EnvelopeBundle> {
   check(bytes.length <= 12 * 1024 * 1024, 'ENVELOPE_BUNDLE_TOO_LARGE');
   const bundle: EnvelopeBundle = JSON.parse(bytes.toString('utf8'));
   check(jcsBytes(bundle).equals(bytes) && Object.keys(bundle).sort().join(',') === 'coverage,jws,operationId,profile,receipts,requestSha256' && bundle.profile === 'packproof.envelope-bundle.v1' && bundle.operationId === operationId && bundle.requestSha256 === requestSha256, 'ENVELOPE_BUNDLE_CONFLICT');
@@ -183,18 +188,21 @@ export async function processEnvelopeJob(db: Database, clock: Clock, worker: Env
     return row;
   });
   if (!job) return { processed: 0 };
+  let request: EnvelopeRequest;
   const renew = () => db.transaction(async tx => {
     await lockFence(tx,worker.writerGeneration);
+    await worker.authorizeRequest?.(tx, job.operation_id, request);
     const at=clock.now();
     const updated=await tx.query("UPDATE integrity_envelope_delivery SET lease_until=$4 WHERE operation_id=$1 AND lease_token=$2 AND state='LEASED' AND lease_until>$3",[job.operation_id,token,at.toISOString(),new Date(at.getTime()+120000).toISOString()]);
     check(updated.rowCount===1,'ENVELOPE_LEASE_LOST');
   });
   try {
     check(sha256(job.request_json) === job.request_sha256, 'ENVELOPE_REQUEST_CORRUPT');
-    const request: EnvelopeRequest = JSON.parse(job.request_json);
+    request = JSON.parse(job.request_json);
     check(Date.parse(request.retainUntil) > clock.now().getTime(), 'ENVELOPE_RETENTION_EXPIRED');
     // All storage and KMS calls occur between transactions. The final CAS checks
     // the lease and writer generation again, so an old worker cannot acknowledge.
+    await renew();
     await verifyEnvelopeSource(request, worker);
     await renew();
     const key = envelopeBundleKey(job.operation_id);
@@ -227,6 +235,7 @@ export async function processEnvelopeJob(db: Database, clock: Clock, worker: Env
       await lockFence(tx, worker.writerGeneration);
       const lease = (await tx.query<{ lease_token: string; state: string; lease_until: Date | string }>('SELECT state,lease_token,lease_until FROM integrity_envelope_delivery WHERE operation_id=$1 FOR UPDATE', [job.operation_id])).rows[0];
       if (lease?.state !== 'LEASED' || lease.lease_token !== token || new Date(lease.lease_until).getTime() <= clock.now().getTime()) return { processed: 0, state: 'LEASE_LOST' };
+      await worker.authorizeRequest?.(tx, job.operation_id, request);
       await tx.query('INSERT INTO integrity_envelope_results(operation_id,proof_id,bundle_json,bundle_sha256,receipt_json,accepted_at) VALUES($1,$2,$3,$4,$5,$6)', [job.operation_id, job.proof_id, stored!.body.toString(), artifact.sha256, JSON.stringify(receipt), clock.now().toISOString()]);
       await tx.query("UPDATE integrity_envelope_delivery SET state='ACCEPTED',lease_token=NULL,lease_until=NULL,error_code=NULL WHERE operation_id=$1", [job.operation_id]);
       await appendAudit(tx,{proofId:job.proof_id,actorUserId:null,eventType:'ENVELOPE_SIGNATURE_ACCEPTED',eventData:{operationId:job.operation_id,bundleSha256:artifact.sha256},at:clock.now()});
@@ -235,7 +244,7 @@ export async function processEnvelopeJob(db: Database, clock: Clock, worker: Env
     });
   } catch (error) {
     const code = error instanceof Error && /^ENVELOPE_[A-Z_]+$/.test(error.message) ? error.message : 'ENVELOPE_DEPENDENCY_UNAVAILABLE';
-    const terminal = /CONFLICT|CORRUPT|MISMATCH|BINDING|UNTRUSTED|EXPIRED|INVALID/.test(code) || job.attempts >= 7;
+    const terminal = /CONFLICT|CORRUPT|MISMATCH|BINDING|UNTRUSTED|EXPIRED|INVALID|REVOKED/.test(code) || job.attempts >= 7;
     const state = terminal ? 'DEAD_LETTER' : 'PENDING';
     // Releasing only our lease is safe even after the generation was fenced.
     const updated = await db.query("UPDATE integrity_envelope_delivery SET state=$3,error_code=$4,lease_token=NULL,lease_until=NULL,next_attempt_at=$5 WHERE operation_id=$1 AND lease_token=$2 AND state='LEASED'", [job.operation_id, token, state, code, new Date(clock.now().getTime() + Math.min(60000, 1000 * 2 ** job.attempts)).toISOString()]);

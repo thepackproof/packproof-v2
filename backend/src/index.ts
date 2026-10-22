@@ -13,6 +13,8 @@ import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecipientPreservation,validateRecipientDeployment } from "./export/recipient-runtime.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import { initializeEnvelopeTrustPublication } from "./integrity/envelope-publication.js";
+import { initializeEnvelopeRuntime } from "./integrity/envelope-runtime.js";
+import { processEnvelopeJob } from "./integrity/envelope-jobs.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
 import { assertRealDataRuntime } from './operations/integration-readiness.js';
@@ -83,6 +85,7 @@ const objectStore = createObjectStore(config);
 const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
 const recipientPreservation=initializeRecipientPreservation(config,systemClock);
+const envelopes=await initializeEnvelopeRuntime(config,systemClock,opened.db);
 const durabilityPolicy=(await opened.db.query<{durability_required:boolean}>('SELECT durability_required FROM policy_recovery_fence WHERE singleton=1')).rows[0];
 if(!durabilityPolicy||durabilityPolicy.durability_required!==(config.requireDurableReceipts===true))
   throw new Error('Runtime durability mode does not match the migration-controlled policy');
@@ -109,6 +112,7 @@ if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(create
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 const readinessProbes=[
+  {name:'integrity-envelopes',required:Boolean(envelopes),check:async()=>{envelopes?.assertReady();await envelopes?.checkDatabase();}},
   {name:'envelope-trust-publication',required:Boolean(envelopeTrustPublication),check:async()=>{envelopeTrustPublication?.snapshot();}},
   {name:'recipient-preservation',required:Boolean(recipientPreservation),check:async()=>{if(recipientPreservation)validateRecipientDeployment(config,systemClock);}},
   {name:'policy-recovery',check:()=>assertPolicyAccessSafe(opened.db)},
@@ -144,6 +148,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   webhookConfig,
   manifestSigning,
   envelopeTrustPublication,
+  envelopes:envelopes?.access,
   futurePlatform: futurePlatformFromEnv(process.env),
   releaseIdentity: config.release,
   credentialNamespace: config.credentialNamespace,
@@ -167,6 +172,7 @@ const server = app.listen(config.port, config.release.environment==='research'?"
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+if(envelopes?.worker){const worker=envelopes.worker;jobs.push({name:'integrity-envelopes',intervalMs:5000,run:()=>processEnvelopeJob(opened.db,systemClock,worker)});}
 if(rnd.enabled&&Object.values(rnd.features).some(feature=>feature.processing))jobs.push({name:'experimental-rnd',intervalMs:5000,run:()=>runRndWorkerOnce({db:opened.db,clock:systemClock,objectStore,manifestSigning,rnd:rndConfigFromEnv()})});
 jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});
 jobs.push({name:'order-shippo',intervalMs:15000,run:()=>dispatchShippoIntake(opened.db,systemClock,{credentialStore,config:()=>intakeConfigFromEnv()})});

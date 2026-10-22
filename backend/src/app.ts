@@ -227,6 +227,7 @@ import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-request
 import { recipientExportsRouter } from "./http/recipient-exports-router.js";
 import { claimCasesRouter } from "./http/claim-cases-router.js";
 import { envelopeTrustRouter } from "./http/envelope-trust-router.js";
+import { envelopeRouter } from "./http/envelope-router.js";
 import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 import { rndRouter } from './rnd/router.js';
@@ -262,6 +263,7 @@ export interface AppDependencies {
   webhookConfig?: WebhookConfig;
   manifestSigning?: ManifestSigningRuntime;
   envelopeTrustPublication?: import("./integrity/envelope-publication.js").EnvelopeTrustPublication | null;
+  envelopes?: import("./integrity/envelope-access.js").EnvelopeAccessRuntime;
   recipientPreservation?: import("./export/recipient-preservation.js").RecipientPreservationRuntime;
   requireDurableReceipts?: boolean;
   readinessProbes?: DependencyProbe[];
@@ -623,6 +625,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/proofs/:id/parcel-scope", parcelScopeRouter(deps));
   app.use("/proofs/:id/recipient-exports", recipientExportsRouter(deps));
   app.use("/proofs/:id/claim-cases", claimCasesRouter(deps));
+  app.use("/proofs/:id/integrity-envelopes", envelopeRouter(deps));
   app.get("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
     await requireCommerceAccess(deps.db,req.params.id,bearerUser(req));
     res.setHeader("Cache-Control","private, no-store");
