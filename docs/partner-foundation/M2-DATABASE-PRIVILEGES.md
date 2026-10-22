@@ -8,7 +8,7 @@ to its original migration boundary.
 
 | Record | API | Worker |
 | --- | --- | --- |
-| Claim identity/revisions | Read and append; identity row lock | Read |
+| Claim identity/revisions | Read and append; identity row lock | Read; identity row lock |
 | Envelope request | Read and append | Read |
 | Envelope delivery | Read and insert initial operation/time columns | Read and update delivery columns |
 | Envelope result | Read | Read and append |

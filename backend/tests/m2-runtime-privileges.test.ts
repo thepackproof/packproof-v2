@@ -59,6 +59,8 @@ describe('M2 database API and worker authority',()=>{
    await expect(asRole(workerRole,`INSERT INTO ${table} SELECT * FROM ${table} WHERE false`)).rejects.toMatchObject({code:'42501'});
   }
   await asRole(apiRole,'SELECT * FROM claim_cases FOR UPDATE');
+  // Worker revalidation takes FOR SHARE while a merchant revision takes UPDATE.
+  await asRole(workerRole,'SELECT * FROM claim_cases FOR SHARE');
   for(const role of [apiRole,workerRole])for(const table of ['integrity_envelope_jobs','integrity_envelope_results','claim_cases','claim_case_revisions','recipient_export_preservations','recipient_export_approvals']){
    await expect(asRole(role,`DELETE FROM ${table} WHERE false`)).rejects.toMatchObject({code:'42501'});
    await expect(asRole(role,`TRUNCATE ${table}`)).rejects.toMatchObject({code:'42501'});
@@ -84,6 +86,10 @@ describe('M2 database API and worker authority',()=>{
   await opened.db.query(`GRANT ${workerRole} TO ${apiRole}`);
   await expect(applyM2RuntimePrivileges(opened.db,roles)).rejects.toThrow('M2_SEPARATE_ROLES_REQUIRED');
   await opened.db.query(`REVOKE ${workerRole} FROM ${apiRole}`);
+  await opened.db.query('GRANT INSERT ON integrity_envelope_results TO PUBLIC');
+  await expect(applyM2RuntimePrivileges(opened.db,roles)).rejects.toThrow('M2_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');
+  await opened.db.query('REVOKE INSERT ON integrity_envelope_results FROM PUBLIC');
+  await verifyM2RuntimePrivileges(opened.db,roles);
  });
  it('refuses combined roles, injection, owner authority and drifted migration receipts',async()=>{
   await expect(applyM2RuntimePrivileges(opened.db,{apiRole,workerRole:apiRole})).rejects.toThrow('M2_SEPARATE_ROLES_REQUIRED');

@@ -15,7 +15,7 @@ const policy = {
  integrity_envelope_jobs: {api:{insert:'*'},worker:{}},
  integrity_envelope_delivery: {api:{insert:['operation_id','next_attempt_at']},worker:{update:['state','attempts','next_attempt_at','lease_token','lease_until','error_code']}},
  integrity_envelope_results: {api:{},worker:{insert:'*'}},
- claim_cases: {api:{insert:'*',update:['id']},worker:{}},
+ claim_cases: {api:{insert:'*',update:['id']},worker:{update:['id']}},
  claim_case_revisions: {api:{insert:'*'},worker:{}},
  recipient_export_jobs: {api:{insert:requestColumns},worker:{update:resultColumns}},
  recipient_export_approvals: {api:{insert:'*'},worker:{}},
