@@ -4,7 +4,33 @@ This additive M2 source implements exact-file preservation and recovery for new
 claim-bound merchant review exports. It does not activate production, submit a
 provider dispute, backfill legacy packets or establish merchant acceptance.
 
-## Actual-role storage acceptance - 22 October 2026
+## Combined actual-role lifecycle and restore - 22 October 2026
+
+The [combined cloud evidence](recipient-flow-cloud-evidence-2026-10-22.json)
+now establishes fresh recipient database reconstruction alongside actual RDS,
+S3 Object Lock and KMS authority. Separate API/worker logins execute the domain
+lifecycle; the owner controller only seeds, revokes and fences the synthetic
+fixture. Requests, results and approvals wait for their protected journals.
+A lost S3 response recovers the exact first artifact with no additional render
+or publication; stale claims and revoked membership are denied. A running worker
+is fenced with its already-issued credentials before fresh reconstruction.
+
+All nine reconstructed tables match their signed source, and a read-only
+follow-up compares the revoked membership and 17 policy entries. The first
+restore task completed reconstruction but failed its final test assertion:
+the application correctly returned POLICY_RECOVERY_UNAVAILABLE while the harness
+expected ORGANIZATION_ACCESS_REVOKED. The corrected follow-up requires the
+stronger recovery fence and binds the original failed report by version and hash.
+No database replay, rendering, signing or protected publication occurs in that
+follow-up. Both reports and source/image identities remain in the evidence.
+
+Ten tasks passed, with one initial harness assertion failure; 61 passing report
+check entries include repeated identity checks. All three logins are now disabled,
+writers/traffic remain closed, and temporary build/egress resources are removed.
+This is a synthetic domain flow, not authenticated HTTP, device, human-review or
+merchant-pilot acceptance. Production protection and activation remain gated.
+
+## Earlier storage-only acceptance - 22 October 2026
 
 Three isolated Fargate roles passed 26 storage assertions against the compiled
 adapter at application source cb74098996147ebe74a149ccb38fec8f86ce3a60. The worker
