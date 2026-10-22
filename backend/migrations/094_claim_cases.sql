@@ -1,4 +1,7 @@
 -- Additive, inactive merchant review records. No external submission authority.
+ALTER TABLE platform_integration_accounts ADD CONSTRAINT platform_account_claim_identity
+ UNIQUE(id,merchant_id,environment,provider,external_account_id);
+CREATE TRIGGER platform_account_identity_immutable BEFORE UPDATE OR DELETE ON platform_integration_accounts FOR EACH ROW EXECUTE FUNCTION platform_record_immutable();
 CREATE TABLE claim_cases (
  id TEXT PRIMARY KEY,
  proof_id TEXT NOT NULL,
@@ -15,7 +18,7 @@ CREATE TABLE claim_cases (
  create_request_sha256 TEXT NOT NULL CHECK(create_request_sha256 ~ '^[a-f0-9]{64}$'),
  created_at TIMESTAMPTZ NOT NULL,
  FOREIGN KEY(proof_id,merchant_id,environment) REFERENCES platform_proof_ownership(proof_id,merchant_id,environment),
- FOREIGN KEY(integration_account_id,merchant_id,environment) REFERENCES platform_integration_accounts(id,merchant_id,environment),
+ FOREIGN KEY(integration_account_id,merchant_id,environment,provider,provider_account_id) REFERENCES platform_integration_accounts(id,merchant_id,environment,provider,external_account_id),
  UNIQUE(integration_account_id,dispute_id),
  UNIQUE(proof_id,created_by,create_key),
  UNIQUE(id,proof_id)

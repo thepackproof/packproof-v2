@@ -31,7 +31,7 @@ export async function bindClaimExport(db:Database,clock:Clock,actor:string,proof
  eligible(s,clock);
  if(s.provider!=='stripe'||!REQUIREMENTS[s.reasonCode]||s.network==='UNKNOWN')throw fail('CLAIM_PROFILE_UNSUPPORTED','This provider, reason or unknown card network has no reviewed claim profile.');
  const expected=recipientProfile(`stripe-dispute-us-${s.network==='MASTERCARD'?'mastercard':'other'}-v2`,clock.now());
- if(profile.id!==expected.id)throw fail('CLAIM_PROFILE_MISMATCH','Choose the current recipient profile for this case's provider and card network.');
+ if(profile.id!==expected.id)throw fail('CLAIM_PROFILE_MISMATCH','Choose the current recipient profile for this case provider and card network.');
  if(typeof input.destinationDeadline!=='string'||Date.parse(input.destinationDeadline)!==Date.parse(s.providerDeadline!))throw fail('CLAIM_DEADLINE_MISMATCH','The packet deadline must match the selected case revision.');
  return {claimCaseId:c.claimCaseId,snapshotSha256:c.snapshotSha256,snapshot:s,action:'EXPORT_FOR_MERCHANT_REVIEW',providerSubmission:'UNAVAILABLE',evidenceProfile:{id:`stripe-manual-physical-${s.reasonCode}-${s.network.toLowerCase()}-2026-10-22.1`,version:'2026-10-22.1',provider:'stripe',apiVersion:'MANUAL_PORTAL',reasonCode:s.reasonCode,network:s.network,recipientProfileId:expected.id,requiredFacts:[...REQUIREMENTS[s.reasonCode]]}};
 }

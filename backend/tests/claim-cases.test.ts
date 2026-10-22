@@ -81,6 +81,7 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   expect(new Set([one,two,otherAccount,otherMerchant].map(c=>c.claimCaseId)).size).toBe(4);
   expect(one.snapshot).toMatchObject({source:'MERCHANT_REPORTED',providerVerification:'UNVERIFIED',apiVersion:'MANUAL_PORTAL',paymentId:'ch_shared',orderLineIds:[]});
   expect(one.preservation.status).toBe('COMMITTED_PENDING_DURABILITY');
+  await expect(h.db.query("UPDATE platform_integration_accounts SET external_account_id='changed' WHERE id=$1",[accountA])).rejects.toThrow();
   await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_one'),reasonCode:'product_not_received'})).rejects.toMatchObject({code:'CLAIM_RETRY_CONFLICT'});
   await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_one'),idempotencyKey:'changed-identity',reasonCode:'product_not_received'})).rejects.toMatchObject({code:'CLAIM_IDENTITY_CONFLICT'});
   expect((await getClaimCase(h.db,opA,proofA,one.claimCaseId)).snapshotSha256).toBe(sha256Hex(canonicalize(one.snapshot)));
@@ -137,7 +138,7 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   const stale=await getRecipientExport(h.db,opA,proofA,job.jobId,clock);expect(stale.claimReview).toMatchObject({state:'REVIEW_REQUIRED',requiresNewApproval:true,reason:'CLAIM_REVISION_CHANGED'});expect(stale.approval).not.toBeNull();
  },60000);
  it('keeps HTTP feature gates, current human identity and submission denial explicit',async()=>{
-  const contract=await request(h.app).get('/v1/claim-export-openapi.json');expect(contract.status,contract.text).toBe(200);expect(contract.body.paths['/proofs/{id}/claim-cases']).toHaveProperty('post');
+  const contract=JSON.parse(await readFile(new URL('../claim-export-openapi.json',import.meta.url),'utf8'));expect(contract.paths['/proofs/{id}/claim-cases']).toHaveProperty('post');
   const req={headers:{},packproofUserId:opA} as Request;
   for(const at of [undefined,NaN,clock.now().getTime()/1000-301,clock.now().getTime()/1000+1])await expect(requireRecentClaimAuthentication({clock,auth:{authenticate:async()=>({userId:opA,authenticatedAt:at})}} as AppDependencies,req)).rejects.toMatchObject({code:'RECENT_AUTHENTICATION_REQUIRED'});
   expect(await requireRecentClaimAuthentication({clock,auth:{authenticate:async()=>({userId:opA,authenticatedAt:clock.now().getTime()/1000-10})}} as AppDependencies,req)).toBe(opA);

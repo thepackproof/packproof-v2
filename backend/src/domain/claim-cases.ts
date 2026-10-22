@@ -90,7 +90,7 @@ export async function createClaimCase(db:Database,clock:Clock,actor:string,proof
   const retry=(await tx.query<{create_request_sha256:string}>('SELECT create_request_sha256 FROM claim_cases WHERE proof_id=$1 AND created_by=$2 AND create_key=$3',[proofId,actor,key])).rows[0];
   if(retry&&retry.create_request_sha256!==requestHash)throw fail('CLAIM_RETRY_CONFLICT','This creation key already records a different case request.');
   const account=(await tx.query<{provider:string;external_account_id:string}>('SELECT provider,external_account_id FROM platform_integration_accounts WHERE id=$1 AND merchant_id=$2 AND environment=$3',[accountId,owner.merchant_id,owner.environment])).rows[0];
-  if(!account||account.provider!=='stripe')throw fail('CLAIM_ACCOUNT_UNSUPPORTED','Choose this merchant's registered direct Stripe namespace. No provider connection is implied.',400);
+  if(!account||account.provider!=='stripe')throw fail('CLAIM_ACCOUNT_UNSUPPORTED','Choose this merchant registered direct Stripe namespace. No provider connection is implied.',400);
   const payment=await tx.query("SELECT 1 FROM platform_external_bindings WHERE integration_account_id=$1 AND resource_type='PAYMENT' AND external_id=$2 AND proof_id=$3",[accountId,paymentId,proofId]);
   if(!payment.rows[0])throw fail('CLAIM_PAYMENT_SCOPE','The payment is not bound to this Proof and provider account.',400);
   const lines=(await tx.query<{id:string}>('SELECT i.id FROM transaction_items i JOIN proofs p ON p.transaction_id=i.transaction_id WHERE p.id=$1 AND i.id=ANY($2::text[])',[proofId,orderLineIds])).rows;
