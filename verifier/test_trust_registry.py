@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -108,7 +109,7 @@ class SignedRegistryTests(unittest.TestCase):
                                  authority_key_path=self.folder / 'rsa-authority.pem', authority_key_id='pinned-authority')
         self.assertEqual(result['status'], 'VERIFIED')
         # The process uses the real clock; independently assert math and flag wiring even when the fixture is stale.
-        process = subprocess.run(['python3', str(HERE / 'verify.py'), str(archive), '--trust-registry', str(registry),
+        process = subprocess.run([sys.executable, str(HERE / 'verify.py'), str(archive), '--trust-registry', str(registry),
                                   '--trust-authority-key', str(self.folder / 'rsa-authority.pem'),
                                   '--trust-authority-key-id', 'pinned-authority'], capture_output=True, text=True,
                                  env={**os.environ, 'http_proxy': 'http://127.0.0.1:1', 'https_proxy': 'http://127.0.0.1:1'})

@@ -1,0 +1,26 @@
+{
+  "files": {
+    "package.json": "eyJjb3ZlcmFnZVBhdGgiOiJpbnRlZ3JpdHkvY292ZXJhZ2UuanNvbiIsImVudmVsb3BlUGF0aCI6ImludGVncml0eS9lbnZlbG9wZS5qd3MuanNvbiIsInByb29mSWQiOiJwcm9vZl9tMl9rbXNfZml4dHVyZSIsInNjaGVtYSI6InBhY2twcm9vZi5zaWduZWQtcHJvb2YtcGFja2FnZS52MiIsInRpbWVzdGFtcCI6eyJzdGF0ZSI6Ik5PVF9QUkVTRU5UIn19",
+    "manifest.json": "eyAic3ludGhldGljIjp0cnVlLCAicHJvb2ZJZCI6InByb29mX20yX2ttc19maXh0dXJlIiB9Cg==",
+    "integrity/coverage.json": "eyJhcnRpZmFjdHMiOlt7ImJ5dGVTaXplIjo1NSwia2luZCI6Ik1BTklGRVNUIiwicGF0aCI6Im1hbmlmZXN0Lmpzb24iLCJyZXF1aXJlZCI6dHJ1ZSwic2hhMjU2IjoiNzY2ZDM5OGIzMTk4NjE4OGU4Y2E0NWY5MDI2MjM4MzRmMDU0ZTRjZDMxM2MzOTM5NDhkNWZiYTVjM2UwOTZmNyIsInNvdXJjZVBhdGgiOm51bGwsInN0b3JhZ2UiOnsiYnVja2V0Ijoic3ludGhldGljLW5vdC1wcmVzZXJ2ZWQiLCJrZXkiOiJmaXh0dXJlLW9ubHkiLCJ2ZXJzaW9uSWQiOiJzeW50aGV0aWMtdmVyc2lvbiJ9fV0sIm9taXNzaW9ucyI6W10sInByb2ZpbGUiOiJwYWNrcHJvb2YuaW50ZWdyaXR5LWNvdmVyYWdlLnYxIiwicHJvb2ZJZCI6InByb29mX20yX2ttc19maXh0dXJlIiwicmVjb3JkSWQiOiJtYW5pZmVzdF9tMl9maXh0dXJlIiwicmVjb3JkVHlwZSI6IkNPUkUiLCJzdGFnZXMiOltdfQ==",
+    "integrity/envelope.jws.json": "eyJwYXlsb2FkIjoiZXlKamIzWmxjbUZuWlZOb1lUSTFOaUk2SWpBMk1XWmtNalEyWVRObVpqaGpNMkkxTVdKbU1UTTJabVkzTURnMVlXTTVZbVUyWWpabFlqQmtNbU16WVRSbFpqZ3lOemMzWkRrME5tRm1ZVEJtTUdVaUxDSnBjM04xWldSQmRDSTZJakl3TWpZdE1UQXRNakpVTURRNk16QTZNREF1TURBd1dpSXNJbWx6YzNWbGNpSTZJbWgwZEhCek9pOHZjR0ZqYTNCeWIyOW1MVzB4TG5SbGMzUWlMQ0p0WVc1cFptVnpkRkJoZEdnaU9pSnRZVzVwWm1WemRDNXFjMjl1SWl3aWJXRnVhV1psYzNSVFkyaGxiV0VpT2lKemVXNTBhR1YwYVdNdWJXRnVhV1psYzNRdWRqRWlMQ0p0WVc1cFptVnpkRk5vWVRJMU5pSTZJamMyTm1Rek9UaGlNekU1T0RZeE9EaGxPR05oTkRWbU9UQXlOakl6T0RNMFpqQTFOR1UwWTJRek1UTmpNemt6T1RRNFpEVm1ZbUUxWXpObE1EazJaamNpTENKd2NtOW1hV3hsSWpvaWNHRmphM0J5YjI5bUxtbHVkR1ZuY21sMGVTMWxiblpsYkc5d1pTNTJNU0lzSW5CeWIyOW1TV1FpT2lKd2NtOXZabDl0TWw5cmJYTmZabWw0ZEhWeVpTSXNJbkpsWTI5eVpFbGtJam9pYldGdWFXWmxjM1JmYlRKZlptbDRkSFZ5WlNJc0luSmxZMjl5WkZSNWNHVWlPaUpEVDFKRkluMCIsInByb3RlY3RlZCI6ImV5SmhiR2NpT2lKRlV6STFOaUlzSW10cFpDSTZJbWx6YjJ4aGRHVmtMVzB5TFdacGVIUjFjbVV0TWpBeU5qRXdNaklpTENKMGVYQWlPaUpoY0hCc2FXTmhkR2x2Ymk5d1lXTnJjSEp2YjJZdGFXNTBaV2R5YVhSNUsycDNjeUo5Iiwic2lnbmF0dXJlIjoiZFlKdUFCYmVDbnVDZzh4UE9xVUxRWUJ6dk9Nbnl2c0hOMFFlZUF3RHAzckFQalp3UU1Jd0lHMnFvUmU3V2NsRExfSlU1MkdsUlRrY3k1WVYtUC1IcHcifQ=="
+  },
+  "trust": {
+    "schema": "packproof.envelope-trust.v1",
+    "issuer": "https://packproof-m1.test",
+    "publishedAt": "2026-10-22T04:35:00.000Z",
+    "nextReviewAt": "2026-10-23T04:35:00.000Z",
+    "keys": [
+      {
+        "keyId": "isolated-m2-fixture-20261022",
+        "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYDYA6VZiCRHBhBaDXVaeVhwYu1Gz\nROTsIXGvNiPioGJnElNRXj+pjshtTsALkvW1zM78k4cxR7KcgF551tHTyg==\n-----END PUBLIC KEY-----\n",
+        "status": "ACTIVE",
+        "validFrom": "2026-10-20T00:00:00.000Z",
+        "validUntil": null,
+        "statusEffectiveAt": null
+      }
+    ]
+  },
+  "expectedProof": "proof_m2_kms_fixture",
+  "expectedDigest": "766d398b31986188e8ca45f902623834f054e4cd313c393948d5fba5c3e096f7"
+}

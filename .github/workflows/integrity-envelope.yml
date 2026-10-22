@@ -1,0 +1,27 @@
+name: Integrity envelope conformance
+on:
+  pull_request:
+    paths: ['backend/src/integrity/**', 'backend/tests/envelope-*', 'backend/tests/verify-envelope-fixture.py', 'backend/package*.json', 'verifier/**', '.github/workflows/integrity-envelope.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r verifier/requirements-envelope.txt
+      - run: npm ci
+        working-directory: backend
+      - run: npm run typecheck
+        working-directory: backend
+      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts
+        working-directory: backend
+      - run: python -m unittest discover -s verifier -p 'test_*.py'
