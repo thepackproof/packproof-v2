@@ -12,7 +12,8 @@ const source='a'.repeat(40),account='123456789012';
 const config={processRole:'api',migrateOnStart:false,requireDurableReceipts:true,objectStore:'s3',awsRegion:'us-east-1',awsS3Bucket:'original-fixture',release:{commit:source,environment:'production'}} as AppConfig;
 const binding={artifactBucket:'envelope-fixture',evidenceBucket:'original-fixture',journalBucket:'journal-fixture',account,region:'us-east-1',
   keyArn:`arn:aws:kms:us-east-1:${account}:key/11111111-2222-3333-4444-555555555555`,keyId:'envelope-key',issuer:'https://envelopes.example.test',
-  apiRole:`arn:aws:iam::${account}:role/api-fixture`,workerRole:`arn:aws:iam::${account}:role/worker-fixture`,apiDatabaseRole:'m2_api_fixture',workerDatabaseRole:'m2_worker_fixture',
+  apiRole:`arn:aws:iam::${account}:role/api-fixture`,workerRole:`arn:aws:iam::${account}:role/worker-fixture`,
+  apiDatabaseRole:'test_api',workerDatabaseRole:'test_worker',
   sourceSha:source,environment:'production',organizationEnvironment:'live',merchantIds:['org_fixture'],cutoverAt:now.toISOString(),retainUntil:'2027-10-22T05:00:00.000Z',writerGeneration:'generation-fixture'};
 const positive={schema:'packproof.envelope-deployment.v1',binding,reviewedBy:'synthetic-test',evidenceReference:'synthetic-test-only',verifiedAt:now.toISOString(),expiresAt:'2026-10-23T05:00:00.000Z',
   versioningVerified:true,complianceRetentionVerified:true,originalProtectionVerified:true,conditionalCreationVerified:true,exactVersionReadVerified:true,apiWritesDenied:true,apiSigningDenied:true,

@@ -68,6 +68,9 @@
           },
           "503": {
             "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
           }
         },
         "description": "First-party human admission only. The server derives the frozen source, issuer, key, storage and retention policy. Idempotency is deterministic per frozen record; a changed preservation policy conflicts. There is no legacy backfill or client-selected storage/signing configuration.",
@@ -149,6 +152,9 @@
           },
           "503": {
             "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
           }
         }
       }
@@ -220,6 +226,9 @@
           },
           "503": {
             "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
           }
         }
       }
@@ -306,6 +315,9 @@
           },
           "503": {
             "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
           }
         },
         "x-required-scope": "exports:read"
@@ -394,6 +406,9 @@
           },
           "503": {
             "description": "Feature disabled or deployment verification unavailable."
+          },
+          "413": {
+            "description": "The aggregate frozen manifest and original bytes exceed the 200 MiB admission/export budget."
           }
         },
         "x-required-scope": "exports:read"

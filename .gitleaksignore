@@ -45,3 +45,8 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:9
 78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:34
 78aafd7a7ddea959c4bfaa57bb2c44915d829f78:docs/partner-foundation/m2-bridge-evidence-2026-10-22.json:generic-api-key:678
+
+# Reviewed CI 39843564775 / job 120051501332: this exact historical line
+# contains only fabricated IAM/database role names (m2_api_fixture), no password
+# or credential. Current test identifiers are shorter; all scanner rules remain.
+312431f4347490df2f87b321971697f6641a0365:backend/tests/envelope-runtime.test.ts:generic-api-key:15

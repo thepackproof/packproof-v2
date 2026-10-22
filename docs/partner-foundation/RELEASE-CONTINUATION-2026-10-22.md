@@ -23,6 +23,18 @@ package installation; the follow-up uses installed tools when present, bounds
 fallback installation and still verifies both media binaries. Updated CI and
 actual-role acceptance remain required before release of this candidate.
 
+The first HTTP candidate, `312431f4347490df2f87b321971697f6641a0365`, then passed
+all 87 envelope conformance checks on PostgreSQL, all 32 legacy Python checks,
+foundation and CodeQL gates, web/mobile, dependency audits and deployment tooling.
+Its container built successfully and verified all five contract paths, 94 exact
+migrations and zero envelope DB calls when disabled. Full CI exposed one secret
+scanner false positive in a fabricated test role name; the reviewed exception is
+limited to that exact historical line. PostgreSQL CI also stalled at unbounded
+media installation, so all matching CI setup steps now use installed binaries or
+bounded installation. An additional admission/download byte-budget check rejects
+oversize work before artifact I/O; its two boundary checks and seven access checks
+passed locally. The updated full CI and container results are still pending.
+
 Production remains the accepted inactive task revision 49 below. No organizations,
 envelope API, envelope worker or claim export feature has been enabled by this
 implementation. RFC 3161, hosted acceptance, separate production baseline roles,

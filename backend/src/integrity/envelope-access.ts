@@ -28,6 +28,16 @@ export interface EnvelopeAccessRuntime {
 type RequestRow = { operation_id: string; proof_id: string; record_type: string; record_id: string; manifest_sha256: string; request_json: string; request_sha256: string };
 const unavailable = () => new DomainError('ENVELOPE_UNAVAILABLE', 'This integrity envelope is unavailable.', 404);
 const integrityFailure = () => new DomainError('ENVELOPE_INTEGRITY_FAILURE', 'The stored integrity envelope could not be verified.', 409);
+/** Existing ZIP transport is capped at 220 MiB. Reserve 20 MiB for bounded
+ * coverage/JWS metadata and ZIP headers before any artifact is read or signed. */
+export function assertEnvelopeRequestBudget(request: Pick<EnvelopeRequest, 'manifests' | 'originals'>) {
+  let remaining = 200 * 1024 * 1024;
+  for (const size of [...request.manifests.map(m => Buffer.byteLength(m.canonicalJson)), ...request.originals.map(a => a.byteSize)]) {
+    if (!Number.isSafeInteger(size) || size < 0 || size > remaining)
+      throw new DomainError('ENVELOPE_PACKAGE_TOO_LARGE', 'This record exceeds the supported integrity package size.', 413);
+    remaining -= size;
+  }
+}
 function assertRuntimeReady(runtime: EnvelopeAccessRuntime) {
   try { runtime.assertReady(); }
   catch { throw new DomainError('ENVELOPE_DEPLOYMENT_UNAVAILABLE', 'Integrity envelope service verification needs review.', 503); }
@@ -46,6 +56,7 @@ async function authorize(db: Database, actor: string, proofId: string, runtime: 
 function decode(row: RequestRow): EnvelopeRequest {
   const request: EnvelopeRequest = JSON.parse(row.request_json);
   if (sha256(row.request_json) !== row.request_sha256 || !jcsBytes(request).equals(Buffer.from(row.request_json)) || envelopeOperationId(request) !== row.operation_id || request.proofId !== row.proof_id || request.recordType !== row.record_type || request.recordId !== row.record_id || request.manifestSha256 !== row.manifest_sha256) throw integrityFailure();
+  assertEnvelopeRequestBudget(request);
   return request;
 }
 async function currentJob(db: Database, actor: string, proofId: string, operationId: string, runtime: EnvelopeAccessRuntime) {
@@ -73,6 +84,7 @@ export async function requestProofEnvelope(db: Database, clock: Clock, actor: st
     if (sha256(source.canonical_json) !== source.sha256 || source.receipt_json?.eventSha256 !== source.sha256) throw integrityFailure();
     const frozen = requestFromFrozenEvent(JSON.parse(source.canonical_json), { ...runtime.admission, sourceReceipt: source.receipt_json });
     if (frozen.proofId !== proofId || frozen.recordType !== body.recordType || frozen.recordId !== body.recordId) throw unavailable();
+    assertEnvelopeRequestBudget(frozen);
     const queued = await enqueueEnvelopeFromRecovery(tx, clock, { ...runtime.admission, sourceOperationId, actorUserId: actor });
     return { ...queued, proofId, recordType: frozen.recordType, recordId: frozen.recordId, ...(await envelopeJobStatus(tx, queued.operationId)) };
   }).catch((error: unknown) => {

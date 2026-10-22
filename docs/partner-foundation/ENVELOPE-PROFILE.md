@@ -40,6 +40,12 @@ Existing partner credentials may read status and export under `exports:read` at
 the corresponding `/v1/partner/proofs/:proofId/integrity-envelopes/...` paths.
 Service principals cannot enqueue signing in this slice.
 
+Admission and stored-request reads enforce a 200 MiB aggregate frozen-manifest
+and original-byte budget before artifact I/O. This leaves 20 MiB inside the
+existing 220 MiB ZIP transport cap for bounded coverage metadata and ZIP headers.
+An oversized record returns 413; it is not queued for signing or downloaded until
+the supported package policy can accommodate it. This does not raise media limits.
+
 The accepted human actor enters the immutable request journal. The worker checks
 that actor's current authority before external work, at lease renewals and before
 accepting a result. Completed revocation makes queued work fail without signing.
