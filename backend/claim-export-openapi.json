@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PackProof merchant claim review exports",
-    "version": "2026-10-22.2",
+    "version": "2026-10-22.3",
     "description": "Additive, disabled-by-default first-party human workflow. Both PACKPROOF_ORGANIZATIONS_ENABLED and PACKPROOF_CLAIM_EXPORTS_ENABLED must be true. Current direct merchant membership and contributor access to the finalized Proof are required. Recent authentication (five minutes) is required at these HTTP surfaces. Case data is merchant-reported and unverified by PackProof. The provider account is a registered namespace, not an OAuth connection. No provider submission is supported. Claim-bound export activation also requires separate protected recipient storage, durable recovery publication and reviewed deployment evidence."
   },
   "servers": [
@@ -527,6 +527,54 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported input."
+          },
+          "401": {
+            "description": "Authentication absent or not recent."
+          },
+          "403": {
+            "description": "Current human/Proof authority is missing or revoked."
+          },
+          "404": {
+            "description": "Resource unavailable in this scope."
+          },
+          "409": {
+            "description": "Case changed, stale, not preserved, ineligible, or provider submission unavailable."
+          },
+          "429": {
+            "description": "Bounded case, revision or export allowance reached."
+          },
+          "503": {
+            "description": "Feature disabled or preservation/authorization unavailable."
+          }
+        }
+      }
+    },
+    "/proofs/{id}/claim-cases/options": {
+      "get": {
+        "operationId": "getClaimCaseOptions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized direct Stripe payments already linked to this Proof, and affected order-line choices. No provider connection or verification is implied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimOptions"
                 }
               }
             }
@@ -1152,6 +1200,72 @@
                       "LEGACY_UNCONFIRMED"
                     ]
                   }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ClaimOptions": {
+        "type": "object",
+        "required": [
+          "proofId",
+          "payments",
+          "orderLines"
+        ],
+        "properties": {
+          "proofId": {
+            "type": "string"
+          },
+          "payments": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "integrationAccountId",
+                "providerAccountId",
+                "paymentId"
+              ],
+              "properties": {
+                "integrationAccountId": {
+                  "type": "string"
+                },
+                "providerAccountId": {
+                  "type": "string"
+                },
+                "paymentId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "orderLines": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "title",
+                "quantity"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quantity": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1
                 }
               }
             }

@@ -121,6 +121,19 @@ export async function listClaimCases(db:Database,actor:string,proofId:string){
  if(cases.length>100)throw fail('CLAIM_LIST_LIMIT','Use a specific case ID to inspect this larger record.',413);
  return {cases:await Promise.all(cases.map(async c=>view(db,c,await latest(db,c.id))))};
 }
+export async function claimCaseOptions(db:Database,actor:string,proofId:string){
+ return db.transaction(async tx=>{
+  const owner=await requireClaimAccess(tx,actor,proofId);
+  const payments=(await tx.query<{integrationAccountId:string;providerAccountId:string;paymentId:string}>(`SELECT a.id AS "integrationAccountId",a.external_account_id AS "providerAccountId",b.external_id AS "paymentId"
+   FROM platform_external_bindings b JOIN platform_integration_accounts a ON a.id=b.integration_account_id
+   WHERE b.proof_id=$1 AND b.merchant_id=$2 AND b.environment=$3 AND b.resource_type='PAYMENT'
+   AND a.provider='stripe' AND a.merchant_id=b.merchant_id AND a.environment=b.environment
+   ORDER BY a.id,b.external_id LIMIT 101`,[proofId,owner.merchant_id,owner.environment])).rows;
+  const orderLines=(await tx.query<{id:string;title:string|null;quantity:number|null}>('SELECT i.id,i.title,i.quantity FROM transaction_items i JOIN proofs p ON p.transaction_id=i.transaction_id WHERE p.id=$1 ORDER BY i.position,i.id LIMIT 101',[proofId])).rows;
+  if(payments.length>100||orderLines.length>100)throw fail('CLAIM_OPTIONS_LIMIT','This record exceeds the bounded review form. Use a scoped API request.',413);
+  return {proofId,payments,orderLines,source:'MERCHANT_REPORTED' as const,providerVerification:'UNVERIFIED' as const};
+ });
+}
 export async function reviseClaimCase(db:Database,clock:Clock,actor:string,proofId:string,id:string,input:unknown){
  const b=strictBody(input,['expectedSnapshotSha256','idempotencyKey',...FACT_FIELDS]),key=text(b.idempotencyKey,'idempotencyKey'),f=facts(b,clock);
  if(typeof b.expectedSnapshotSha256!=='string'||! /^[a-f0-9]{64}$/.test(b.expectedSnapshotSha256))throw fail('CLAIM_INPUT_INVALID','The current case digest is required.',400);

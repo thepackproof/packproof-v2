@@ -172,6 +172,9 @@ export class PackProofApi {
   async featureRequest<T>(proofId:string, path:string, method = "GET", body?:unknown): Promise<T> {
     return this.request(`/proofs/${encodeURIComponent(proofId)}/${path}`, {method,body});
   }
+  async claimWrite<T>(proofId:string,caseId:string|null,body:unknown,idempotencyKey:string):Promise<T>{
+    return this.request(`/proofs/${encodeURIComponent(proofId)}/claim-cases${caseId?`/${encodeURIComponent(caseId)}/revisions`:''}`,{method:'POST',body,headers:{'Idempotency-Key':idempotencyKey}});
+  }
   async featureDownload(proofId:string,path:string): Promise<Blob> { return this.download(`/proofs/${encodeURIComponent(proofId)}/${path}`); }
   async setCommerceAutomation(connectionId:string,enabled:boolean) { return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/automation`, {method:"POST",body:{enabled}}); }
   async relayRequest<T>(path:string,method="GET",body?:unknown,token?:string): Promise<T> { return this.request(`/me/packing-relay${path}`,{method,body,headers:token?{"X-PackProof-Station-Token":token}:undefined}); }
