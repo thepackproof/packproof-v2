@@ -18,13 +18,15 @@ it('keeps the backend locked install independent of the parent application packa
  for(const line of ['COPY backend/package.json backend/package-lock.json ./','COPY backend/src ./src','COPY packages/evidence-contracts /app/packages/evidence-contracts','COPY config/rnd/research-build.json /app/config/rnd/research-build.json','COPY backend/migrations ./migrations','COPY backend/certs ./certs','COPY backend/rnd-openapi.json ./rnd-openapi.json','COPY backend/scripts/rnd-migrate.mjs ./scripts/rnd-migrate.mjs'])expect(docker).toContain(line);
  expect(docker).toContain('RUN npm ci --omit=dev');expect(docker).toContain('USER node');
  expect(docker).toContain('COPY backend/partner-openapi.json ./partner-openapi.json');
+ expect(docker).toContain('COPY backend/claim-export-openapi.json ./claim-export-openapi.json');
  expect(docker).toContain('COPY backend/certs /app/certs'); // Preserve the live absolute CA-file binding.
 });
-it('keeps all 92 migration files byte-identical to the reviewed Git index with LF endings',async()=>{
- const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(92);
+it('keeps all 93 migration files byte-identical to the reviewed Git index with LF endings',async()=>{
+ const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(93);
+ expect(files.at(-1)).toBe('094_claim_cases.sql');
  const output=execFileSync('git',['ls-files','--stage','--','backend/migrations'],{cwd:root,encoding:'utf8'});
  const indexed=new Map(output.trim().split(/\r?\n/).map(line=>{const found=/^100644 ([a-f0-9]{40}) 0\t(.+)$/.exec(line);if(!found)throw Error('Unmerged or unexpected migration index entry');return [found[2],found[1]];}));
- expect(indexed.size).toBe(92);
+ expect(indexed.size).toBe(93);
  for(const name of files){const bytes=await readFile(path.join(backend,'migrations',name)),gitBlob=execFileSync('git',['cat-file','blob',indexed.get('backend/migrations/'+name)!],{cwd:root});expect(bytes.includes(13),name).toBe(false);expect(createHash('sha256').update(bytes).digest('hex'),name).toBe(createHash('sha256').update(gitBlob).digest('hex'));}
 },30_000);
 it('imports the compiled server graph and resolves contracts, profile, migrations and scripts from the image layout',async()=>{
@@ -35,7 +37,7 @@ it('imports the compiled server graph and resolves contracts, profile, migration
  await mkdir(path.join(directory,'config/rnd'),{recursive:true});await cp(path.join(root,'config/rnd/research-build.json'),path.join(directory,'config/rnd/research-build.json'));
  for(const name of ['migrations','certs','scripts'])await cp(path.join(backend,name),path.join(imageBackend,name),{recursive:true});
  await cp(path.join(backend,'certs'),path.join(directory,'certs'),{recursive:true});
- for(const name of ['package.json','package-lock.json','openapi.json','partner-openapi.json','rnd-openapi.json'])await cp(path.join(backend,name),path.join(imageBackend,name));
+ for(const name of ['package.json','package-lock.json','openapi.json','partner-openapi.json','claim-export-openapi.json','rnd-openapi.json'])await cp(path.join(backend,name),path.join(imageBackend,name));
  // Reuse the separately checked clean install; this is a path/import smoke check,
  // not a claim that Docker or AWS service initialization has run on this host.
  await symlink(path.join(backend,'node_modules'),path.join(imageBackend,'node_modules'),process.platform==='win32'?'junction':'dir');
@@ -59,11 +61,13 @@ try{inspectInventory(inventory,inventory);}catch(error){if(error.message!=='CAND
 if(!newerInventoryRefused)throw Error('RETIRED_OPERATOR_ACCEPTED_UNREVIEWED_INVENTORY');
 const partnerContract=JSON.parse(await readFile('partner-openapi.json','utf8'));
 if(!partnerContract.paths['/v1/partner/event-stream']?.get)throw Error('PARTNER_CONTRACT_UNAVAILABLE');
+const claimContract=JSON.parse(await readFile('claim-export-openapi.json','utf8'));
+if(!claimContract.paths['/proofs/{id}/claim-cases']?.post)throw Error('CLAIM_CONTRACT_UNAVAILABLE');
 await readFile('certs/rds-us-east-1-bundle.pem');
 console.log(JSON.stringify({profile:'capture-receipts-v1',migrations:inventory.length,runtimeRole:PRODUCTION_RUNTIME_ROLE,serverImported:true}));`;
  await writeFile(path.join(imageBackend,'packaging-smoke.mjs'),script);
  const smoke=spawnSync(process.execPath,['packaging-smoke.mjs'],{cwd:imageBackend,encoding:'utf8',timeout:15_000,env:{PATH:process.env.PATH,SystemRoot:process.env.SystemRoot,AWS_EC2_METADATA_DISABLED:'true'}});
- expect(smoke.status,smoke.stdout+smoke.stderr).toBe(0);expect(JSON.parse(smoke.stdout.trim())).toEqual({profile:'capture-receipts-v1',migrations:92,runtimeRole:'packproof_app_runtime_v1',serverImported:true});
+ expect(smoke.status,smoke.stdout+smoke.stderr).toBe(0);expect(JSON.parse(smoke.stdout.trim())).toEqual({profile:'capture-receipts-v1',migrations:93,runtimeRole:'packproof_app_runtime_v1',serverImported:true});
 },30_000);
 it('leaves legacy builds/deployment inert before credentials, source uploads or cloud writes',async()=>{
  const build=await readFile(path.join(backend,'buildspec.yml'),'utf8');

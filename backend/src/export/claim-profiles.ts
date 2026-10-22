@@ -19,6 +19,7 @@ const REQUIREMENTS:Record<string,string[]>={
  product_unacceptable:['transaction description and affected items','condition and item identifiers in preserved sources','return or inspection observations, including contrary observations','customer communications and applicable policy'],
 };
 function eligible(s:ClaimSnapshot,clock:Clock){
+ if(s.region!=='US'||s.paymentMethod!=='CARD')throw fail('CLAIM_PROFILE_UNSUPPORTED','This case has no reviewed region and payment method.');
  if(!['needs_response','warning_needs_response'].includes(s.lifecycleStatus)||!s.allowedActions.includes('RESPOND'))throw fail('CLAIM_ACTION_UNAVAILABLE','The reported case does not currently allow a response.');
  if(!s.providerDeadline||Date.parse(s.providerDeadline)<=clock.now().getTime())throw fail('CLAIM_DEADLINE_PASSED','Record the actual future provider deadline before preparing or approving a packet.');
  const age=clock.now().getTime()-Date.parse(s.retrievedAt);
