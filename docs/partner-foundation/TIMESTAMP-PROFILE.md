@@ -30,9 +30,21 @@ Source references: [RFC 3161](https://www.rfc-editor.org/rfc/rfc3161),
 [OpenSSL ts](https://docs.openssl.org/3.4/man1/openssl-ts/) and
 [OpenSSL explicit certificate store construction](https://github.com/openssl/openssl/blob/openssl-3.4/apps/ts.c).
 
-Current scope: bounded protocol and transport implementation, with synthetic
-request/transport tests and a required Linux OpenSSL authority/verification gate.
-The Windows host cannot execute its MSYS OpenSSL, so local protocol tests do not
-establish cryptographic conformance. Durable worker integration, package export,
-independent verifier support and deployment acceptance are still required. No
-production configuration, service, migration or provider has been changed.
+Current scope: bounded protocol and transport, package export and independent
+Python verification are implemented. Source `d792384a5173408ca01087f1d6168e3361ce90c6`
+passed all 22 Linux timestamp conformance checks, including real OpenSSL tokens,
+wrong nonces, signature tampering, unrelated roots, revoked trust, cross-language
+verification and a complete exported package. Full CI passed 1,535 backend checks
+(17 skipped), web/mobile, PostgreSQL invariants and security gates. The Windows
+host cannot execute MSYS OpenSSL; the cryptographic result comes from Linux CI.
+
+Durable request/result persistence, worker scheduling, runtime/HTTP integration,
+container packaging and deployed acceptance remain open in draft PR #126. No
+production configuration, service, migration or provider has been changed. See
+[the engineering checkpoint](m2-envelope-engineering-checkpoint-2026-10-22.json).
+
+Verifier v1.5.0 accepts `--timestamp-trust` separately from `--envelope-trust`.
+A package declares timestamp material PRESENT; the verifier derives VALID or
+INVALID. A claimed historical validation receipt never supplies current trust.
+Missing or untrusted timestamp material makes a declared timestamp invalid while
+preserving the separate issuer-signature and media-integrity results.
