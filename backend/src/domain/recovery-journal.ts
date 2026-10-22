@@ -10,7 +10,7 @@ import { verifyManifestIntegrity } from "./manifest-signing.js";
 import { assertPolicyAccessSafe, currentPolicySequence, requireDurablePolicySequence } from "./policy-recovery.js";
 import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
-export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED";
+export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED" | "CLAIM_CASE_RECORDED";
 interface RecoveryRow {
   operation_id: string; sequence: number | string; proof_id: string; kind: RecoveryKind;
   request_sha256: string; canonical_json: string; sha256: string; previous_sha256: string | null;
@@ -88,6 +88,7 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   rows.platform_capture_authorizations = (await db.query('SELECT * FROM platform_capture_authorizations WHERE proof_id=$1',[proofId])).rows;
   // Immutable requests/results are reconstructed; transient leases are not.
   for (const table of ['integrity_envelope_jobs', 'integrity_envelope_results']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
+  for (const table of ['claim_cases', 'claim_case_revisions']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   rows.capture_session_reports = (await db.query("SELECT r.* FROM capture_session_reports r JOIN capture_sessions s ON s.id=r.session_id WHERE s.proof_id=$1", [proofId])).rows;
   for (const table of ["observation_assets", "observation_evidence", "observation_external_refs"]) rows[table] = (await db.query(`SELECT j.* FROM ${table} j JOIN custody_observations o ON o.id=j.observation_id WHERE o.proof_id=$1`, [proofId])).rows;
   for (const table of ["transactions", "transaction_shipping", "transaction_items", "transaction_integration_identities", "transaction_source_observations"]) {

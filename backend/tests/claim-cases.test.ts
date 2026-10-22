@@ -1,0 +1,170 @@
+import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
+import {readFile,mkdtemp,rm} from 'node:fs/promises';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import os from 'node:os';
+import path from 'node:path';
+import {generateKeyPairSync,sign} from 'node:crypto';
+import request from './in-process-http.js';
+import {createHarness,createUser,commitProofEvidence,auth,type TestHarness} from './helpers.js';
+import {VersionedMemoryObjectStore} from './versioned-memory-object-store.js';
+import {openIsolatedTestDatabase} from './isolated-test-database.js';
+import {createOrganization,setOrganizationEntitlement,addOrganizationMember,createIntegrationAccount,createServicePrincipal,issuePartnerCredential,authenticatePartner,PARTNER_SCOPES,revokeOrganizationMember} from '../src/platform/organizations.js';
+import {importPartnerOrder,addPartnerBinding} from '../src/platform/partner-proofs.js';
+import {finalizeProof} from '../src/domain/finalize.js';
+import {commitAttestation} from '../src/domain/attestations.js';
+import {createSignatureSnapshot,buildSignatureCase} from '../src/domain/signature.js';
+import {createClaimCase,getClaimCase,reviseClaimCase} from '../src/domain/claim-cases.js';
+import {bindClaimExport,assertClaimExportCurrent,claimEvidenceSelection} from '../src/export/claim-profiles.js';
+import {recipientProfile} from '../src/export/recipient-profiles.js';
+import {queueRecipientExport,processRecipientExport,getRecipientExport,approveRecipientExport,downloadRecipientExport} from '../src/domain/recipient-exports.js';
+import {sha256Hex} from '../src/hash.js';
+import {canonicalize} from '../src/canonical.js';
+import {processRecoveryOutbox,type RecoveryPublisher} from '../src/domain/recovery-journal.js';
+import {processPolicyRecoveryOutbox} from '../src/domain/policy-recovery.js';
+import {restoreFreshRecoveryDatabase} from '../src/domain/recovery-restore.js';
+import {createPgliteDatabase} from '../src/db/pglite.js';
+import {migrate} from '../src/db/migrate.js';
+import {requireRecentClaimAuthentication} from '../src/http/claim-cases-router.js';
+import type {AppDependencies} from '../src/app.js';
+import type {Request} from 'express';
+
+describe('merchant ClaimCase identity and exact review binding',()=>{
+ const clock={now:()=>new Date('2026-10-22T12:00:00Z')};
+ const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),pem=keys.publicKey.export({type:'spki',format:'pem'}).toString();
+ const objects=new Map<string,Buffer>();
+ const journal={putIfAbsent:async(key:string,bytes:Buffer)=>{if(objects.has(key))return {created:false};objects.set(key,Buffer.from(bytes));return {created:true};},get:async(key:string,ref?:{versionId:string})=>{const body=objects.get(key);if(ref&&ref.versionId!==`test:${body&&sha256Hex(body)}`)throw Error('Wrong test journal version');return body?{body,contentType:'application/json'}:null;},head:async(key:string)=>{const body=objects.get(key);return body?{versionId:`test:${sha256Hex(body)}`,byteSize:body.length,contentType:'application/json'}:null;}};
+ const publisher:RecoveryPublisher={store:journal,protectedStoreVerified:true,writerGeneration:'initial',trustedPublicKey:async id=>id==='claim-test-key'?pem:null,signer:{signManifest:async input=>({algorithm:'ECDSA_SHA_256',keyId:'claim-test-key',signedAt:clock.now().toISOString(),signatureBase64:sign('sha256',Buffer.from(input.canonicalJson),keys.privateKey).toString('base64')})}};
+ const media=new VersionedMemoryObjectStore();
+ let h:TestHarness,opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>;
+ let admin:string,ownerA:string,ownerB:string,opA:string,opB:string,merchantA:string,memberA:string,accountA:string,accountA2:string,accountB:string,proofA:string,proofB:string,evidenceId:string,packet:Awaited<ReturnType<typeof buildSignatureCase>>,serviceActor:string;
+ const facts={reasonCode:'product_unacceptable',network:'MASTERCARD',lifecycleStatus:'needs_response',providerDeadline:'2026-10-25T12:00:00Z',retrievedAt:'2026-10-22T11:00:00Z',allowedActions:['RESPOND']};
+ const input=(id:string,account=accountA)=>({integrationAccountId:account,disputeId:id,paymentId:'ch_shared',orderLineIds:[],idempotencyKey:`${id}:${account}`,...facts});
+ const revision=(c:{snapshotSha256:string},key:string,extra={})=>({...facts,retrievedAt:'2026-10-22T11:30:00Z',expectedSnapshotSha256:c.snapshotSha256,idempotencyKey:key,...extra});
+ const exportInput=(c:{claimCaseId:string;snapshotSha256:string},key:string)=>({caseId:packet.caseId,profileId:'stripe-dispute-us-mastercard-v2',idempotencyKey:key,claimCaseId:c.claimCaseId,claimSnapshotSha256:c.snapshotSha256,destinationDeadline:facts.providerDeadline,destinationInstructionsReviewed:true,narrative:'Merchant-selected packing frame for review.',frames:[{evidenceId,offsetMs:0,label:'Selected packing observation'}]});
+ async function preserve(){for(let i=0;i<200;i++){if(!(await processPolicyRecoveryOutbox(h.db,clock,publisher)).processed)break;if(i===199)throw Error('Policy did not drain');}for(let i=0;i<200;i++){if(!(await processRecoveryOutbox(h.db,clock,publisher)).processed)return;if(i===199)throw Error('Core did not drain');}}
+ beforeAll(async()=>{
+  vi.stubEnv('PACKPROOF_ORGANIZATIONS_ENABLED','true');vi.stubEnv('PACKPROOF_CLAIM_EXPORTS_ENABLED','true');
+  opened=await openIsolatedTestDatabase();h=await createHarness(clock,{opened,objectStore:media});
+  [admin,ownerA,ownerB,opA,opB]=await Promise.all(Array.from({length:5},()=>createUser(h)));
+  const mediaDir=await mkdtemp(path.join(os.tmpdir(),'claim-source-'));let source:Buffer;
+  try{const file=path.join(mediaDir,'clip.mp4');await promisify(execFile)('ffmpeg',['-nostdin','-v','error','-f','lavfi','-i','testsrc2=size=1280x720:rate=25','-t','0.4','-c:v','libx264','-threads','1','-pix_fmt','yuv420p',file],{timeout:10000});source=await readFile(file);}finally{await rm(mediaDir,{recursive:true,force:true});}
+  await h.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);
+  async function merchant(owner:string,operator:string,name:string){
+   const org=await createOrganization(h.db,clock,admin,{kind:'MERCHANT',name,ownerUserId:owner},'setup');await setOrganizationEntitlement(h.db,clock,admin,org.id,{enabled:true},'setup');
+   const member=await addOrganizationMember(h.db,clock,owner,org.id,{userId:operator,role:'OPERATOR'},'setup');
+   const account=await createIntegrationAccount(h.db,clock,owner,org.id,{provider:'stripe',externalAccountId:`acct_${name}`},'setup');
+   const principal=await createServicePrincipal(h.db,clock,owner,org.id,{name:'Reference account'},'setup');
+   const cred=await issuePartnerCredential(h.db,clock,owner,org.id,principal.id,{scopes:[...PARTNER_SCOPES],expiresAt:'2026-10-23T12:00:00Z'},'setup');
+   const actor=await authenticatePartner(h.db,clock,`Bearer ${cred.token}`,org.id,undefined,'setup');
+   const proof=await importPartnerOrder(h.db,clock,actor,{integrationAccountId:account.id,externalId:'same-order',operatorMembershipId:member.id,transaction:{itemTitle:'Synthetic camera',quantity:1}});
+   await addPartnerBinding(h.db,clock,actor,proof.proofId,{integrationAccountId:account.id,resourceType:'PAYMENT',externalId:'ch_shared'});
+   const evidence=await commitProofEvidence(h,operator,proof.proofId,{evidenceType:'FULFILLMENT_CAPTURE',bytes:source});
+   await commitAttestation(h.db,clock,operator,proof.proofId,{statement:'PACKED_DESCRIBED_ITEM',relatedEvidenceId:evidence.evidenceId});
+   await finalizeProof(h.db,clock,operator,proof.proofId,publisher.signer);
+   return {org:org.id,member:String(member.id),account:account.id,proof:proof.proofId,evidence:evidence.evidenceId,actor};
+  }
+  const a=await merchant(ownerA,opA,'claim_a'),b=await merchant(ownerB,opB,'claim_b');
+  merchantA=a.org;memberA=a.member;accountA=a.account;accountB=b.account;proofA=a.proof;proofB=b.proof;evidenceId=a.evidence;serviceActor=a.actor.actorUserId;
+  accountA2=(await createIntegrationAccount(h.db,clock,ownerA,merchantA,{provider:'stripe',externalAccountId:'acct_claim_a_second'},'setup')).id;
+  await addPartnerBinding(h.db,clock,a.actor,proofA,{integrationAccountId:accountA2,resourceType:'PAYMENT',externalId:'ch_shared'});
+  const snapshot=await createSignatureSnapshot(h.db,clock,opA,proofA);
+  packet=await buildSignatureCase(h.db,clock,opA,proofA,{snapshotId:snapshot.snapshotId,template:'WRONG_ITEM',scope:{fields:['status','order','shipping','evidence','statements'],evidenceIds:[evidenceId]}});
+ },60000);
+ afterAll(async()=>{await h?.close();await opened?.close();vi.unstubAllEnvs();});
+ it('keeps individual disputes and account namespaces distinct while replaying exact creates',async()=>{
+  const one=await createClaimCase(h.db,clock,opA,proofA,input('du_one'));
+  expect((await createClaimCase(h.db,clock,opA,proofA,input('du_one'))).claimCaseId).toBe(one.claimCaseId);
+  const two=await createClaimCase(h.db,clock,opA,proofA,input('du_two'));
+  const otherAccount=await createClaimCase(h.db,clock,opA,proofA,input('du_one',accountA2));
+  const otherMerchant=await createClaimCase(h.db,clock,opB,proofB,input('du_one',accountB));
+  expect(new Set([one,two,otherAccount,otherMerchant].map(c=>c.claimCaseId)).size).toBe(4);
+  expect(one.snapshot).toMatchObject({source:'MERCHANT_REPORTED',providerVerification:'UNVERIFIED',apiVersion:'MANUAL_PORTAL',paymentId:'ch_shared',orderLineIds:[]});
+  expect(one.preservation.status).toBe('COMMITTED_PENDING_DURABILITY');
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_one'),reasonCode:'product_not_received'})).rejects.toMatchObject({code:'CLAIM_RETRY_CONFLICT'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_one'),idempotencyKey:'changed-identity',reasonCode:'product_not_received'})).rejects.toMatchObject({code:'CLAIM_IDENTITY_CONFLICT'});
+  expect((await getClaimCase(h.db,opA,proofA,one.claimCaseId)).snapshotSha256).toBe(sha256Hex(canonicalize(one.snapshot)));
+ });
+ it('denies crossed merchants, payments, lines, service actors and forged provenance',async()=>{
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_scope'));
+  await expect(getClaimCase(h.db,opB,proofA,c.claimCaseId)).rejects.toThrow();
+  await expect(createClaimCase(h.db,clock,opA,proofA,input('du_cross',accountB))).rejects.toMatchObject({code:'CLAIM_ACCOUNT_UNSUPPORTED'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_payment'),paymentId:'unbound'})).rejects.toMatchObject({code:'CLAIM_PAYMENT_SCOPE'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_lines'),orderLineIds:['another-proof-line']})).rejects.toMatchObject({code:'CLAIM_LINE_SCOPE'});
+  await expect(createClaimCase(h.db,clock,serviceActor,proofA,input('du_machine'))).rejects.toMatchObject({code:'HUMAN_AUTHENTICATION_REQUIRED'});
+  await expect(createClaimCase(h.db,clock,opA,proofA,{...input('du_forged'),source:'PROVIDER_VERIFIED'})).rejects.toMatchObject({code:'INVALID_REQUEST'});
+ });
+ it('appends revisions atomically, preserves earlier bytes and rejects stale competing writes',async()=>{
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_revisions'));
+  const changed=revision(c,'revision-1',{reasonCode:'product_not_received'});
+  const results=await Promise.allSettled([reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,changed),reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,{...changed,idempotencyKey:'revision-race',network:'VISA'})]);
+  expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(results.filter(r=>r.status==='rejected')).toHaveLength(1);
+  const latest=await getClaimCase(h.db,opA,proofA,c.claimCaseId);expect(latest.revision).toBe(2);expect(latest.snapshot.previousSha256).toBe(c.snapshotSha256);
+  await expect(h.db.query("UPDATE claim_case_revisions SET snapshot_json='{}' WHERE id=$1",[c.revisionId])).rejects.toThrow();
+  await expect(reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,revision(latest,'old-time',{retrievedAt:facts.retrievedAt}))).rejects.toMatchObject({code:'CLAIM_OBSERVATION_STALE'});
+  const event=(await h.db.query<{canonical_json:string}>('SELECT canonical_json FROM recovery_events WHERE operation_id=$1',[`claim-revision:${latest.revisionId}`])).rows[0];
+  const payload=JSON.parse(event.canonical_json).payload;expect(payload.schemaVersion).toBe(1);expect(payload.rows.claim_case_revisions.filter((r:{claim_case_id:string})=>r.claim_case_id===c.claimCaseId)).toHaveLength(2);
+ });
+ it('binds the actual reason, network, deadline and revision; missing evidence remains a gap',async()=>{
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_profiles')),profile=recipientProfile('stripe-dispute-us-mastercard-v2',clock.now());
+  const b=await bindClaimExport(h.db,clock,opA,proofA,exportInput(c,'profile'),profile);
+  expect(b.evidenceProfile).toMatchObject({reasonCode:facts.reasonCode,network:'MASTERCARD',apiVersion:'MANUAL_PORTAL'});
+  const selection=claimEvidenceSelection(packet.preview,b,exportInput(c,'s').frames);
+  expect(selection.references.find(r=>r.kind==='SELECTED_FRAME')).toMatchObject({reference:evidenceId,timestampMs:0});expect(selection.gaps.join(' ')).toContain('not established');
+  expect(claimEvidenceSelection(packet.preview,b,exportInput(c,'s').frames)).toEqual(selection);
+  await expect(bindClaimExport(h.db,clock,opA,proofA,{...exportInput(c,'bad'),destinationDeadline:'2026-10-26T12:00:00Z'},profile)).rejects.toMatchObject({code:'CLAIM_DEADLINE_MISMATCH'});
+  await expect(bindClaimExport(h.db,clock,opA,proofA,exportInput(c,'bad'),recipientProfile('stripe-dispute-us-other-v2',clock.now()))).rejects.toMatchObject({code:'CLAIM_PROFILE_MISMATCH'});
+  const unsupported=await createClaimCase(h.db,clock,opA,proofA,{...input('du_fraud'),reasonCode:'fraudulent'});
+  await expect(bindClaimExport(h.db,clock,opA,proofA,exportInput(unsupported,'bad'),profile)).rejects.toMatchObject({code:'CLAIM_PROFILE_UNSUPPORTED'});
+  await expect(h.db.transaction(tx=>assertClaimExportCurrent(tx,{now:()=>new Date('2026-10-23T12:00:00Z')},opA,proofA,b))).rejects.toMatchObject({code:'CLAIM_REFRESH_REQUIRED'});
+ });
+ it('renders and approves exact files, then blocks approval and download after a case change',async()=>{
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_export'));
+  await expect(queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'before-preservation'))).rejects.toMatchObject({code:'PRESERVATION_PENDING'});
+  await preserve();
+  const job=await queueRecipientExport(h.db,clock,opA,proofA,exportInput(c,'render-claim'));
+  const processed=await processRecipientExport(h.db,clock,h.objectStore);
+  expect(processed,JSON.stringify(await getRecipientExport(h.db,opA,proofA,job.jobId,clock))).toEqual({processed:1,failed:0});
+  const ready=await getRecipientExport(h.db,opA,proofA,job.jobId,clock);expect(ready.claimReview?.state).toBe('REVIEW_REQUIRED');
+  expect(ready.artifact.claimCase.snapshotSha256).toBe(c.snapshotSha256);expect(ready.artifact.sources[0].sourceActorUserId).toBe(opA);
+  const approval={artifactSha256:ready.artifactSha256,claimSnapshotSha256:c.snapshotSha256,action:'EXPORT_FOR_MERCHANT_REVIEW',legibilityConfirmed:true};
+  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,{...approval,action:'AUTHORIZE_PROVIDER_SUBMISSION'})).rejects.toMatchObject({code:'CLAIM_APPROVAL_ACTION_REQUIRED'});
+  expect((await approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval)).claimReview?.state).toBe('APPROVED');
+  expect((await downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock)).subarray(0,2).toString()).toBe('PK');
+  await reviseClaimCase(h.db,clock,opA,proofA,c.claimCaseId,revision(c,'closed',{lifecycleStatus:'under_review',allowedActions:[]}));
+  await expect(approveRecipientExport(h.db,clock,h.objectStore,opA,proofA,job.jobId,approval)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
+  await expect(downloadRecipientExport(h.db,h.objectStore,opA,proofA,job.jobId,clock)).rejects.toMatchObject({code:'CLAIM_REVISION_CHANGED'});
+  const stale=await getRecipientExport(h.db,opA,proofA,job.jobId,clock);expect(stale.claimReview).toMatchObject({state:'REVIEW_REQUIRED',requiresNewApproval:true,reason:'CLAIM_REVISION_CHANGED'});expect(stale.approval).not.toBeNull();
+ },60000);
+ it('keeps HTTP feature gates, current human identity and submission denial explicit',async()=>{
+  const contract=await request(h.app).get('/v1/claim-export-openapi.json');expect(contract.status,contract.text).toBe(200);expect(contract.body.paths['/proofs/{id}/claim-cases']).toHaveProperty('post');
+  const req={headers:{},packproofUserId:opA} as Request;
+  for(const at of [undefined,NaN,clock.now().getTime()/1000-301,clock.now().getTime()/1000+1])await expect(requireRecentClaimAuthentication({clock,auth:{authenticate:async()=>({userId:opA,authenticatedAt:at})}} as AppDependencies,req)).rejects.toMatchObject({code:'RECENT_AUTHENTICATION_REQUIRED'});
+  expect(await requireRecentClaimAuthentication({clock,auth:{authenticate:async()=>({userId:opA,authenticatedAt:clock.now().getTime()/1000-10})}} as AppDependencies,req)).toBe(opA);
+  const c=await createClaimCase(h.db,clock,opA,proofA,input('du_http'));
+  const base=`/proofs/${proofA}/claim-cases`;
+  const read=await request(h.app).get(`${base}/${c.claimCaseId}`).set(auth(opA));expect(read.status,read.text).toBe(200);expect(read.headers['cache-control']).toContain('no-store');
+  const submit=await request(h.app).post(`${base}/${c.claimCaseId}/submissions`).set(auth(opA)).send({});expect(submit.status).toBe(409);expect(submit.body.code??submit.body.error?.code).toBe('CLAIM_PROVIDER_SUBMISSION_UNAVAILABLE');
+  vi.stubEnv('PACKPROOF_CLAIM_EXPORTS_ENABLED','false');expect((await request(h.app).get(base).set(auth(opA))).status).toBe(503);vi.stubEnv('PACKPROOF_CLAIM_EXPORTS_ENABLED','true');
+  await revokeOrganizationMember(h.db,clock,ownerA,merchantA,memberA,'revoke');
+  await expect(getClaimCase(h.db,opA,proofA,c.claimCaseId)).rejects.toThrow();
+  await expect(createClaimCase(h.db,clock,opA,proofA,input('du_http'))).rejects.toThrow();
+ });
+ it('reconstructs exact claim identities and revision history in a fresh fenced database',async()=>{
+  await preserve();
+  const target=await createPgliteDatabase();
+  try{
+   await migrate(target.db);await target.db.query('CREATE ROLE packproof_restore_claims NOLOGIN NOSUPERUSER NOBYPASSRLS');
+   await target.db.query('GRANT USAGE ON SCHEMA public TO packproof_restore_claims');
+   await target.db.query('GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO packproof_restore_claims');
+   await target.db.query('GRANT USAGE,SELECT,UPDATE ON ALL SEQUENCES IN SCHEMA public TO packproof_restore_claims');
+   await target.db.query('SET ROLE packproof_restore_claims');
+   const database=(await target.db.query<{name:string}>('SELECT current_database() AS name')).rows[0].name;
+   const core=[...objects].filter(([key])=>key.startsWith('recovery/v1/')).map(([,body])=>body),policy=[...objects].filter(([key])=>key.startsWith('recovery/policy/v1/')).map(([,body])=>body);
+   await h.db.query('UPDATE recovery_writer_fence SET writes_enabled=false WHERE singleton=1');
+   await restoreFreshRecoveryDatabase(target.db,{expectedDatabase:database,restoreRole:'packproof_restore_claims',isolatedTargetReference:'synthetic-claim-target',oldWriterFenceReference:'synthetic-source-closed',targetWriterGeneration:'claim-replay-test',core:{envelopes:core,expectedWatermark:core.at(-1)!},policy:{envelopes:policy,expectedWatermark:policy.at(-1)!},trustedPublicKey:publisher.trustedPublicKey,sourceStore:{get:(key,ref)=>key.startsWith('recovery/')?journal.get(key,ref?.versionId?{versionId:ref.versionId}:undefined):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journal.head(key):media.head(key,ref),getStream:media.getStream.bind(media)}});
+   for(const table of ['claim_cases','claim_case_revisions'])expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows);
+   expect((await target.db.query<{writes_enabled:boolean}>('SELECT writes_enabled FROM recovery_writer_fence')).rows[0].writes_enabled).toBe(false);
+  }finally{await target.close();}
+ },60000);
+});

@@ -101,6 +101,8 @@ export function createPlatformRouter(deps: AppDependencies) {
   router.use('/partner',createPartnerRouter(deps));
   router.get('/partner-openapi.json',rateLimit(ingressRateLimitOptions(deps.db,ingressRatePolicies.openApi)),(_req,res)=>
     res.sendFile(fileURLToPath(new URL('../../partner-openapi.json',import.meta.url))));
+  router.get('/claim-export-openapi.json',rateLimit(ingressRateLimitOptions(deps.db,ingressRatePolicies.openApi)),(_req,res)=>
+    res.sendFile(fileURLToPath(new URL('../../claim-export-openapi.json',import.meta.url))));
   router.get("/openapi.json", rateLimit(ingressRateLimitOptions(deps.db, ingressRatePolicies.openApi)), (_req, res) =>
     res.sendFile(fileURLToPath(new URL("../../openapi.json", import.meta.url))),
   );

@@ -225,6 +225,7 @@ import { readDisclosedMediaStream } from "./domain/disclosure-stream.js";
 import { receiveAdmittedUploadPart } from "./domain/resumable-upload.js";
 import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-requests-router.js";
 import { recipientExportsRouter } from "./http/recipient-exports-router.js";
+import { claimCasesRouter } from "./http/claim-cases-router.js";
 import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 import { rndRouter } from './rnd/router.js';
@@ -617,6 +618,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/packing-requests", packingRequestsRouter(deps));
   app.use("/proofs/:id/parcel-scope", parcelScopeRouter(deps));
   app.use("/proofs/:id/recipient-exports", recipientExportsRouter(deps));
+  app.use("/proofs/:id/claim-cases", claimCasesRouter(deps));
   app.get("/proofs/:id/supplements", asyncRoute(async (req,res)=>{
     await requireCommerceAccess(deps.db,req.params.id,bearerUser(req));
     res.setHeader("Cache-Control","private, no-store");
