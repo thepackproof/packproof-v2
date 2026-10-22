@@ -82,6 +82,13 @@ describe('M2 database API and worker authority',()=>{
   await expect(applyM2RuntimePrivileges(opened.db,roles)).rejects.toThrow('M2_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');
   expect((await opened.db.query("SELECT relname,relacl FROM pg_class WHERE relnamespace=current_schema()::regnamespace ORDER BY relname")).rows).toEqual(before);
   await opened.db.query(`REVOKE ${broad} FROM ${apiRole}`);
+  await opened.db.query(`REVOKE UPDATE ON recipient_export_jobs FROM ${broad}`);
+  await verifyM2RuntimePrivileges(opened.db,roles);
+  // The effective write itself is permitted, but authority to delegate it is not.
+  await opened.db.query(`GRANT INSERT ON claim_cases TO ${broad} WITH GRANT OPTION`);
+  await opened.db.query(`GRANT ${broad} TO ${apiRole}`);
+  await expect(applyM2RuntimePrivileges(opened.db,roles)).rejects.toThrow('M2_DELEGABLE_PRIVILEGES_UNSAFE');
+  await opened.db.query(`REVOKE ${broad} FROM ${apiRole}`);
   await verifyM2RuntimePrivileges(opened.db,roles);
   await opened.db.query(`GRANT ${workerRole} TO ${apiRole}`);
   await expect(applyM2RuntimePrivileges(opened.db,roles)).rejects.toThrow('M2_SEPARATE_ROLES_REQUIRED');

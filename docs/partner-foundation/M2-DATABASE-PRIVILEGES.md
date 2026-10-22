@@ -29,7 +29,8 @@ Domain authorization, immutable triggers and journal verification remain require
 `applyM2RuntimePrivileges(db, {apiRole, workerRole})` runs one owner transaction,
 checks the exact three migration receipts, rejects shared/owner/elevated roles,
 removes direct table and column grants only on the nine listed tables, grants the
-policy, then verifies effective table and column permissions. Inherited or PUBLIC
+policy, then verifies effective table and column permissions, including refusal
+of grant options that could delegate authority to another role. Inherited or PUBLIC
 excess rights abort the transaction. It changes no role memberships, login settings,
 credentials, application data, schema or unrelated grants. Reapplication is exact.
 Do not attach the old broad runtime group and assume a direct REVOKE overrides it.

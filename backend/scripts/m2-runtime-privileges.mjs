@@ -44,16 +44,19 @@ async function inspect(tx,roles){
   if(unsafe.length||(await tx.query('SELECT has_schema_privilege($1,current_schema(),\'CREATE\') AS allowed',[role])).rows[0].allowed)fail('M2_ROLE_AUTHORITY_UNSAFE');
  }
  if((await tx.query("SELECT pg_has_role($1,$2,'MEMBER') OR pg_has_role($2,$1,'MEMBER') AS shared",identities)).rows[0].shared)fail('M2_SEPARATE_ROLES_REQUIRED');
- const tables=(await tx.query(`SELECT roles.role,c.relname AS name,p.privilege,has_table_privilege(roles.role,c.oid,p.privilege) AS allowed
+ const tables=(await tx.query(`SELECT roles.role,c.relname AS name,p.privilege,has_table_privilege(roles.role,c.oid,p.privilege) AS allowed,
+ has_table_privilege(roles.role,c.oid,p.privilege||' WITH GRANT OPTION') AS grantable
  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace CROSS JOIN unnest($1::text[]) roles(role) CROSS JOIN unnest($3::text[]) p(privilege)
  WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname=ANY($2::text[]) ORDER BY roles.role,c.relname,p.privilege`,[identities,names,tablePrivileges])).rows;
- const fields=(await tx.query(`SELECT roles.role,c.relname AS name,a.attname AS column_name,p.privilege,has_column_privilege(roles.role,c.oid,a.attnum,p.privilege) AS allowed
+ const fields=(await tx.query(`SELECT roles.role,c.relname AS name,a.attname AS column_name,p.privilege,has_column_privilege(roles.role,c.oid,a.attnum,p.privilege) AS allowed,
+ has_column_privilege(roles.role,c.oid,a.attnum,p.privilege||' WITH GRANT OPTION') AS grantable
  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
  CROSS JOIN unnest($1::text[]) roles(role) CROSS JOIN unnest($3::text[]) p(privilege)
  WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname=ANY($2::text[]) ORDER BY roles.role,c.relname,a.attnum,p.privilege`,[identities,names,columnPrivileges])).rows;
  return {columns,tables,fields};
 }
 function check(state,roles){
+ if([...state.tables,...state.fields].some(row=>row.grantable))fail('M2_DELEGABLE_PRIVILEGES_UNSAFE');
  const kind=Object.fromEntries(Object.entries(roles).map(([key,value])=>[value,key]));
  for(const row of state.tables){
   const rule=policy[row.name][kind[row.role]];
