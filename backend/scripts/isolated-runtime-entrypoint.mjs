@@ -14,6 +14,9 @@ if(process.env.PACKPROOF_PROCESS_ROLE==='api'){
  assert.ok(tls?.key&&tls?.cert);
  server=https.createServer({key:tls.key,cert:tls.cert,minVersion:'TLSv1.2'},(req,res)=>{
   const upstream=http.request({hostname:'127.0.0.1',port:3000,path:req.url,method:req.method,headers:req.headers},response=>{
+   // Revocation aborts an already-started package. Propagate the truncation
+   // without turning an expected upstream reset into an uncaught exception.
+   response.on('error',()=>res.destroy());
    res.writeHead(response.statusCode??502,response.headers);response.pipe(res);
   });
   upstream.on('error',()=>{if(!res.headersSent)res.writeHead(502);res.end();});

@@ -1139,7 +1139,7 @@ describe("PackProof web reference client", () => {
     expect(await screen.findByRole("button", { name: "Finish recording" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scan Package to Finish" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Finish recording" }));
-    expect(await screen.findByLabelText("Recorded packing video")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Recorded packing video")).toBeInTheDocument());
     expect(uploadInits).toBe(0);
     expect(await screen.findByRole("button", { name: "Save to PackProof" })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole("checkbox", { name: /The item shown and attached/ })).toBeEnabled());

@@ -30,6 +30,7 @@ COPY backend/scripts/measurement-migrate.mjs ./scripts/measurement-migrate.mjs
 COPY backend/scripts/rnd-migrate.mjs ./scripts/rnd-migrate.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
+COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

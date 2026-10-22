@@ -287,6 +287,10 @@
                 }
               },
               {
+                "Name": "PACKPROOF_WEBHOOK_HOSTS",
+                "Value": "thepackproof.com"
+              },
+              {
                 "Name": "PACKPROOF_MANIFEST_SIGNING_ALGORITHM",
                 "Value": "ECDSA_SHA_256"
               },
@@ -653,6 +657,10 @@
                 "Value": {
                   "Ref": "WorkerRole"
                 }
+              },
+              {
+                "Name": "PACKPROOF_WEBHOOK_HOSTS",
+                "Value": "thepackproof.com"
               },
               {
                 "Name": "PACKPROOF_MANIFEST_SIGNING_ALGORITHM",

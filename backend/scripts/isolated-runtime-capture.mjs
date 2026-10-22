@@ -33,12 +33,17 @@ const call=async(method,path,token,body,statuses=[200],extra={})=>{
 };
 const report={checks:[],proofs:[]};
 try{
- const bytes=await readFile(new URL('../tests/fixtures/camera-recording.mp4',import.meta.url));
+ const original=await readFile(new URL('../tests/fixtures/camera-recording.mp4',import.meta.url));
+ // A valid MP4 free atom adds inert synthetic bytes, keeping media duration
+ // unchanged while forcing the real HTTPS exporter to encounter backpressure.
+ const padding=randomBytes(32*1024*1024);padding.writeUInt32BE(padding.length,0);padding.write('free',4,'ascii');
+ const largeFixture=Buffer.concat([original,padding]);
  for(const [owner,operator,other] of [['ownerA','operatorA','operatorB'],['ownerB','operatorB','operatorA']]){
+  const bytes=owner==='ownerA'?largeFixture:original;
   const proof=input.proofs[owner],token=input.tokens[operator],headers={'PackProof-Merchant-Id':input.merchants[owner],'PackProof-Delegation-Id':input.grants[owner]};
   phase=owner+':intent';
   const intent=await call('POST',`/v1/partner/proofs/${proof}/capture-intents`,input.tokens.partner,{allowedSurfaces:['WEB']},[201],headers);
-  const capabilities={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:false,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:10000000,coreVersion:CORE_VERSION};
+  const capabilities={surface:'WEB',cameraSource:'UNKNOWN',timing:'MONOTONIC',barcode:false,itemVisibility:false,durableJournal:true,incrementalMedia:false,audio:false,deviceAuthentication:'UNAVAILABLE',appIntegrity:'UNAVAILABLE',storageReserveBytes:100000000,coreVersion:CORE_VERSION};
   const denied=await call('POST','/capture-sessions/bind',input.tokens[other],{launchToken:intent.launchToken,capabilities},[409]);assert.equal(denied.error.code,'CAPTURE_INTENT_INVALID');
   phase=owner+':bind';
   const bound=await call('POST','/capture-sessions/bind',token,{launchToken:intent.launchToken,capabilities},[201]);
@@ -70,10 +75,11 @@ try{
   assert.ok(Buffer.isBuffer(pkg)&&pkg.subarray(0,2).toString()==='PK');
   await writeFile(`runtime-artifacts/${owner}.pkpr`,pkg);
   await writeFile(`runtime-artifacts/${owner}-manifest.json`,final.manifest.canonicalJson);
-  report.proofs.push({proofId:proof,captureId:id,evidenceId:upload.evidenceId,manifestSha256:final.manifest.sha256,packageSha256:digest(pkg),packageBytes:pkg.length});
+  report.proofs.push({proofId:proof,captureId:id,evidenceId:upload.evidenceId,manifestSha256:final.manifest.sha256,packageSha256:digest(pkg),packageBytes:pkg.length,sourceSha256:source.sha256,sourceBytes:bytes.length,syntheticPaddingBytes:owner==='ownerA'?padding.length:0});
   report.checks.push(`${owner}_operator_scope_capture_retry_upload_attestation_finalize_export`);
  }
  phase='open_capture_for_revocation';
+ const bytes=original;
  const headers={'PackProof-Merchant-Id':input.merchants.ownerA,'PackProof-Delegation-Id':input.grants.ownerA};
  const pending=await call('POST','/v1/partner/proofs',input.tokens.partner,{integrationAccountId:input.integrations.ownerA,externalId:'INTERRUPTED-'+randomBytes(8).toString('hex'),operatorMembershipId:input.members.operatorC,transaction:{itemTitle:'Synthetic interrupted capture',quantity:1}},[201],headers);
  const intent=await call('POST',`/v1/partner/proofs/${pending.proofId}/capture-intents`,input.tokens.partner,{allowedSurfaces:['WEB']},[201],headers);

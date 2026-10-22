@@ -983,6 +983,52 @@
                     "cognito-idp:GetUserPoolMfaConfig"
                   ],
                   "Resource": "arn:aws:cognito-idp:us-east-1:784514617543:userpool/us-east-1_1wLVqaizj"
+                },
+                {
+                  "Sid": "RunExactWorkerProbe",
+                  "Effect": "Allow",
+                  "Action": "ecs:RunTask",
+                  "Resource": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-worker:*",
+                  "Condition": {
+                    "ArnEquals": {
+                      "ecs:cluster": {
+                        "Fn::GetAtt": [
+                          "Cluster",
+                          "Arn"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "PassOnlyWorkerRoles",
+                  "Effect": "Allow",
+                  "Action": "iam:PassRole",
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "WorkerRole",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "WorkerExecutionRole",
+                        "Arn"
+                      ]
+                    }
+                  ],
+                  "Condition": {
+                    "StringEquals": {
+                      "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                    }
+                  }
+                },
+                {
+                  "Sid": "StopBoundedAcceptanceTasks",
+                  "Effect": "Allow",
+                  "Action": "ecs:StopTask",
+                  "Resource": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/*"
                 }
               ]
             }
@@ -1107,6 +1153,13 @@
               "Name": "TLS_SECRET_ARN",
               "Value": {
                 "Ref": "TlsSecret"
+              },
+              "Type": "PLAINTEXT"
+            },
+            {
+              "Name": "ISOLATED_SERVICE_SECURITY_GROUP",
+              "Value": {
+                "Ref": "ServiceSecurityGroup"
               },
               "Type": "PLAINTEXT"
             }
