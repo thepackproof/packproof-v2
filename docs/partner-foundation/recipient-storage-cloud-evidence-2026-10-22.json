@@ -1,0 +1,751 @@
+{
+  "schema": "packproof.recipient-storage-cloud-evidence.v1",
+  "recordedAt": "2026-10-22T10:15:48.426018+00:00",
+  "account": "784514617543",
+  "region": "us-east-1",
+  "status": "PASSED_STORAGE_ONLY",
+  "syntheticOnly": true,
+  "productionChanged": false,
+  "databaseRestoreVerified": false,
+  "scope": "Real recipient storage adapter in three separate ECS workload roles. Does not attest to database reconstruction, HTTP admission, device capture, merchant adoption or provider acceptance.",
+  "review": {
+    "reviewedBy": "Codex implementing agent",
+    "independentHumanReview": false
+  },
+  "source": {
+    "application": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+    "applicationMergedAs": "20fbdc1680254de44cdbff6f4dced4072762efaf",
+    "applicationTree": "8afc291be4e01f546b9dae6a1fdb9ef485170619",
+    "harness": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+    "harnessMergedAs": "4ca66aede6a3ba4e33762e0cdeb3f22fc4aa1a65",
+    "harnessTree": "731e329cf8da6f0c4908fea8b28d2a6cf23bf70a"
+  },
+  "build": {
+    "id": "packproof-m1-20261021-runtime:7b3292bd-8cb0-4f0e-b3ee-97ccc0a1c228",
+    "status": "SUCCEEDED",
+    "phase": "COMPLETED",
+    "phases": [
+      {
+        "type": "SUBMITTED",
+        "status": "SUCCEEDED",
+        "duration": 0
+      },
+      {
+        "type": "QUEUED",
+        "status": "SUCCEEDED",
+        "duration": 1
+      },
+      {
+        "type": "PROVISIONING",
+        "status": "SUCCEEDED",
+        "duration": 28,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "DOWNLOAD_SOURCE",
+        "status": "SUCCEEDED",
+        "duration": 58,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "INSTALL",
+        "status": "SUCCEEDED",
+        "duration": 29,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "PRE_BUILD",
+        "status": "SUCCEEDED",
+        "duration": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "BUILD",
+        "status": "SUCCEEDED",
+        "duration": 40,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "POST_BUILD",
+        "status": "SUCCEEDED",
+        "duration": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "UPLOAD_ARTIFACTS",
+        "status": "SUCCEEDED",
+        "duration": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "FINALIZING",
+        "status": "SUCCEEDED",
+        "duration": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "type": "COMPLETED"
+      }
+    ],
+    "phaseRequested": "image",
+    "databaseSecretInjectionDisabled": true,
+    "databaseOperations": false,
+    "image": [
+      {
+        "registryId": "784514617543",
+        "repositoryName": "packproof-m1-20261021-runtime",
+        "imageDigest": "sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+        "imageTags": [
+          "cb74098996147ebe74a149ccb38fec8f86ce3a60"
+        ],
+        "imageSizeInBytes": 146175308,
+        "imagePushedAt": "2026-10-22T09:56:34.165000+00:00",
+        "imageManifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+        "artifactMediaType": "application/vnd.docker.container.image.v1+json",
+        "imageStatus": "ACTIVE"
+      }
+    ],
+    "scan": {
+      "status": {
+        "status": "COMPLETE",
+        "description": "The scan was completed successfully."
+      },
+      "imageId": {
+        "imageDigest": "sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+        "imageTag": "cb74098996147ebe74a149ccb38fec8f86ce3a60"
+      },
+      "findings": {
+        "findings": [],
+        "imageScanCompletedAt": "2026-10-22T09:56:46+00:00",
+        "vulnerabilitySourceUpdatedAt": "2026-10-22T09:56:46+00:00",
+        "findingSeverityCounts": {}
+      }
+    }
+  },
+  "infrastructure": {
+    "stack": "packproof-m2-recipient-20261022-a",
+    "outputs": {
+      "ApiExecutionRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-api-exec",
+      "RestoreTask": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-restore:1",
+      "WorkerTask": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-worker:1",
+      "ReportsBucket": "packproof-m2-recipient-20261022-a-reportsbucket-weoylil7ol7y",
+      "Logs": "/packproof/packproof-m2-recipient-20261022-a",
+      "RecipientBucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+      "ApiRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-api",
+      "RestoreRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-restore",
+      "RestoreExecutionRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-restore-exec",
+      "CanaryBucket": "packproof-m2-recipient-20261022-a-canarybucket-xsbzhaisjmqs",
+      "ApiTask": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-api:1",
+      "WorkerRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-worker",
+      "WorkerExecutionRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-worker-exec"
+    },
+    "roles": [
+      {
+        "name": "packproof-m2-recipient-20261022-a-worker",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-worker-exec",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-api",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-api-exec",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-restore",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-restore-exec",
+        "trustVerified": true,
+        "inlinePoliciesVerified": true,
+        "managedPolicies": []
+      }
+    ],
+    "buckets": [
+      {
+        "name": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+        "versioning": "Enabled",
+        "publicAccessBlocked": true,
+        "encryption": "AES256",
+        "ownership": "BucketOwnerEnforced",
+        "policyVerified": true,
+        "complianceDays": 2
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-reportsbucket-weoylil7ol7y",
+        "versioning": "Enabled",
+        "publicAccessBlocked": true,
+        "encryption": "AES256",
+        "ownership": "BucketOwnerEnforced",
+        "policyVerified": true
+      },
+      {
+        "name": "packproof-m2-recipient-20261022-a-canarybucket-xsbzhaisjmqs",
+        "versioning": "Enabled",
+        "publicAccessBlocked": true,
+        "encryption": "AES256",
+        "ownership": "BucketOwnerEnforced",
+        "policyVerified": true,
+        "complianceDays": 2
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-worker:1",
+        "taskRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-worker",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+        "inlineProbeVerified": true,
+        "environmentVerified": true,
+        "readOnlyRoot": true,
+        "user": "1000:1000",
+        "secrets": [],
+        "ports": [],
+        "container": "worker"
+      },
+      {
+        "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-api:1",
+        "taskRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-api",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+        "inlineProbeVerified": true,
+        "environmentVerified": true,
+        "readOnlyRoot": true,
+        "user": "1000:1000",
+        "secrets": [],
+        "ports": [],
+        "container": "api"
+      },
+      {
+        "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-restore:1",
+        "taskRole": "arn:aws:iam::784514617543:role/packproof-m2-recipient-20261022-a-restore",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+        "inlineProbeVerified": true,
+        "environmentVerified": true,
+        "readOnlyRoot": true,
+        "user": "1000:1000",
+        "secrets": [],
+        "ports": [],
+        "container": "restore"
+      }
+    ],
+    "validation": {
+      "cfnLint": "PASSED",
+      "cloudFormationGuard": {
+        "version": "3.2.1",
+        "rulesPassed": 3,
+        "linuxArchiveSha256": "8c66efb19c63e6c2bf26b9a41bbcf2f85baa8a937b01d350940194faaf64cf1d"
+      },
+      "awsValidateTemplate": "PASSED"
+    },
+    "changes": {
+      "resume": {
+        "Id": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/resume-recipient-storage-20261022-0949/2fa95921-2cab-40a5-91cc-d516a3678910",
+        "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m1-20261021-runtime/c5ce5190-ccf6-11f1-bedb-0affde06d541"
+      },
+      "create": {
+        "Id": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/create-recipient-storage-20261022/25ed5f45-e99b-48a4-81f4-a1f047b1b705",
+        "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m2-recipient-20261022-a/39a36480-cdff-11f1-bc43-0efffda0e4a9"
+      },
+      "close": {
+        "Id": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/close-recipient-worker-20261022/f03c9c1f-c205-4886-b0e9-ab0ac0b0bcea",
+        "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m2-recipient-20261022-a/39a36480-cdff-11f1-bc43-0efffda0e4a9"
+      },
+      "pause": {
+        "Id": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/pause-recipient-storage-20261022/529fb027-d90c-4aeb-8ae1-e7fe3d6a5f96",
+        "StackId": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-m1-20261021-runtime/c5ce5190-ccf6-11f1-bedb-0affde06d541"
+      }
+    },
+    "fenceMarker": {
+      "marker": {
+        "source": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+        "harness": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/6831f73f51054798863ca2cc2680be1a",
+        "writerFence": "CLOSED",
+        "changeSetArn": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/close-recipient-worker-20261022/f03c9c1f-c205-4886-b0e9-ab0ac0b0bcea"
+      },
+      "versionId": "lVHyGwwn43hDABIedKfDOAfVUoRFsMTC",
+      "fencePolicy": [
+        {
+          "Action": "s3:PutObject",
+          "Resource": "arn:aws:s3:::packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3/*",
+          "Effect": "Deny",
+          "Sid": "IndependentWriterFence"
+        }
+      ]
+    }
+  },
+  "reports": [
+    {
+      "event": "recipient_storage_probe_complete",
+      "schema": "packproof.recipient-storage-probe.v1",
+      "source": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+      "harness": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+      "kind": "worker",
+      "stack": "packproof-m2-recipient-20261022-a",
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/6831f73f51054798863ca2cc2680be1a",
+      "taskRevision": "1",
+      "syntheticOnly": true,
+      "productionChanged": false,
+      "databaseRestoreVerified": false,
+      "checks": [
+        "worker_exact_version_bytes_and_compliance_retention",
+        "lost_response_reconciles_first_exact_artifact_without_new_write",
+        "conditional_duplicate_preserves_first_version",
+        "unconditional_creation_denied_by_bucket_policy",
+        "altered_digest_rejected",
+        "exact_version_deletion_denied",
+        "retention_shortening_denied",
+        "other_bucket_read_denied",
+        "other_bucket_write_denied",
+        "cached_task_credentials_obey_external_writer_fence"
+      ],
+      "startedAt": "2026-10-22T10:08:27.450Z",
+      "jobId": "rex_cloud_6831f73f51054798863ca2cc2680be1a",
+      "file": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/files/645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+          "versionId": "g1PmmsqQuBcihHQDcLATrE7yMYe8Omkt"
+        },
+        "sha256": "645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+        "byteSize": 68,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.685Z",
+        "verifiedAt": "2026-10-22T10:08:27.764Z"
+      },
+      "artifact": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/artifact.json",
+          "versionId": "9.GOghMLQNMYXRPbgVYEE4VEr19fB9wX"
+        },
+        "sha256": "3037f3dfaf91e72975c3943172ade40457d2a9e5367f58232e26659674320bbc",
+        "byteSize": 632,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.827Z",
+        "verifiedAt": "2026-10-22T10:08:28.073Z"
+      },
+      "status": "PASSED",
+      "completedAt": "2026-10-22T10:10:35.838Z",
+      "report": {
+        "bucket": "packproof-m2-recipient-20261022-a-reportsbucket-weoylil7ol7y",
+        "key": "acceptance/worker/6831f73f51054798863ca2cc2680be1a.json",
+        "versionId": "oZgqaFApcDJOIdTi0O2zZiuHYCZ4v9fW",
+        "sha256": "54e2192070dbdd57056338f6c274eb66abbe17c299430701e198ca9d962a921d"
+      },
+      "exactVersionDownloaded": true,
+      "downloadedSha256Verified": true
+    },
+    {
+      "event": "recipient_storage_probe_complete",
+      "schema": "packproof.recipient-storage-probe.v1",
+      "source": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+      "harness": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+      "kind": "api",
+      "stack": "packproof-m2-recipient-20261022-a",
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/c57139ed7d15416e9e70d33adc03df10",
+      "taskRevision": "1",
+      "syntheticOnly": true,
+      "productionChanged": false,
+      "databaseRestoreVerified": false,
+      "checks": [
+        "separate_role_reads_only_exact_protected_versions",
+        "latest_version_read_denied",
+        "protected_writes_denied",
+        "altered_digest_rejected",
+        "exact_version_deletion_denied",
+        "retention_shortening_denied",
+        "other_bucket_read_denied",
+        "other_bucket_write_denied"
+      ],
+      "startedAt": "2026-10-22T10:11:59.172Z",
+      "jobId": "rex_cloud_6831f73f51054798863ca2cc2680be1a",
+      "file": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/files/645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+          "versionId": "g1PmmsqQuBcihHQDcLATrE7yMYe8Omkt"
+        },
+        "sha256": "645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+        "byteSize": 68,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.685Z",
+        "verifiedAt": "2026-10-22T10:08:27.764Z"
+      },
+      "artifact": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/artifact.json",
+          "versionId": "9.GOghMLQNMYXRPbgVYEE4VEr19fB9wX"
+        },
+        "sha256": "3037f3dfaf91e72975c3943172ade40457d2a9e5367f58232e26659674320bbc",
+        "byteSize": 632,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.827Z",
+        "verifiedAt": "2026-10-22T10:08:28.073Z"
+      },
+      "status": "PASSED",
+      "completedAt": "2026-10-22T10:11:59.826Z",
+      "report": {
+        "bucket": "packproof-m2-recipient-20261022-a-reportsbucket-weoylil7ol7y",
+        "key": "acceptance/api/c57139ed7d15416e9e70d33adc03df10.json",
+        "versionId": "3H0E4f5HFFUCkFEMcG2ZamETFHSRw.SM",
+        "sha256": "8bba6253991ef793322baf7bb4001557e3c70dc96cfc19f294553c3abcf3cb89"
+      },
+      "exactVersionDownloaded": true,
+      "downloadedSha256Verified": true
+    },
+    {
+      "event": "recipient_storage_probe_complete",
+      "schema": "packproof.recipient-storage-probe.v1",
+      "source": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+      "harness": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+      "kind": "restore",
+      "stack": "packproof-m2-recipient-20261022-a",
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/cd185d913bf6417096d16f0ac76208b1",
+      "taskRevision": "1",
+      "syntheticOnly": true,
+      "productionChanged": false,
+      "databaseRestoreVerified": false,
+      "checks": [
+        "separate_role_reads_only_exact_protected_versions",
+        "latest_version_read_denied",
+        "protected_writes_denied",
+        "altered_digest_rejected",
+        "exact_version_deletion_denied",
+        "retention_shortening_denied",
+        "other_bucket_read_denied",
+        "other_bucket_write_denied"
+      ],
+      "startedAt": "2026-10-22T10:12:05.030Z",
+      "jobId": "rex_cloud_6831f73f51054798863ca2cc2680be1a",
+      "file": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/files/645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+          "versionId": "g1PmmsqQuBcihHQDcLATrE7yMYe8Omkt"
+        },
+        "sha256": "645d47a2ab89798656c7b62726ea25b3c0ca207a89fd2ce05cdf6a9a2e83232a",
+        "byteSize": 68,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.685Z",
+        "verifiedAt": "2026-10-22T10:08:27.764Z"
+      },
+      "artifact": {
+        "object": {
+          "bucket": "packproof-m2-recipient-20261022-a-recipientbucket-slumcomez2s3",
+          "key": "recipient-exports/v2/rex_cloud_6831f73f51054798863ca2cc2680be1a/artifact.json",
+          "versionId": "9.GOghMLQNMYXRPbgVYEE4VEr19fB9wX"
+        },
+        "sha256": "3037f3dfaf91e72975c3943172ade40457d2a9e5367f58232e26659674320bbc",
+        "byteSize": 632,
+        "mode": "COMPLIANCE",
+        "retainUntil": "2026-10-24T10:08:27.827Z",
+        "verifiedAt": "2026-10-22T10:08:28.073Z"
+      },
+      "status": "PASSED",
+      "completedAt": "2026-10-22T10:12:05.526Z",
+      "report": {
+        "bucket": "packproof-m2-recipient-20261022-a-reportsbucket-weoylil7ol7y",
+        "key": "acceptance/restore/cd185d913bf6417096d16f0ac76208b1.json",
+        "versionId": "fHgu7BmvUX7Ui2KBG14_7YfZnIA.ZI3A",
+        "sha256": "5f30e1576e9f2425e5812219968483485fa6fa8639f9f9cff194761dc9f2e0f8"
+      },
+      "exactVersionDownloaded": true,
+      "downloadedSha256Verified": true
+    }
+  ],
+  "assertionsPassed": 26,
+  "taskCompletions": [
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/6831f73f51054798863ca2cc2680be1a",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-worker:1",
+      "lastStatus": "STOPPED",
+      "startedAt": "2026-10-22T10:08:25.625000+00:00",
+      "stoppedAt": "2026-10-22T10:11:08.616000+00:00",
+      "containers": [
+        {
+          "name": "worker",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "imageDigest": "sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/c57139ed7d15416e9e70d33adc03df10",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-api:1",
+      "lastStatus": "STOPPED",
+      "startedAt": "2026-10-22T10:11:57.905000+00:00",
+      "stoppedAt": "2026-10-22T10:12:23.276000+00:00",
+      "containers": [
+        {
+          "name": "api",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "imageDigest": "sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/cd185d913bf6417096d16f0ac76208b1",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2-recipient-20261022-a-restore:1",
+      "lastStatus": "STOPPED",
+      "startedAt": "2026-10-22T10:12:04.056000+00:00",
+      "stoppedAt": "2026-10-22T10:12:30.506000+00:00",
+      "containers": [
+        {
+          "name": "restore",
+          "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "imageDigest": "sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f",
+          "exitCode": 0
+        }
+      ]
+    }
+  ],
+  "ci": {
+    "privilegePolicy": {
+      "head": "cb74098996147ebe74a149ccb38fec8f86ce3a60",
+      "ciRun": 39756517661,
+      "backendTestsPassed": 1475,
+      "backendTestsSkipped": 17,
+      "foundationRun": 39756517534
+    },
+    "storageHarness": {
+      "head": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03",
+      "ciRun": 39758520340,
+      "backendTestsPassed": 1475,
+      "backendTestsSkipped": 17,
+      "infrastructureRun": 39758520190,
+      "codeqlRun": 39758520141,
+      "foundationRun": 39758520174
+    }
+  },
+  "cleanup": {
+    "runtimeStatus": "UPDATE_COMPLETE",
+    "parameters": [
+      {
+        "ParameterKey": "WriterFence",
+        "ParameterValue": "CLOSED"
+      },
+      {
+        "ParameterKey": "ComputeEnabled",
+        "ParameterValue": "false"
+      },
+      {
+        "ParameterKey": "EgressAvailabilityZone",
+        "ParameterValue": "us-east-1a"
+      },
+      {
+        "ParameterKey": "CandidateCommit",
+        "ParameterValue": "ae99e06fb547d49edd223d31901510874c2e0e35"
+      }
+    ],
+    "nat": [
+      {
+        "id": "nat-0cc5a7f0a47d9665c",
+        "state": "deleted"
+      }
+    ],
+    "trail": {
+      "IsLogging": false,
+      "LatestDeliveryTime": "2026-10-22T10:11:41.528000+00:00",
+      "StartLoggingTime": "2026-10-22T09:48:57.344000+00:00",
+      "StopLoggingTime": "2026-10-22T10:13:18.352000+00:00",
+      "LatestDigestDeliveryTime": "2026-10-22T09:56:31.829000+00:00",
+      "LatestDeliveryAttemptTime": "2026-10-22T10:11:41Z",
+      "LatestNotificationAttemptTime": "",
+      "LatestNotificationAttemptSucceeded": "",
+      "LatestDeliveryAttemptSucceeded": "2026-10-22T10:11:41Z",
+      "TimeLoggingStarted": "2026-10-22T09:48:57Z",
+      "TimeLoggingStopped": "2026-10-22T10:13:18Z"
+    },
+    "buildProjectAbsent": true,
+    "buildRoleRemovedWithStack": true,
+    "oldServices": [
+      {
+        "name": "packproof-m1-20261021-runtime-api",
+        "desired": 0,
+        "running": 0,
+        "pending": 0
+      },
+      {
+        "name": "packproof-m1-20261021-runtime-worker",
+        "desired": 0,
+        "running": 0,
+        "pending": 0
+      }
+    ],
+    "verifiedAt": "2026-10-22T10:15:48.426018+00:00",
+    "isolatedTasks": [],
+    "productionServices": [
+      {
+        "name": "packproof-v2-staging-api",
+        "desired": 1,
+        "running": 1,
+        "pending": 0,
+        "deployments": [
+          {
+            "id": "ecs-svc/9541157609586903688",
+            "status": "PRIMARY",
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:48",
+            "desiredCount": 1,
+            "pendingCount": 0,
+            "runningCount": 1,
+            "failedTasks": 0,
+            "createdAt": "2026-10-22T04:10:16.930000+00:00",
+            "updatedAt": "2026-10-22T04:19:53.945000+00:00",
+            "launchType": "FARGATE",
+            "platformVersion": "1.4.0",
+            "platformFamily": "Linux",
+            "networkConfiguration": {
+              "awsvpcConfiguration": {
+                "subnets": [
+                  "subnet-0d7611419ad695536",
+                  "subnet-002790f4a22ef84ee"
+                ],
+                "securityGroups": [
+                  "sg-0fbfe8871eef85488"
+                ],
+                "assignPublicIp": "ENABLED"
+              }
+            },
+            "rolloutState": "COMPLETED",
+            "rolloutStateReason": "ECS deployment ecs-svc/9541157609586903688 completed."
+          }
+        ]
+      }
+    ],
+    "productionTasks": [
+      {
+        "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:48",
+        "lastStatus": "RUNNING",
+        "images": [
+          {
+            "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2",
+            "digest": "sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2"
+          }
+        ]
+      }
+    ],
+    "releasedAddresses": [],
+    "routes": [
+      {
+        "routeTableId": "rtb-05ee97c6869a5baab",
+        "routes": [
+          {
+            "DestinationCidrBlock": "10.42.0.0/16",
+            "GatewayId": "local",
+            "Origin": "CreateRouteTable",
+            "State": "active"
+          }
+        ]
+      }
+    ],
+    "recipientStack": {
+      "status": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "ApplicationCommit",
+          "ParameterValue": "cb74098996147ebe74a149ccb38fec8f86ce3a60"
+        },
+        {
+          "ParameterKey": "HarnessCommit",
+          "ParameterValue": "98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03"
+        },
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "Image",
+          "ParameterValue": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:0c31d44f28eef4eae08965316d963bd675f98fe3d141413f93120aa3a549047f"
+        },
+        {
+          "ParameterKey": "RetainUntil",
+          "ParameterValue": "2026-10-23T08:58:55.943Z"
+        }
+      ]
+    },
+    "retained": [
+      "Protected synthetic objects and exact reports",
+      "Three isolated buckets and bucket policies",
+      "Immutable image",
+      "IAM task roles and task definitions",
+      "CloudWatch/audit evidence"
+    ],
+    "databaseConnectionsOpened": 0
+  },
+  "failedProbeAttempts": [],
+  "inspectionCorrections": [
+    "Hashing was performed locally because the AWS script sandbox rejects hashlib; no probe ran before the deployed checks passed.",
+    "CloudFormation Environment Name/Value was normalized to ECS name/value for exact configuration comparison; duplicate names were rejected.",
+    "Production service task identity was verified from deployments and actual running tasks because its top-level taskDefinition is absent."
+  ],
+  "remainingGates": [
+    "Measured fresh database restore for exact recipient results, approvals and claim revisions under actual separate database authority",
+    "Baseline API/worker database role provisioning plus reviewed production migrations 093-095 and rollback-compatible bridge",
+    "Deployed HTTP authorization and current grant/revision revocation",
+    "Actual browser and Android capture/recovery acceptance",
+    "Consenting merchant cohort, explicit retention, profile review and measured pilot",
+    "Envelope HTTP/runtime integration, authenticated key-history distribution, RFC3161 and rotation/compromise acceptance"
+  ]
+}

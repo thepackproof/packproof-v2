@@ -1,6 +1,49 @@
-# Full-release continuation — 2026-10-22
+# Full-release continuation - 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
+ 
+## M2 recipient continuation - 22 October 2026, 10:15 UTC
+
+PRs #114-#117 are merged. They add protected recipient result and approval
+recovery, the gated merchant claim-review UI, explicit API/worker database
+privilege separation, and a reproducible actual-role storage probe. The final
+application head cb74098996147ebe74a149ccb38fec8f86ce3a60 passed 1,475 backend
+tests (17 skipped), web/mobile builds and checks, real PostgreSQL gates,
+dependency audits and CodeQL. Its merge 20fbdc1680254de44cdbff6f4dced4072762efaf
+has the identical tree. Harness head 98c5ec3d69f9aaee4ce95ba3f79ec6a50aa2aa03
+also passed full CI; merge 4ca66aede6a3ba4e33762e0cdeb3f22fc4aa1a65 has its
+identical tree.
+
+Three one-shot Fargate tasks passed 26 assertions using the real compiled
+recipient adapter and separate worker, API and restore-reader roles. The worker
+recovered the first exact artifact after an injected lost S3 response, refused
+a conditional contender, and obeyed a completed external write fence with its
+already-issued credentials. The readers accepted only pinned exact versions.
+Actual permissions denied writes, deletion, retention shortening and canary
+access as appropriate. Every report was downloaded at its exact version and
+SHA-256 verified; every task exited 0. The application and harness are separately
+pinned in the [storage evidence](recipient-storage-cloud-evidence-2026-10-22.json).
+
+This is storage-only acceptance: databaseRestoreVerified remains false. It does
+not establish a full fresh database restore, production protection, HTTP
+authorization, physical-device capture or merchant adoption. The two-day synthetic
+bucket floor is not a production retention choice. The new database privilege
+helper is not invoked automatically and has not changed production roles.
+
+Cleanup is complete: zero isolated tasks, existing services at zero, both IAM
+write fences CLOSED, ComputeEnabled=false, build project absent, NAT deleted,
+allocated address released, local VPC routes only, and the synthetic trail
+stopped. Protected objects, versioned reports, logs and immutable images remain.
+No database was opened or changed by this storage run.
+
+Production still runs foundation task revision 48, image
+sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2,
+with one running task and no pending task. Migrations 093-095, baseline separated
+database roles, a compatible rollback bridge, measured recipient database
+restore, deployed authorization and actual browser/Android acceptance remain
+release gates. Merchant cohort and pilot evidence are still required. The full
+M2 release and the development plan are not declared complete.
+
 
 
 ## Completed foundation release - 22 October 2026, 04:20 UTC
