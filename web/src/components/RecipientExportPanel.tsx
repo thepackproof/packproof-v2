@@ -91,7 +91,7 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources,claim}:{
     {!profiles.length&&<button className="btn btn-secondary" disabled={busy} onClick={()=>{setError(null);setProfileReload(n=>n+1);}}>Reload submission formats</button>}
     <fieldset disabled={busy} className="stack">
       <legend>Source selection and destination</legend>
-      <label className="field"><span>Destination</span><select value={profileId} onChange={e=>{changed();setProfileId(e.target.value);}}><option value="">Choose a format</option>{profiles.map(p=><option key={p.id} value={p.id} disabled={p.reviewRequired}>{p.destination==="EBAY_PAYMENT_DISPUTE"?"eBay payment dispute � images":`Stripe dispute � ${p.network==="MASTERCARD"?"Mastercard":"other networks"} � PDF`} � {p.region}{p.reviewRequired?" � requires updated review":""}</option>)}</select></label>
+      <label className="field"><span>Destination</span><select value={profileId} onChange={e=>{changed();setProfileId(e.target.value);}}><option value="">Choose a format</option>{profiles.map(p=><option key={p.id} value={p.id} disabled={p.reviewRequired}>{p.destination==="EBAY_PAYMENT_DISPUTE"?"eBay payment dispute · images":`Stripe dispute · ${p.network==="MASTERCARD"?"Mastercard":"other networks"} · PDF`} · {p.region}{p.reviewRequired?" · requires updated review":""}</option>)}</select></label>
       <label className="field"><span>Submission deadline from your case</span><input type="datetime-local" readOnly={Boolean(claim)} value={deadline} onChange={e=>{changed();setDeadline(e.target.value);}}/></label>
       <label className="row"><input type="checkbox" checked={reviewed} onChange={e=>{changed();setReviewed(e.target.checked);}}/>I checked the current instructions and deadline for this case.</label>
       {frames.map((frame,index)=><fieldset key={index}><legend>Frame {index+1}</legend>
@@ -101,7 +101,7 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources,claim}:{
         <button className="btn btn-secondary" onClick={()=>{changed();setFrames(old=>old.filter((_,i)=>i!==index));}}>Remove frame</button>
       </fieldset>)}
       <button className="btn btn-secondary" disabled={!recordings.length||frames.length>=4} onClick={()=>{changed();setFrames(old=>[...old,{evidenceId:recordings[0].evidenceId,seconds:"0",label:""}]);}}>Add a source frame</button>
-      <label className="field"><span>Supporting text � your statement</span><textarea maxLength={2000} value={narrative} onChange={e=>{changed();setNarrative(e.target.value);}}/></label>
+      <label className="field"><span>Supporting text · your statement</span><textarea maxLength={2000} value={narrative} onChange={e=>{changed();setNarrative(e.target.value);}}/></label>
       <button className="btn" disabled={!canPrepare} onClick={()=>void run(async version=>{const parsed=jobFrom(await api.featureRequest<unknown>(proofId,path,"POST",{caseId,profileId,frames:frames.map(f=>({evidenceId:f.evidenceId,offsetMs:Math.round(Number(f.seconds)*1000),label:f.label})),narrative,destinationDeadline:claim?.deadline??new Date(deadline).toISOString(),destinationInstructionsReviewed:true,idempotencyKey:requestKey.current,...(claim?{claimCaseId:claim.claimCaseId,claimSnapshotSha256:claim.snapshotSha256}:{})}),proofId,caseId,claim);publish(parsed,version);})}>Prepare exact files</button>
     </fieldset>
     {job&&["QUEUED","RENDERING","PRESERVING"].includes(job.state)&&<p role="status">Your files are being prepared. The original recording stays unchanged.</p>}
@@ -111,7 +111,7 @@ export function RecipientExportPanel({api,userId,proofId,caseId,sources,claim}:{
     {job?.state==="FAILED"&&<p role="alert">{failureMessage(job.failureCode)}</p>}
     {job?.state==="READY"&&job.artifact&&<div className="stack">
       <h4>Exact files for approval</h4>
-      {job.artifact.files.map((file,index)=><figure key={`${index}-${file.name}`}><figcaption>{file.name} � {(file.byteSize/1000).toFixed(0)} KB</figcaption>{previews[index]&&(file.contentType==="application/pdf"?<iframe title={`Preview ${file.name}`} src={previews[index]} style={{width:"100%",height:"32rem"}}/>:<img src={previews[index]} alt={`Submission file ${index+1}: ${file.name}`} style={{maxWidth:"100%",height:"auto"}}/>)}</figure>)}
+      {job.artifact.files.map((file,index)=><figure key={`${index}-${file.name}`}><figcaption>{file.name} · {(file.byteSize/1000).toFixed(0)} KB</figcaption>{previews[index]&&(file.contentType==="application/pdf"?<iframe title={`Preview ${file.name}`} src={previews[index]} style={{width:"100%",height:"32rem"}}/>:<img src={previews[index]} alt={`Submission file ${index+1}: ${file.name}`} style={{maxWidth:"100%",height:"auto"}}/>)}</figure>)}
       <p>{job.artifact.approvedNarrative}</p><ul>{job.artifact.gaps.map((gap,i)=><li key={i}>{gap}</li>)}</ul>
       {!job.approval&&<label className="row"><input type="checkbox" checked={legible} onChange={e=>setLegible(e.target.checked)}/>I reviewed these exact files and text; the relevant details are readable.</label>}
       <button className="btn" disabled={busy||job.claimReview?.state==="APPROVAL_PRESERVING"||job.claimReview?.requiresNewApproval||(!job.approval&&(!legible||previews.length!==job.artifact.files.length))} onClick={()=>void run(async version=>{

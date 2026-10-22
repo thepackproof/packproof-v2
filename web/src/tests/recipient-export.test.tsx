@@ -87,15 +87,15 @@ it("prepares selected source moments, verifies the exact preview, approves its d
     return new Blob([path===previewPath?bytes:"approved zip"],{type:path===previewPath?"image/jpeg":"application/zip"});
   });
   render(<RecipientExportPanel userId="seller-fixture" api={{recoveryScope,featureRequest,featureDownload} as unknown as PackProofApi} proofId={proofId} caseId={caseId} sources={sources}/>);
-  await screen.findByRole("option",{name:"eBay payment dispute � images � US"});
-  expect(screen.getByRole("option",{name:"Stripe dispute � Mastercard � PDF � US"})).toBeInTheDocument();
-  expect(screen.getByRole("option",{name:"Stripe dispute � other networks � PDF � US"})).toBeInTheDocument();
+  await screen.findByRole("option",{name:"eBay payment dispute · images · US"});
+  expect(screen.getByRole("option",{name:"Stripe dispute · Mastercard · PDF · US"})).toBeInTheDocument();
+  expect(screen.getByRole("option",{name:"Stripe dispute · other networks · PDF · US"})).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Submission deadline from your case"),{target:{value:"2099-09-09T12:00"}});
   fireEvent.click(screen.getByRole("checkbox",{name:"I checked the current instructions and deadline for this case."}));
   fireEvent.click(screen.getByRole("button",{name:"Add a source frame"}));
   fireEvent.change(screen.getByLabelText("Time in recording (seconds)"),{target:{value:"1.25"}});
   fireEvent.change(screen.getByLabelText("Factual label"),{target:{value:"Item before packing"}});
-  fireEvent.change(screen.getByLabelText("Supporting text � your statement"),{target:{value:ready.artifact.approvedNarrative}});
+  fireEvent.change(screen.getByLabelText("Supporting text · your statement"),{target:{value:ready.artifact.approvedNarrative}});
   fireEvent.click(screen.getByRole("button",{name:"Prepare exact files"}));
   await screen.findByRole("status");
   expect(featureRequest).toHaveBeenCalledWith(proofId,"recipient-exports","POST",{
@@ -139,7 +139,7 @@ it("recovers malformed format and saved-job responses without losing the case or
   expect(screen.queryByRole("button",{name:"Approve and download files"})).not.toBeInTheDocument();
   formatsReadable=true;
   fireEvent.click(screen.getByRole("button",{name:"Reload submission formats"}));
-  await screen.findByRole("option",{name:"eBay payment dispute � images � US"});
+  await screen.findByRole("option",{name:"eBay payment dispute · images · US"});
   jobReadable=true;
   fireEvent.click(screen.getByRole("button",{name:"Check preparation again"}));
   await screen.findByRole("img",{name:"Submission file 1: facts-1.jpg"});
