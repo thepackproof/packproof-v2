@@ -1,7 +1,7 @@
 name: Partner isolated infrastructure validation
 on:
   pull_request:
-    paths: ['infra/partner-foundation/**', 'backend/scripts/*recipient-storage*', '.github/workflows/partner-infrastructure.yml']
+    paths: ['infra/partner-foundation/**', 'backend/scripts/*recipient*', '.github/workflows/partner-infrastructure.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,6 +25,10 @@ jobs:
           node --check backend/scripts/isolated-recipient-storage-probe.mjs
           node backend/scripts/generate-recipient-storage-infra.mjs
           git diff --exit-code -- infra/partner-foundation/recipient-storage-assets.json
+          node --check backend/scripts/isolated-recipient-control.mjs
+          node --check backend/scripts/isolated-recipient-acceptance.mjs
+          node backend/scripts/generate-recipient-flow-infra.mjs
+          git diff --exit-code -- infra/partner-foundation/recipient-flow-assets.json
       - name: Validate recipient storage security requirements
         run: |
           curl --fail --silent --show-error --location https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.2.1/cfn-guard-v3-x86_64-linux-latest.tar.gz -o "$RUNNER_TEMP/cfn-guard.tar.gz"
@@ -32,3 +36,4 @@ jobs:
           mkdir "$RUNNER_TEMP/cfn-guard"
           tar -xzf "$RUNNER_TEMP/cfn-guard.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/cfn-guard"
           "$RUNNER_TEMP/cfn-guard/cfn-guard" validate --rules infra/partner-foundation/recipient-storage.guard --data infra/partner-foundation/recipient-storage-assets.json --output-format json --show-summary none
+          "$RUNNER_TEMP/cfn-guard/cfn-guard" validate --rules infra/partner-foundation/recipient-flow.guard --data infra/partner-foundation/recipient-flow-assets.json --output-format json --show-summary none

@@ -2,7 +2,47 @@
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
  
-## M2 recipient continuation - 22 October 2026, 10:15 UTC
+## Combined recipient lifecycle and fresh restore - 22 October 2026
+
+PRs #120 and #121 added actual separate database logins and the exact inactive
+093-095 migration operator. PR #122 adds the combined RDS/S3/KMS acceptance
+harness. The [cloud evidence](recipient-flow-cloud-evidence-2026-10-22.json)
+records eleven one-shot tasks: ten passed, with 61 check entries including repeated
+identity checks. The initial restore reconstructed the fresh database and matched
+all nine tables, then failed a test assertion that expected a membership denial
+instead of the stronger policy-recovery traffic fence. A version/hash-bound,
+read-only follow-up passed, including exact signed revoked-membership comparison
+and all 17 restored policy entries. The original failed report is retained.
+
+The executed lifecycle source is 608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7;
+follow-up harness 0cfb76ee418af311081f073db61ed6e885f833fd changes no application
+source or migration. Both immutable images and every downloaded report hash are
+recorded separately. The worker reconciled an injected lost publication response
+without rendering or publishing again. Requests, results and approvals waited
+for protected durability. Stale claims and revoked membership were denied.
+The running worker obeyed the completed external IAM fence using its cached
+credentials. Seven core and nineteen policy records were durable before cutover.
+Restore used exact protected versions, made no signing or recipient-publication
+calls, and left writers and traffic closed. This is combined acceptance with a
+read-only follow-up, not a clean first-pass restore or a general recovery-time
+measurement.
+
+All three temporary database logins are NOLOGIN, all eleven tasks are stopped,
+and the existing isolated services remain at zero. The new temporary build policy,
+build role/project, NAT and allocated address are removed. Both writer fences
+remain CLOSED, ComputeEnabled=false, only local VPC routes remain, and synthetic
+audit logging is stopped. Versioned reports, protected objects, images and logs
+are retained. The synthetic fixture and two-day retention floor are explicit.
+
+This closes the combined actual-role recipient database/storage restore gap.
+It does not establish HTTP authorization, physical capture, human review or a
+consenting merchant pilot. Production remains at foundation task revision 48;
+migrations 093-095, a compatible rollback bridge, separated baseline runtime
+privileges and production protection/activation are still separate gates. The
+envelope API, key-history distribution, trusted timestamp and later conditional
+milestones also remain open. The full M2 release and plan are not complete.
+
+## Earlier M2 recipient continuation - 22 October 2026, 10:15 UTC
 
 PRs #114-#117 are merged. They add protected recipient result and approval
 recovery, the gated merchant claim-review UI, explicit API/worker database

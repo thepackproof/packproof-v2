@@ -1,0 +1,1787 @@
+{
+  "schema": "packproof.recipient-flow-cloud-evidence.v1",
+  "observedDate": "2026-10-22",
+  "status": "PASSED_COMBINED_WITH_READ_ONLY_FOLLOWUP",
+  "reviewedBy": "Implementing agent; not an independent human review",
+  "scope": {
+    "syntheticOnly": true,
+    "databaseRestoreVerified": true,
+    "productionChanged": false,
+    "productionActivationAccepted": false,
+    "httpAcceptance": false,
+    "deviceAcceptance": false,
+    "humanReviewAcceptance": false,
+    "merchantPilotAcceptance": false,
+    "providerSubmission": false
+  },
+  "repository": "thepackproof/packproof-v2",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/122",
+  "executedSource": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+  "executedImage": {
+    "digest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+    "tags": [
+      "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7"
+    ],
+    "pushedAt": "2026-10-22T16:52:38.419000+00:00",
+    "size": 146190930
+  },
+  "readOnlyFollowup": {
+    "harnessSource": "0cfb76ee418af311081f073db61ed6e885f833fd",
+    "image": {
+      "digest": "sha256:27801b38c9b9fc83a0145d2f6b03cfd7d00b6a6521102a1ce89579c7e222c643",
+      "tags": [
+        "0cfb76ee418af311081f073db61ed6e885f833fd"
+      ],
+      "pushedAt": "2026-10-22T17:30:33.687000+00:00"
+    },
+    "sourceDiff": [
+      {
+        "filename": ".gitleaksignore",
+        "status": "modified",
+        "sha": "efc5780eb88ddcfc28a76833ab023982b5ae9b97"
+      },
+      {
+        "filename": "backend/scripts/generate-recipient-flow-infra.mjs",
+        "status": "modified",
+        "sha": "b3cf20e04b7c5450813d76ddabc78351952bf78c"
+      },
+      {
+        "filename": "backend/scripts/isolated-recipient-acceptance.mjs",
+        "status": "modified",
+        "sha": "62dcd9d36effeb521977eeebabf35929f0c0a145"
+      },
+      {
+        "filename": "infra/partner-foundation/RECIPIENT-FLOW-ACCEPTANCE.md",
+        "status": "modified",
+        "sha": "9d6da11a748067d59de43158993683c5b0dec480"
+      },
+      {
+        "filename": "infra/partner-foundation/recipient-flow-assets.json",
+        "status": "modified",
+        "sha": "26ea63f7f456842208090969fbcd52e1612a97be"
+      }
+    ],
+    "applicationAndMigrationsUnchanged": true,
+    "compiledImageBytesIdenticalClaimed": false
+  },
+  "summary": {
+    "tasks": 11,
+    "passedTasks": 10,
+    "initialRestoreHarnessFailures": 1,
+    "passedReportCheckEntries": 61,
+    "checkCountIncludesRepeatedIdentityChecks": true,
+    "protectedCoreRecords": 7,
+    "protectedPolicyRecords": 19,
+    "exactReconstructedTables": 9,
+    "matchedRestoredPolicyEntries": 17,
+    "generalRecoveryTimeObjectiveMeasured": false
+  },
+  "restoreCorrection": {
+    "initialResult": "Fresh reconstruction and exact nine-table comparison completed; the final test assertion expected ORGANIZATION_ACCESS_REVOKED, but the correctly fenced application returned POLICY_RECOVERY_UNAVAILABLE.",
+    "correction": "Read-only follow-up binds the exact failed report version/hash, re-verifies protected journals and exact tables, compares the signed revoked membership and 17 policy entries, and requires the recovery traffic fence. No production policy or application behavior was weakened.",
+    "databaseReplayedAgain": false,
+    "readOnlySessionEnforced": true,
+    "restoreSigningCalls": 0,
+    "restoreRecipientWrites": 0,
+    "writersEnabled": false,
+    "trafficMayOpen": false,
+    "initialReport": {
+      "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+      "key": "acceptance/recipient/restore/fc18bebd8aac439eab087f414e61a50a.json",
+      "versionId": "OWIFDmulu2Q84wuYakRcZJfdZS90PDLg",
+      "sha256": "40411659875f3c0bbe6fc18d0d3302eb05456f1c0f3db11aa096a85cffe54930",
+      "byteSize": 1275,
+      "downloadedChecksumVerified": true
+    },
+    "followupReport": {
+      "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+      "key": "acceptance/recipient/restore/536a8486d61f40f1906f5a062353cdfb.json",
+      "versionId": "M1x2cDlqUIcA.AS_OJiiyGm1y6TTSueR",
+      "sha256": "98dee2363853fe4b0adbe905cd0a9576d7c445d18f688f9b075ee03656c90e5f",
+      "byteSize": 1766,
+      "downloadedChecksumVerified": true
+    }
+  },
+  "configuration": {
+    "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+    "key": "acceptance/recipient/config/runtime.json",
+    "versionId": "v.em5yFGXWHB0i.6tftEC05HKcrLrQwH",
+    "sha256": "212106b3f7a490a01024c6ad9b2050171414e143fcac2572287663ce068a3f6a",
+    "fixtureMethod": "OWNER_SEEDED_LEGACY_UNKNOWN_DOMAIN_FINALIZATION_NO_DEVICE_HTTP_OR_HUMAN_REVIEW_ASSERTION",
+    "sourceDatabase": "m2_recipient_20261022",
+    "restoreDatabase": "m2_recipient_restore_20261022",
+    "proofId": "proof_01M5J8RX6XJQ996JTRJQ1TB4ZF",
+    "manifestSha256": "37a2ec95fcac94338eaa981bf2cb187ab33d5d02e149795328692ed1d29a68ad",
+    "original": {
+      "bucket": "packproof-m2r-20261022-committedbucket-k0rhqot4q2me",
+      "key": "evidence/proof_01M5J8RX6XJQ996JTRJQ1TB4ZF/evd_m2_recipient_20261022/committed/sha256-4aff77d4db6c968385f4d4f2dbf452d0dc670e3268d4ab8c019c267de89e11fb",
+      "versionId": "KrnAJq9zky.AfroAvvsPRVwuGhmV8x0A",
+      "sha256": "4aff77d4db6c968385f4d4f2dbf452d0dc670e3268d4ab8c019c267de89e11fb",
+      "byteSize": 137446
+    },
+    "retainUntil": "2026-10-23T16:58:09.477Z",
+    "testBucketRetentionFloorDays": 2
+  },
+  "reports": [
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/worker/6c7f5cd70bf9435eaf4b00bd5d04fefa.json",
+        "versionId": "BMwEA5t03Oq9VXhsu.poRjdm4w.mPaZL",
+        "sha256": "899bf2add2fbafdf67c0c119cbb922f0b1132d8c659fedac034b0968ebc4d6d4",
+        "byteSize": 4515,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/6c7f5cd70bf9435eaf4b00bd5d04fefa",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:02:00.683000+00:00",
+        "stoppedAt": "2026-10-22T17:02:33.722000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "worker",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "worker",
+        "mode": "seed",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/6c7f5cd70bf9435eaf4b00bd5d04fefa",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "worker_cannot_approve_or_reopen_database_fence",
+          "worker_root_signing_denied",
+          "worker_original_deletion_denied",
+          "unconditional_journal_publication_denied",
+          "journal_conditional_creation_prevents_replacement",
+          "worker_journal_deletion_denied",
+          "journal_version_retained_in_compliance_mode",
+          "exact_original_bytes_and_retention",
+          "core_and_policy_journals_drained"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "16a3383f-920f-4a67-9a40-72189d57c1fe"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "9798fe5a-ebd4-4ddb-9646-a3b7d74d0d19"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "a9d4e255-68e8-468f-95ef-0c092478e908"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "80b3fd0a-5738-487e-84cd-9b1122761993"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "138b3b66-ad47-4fb4-8799-8a50c4582b61"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "6da08f8e-d30c-4eb6-9591-18ceda2b5bf8"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "34d79dde-52ab-4b72-b6fa-df6fe7a9a6e7"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "9ea76059-02cc-4cb1-8b4f-24f65504e710"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "daab1d6f-d959-4ab8-bc15-e1b4d41fc099"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "e6abde21-3a31-4896-aa5c-d11858080f7e"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "4aabcec7-958e-4375-803c-5b70b9143ae5"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "fcd9f545-07e2-4334-ab2d-e0c54d5785c7"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "c4e494bc-d4da-4ca2-8407-8584b850f015"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "e30f0f1b-7c6b-40e3-ab9e-c4eb209d3f94"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "1fe67547-c71b-424f-baab-95645275ff54"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "2d393498-cb0a-4b6a-bafb-a5fe2c095384"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "b1d9bef8-0d8e-48e7-8d51-cfdef4db6959"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "852c0256-f8d5-4803-a3ce-b3cbe7bea1ae"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "9a0b703e-858f-4053-adde-d13ca01ba616"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "96a0fb31-89b0-415c-b3af-cc2411265bfe"
+          }
+        ],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_worker_20261022",
+          "login": "m2_recipient_worker_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/api/bb176c84806f4f99883c8f7ac0f69780.json",
+        "versionId": "Ax_MGIrDTKNEgsVTRZRqSivLWEjSpWAe",
+        "sha256": "45139cf0d97e7c953d6aca0906b996a987ae5387ec4203640e44cd1993f9d060",
+        "byteSize": 1205,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/bb176c84806f4f99883c8f7ac0f69780",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-api:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:03:42.774000+00:00",
+        "stoppedAt": "2026-10-22T17:04:10.414000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "api",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "api",
+        "mode": "request",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/bb176c84806f4f99883c8f7ac0f69780",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "api_database_result_writes_denied",
+          "api_protected_publication_denied",
+          "api_recovery_signing_denied",
+          "request_waits_for_protected_journal"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_api_20261022",
+          "login": "m2_recipient_api_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "claim": {
+          "id": "claim_01M5J935VNWKA59Q0X7X67J5H1",
+          "revisionId": "clrev_01M5J935VYSJQBZ24PNZ576NT3",
+          "sha256": "e892d448573811dd39300a34737cfb5ba8a6a1fad077f25c31233725f1f9f412"
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/worker/e6a14c1d9fe445029abcb28d08ce3a77.json",
+        "versionId": "ulL9W4ZV240.D1M7.1mcFHcTJj_n92BF",
+        "sha256": "c612468e27fce1164df2f703fa1142ce77e132f8fcdee3ab87e79d36ba39864d",
+        "byteSize": 1145,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/e6a14c1d9fe445029abcb28d08ce3a77",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:05:30.271000+00:00",
+        "stoppedAt": "2026-10-22T17:05:58.586000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "worker",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "worker",
+        "mode": "drain",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/e6a14c1d9fe445029abcb28d08ce3a77",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "worker_cannot_approve_or_reopen_database_fence",
+          "core_and_policy_journals_drained"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "8b22a4eb-eb74-4f2e-9d35-9ae74470aeb4"
+          }
+        ],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_worker_20261022",
+          "login": "m2_recipient_worker_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/api/2d62e827d0fd4a1bac42010b3087b9e2.json",
+        "versionId": "oSwCb9B6Fdh7SbNRQmU26IVW3OpKR20z",
+        "sha256": "66db19bdabac02222fe00f1e23034c8b69c5b66d363d8a6f489e01d94c888ea2",
+        "byteSize": 1008,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/2d62e827d0fd4a1bac42010b3087b9e2",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-api:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:06:18.212000+00:00",
+        "stoppedAt": "2026-10-22T17:06:47.408000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "api",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "api",
+        "mode": "queue",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/2d62e827d0fd4a1bac42010b3087b9e2",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "api_database_result_writes_denied",
+          "queued_exact_claim_and_request_journal"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_api_20261022",
+          "login": "m2_recipient_api_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "jobId": "rex_01M5J97XE6XTP32Z2A6KD22R5Z",
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/worker/75a1c1fcb3fe43e384baa07c4a3b6762.json",
+        "versionId": "3mTwimiCeGs1V5PyNZfMG1PspzT9Vk57",
+        "sha256": "d75679271989e905c17c1c343cc29c21833c5b5b5138d2e956daf67fa579a401",
+        "byteSize": 2866,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/75a1c1fcb3fe43e384baa07c4a3b6762",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:07:14.464000+00:00",
+        "stoppedAt": "2026-10-22T17:08:19.832000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "worker",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "worker",
+        "mode": "render",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/75a1c1fcb3fe43e384baa07c4a3b6762",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "worker_cannot_approve_or_reopen_database_fence",
+          "render_waits_for_request_publication",
+          "lost_response_has_no_false_acceptance",
+          "retry_reuses_first_exact_artifact_without_render_or_put",
+          "accepted_result_waits_for_protected_journal",
+          "core_and_policy_journals_drained"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "19572a2e-1c88-4d94-92a1-9613dfcbc210"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "03100c50-222a-47b3-bedd-b97d6a5e898d"
+          }
+        ],
+        "recipientWrites": [
+          {
+            "key": "recipient-exports/v2/rex_01M5J97XE6XTP32Z2A6KD22R5Z/files/7d561a25f5663d35648c579148cd577d40b285ffe0daf3048e27ffc0a3f88ea8",
+            "versionId": "5zGVr0fc.GMYy1iZNyLrHx7FbIjttUUJ",
+            "sha256": "7d561a25f5663d35648c579148cd577d40b285ffe0daf3048e27ffc0a3f88ea8"
+          },
+          {
+            "key": "recipient-exports/v2/rex_01M5J97XE6XTP32Z2A6KD22R5Z/files/e196a3ffd0bb52357f021fa6a280db38a9cc36b1aceabc9e4dde71832d6b6d58",
+            "versionId": "f.bL85X7ZI5xlranTYovVZMLqXF1oNDx",
+            "sha256": "e196a3ffd0bb52357f021fa6a280db38a9cc36b1aceabc9e4dde71832d6b6d58"
+          },
+          {
+            "key": "recipient-exports/v2/rex_01M5J97XE6XTP32Z2A6KD22R5Z/files/277c8bc2b551a627079e91c6491fa17db668cb25d1e46c390e72fa47aeb3f776",
+            "versionId": "pzlSSKEUtM6Y4qnQVbCLDJOxI9ij0Re6",
+            "sha256": "277c8bc2b551a627079e91c6491fa17db668cb25d1e46c390e72fa47aeb3f776"
+          },
+          {
+            "key": "recipient-exports/v2/rex_01M5J97XE6XTP32Z2A6KD22R5Z/artifact.json",
+            "versionId": "Ph3jGzDqOsUwRLlAR13hunYfoUsP7AsH",
+            "sha256": "36242994e8b726db2b59f3cf403eb4e6ccefb88c7afa976f0f1734b9bc72e895"
+          }
+        ],
+        "databaseIdentity": {
+          "principal": "m2_recipient_worker_20261022",
+          "login": "m2_recipient_worker_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "artifactReceipt": {
+          "object": {
+            "bucket": "packproof-m2r-20261022-recipientbucket-yehcvy7py2w8",
+            "key": "recipient-exports/v2/rex_01M5J97XE6XTP32Z2A6KD22R5Z/artifact.json",
+            "versionId": "Ph3jGzDqOsUwRLlAR13hunYfoUsP7AsH"
+          },
+          "sha256": "36242994e8b726db2b59f3cf403eb4e6ccefb88c7afa976f0f1734b9bc72e895",
+          "byteSize": 8744,
+          "mode": "COMPLIANCE",
+          "retainUntil": "2026-10-24T17:07:19.330Z",
+          "verifiedAt": "2026-10-22T17:07:19.449Z"
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/api/e6447270f8ec422f8a81c56c7dfb70cb.json",
+        "versionId": "M7p1b11tE1DE9kOt0IuxN2R1TbMP__VA",
+        "sha256": "2eadb42f7b7b4fbe8e0f99bbb6c3cccb7ac0400ede623c2c839c312efc7bf488",
+        "byteSize": 1083,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/e6447270f8ec422f8a81c56c7dfb70cb",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-api:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:09:04.986000+00:00",
+        "stoppedAt": "2026-10-22T17:09:34.679000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "api",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "api",
+        "mode": "approve",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/e6447270f8ec422f8a81c56c7dfb70cb",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "api_database_result_writes_denied",
+          "provider_submission_action_denied",
+          "exact_approval_waits_for_journal"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_api_20261022",
+          "login": "m2_recipient_api_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "artifactSha256": "36242994e8b726db2b59f3cf403eb4e6ccefb88c7afa976f0f1734b9bc72e895",
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/worker/9864dcedea1f49ffb488234a0eb6a9fc.json",
+        "versionId": "bf9xgvn.3glgSEq2ckKGBjjUbOnkuRD3",
+        "sha256": "f59be9fb1936c4ed4c0d56286f354a672e6c488daf25981e14f0169d3a54a364",
+        "byteSize": 1145,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/9864dcedea1f49ffb488234a0eb6a9fc",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:10:03.577000+00:00",
+        "stoppedAt": "2026-10-22T17:10:32.768000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "worker",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "worker",
+        "mode": "drain",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/9864dcedea1f49ffb488234a0eb6a9fc",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "worker_cannot_approve_or_reopen_database_fence",
+          "core_and_policy_journals_drained"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "a7b22a93-2e59-48fb-b554-24a71650e2bb"
+          }
+        ],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_worker_20261022",
+          "login": "m2_recipient_worker_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/api/fb686a4693764f35a1a8181278884b3e.json",
+        "versionId": "iNazOO6QFWvynfYUfANpuV38VTAfWMze",
+        "sha256": "8f40b1fab8cc060ff9df8f14d835bdb11efc4845bed842c6a1dcebb2a105058e",
+        "byteSize": 1117,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/fb686a4693764f35a1a8181278884b3e",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-api:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:11:08.861000+00:00",
+        "stoppedAt": "2026-10-22T17:11:39.285000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "api",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "api",
+        "mode": "download",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/fb686a4693764f35a1a8181278884b3e",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "api_database_result_writes_denied",
+          "durable_approved_exact_version_download",
+          "stale_download_denied_after_revision"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_api_20261022",
+          "login": "m2_recipient_api_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "download": {
+          "sha256": "eaf698d1b700707a8c11a240e50551c64a42840cb5407522ec15c366eb5747e0",
+          "byteSize": 679628
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/worker/d3579500849a4d2e833e83f559ee02fe.json",
+        "versionId": "ivW7wq.JMH9yNVaAeClIiViq_THEO0PF",
+        "sha256": "7b534494c5f0a6d23a215b7a473038a5b1907652d2aa1d70f401cb4734f8023d",
+        "byteSize": 1872,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/d3579500849a4d2e833e83f559ee02fe",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:15:01.180000+00:00",
+        "stoppedAt": "2026-10-22T17:20:01.907000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "worker",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "worker",
+        "mode": "handoff",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/d3579500849a4d2e833e83f559ee02fe",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "worker_cannot_approve_or_reopen_database_fence",
+          "core_and_policy_journals_drained",
+          "revoked_operator_denied_before_restore",
+          "external_iam_fence_denies_cached_credentials",
+          "source_database_login_and_sessions_closed"
+        ],
+        "kmsCalls": [
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "b8330f8f-02be-4841-8463-fb468b151a73"
+          },
+          {
+            "keyArn": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6",
+            "messageType": "DIGEST",
+            "requestId": "6f7cbe46-5648-497c-9c38-3a2013106321"
+          }
+        ],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "m2_recipient_worker_20261022",
+          "login": "m2_recipient_worker_20261022",
+          "database": "m2_recipient_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "replayInput": {
+          "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+          "key": "acceptance/recipient/worker/replay-input.json",
+          "versionId": "FQeO5WiXNRcfkDzR1IMZDFbLSsg30tgb",
+          "sha256": "a9967bdd34f675601d27db12e6438bf8201b945b6ee01093636fb28f2b0ba767",
+          "byteSize": 51965
+        },
+        "heads": {
+          "core": "3e27626b016113fd903488ba4821e5f87dc18e896b986463188a7a9779b06168",
+          "policy": "4005213e188da1e4cd99ca5884ea93ad40e99ccee53674e2c64edf8b5b0382b8"
+        },
+        "status": "PASSED"
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/restore/fc18bebd8aac439eab087f414e61a50a.json",
+        "versionId": "OWIFDmulu2Q84wuYakRcZJfdZS90PDLg",
+        "sha256": "40411659875f3c0bbe6fc18d0d3302eb05456f1c0f3db11aa096a85cffe54930",
+        "byteSize": 1275,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/fc18bebd8aac439eab087f414e61a50a",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-restore:2",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:21:22.309000+00:00",
+        "stoppedAt": "2026-10-22T17:21:56.075000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "restore",
+          "exitCode": 1,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "restore",
+        "mode": "restore",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:87e1bba60fcd9e1f4801d18245145f1942552c3d4600b26383835486f1c6535e",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/fc18bebd8aac439eab087f414e61a50a",
+        "taskRevision": "2",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "fresh_database_reconstructs_exact_claim_result_approval_and_original_references"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "packproof_restore_recipient_20261022",
+          "login": "packproof_restore_recipient_20261022",
+          "database": "m2_recipient_restore_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "status": "FAILED",
+        "failure": {
+          "name": "AssertionError",
+          "code": "ERR_ASSERTION",
+          "status": null,
+          "assertion": "The validation function is expected to return \"true\". Received false\n\nCaught error:\n\nDomainError: Access is temporarily unavailable while recovery permissions are reconciled"
+        }
+      }
+    },
+    {
+      "object": {
+        "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+        "key": "acceptance/recipient/restore/536a8486d61f40f1906f5a062353cdfb.json",
+        "versionId": "M1x2cDlqUIcA.AS_OJiiyGm1y6TTSueR",
+        "sha256": "98dee2363853fe4b0adbe905cd0a9576d7c445d18f688f9b075ee03656c90e5f",
+        "byteSize": 1766,
+        "downloadedChecksumVerified": true
+      },
+      "task": {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/536a8486d61f40f1906f5a062353cdfb",
+        "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-restore:3",
+        "lastStatus": "STOPPED",
+        "startedAt": "2026-10-22T17:33:20.481000+00:00",
+        "stoppedAt": "2026-10-22T17:33:51.657000+00:00",
+        "stoppedReason": "Essential container in task exited"
+      },
+      "containers": [
+        {
+          "name": "temporary-volume-init",
+          "exitCode": 0,
+          "imageDigest": "sha256:27801b38c9b9fc83a0145d2f6b03cfd7d00b6a6521102a1ce89579c7e222c643",
+          "lastStatus": "STOPPED"
+        },
+        {
+          "name": "restore",
+          "exitCode": 0,
+          "imageDigest": "sha256:27801b38c9b9fc83a0145d2f6b03cfd7d00b6a6521102a1ce89579c7e222c643",
+          "lastStatus": "STOPPED"
+        }
+      ],
+      "report": {
+        "schema": "packproof.isolated-recipient-acceptance.v1",
+        "kind": "restore",
+        "mode": "verify-restored",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "harness": "0cfb76ee418af311081f073db61ed6e885f833fd",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:27801b38c9b9fc83a0145d2f6b03cfd7d00b6a6521102a1ce89579c7e222c643",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/536a8486d61f40f1906f5a062353cdfb",
+        "taskRevision": "3",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "deviceAcceptance": false,
+        "humanReviewAcceptance": false,
+        "httpAcceptance": false,
+        "providerSubmission": false,
+        "checks": [
+          "separate_non_owner_login",
+          "verified_tls_database_session",
+          "post_restore_database_session_is_read_only",
+          "fresh_database_reconstructs_exact_claim_result_approval_and_original_references",
+          "restored_revoked_membership_matches_signed_policy",
+          "restored_access_closed_pending_policy_reconciliation",
+          "restore_does_not_render_resign_or_publish"
+        ],
+        "kmsCalls": [],
+        "recipientWrites": [],
+        "databaseIdentity": {
+          "principal": "packproof_restore_recipient_20261022",
+          "login": "packproof_restore_recipient_20261022",
+          "database": "m2_recipient_restore_20261022",
+          "rolsuper": false,
+          "rolbypassrls": false,
+          "can_create": false
+        },
+        "restore": {
+          "mode": "READ_ONLY_POST_RECONSTRUCTION_VERIFICATION",
+          "reconstructedBy": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/fc18bebd8aac439eab087f414e61a50a",
+          "previousReportVersion": "OWIFDmulu2Q84wuYakRcZJfdZS90PDLg",
+          "previousReportSha256": "40411659875f3c0bbe6fc18d0d3302eb05456f1c0f3db11aa096a85cffe54930",
+          "writersEnabled": false,
+          "trafficMayOpen": false
+        },
+        "policyComparison": {
+          "matches": true,
+          "checked": 17,
+          "mismatches": [],
+          "trafficMayOpen": false
+        },
+        "databaseRestoreVerified": true,
+        "status": "PASSED"
+      }
+    }
+  ],
+  "controllerBuilds": [
+    {
+      "buildId": "packproof-m1-20261021-runtime:439fa0a8-3941-45ea-9396-a562e023c6ef",
+      "status": "SUCCEEDED",
+      "artifact": {
+        "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+        "key": "acceptance/runtime/439fa0a8-3941-45ea-9396-a562e023c6ef/runtime.zip",
+        "versionId": "qASCDatO8c6hMoDO2raieDd6qoM914wk",
+        "sha256": "5aaaf78d13355cac84d3819b9c33db0c053d96578a0ad4de68cca2e48efe98e2",
+        "byteSize": 1575,
+        "downloadedChecksumVerified": true
+      },
+      "receipts": {
+        "recipient-control.json": {
+          "schema": "packproof.isolated-recipient-control.v1",
+          "mode": "bootstrap",
+          "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+          "buildId": "packproof-m1-20261021-runtime:439fa0a8-3941-45ea-9396-a562e023c6ef",
+          "syntheticOnly": true,
+          "productionChanged": false,
+          "privileges": {
+            "schema": "packproof.m2-database-privileges.v1",
+            "apiRole": "m2_recipient_api_20261022",
+            "workerRole": "m2_recipient_worker_20261022",
+            "policySha256": "eda5dedaf09b292d8dcfc9c0c2e72bcfa9a10754497561483ebe649dde9cf903",
+            "effectivePrivilegesSha256": "940562af8e6828388d7ea05f4753e14585fbe1748635fda9c1c773f1bfba80df",
+            "migrations": {
+              "093_integrity_envelope_jobs": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b",
+              "094_claim_cases": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e",
+              "095_recipient_export_preservation": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+            }
+          },
+          "database": "m2_recipient_20261022",
+          "migrations": {
+            "count": 94,
+            "sha256": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9"
+          },
+          "configuration": {
+            "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+            "key": "acceptance/recipient/config/runtime.json",
+            "versionId": "v.em5yFGXWHB0i.6tftEC05HKcrLrQwH",
+            "sha256": "212106b3f7a490a01024c6ad9b2050171414e143fcac2572287663ce068a3f6a"
+          },
+          "proofId": "proof_01M5J8RX6XJQ996JTRJQ1TB4ZF",
+          "manifestSha256": "37a2ec95fcac94338eaa981bf2cb187ab33d5d02e149795328692ed1d29a68ad",
+          "storageProtection": [
+            {
+              "bucket": "packproof-m2r-20261022-committedbucket-k0rhqot4q2me",
+              "lock": {
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {
+                  "DefaultRetention": {
+                    "Mode": "COMPLIANCE",
+                    "Days": 2
+                  }
+                }
+              }
+            },
+            {
+              "bucket": "packproof-m2r-20261022-journalbucket-wjbvzznozb1c",
+              "lock": {
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {
+                  "DefaultRetention": {
+                    "Mode": "COMPLIANCE",
+                    "Days": 2
+                  }
+                }
+              }
+            },
+            {
+              "bucket": "packproof-m2r-20261022-recipientbucket-yehcvy7py2w8",
+              "lock": {
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {
+                  "DefaultRetention": {
+                    "Mode": "COMPLIANCE",
+                    "Days": 2
+                  }
+                }
+              }
+            }
+          ],
+          "publicKeys": {
+            "manifest": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEFyfdoRg9TI4HyU0sB5BPsuBCBP9n\nDmaajs4UyTUNDIyqPAyJnfYOgMQAJfsnB9Ob2JxgmwBSjOBVSHdP4Jw/7Q==\n-----END PUBLIC KEY-----\n",
+            "recovery": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEXWYj3Wyg9E8qw6sd0bV5X4BNOTlb\nycukV4Glx+v6mSxt5gvvdpoUmu7SyMWbEw3j9o9mnE/3UfzbMsB4rus5lw==\n-----END PUBLIC KEY-----\n"
+          },
+          "fixtureMethod": "OWNER_SEEDED_LEGACY_UNKNOWN_DOMAIN_FINALIZATION_NO_DEVICE_HTTP_OR_HUMAN_REVIEW_ASSERTION",
+          "status": "PASSED"
+        }
+      }
+    },
+    {
+      "buildId": "packproof-m1-20261021-runtime:7aeba953-e9e9-4ef4-ad0b-ce6f61aebdf5",
+      "status": "SUCCEEDED",
+      "artifact": {
+        "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+        "key": "acceptance/runtime/7aeba953-e9e9-4ef4-ad0b-ce6f61aebdf5/runtime.zip",
+        "versionId": "NVvBnjI_gP_FRi27_15Tuc1OuhTBcXx_",
+        "sha256": "31979aa76e1e749b1e20b5931adfe66e7bc868c3926e1f194701e4406ba67d1b",
+        "byteSize": 763,
+        "downloadedChecksumVerified": true
+      },
+      "receipts": {
+        "recipient-control.json": {
+          "schema": "packproof.isolated-recipient-control.v1",
+          "mode": "revoke",
+          "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+          "buildId": "packproof-m1-20261021-runtime:7aeba953-e9e9-4ef4-ad0b-ce6f61aebdf5",
+          "syntheticOnly": true,
+          "productionChanged": false,
+          "revokedOperator": "user_01M5J8RX507ND1NTYN85WSZW69",
+          "database": "m2_recipient_20261022",
+          "writerFence": [
+            {
+              "singleton": 1,
+              "generation": "m2-recipient-20261022",
+              "writes_enabled": true
+            }
+          ],
+          "roles": [
+            {
+              "rolname": "m2_recipient_api_20261022",
+              "rolcanlogin": true,
+              "rolsuper": false,
+              "rolcreatedb": false,
+              "rolcreaterole": false,
+              "rolbypassrls": false
+            },
+            {
+              "rolname": "m2_recipient_worker_20261022",
+              "rolcanlogin": true,
+              "rolsuper": false,
+              "rolcreatedb": false,
+              "rolcreaterole": false,
+              "rolbypassrls": false
+            }
+          ],
+          "coreDelivery": [
+            {
+              "state": "PENDING",
+              "count": "1"
+            },
+            {
+              "state": "DURABLE",
+              "count": "6"
+            }
+          ],
+          "policyDelivery": [
+            {
+              "state": "PENDING",
+              "count": "1"
+            },
+            {
+              "state": "DURABLE",
+              "count": "18"
+            }
+          ],
+          "coreHead": [
+            {
+              "sha256": "e6bc9d24f4d19fd02094ec495ac5d0ca4bd2610104db56728270a7781e78b59f"
+            }
+          ],
+          "policyHead": [
+            {
+              "event_sha256": "ea2103e7f6019d1c46253a3270d0b2c608ae19db314f45f0a40aee20296f7a8a"
+            }
+          ],
+          "status": "PASSED"
+        }
+      }
+    },
+    {
+      "buildId": "packproof-m1-20261021-runtime:756de0de-f211-4f7e-8442-c85c73edea15",
+      "status": "SUCCEEDED",
+      "artifact": {
+        "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+        "key": "acceptance/runtime/756de0de-f211-4f7e-8442-c85c73edea15/runtime.zip",
+        "versionId": "EvuDgp.qOYWCJeHg0NfkUZWJiswH9o3M",
+        "sha256": "00b11a284dc78843c490592d92a1a8147c91494b64f572d717e1c397708d0590",
+        "byteSize": 1171,
+        "downloadedChecksumVerified": true
+      },
+      "receipts": {
+        "recipient-control.json": {
+          "schema": "packproof.isolated-recipient-control.v1",
+          "mode": "restore-bootstrap",
+          "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+          "buildId": "packproof-m1-20261021-runtime:756de0de-f211-4f7e-8442-c85c73edea15",
+          "syntheticOnly": true,
+          "productionChanged": false,
+          "database": "m2_recipient_restore_20261022",
+          "migrations": {
+            "count": 94,
+            "sha256": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9"
+          },
+          "status": "PASSED"
+        },
+        "source-closed.json": {
+          "schema": "packproof.isolated-recipient-control.v1",
+          "mode": "close",
+          "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+          "buildId": "packproof-m1-20261021-runtime:756de0de-f211-4f7e-8442-c85c73edea15",
+          "syntheticOnly": true,
+          "productionChanged": false,
+          "database": "m2_recipient_20261022",
+          "writerFence": [
+            {
+              "singleton": 1,
+              "generation": "m2-recipient-20261022",
+              "writes_enabled": false
+            }
+          ],
+          "roles": [
+            {
+              "rolname": "m2_recipient_api_20261022",
+              "rolcanlogin": false,
+              "rolsuper": false,
+              "rolcreatedb": false,
+              "rolcreaterole": false,
+              "rolbypassrls": false
+            },
+            {
+              "rolname": "m2_recipient_worker_20261022",
+              "rolcanlogin": false,
+              "rolsuper": false,
+              "rolcreatedb": false,
+              "rolcreaterole": false,
+              "rolbypassrls": false
+            }
+          ],
+          "coreDelivery": [
+            {
+              "state": "DURABLE",
+              "count": "7"
+            }
+          ],
+          "policyDelivery": [
+            {
+              "state": "DURABLE",
+              "count": "19"
+            }
+          ],
+          "coreHead": [
+            {
+              "sha256": "3e27626b016113fd903488ba4821e5f87dc18e896b986463188a7a9779b06168"
+            }
+          ],
+          "policyHead": [
+            {
+              "event_sha256": "4005213e188da1e4cd99ca5884ea93ad40e99ccee53674e2c64edf8b5b0382b8"
+            }
+          ],
+          "status": "PASSED"
+        }
+      }
+    },
+    {
+      "buildId": "packproof-m1-20261021-runtime:4b4dce1e-f3d4-4201-b8d4-1a1708950810",
+      "status": "SUCCEEDED",
+      "artifact": {
+        "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+        "key": "acceptance/runtime/4b4dce1e-f3d4-4201-b8d4-1a1708950810/runtime.zip",
+        "versionId": "OdDZbtGPhGUevVj6rsUiThtPdz6RA3g5",
+        "sha256": "102e36a33673da456b3e65b8651d7fb0932d0db3f7aaacc09d2ed66a82820057",
+        "downloadedChecksumVerified": true
+      },
+      "receipt": {
+        "schema": "packproof.isolated-recipient-control.v1",
+        "mode": "close",
+        "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+        "buildId": "packproof-m1-20261021-runtime:4b4dce1e-f3d4-4201-b8d4-1a1708950810",
+        "syntheticOnly": true,
+        "productionChanged": false,
+        "database": "m2_recipient_20261022",
+        "writerFence": [
+          {
+            "singleton": 1,
+            "generation": "m2-recipient-20261022",
+            "writes_enabled": false
+          }
+        ],
+        "roles": [
+          {
+            "rolname": "m2_recipient_api_20261022",
+            "rolcanlogin": false,
+            "rolsuper": false,
+            "rolcreatedb": false,
+            "rolcreaterole": false,
+            "rolbypassrls": false
+          },
+          {
+            "rolname": "m2_recipient_worker_20261022",
+            "rolcanlogin": false,
+            "rolsuper": false,
+            "rolcreatedb": false,
+            "rolcreaterole": false,
+            "rolbypassrls": false
+          },
+          {
+            "rolname": "packproof_restore_recipient_20261022",
+            "rolcanlogin": false,
+            "rolsuper": false,
+            "rolcreatedb": false,
+            "rolcreaterole": false,
+            "rolbypassrls": false
+          }
+        ],
+        "coreDelivery": [
+          {
+            "state": "DURABLE",
+            "count": "7"
+          }
+        ],
+        "policyDelivery": [
+          {
+            "state": "DURABLE",
+            "count": "19"
+          }
+        ],
+        "coreHead": [
+          {
+            "sha256": "3e27626b016113fd903488ba4821e5f87dc18e896b986463188a7a9779b06168"
+          }
+        ],
+        "policyHead": [
+          {
+            "event_sha256": "4005213e188da1e4cd99ca5884ea93ad40e99ccee53674e2c64edf8b5b0382b8"
+          }
+        ],
+        "status": "PASSED"
+      }
+    }
+  ],
+  "replayInput": {
+    "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+    "key": "acceptance/recipient/worker/replay-input.json",
+    "versionId": "FQeO5WiXNRcfkDzR1IMZDFbLSsg30tgb",
+    "sha256": "a9967bdd34f675601d27db12e6438bf8201b945b6ee01093636fb28f2b0ba767",
+    "byteSize": 51965
+  },
+  "sourceClosedBinding": {
+    "object": {
+      "bucket": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu",
+      "key": "acceptance/recipient/config/source-closed.json",
+      "versionId": "gSKDO7CIpgjpcnBhsFvjRNiF4iLbJA1o",
+      "sha256": "c8141427440b2b9369c1185f55a37bac0357f0646a5840b95cc3015a21016d5f"
+    },
+    "receipt": {
+      "schema": "packproof.isolated-recipient-source-closed.v1",
+      "source": "608f09be5e1cdc0b61bd883c1fa2f6e3eab707f7",
+      "status": "PASSED",
+      "writesEnabled": false,
+      "apiLoginEnabled": false,
+      "workerLoginEnabled": false,
+      "iamWriterFence": "CLOSED",
+      "cachedCredentialFenceVerified": true,
+      "coreHead": "3e27626b016113fd903488ba4821e5f87dc18e896b986463188a7a9779b06168",
+      "policyHead": "4005213e188da1e4cd99ca5884ea93ad40e99ccee53674e2c64edf8b5b0382b8",
+      "externalFenceReference": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/close-recipient-flow-20261022/f3c9c964-d7a6-4b44-93b8-7e6f666ec9c9; packproof-m1-20261021-runtime:756de0de-f211-4f7e-8442-c85c73edea15; arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/d3579500849a4d2e833e83f559ee02fe",
+      "workerReport": {
+        "key": "acceptance/recipient/worker/d3579500849a4d2e833e83f559ee02fe.json",
+        "versionId": "ivW7wq.JMH9yNVaAeClIiViq_THEO0PF",
+        "sha256": "7b534494c5f0a6d23a215b7a473038a5b1907652d2aa1d70f401cb4734f8023d"
+      }
+    }
+  },
+  "cleanup": {
+    "status": "COMPLETE",
+    "observedAt": "2026-10-22T17:43:02.527Z",
+    "allThreeDatabaseLoginsDisabled": true,
+    "sourceWritesEnabled": false,
+    "restoreWritesEnabled": false,
+    "allElevenTasksStopped": true,
+    "runningTasks": 0,
+    "services": [
+      {
+        "name": "packproof-m1-20261021-runtime-api",
+        "desiredCount": 0,
+        "runningCount": 0,
+        "pendingCount": 0
+      },
+      {
+        "name": "packproof-m1-20261021-runtime-worker",
+        "desiredCount": 0,
+        "runningCount": 0,
+        "pendingCount": 0
+      }
+    ],
+    "recipientStack": {
+      "status": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "ConfigurationVersion",
+          "ParameterValue": "v.em5yFGXWHB0i.6tftEC05HKcrLrQwH"
+        },
+        {
+          "ParameterKey": "ConfigurationDigest",
+          "ParameterValue": "212106b3f7a490a01024c6ad9b2050171414e143fcac2572287663ce068a3f6a"
+        },
+        {
+          "ParameterKey": "TemporaryBuildAuthority",
+          "ParameterValue": "false"
+        },
+        {
+          "ParameterKey": "Image",
+          "ParameterValue": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:27801b38c9b9fc83a0145d2f6b03cfd7d00b6a6521102a1ce89579c7e222c643"
+        },
+        {
+          "ParameterKey": "ServiceSecurityGroup",
+          "ParameterValue": "sg-0f9eb34ec26318728"
+        },
+        {
+          "ParameterKey": "CandidateCommit",
+          "ParameterValue": "0cfb76ee418af311081f073db61ed6e885f833fd"
+        }
+      ],
+      "outputs": [
+        {
+          "OutputKey": "RecoveryKey",
+          "OutputValue": "arn:aws:kms:us-east-1:784514617543:key/a73bd40d-5499-4a16-9cbd-5556517ec1a6"
+        },
+        {
+          "OutputKey": "CommittedBucket",
+          "OutputValue": "packproof-m2r-20261022-committedbucket-k0rhqot4q2me"
+        },
+        {
+          "OutputKey": "ApiExecutionRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-api-execution"
+        },
+        {
+          "OutputKey": "RestoreTask",
+          "OutputValue": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-restore:3"
+        },
+        {
+          "OutputKey": "WorkerTask",
+          "OutputValue": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-worker:3"
+        },
+        {
+          "OutputKey": "ApiDatabaseSecret",
+          "OutputValue": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m2r-20261022/ApiDatabase-8MoSx9"
+        },
+        {
+          "OutputKey": "Logs",
+          "OutputValue": "/packproof/packproof-m2r-20261022"
+        },
+        {
+          "OutputKey": "ManifestKey",
+          "OutputValue": "arn:aws:kms:us-east-1:784514617543:key/0cbd7de1-94e5-4c06-8e8d-2d5e27395358"
+        },
+        {
+          "OutputKey": "RecipientBucket",
+          "OutputValue": "packproof-m2r-20261022-recipientbucket-yehcvy7py2w8"
+        },
+        {
+          "OutputKey": "ApiRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-api"
+        },
+        {
+          "OutputKey": "RestoreRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-restore"
+        },
+        {
+          "OutputKey": "UploadBucket",
+          "OutputValue": "packproof-m2r-20261022-uploadbucket-6fsanu4yyotu"
+        },
+        {
+          "OutputKey": "RestoreExecutionRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-restore-execution"
+        },
+        {
+          "OutputKey": "JournalBucket",
+          "OutputValue": "packproof-m2r-20261022-journalbucket-wjbvzznozb1c"
+        },
+        {
+          "OutputKey": "ApiTask",
+          "OutputValue": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m2r-20261022-api:3"
+        },
+        {
+          "OutputKey": "ServiceSecurityGroup",
+          "OutputValue": "sg-0f9eb34ec26318728"
+        },
+        {
+          "OutputKey": "WorkerRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-worker"
+        },
+        {
+          "OutputKey": "WorkerExecutionRole",
+          "OutputValue": "arn:aws:iam::784514617543:role/packproof-m2r-20261022-worker-execution"
+        },
+        {
+          "OutputKey": "RestoreDatabaseSecret",
+          "OutputValue": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m2r-20261022/RestoreDatabase-yGc2ny"
+        },
+        {
+          "OutputKey": "WorkerDatabaseSecret",
+          "OutputValue": "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m2r-20261022/WorkerDatabase-CAxAov"
+        }
+      ]
+    },
+    "runtimeStack": {
+      "status": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "ComputeEnabled",
+          "ParameterValue": "false"
+        },
+        {
+          "ParameterKey": "EgressAvailabilityZone",
+          "ParameterValue": "us-east-1a"
+        },
+        {
+          "ParameterKey": "CandidateCommit",
+          "ParameterValue": "ae99e06fb547d49edd223d31901510874c2e0e35"
+        }
+      ]
+    },
+    "workerPolicyMatchesReviewedClosedFence": true,
+    "temporaryBuildPolicyRemoved": true,
+    "buildRoleAbsent": true,
+    "buildProjectAbsent": true,
+    "natGatewayState": "deleted",
+    "addressReleased": true,
+    "vpcRoutes": "local only",
+    "syntheticTrailLogging": false,
+    "removeAuthorityChangeSet": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/remove-recipient-bootstrap-authority-final-20261022/853774b1-b235-4642-8866-0ffd39a4bdc1",
+    "pauseChangeSet": "arn:aws:cloudformation:us-east-1:784514617543:changeSet/pause-recipient-flow-20261022/a4b2bda0-b533-4424-bf64-9770b7ea76fa",
+    "retained": "Protected versioned objects, audit logs, immutable images, disabled database roles and synthetic databases; no destructive cleanup of accepted evidence."
+  },
+  "productionObservation": {
+    "production": [
+      {
+        "serviceName": "packproof-v2-staging-api",
+        "status": "ACTIVE",
+        "desiredCount": 1,
+        "runningCount": 1,
+        "pendingCount": 0,
+        "deployments": [
+          {
+            "id": "ecs-svc/9541157609586903688",
+            "status": "PRIMARY",
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:48",
+            "desiredCount": 1,
+            "pendingCount": 0,
+            "runningCount": 1,
+            "failedTasks": 0,
+            "createdAt": "2026-10-22T04:10:16.930000+00:00",
+            "updatedAt": "2026-10-22T04:19:53.945000+00:00",
+            "launchType": "FARGATE",
+            "platformVersion": "1.4.0",
+            "platformFamily": "Linux",
+            "networkConfiguration": {
+              "awsvpcConfiguration": {
+                "subnets": [
+                  "subnet-0d7611419ad695536",
+                  "subnet-002790f4a22ef84ee"
+                ],
+                "securityGroups": [
+                  "sg-0fbfe8871eef85488"
+                ],
+                "assignPublicIp": "ENABLED"
+              }
+            },
+            "rolloutState": "COMPLETED",
+            "rolloutStateReason": "ECS deployment ecs-svc/9541157609586903688 completed."
+          }
+        ],
+        "deploymentController": {
+          "type": "ECS"
+        }
+      }
+    ]
+  },
+  "validation": {
+    "focusedAndInfrastructureRuns": [
+      {
+        "id": 39822869925,
+        "name": "Android production receipt integration",
+        "status": "completed",
+        "conclusion": "skipped",
+        "updated_at": "2026-10-22T17:27:49Z"
+      },
+      {
+        "id": 39822869935,
+        "name": "Isolated R&D checks",
+        "status": "completed",
+        "conclusion": "skipped",
+        "updated_at": "2026-10-22T17:27:40Z"
+      },
+      {
+        "id": 39822869940,
+        "name": "Infrastructure",
+        "status": "completed",
+        "conclusion": "success",
+        "updated_at": "2026-10-22T17:28:00Z"
+      },
+      {
+        "id": 39822869822,
+        "name": "Partner isolated infrastructure validation",
+        "status": "completed",
+        "conclusion": "success",
+        "updated_at": "2026-10-22T17:28:07Z"
+      },
+      {
+        "id": 39822869986,
+        "name": "CI",
+        "status": "in_progress",
+        "conclusion": null,
+        "updated_at": "2026-10-22T17:28:41Z"
+      },
+      {
+        "id": 39822869823,
+        "name": "CodeQL",
+        "status": "completed",
+        "conclusion": "success",
+        "updated_at": "2026-10-22T17:29:08Z"
+      },
+      {
+        "id": 39822869982,
+        "name": "Partner foundation gates",
+        "status": "completed",
+        "conclusion": "success",
+        "updated_at": "2026-10-22T17:29:37Z"
+      }
+    ],
+    "broadCiAtRecording": {
+      "id": 39822869986,
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "0cfb76ee418af311081f073db61ed6e885f833fd"
+    },
+    "jobsAtRecording": [
+      {
+        "id": 119978868467,
+        "name": "Backend",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 119978868601,
+        "name": "Mobile",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868682,
+        "name": "Dependency audit (web)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868686,
+        "name": "rnd-release-policy / policy",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868726,
+        "name": "PostgreSQL release invariants",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868772,
+        "name": "Source secrets and release tooling",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868887,
+        "name": "Web",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978868987,
+        "name": "Deployment scripts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978869004,
+        "name": "Dependency audit (backend)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978869048,
+        "name": "Dependency audit (mobile)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 119978938349,
+        "name": "Android attestation Kotlin",
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ],
+    "allCiGreenClaimed": true,
+    "completedSourceCi": {
+      "source": "0cfb76ee418af311081f073db61ed6e885f833fd",
+      "id": 39822869986,
+      "status": "completed",
+      "conclusion": "success",
+      "completedAt": "2026-10-22T17:52:50Z",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/39822869986"
+    }
+  },
+  "remainingReleaseGates": [
+    "Compatible immutable rollback bridge and reviewed inactive 093-095 production migration",
+    "Production baseline API/worker privilege separation, protected storage/recovery and worker activation",
+    "Authenticated HTTP authorization and actual browser/Android capture/recovery acceptance",
+    "Envelope HTTP admission/status/export, worker scheduling, independent public key-history distribution, trusted timestamps and deployed key rotation/compromise acceptance",
+    "Explicit consenting merchant cohort, pilot evidence and later demand-dependent plan gates"
+  ]
+}
