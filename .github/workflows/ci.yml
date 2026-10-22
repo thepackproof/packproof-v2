@@ -39,13 +39,7 @@ jobs:
             backend/package-lock.json
             mobile/package-lock.json
       - name: Install media validation tools
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
-          fi
-          ffmpeg -version
-          ffprobe -version
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - name: Install shared mobile dependencies
         run: npm ci
         working-directory: mobile
@@ -139,13 +133,7 @@ jobs:
         working-directory: backend
       - run: npm ci
       - name: Install media tools for the canonical API contract test
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
-          fi
-          ffmpeg -version
-          ffprobe -version
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - run: npm run typecheck
       - run: npm run test:build-security
       - run: npm run test:ios
@@ -255,13 +243,7 @@ jobs:
       - run: npm ci
         working-directory: mobile
       - name: Install media validation tools
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
-          fi
-          ffmpeg -version
-          ffprobe -version
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - name: Verify exact-source migrations, quotas, finalization and hold concurrency
         working-directory: backend
         env:

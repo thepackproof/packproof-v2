@@ -32,13 +32,7 @@ jobs:
       - run: npm ci
         working-directory: backend
       - name: Install media validation tools
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-            timeout 180s sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
-          fi
-          ffmpeg -version
-          ffprobe -version
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - run: npm run typecheck
         working-directory: backend
       - name: Validate isolated harness and generated template
