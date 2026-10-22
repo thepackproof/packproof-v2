@@ -1,4 +1,4 @@
-# Full-release continuation - 2026-10-22
+# Full-release continuation — 2026-10-22
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
  
