@@ -22,3 +22,19 @@
 # other history scanning and all default rules.
 707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:79
 707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:168
+
+# Reviewed CI 39721991163 / job 119637330040: these three fields are AWS
+# CodeBuild project:build UUID identifiers, verified against BatchGetBuilds.
+# They are public audit locators, not API credentials. Scope to exact history.
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-release-evidence-2026-10-22.json:generic-api-key:15
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-bridge-evidence-2026-10-22.json:generic-api-key:19
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-bridge-evidence-2026-10-22.json:generic-api-key:28
+
+# Reviewed CI 39817280822 / job 119959325678: exact synthetic database role
+# names, not credentials. Passwords are generated in memory and injected by ECS.
+95e50567292d7a99a631358e30d61cb96664da1d:backend/scripts/isolated-recipient-control.mjs:generic-api-key:26
+
+# Reviewed CI 39826624712 / job 119991499135: apiRole is the synthetic
+# PostgreSQL login name m2_recipient_api_20261022, verified in the closed-role
+# receipt. It is not a password or bearer credential. Exact historical line only.
+333076d58e7b545d2c0d4219fbea91de8b78f746:docs/partner-foundation/recipient-flow-cloud-evidence-2026-10-22.json:generic-api-key:1085
