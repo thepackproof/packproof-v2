@@ -36,7 +36,7 @@ for(const kind of ['Api','Worker','Restore']){
   allow('ReadExactProtectedVersions',['s3:GetObjectVersion','s3:GetObjectRetention'],protectedArns),
   ...(kind==='Worker'?[allow('DiscoverOwnPublishedObjects','s3:GetObject',['Journal','Recipient'].map(x=>sub(`\${${x}Bucket.Arn}/*`))),allow('DistinguishAbsentJournalAndRecipient','s3:ListBucket',['Journal','Recipient'].map(x=>att(`${x}Bucket`)))]:[]),
   allow('ReadPinnedConfiguration',['s3:GetObject','s3:GetObjectVersion'],sub('${UploadBucket.Arn}/acceptance/recipient/config/*')),
-  ...(kind==='Restore'?[allow('ReadPinnedWorkerHandoff',['s3:GetObject','s3:GetObjectVersion'],sub('${UploadBucket.Arn}/acceptance/recipient/worker/*'))]:[]),
+  ...(kind==='Restore'?[allow('ReadPinnedWorkerHandoff',['s3:GetObject','s3:GetObjectVersion'],sub('${UploadBucket.Arn}/acceptance/recipient/worker/*')),allow('ReadPriorRestoreReport','s3:GetObjectVersion',sub('${UploadBucket.Arn}/acceptance/recipient/restore/*'))]:[]),
   allow('WriteAcceptanceReports','s3:PutObject',sub(`\${UploadBucket.Arn}/acceptance/recipient/${kind.toLowerCase()}/*`)),
   allow('ReadPublicSigningKeys','kms:GetPublicKey',['Manifest','Recovery'].map(x=>att(`${x}Key`))),
   deny('NoProtectionOrKeyAdministration',['s3:DeleteObject','s3:DeleteObjectVersion','s3:BypassGovernanceRetention','s3:PutObjectRetention','s3:PutObjectLegalHold','s3:PutBucketPolicy','s3:PutBucketVersioning','s3:PutBucketObjectLockConfiguration','kms:ScheduleKeyDeletion','kms:DisableKey','kms:PutKeyPolicy','kms:CreateGrant'],'*'),

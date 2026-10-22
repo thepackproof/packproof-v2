@@ -44,3 +44,13 @@ domain finalization. It does not imply capture provenance or real user approval.
 The synthetic baseline grants are not a production grant policy. The restore target
 keeps writers and traffic closed. The production M2 migration and rollback bridge
 remain separate acceptance requirements.
+
+The original cloud reconstruction completed the exact nine-table comparison, then
+failed a harness assertion expecting a membership-specific error. A restored
+database correctly returns POLICY_RECOVERY_UNAVAILABLE while disclosure is fenced.
+Keep that failed report. The verify-restored mode requires its exact version and
+digest, uses PostgreSQL default_transaction_read_only=on, verifies all nine tables
+again, checks the authenticated revoked-membership projection and policy overlay,
+and requires the correct closed-access error. It does not replay or change rows,
+complete policy reconciliation, reopen traffic, render output or sign records.
+Its original source and newer verification harness are reported separately.

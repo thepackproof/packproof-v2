@@ -10,8 +10,8 @@ import {initializeManifestSigningRuntime} from '../dist/integrity/kms-signing-ru
 import {AwsS3ObjectStore} from '../dist/s3/aws-s3-object-store.js';
 import {createRecipientS3Store} from '../dist/export/recipient-s3-store.js';
 import {RECIPIENT_PROTECTION_PROFILE} from '../dist/export/recipient-preservation.js';
-import {processRecoveryOutbox} from '../dist/domain/recovery-journal.js';
-import {processPolicyRecoveryOutbox} from '../dist/domain/policy-recovery.js';
+import {processRecoveryOutbox,buildRecoveryReplayPlan} from '../dist/domain/recovery-journal.js';
+import {processPolicyRecoveryOutbox,verifyPolicyEnvelope,inspectPolicyRecoveryReconciliation} from '../dist/domain/policy-recovery.js';
 import {createClaimCase,getClaimCase,reviseClaimCase} from '../dist/domain/claim-cases.js';
 import {queueRecipientExport,processRecipientExport,getRecipientExport,approveRecipientExport,downloadRecipientExport} from '../dist/domain/recipient-exports.js';
 import {restoreFreshRecoveryDatabase} from '../dist/domain/recovery-restore.js';
@@ -22,7 +22,7 @@ const env=name=>{const value=process.env[`M2_${name}`];assert.ok(value,`Missing 
 assert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m2-synthetic');assert.ok(process.env.ECS_CONTAINER_METADATA_URI_V4);
 assert.equal(process.env.PACKPROOF_DB_HOST,host);assert.equal(process.env.AWS_ACCESS_KEY_ID,undefined);
 const kind=process.env.PACKPROOF_PROCESS_ROLE,mode=env('MODE');
-assert.ok(({api:['request','queue','approve','download'],worker:['seed','drain','render','handoff'],restore:['restore']})[kind]?.includes(mode));
+assert.ok(({api:['request','queue','approve','download'],worker:['seed','drain','render','handoff'],restore:['restore','verify-restored']})[kind]?.includes(mode));
 const database=kind==='restore'?'m2_recipient_restore_20261022':'m2_recipient_20261022',role=kind==='restore'?'packproof_restore_recipient_20261022':`m2_recipient_${kind}_20261022`;
 assert.equal(process.env.PACKPROOF_DB_NAME,database);assert.equal(process.env.PACKPROOF_DB_USER,role);
 const upload=env('UPLOAD_BUCKET'),committed=env('COMMITTED_BUCKET'),journal=env('JOURNAL_BUCKET'),recipient=env('RECIPIENT_BUCKET');
@@ -30,8 +30,9 @@ for(const bucket of [upload,committed,journal,recipient])assert.ok(bucket.starts
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),clock={now:()=>new Date()},credentials=await defaultProvider()();
 const s3=new S3Client({region,credentials,maxAttempts:2}),kms=new KMSClient({region,credentials,maxAttempts:2}),options=()=>({abortSignal:AbortSignal.timeout(30000)});
 const metadata=await fetch(process.env.ECS_CONTAINER_METADATA_URI_V4+'/task',{signal:AbortSignal.timeout(5000)}).then(r=>r.json());assert.equal(metadata.Family,`${prefix}-${kind}`);
-const run=metadata.TaskARN.split('/').at(-1),source=process.env.PACKPROOF_RELEASE_SHA;
-const report={schema:'packproof.isolated-recipient-acceptance.v1',kind,mode,source,image:process.env.PACKPROOF_RELEASE_IMAGE,taskArn:metadata.TaskARN,taskRevision:metadata.Revision,syntheticOnly:true,productionChanged:false,deviceAcceptance:false,humanReviewAcceptance:false,httpAcceptance:false,providerSubmission:false,checks:[],kmsCalls:[],recipientWrites:[]};
+const run=metadata.TaskARN.split('/').at(-1),harness=process.env.PACKPROOF_RELEASE_SHA,source=mode==='verify-restored'?env('ORIGINAL_SOURCE'):harness;
+assert.match(source??'',/^[a-f0-9]{40}$/);assert.match(harness??'',/^[a-f0-9]{40}$/);
+const report={schema:'packproof.isolated-recipient-acceptance.v1',kind,mode,source,harness,image:process.env.PACKPROOF_RELEASE_IMAGE,taskArn:metadata.TaskARN,taskRevision:metadata.Revision,syntheticOnly:true,productionChanged:false,deviceAcceptance:false,humanReviewAcceptance:false,httpAcceptance:false,providerSubmission:false,checks:[],kmsCalls:[],recipientWrites:[]};
 const replayTables=['claim_cases','claim_case_revisions','recipient_export_jobs','recipient_export_preservations','recipient_export_approvals','signature_cases','signature_snapshots','final_manifests','evidence'];
 const check=name=>report.checks.push(name);
 async function readJson(key,versionId,digest){
@@ -61,6 +62,7 @@ try{
  const journalReference=(key,ref)=>{if(kind!=='restore')return ref;const versionId=journalVersions.get(key);assert.ok(versionId,'Restore journal read must be in the pinned handoff');if(ref?.versionId)assert.equal(ref.versionId,versionId);return {versionId};};
  const sourceStore={get:(key,ref)=>key.startsWith('recovery/')?journalStore.get(key,journalReference(key,ref)):media.get(key,ref),head:(key,ref)=>key.startsWith('recovery/')?journalStore.head(key,journalReference(key,ref)):media.head(key,ref),getStream:(key,ref)=>key.startsWith('recovery/')?journalStore.getStream(key,journalReference(key,ref)):media.getStream(key,ref)};
  const url=new URL(`postgresql://${host}:5432/${database}?sslmode=verify-full`);url.username=role;url.password=process.env.PACKPROOF_DB_PASSWORD;
+ if(mode==='verify-restored')url.searchParams.set('options','-c default_transaction_read_only=on');
  opened=createPgDatabase(url.toString());const db=opened.db;
  const identity=(await db.query("SELECT current_user AS principal,session_user AS login,current_database() AS database,r.rolsuper,r.rolbypassrls,has_schema_privilege(current_user,'public','CREATE') AS can_create FROM pg_roles r WHERE r.rolname=current_user")).rows[0];
  assert.deepEqual(identity,{principal:role,login:role,database,rolsuper:false,rolbypassrls:false,can_create:false});report.databaseIdentity=identity;check('separate_non_owner_login');
@@ -145,13 +147,30 @@ try{
   async function load(rows){const values=[];for(const row of rows){const receipt=row.receipt_json;assert.ok(receipt.objectVersionId);const value=await journalStore.get(receipt.objectKey,{versionId:receipt.objectVersionId});assert.ok(value);assert.equal(hash(value.body),receipt.envelopeSha256);const lock=await s3.send(new GetObjectRetentionCommand({Bucket:journal,Key:receipt.objectKey,VersionId:receipt.objectVersionId,ExpectedBucketOwner:account}),options());assert.equal(lock.Retention.Mode,'COMPLIANCE');assert.ok(lock.Retention.RetainUntilDate.getTime()>=Date.parse(config.retainUntil));values.push(value.body);}return values;}
   for(const row of [...handoff.core,...handoff.policy]){const receipt=row.receipt_json;assert.ok(receipt.objectVersionId);assert.ok(!journalVersions.has(receipt.objectKey));journalVersions.set(receipt.objectKey,receipt.objectVersionId);}
   const core=await load(handoff.core),policies=await load(handoff.policy);
-  const restored=await restoreFreshRecoveryDatabase(db,{expectedDatabase:database,restoreRole:role,isolatedTargetReference:metadata.TaskARN,oldWriterFenceReference:closed.externalFenceReference,targetWriterGeneration:'m2-recipient-restored-20261022',core:{envelopes:core,expectedWatermark:core.at(-1)},policy:{envelopes:policies,expectedWatermark:policies.at(-1)},trustedPublicKey:publicKey,sourceStore,recipients:recipientStore});
-  assert.equal(restored.writersEnabled,false);assert.equal(restored.trafficMayOpen,false);assert.equal(restored.counts.recipient_export_preservations,1);assert.equal(restored.counts.recipient_export_approvals,1);
+  if(mode==='restore'){
+   const restored=await restoreFreshRecoveryDatabase(db,{expectedDatabase:database,restoreRole:role,isolatedTargetReference:metadata.TaskARN,oldWriterFenceReference:closed.externalFenceReference,targetWriterGeneration:'m2-recipient-restored-20261022',core:{envelopes:core,expectedWatermark:core.at(-1)},policy:{envelopes:policies,expectedWatermark:policies.at(-1)},trustedPublicKey:publicKey,sourceStore,recipients:recipientStore});
+   assert.equal(restored.writersEnabled,false);assert.equal(restored.trafficMayOpen,false);assert.equal(restored.counts.recipient_export_preservations,1);assert.equal(restored.counts.recipient_export_approvals,1);report.restore=restored;
+  }else{
+   assert.equal((await db.query('SHOW default_transaction_read_only')).rows[0].default_transaction_read_only,'on');check('post_restore_database_session_is_read_only');
+   const priorTask=env('PREVIOUS_RESTORE_TASK_ID');assert.match(priorTask,/^[a-f0-9]{32}$/);
+   const prior=await readJson(`acceptance/recipient/restore/${priorTask}.json`,env('PREVIOUS_RESTORE_REPORT_VERSION'),env('PREVIOUS_RESTORE_REPORT_DIGEST'));
+   assert.equal(prior.source,source);assert.equal(prior.kind,'restore');assert.equal(prior.mode,'restore');assert.equal(prior.status,'FAILED');assert.equal(prior.taskArn.split('/').at(-1),priorTask);
+   assert.ok(prior.checks.includes('fresh_database_reconstructs_exact_claim_result_approval_and_original_references'));assert.equal(prior.failure?.name,'AssertionError');assert.ok(prior.failure.assertion.includes('Access is temporarily unavailable while recovery permissions are reconciled'));
+   const plan=await buildRecoveryReplayPlan({envelopes:core,trustedPublicKey:publicKey,backupBoundaryHead:null});assert.equal(plan.finalHead,handoff.coreHead);
+   assert.equal((await db.query('SELECT sha256 FROM recovery_events ORDER BY sequence DESC LIMIT 1')).rows[0].sha256,handoff.coreHead);
+   report.restore={mode:'READ_ONLY_POST_RECONSTRUCTION_VERIFICATION',reconstructedBy:prior.taskArn,previousReportVersion:env('PREVIOUS_RESTORE_REPORT_VERSION'),previousReportSha256:env('PREVIOUS_RESTORE_REPORT_DIGEST'),writersEnabled:false,trafficMayOpen:false};
+  }
   assert.deepEqual(Object.keys(handoff.rows).sort(),[...replayTables].sort());
   for(const table of replayTables)assert.equal(canonicalize((await db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows),canonicalize(handoff.rows[table]),`Restored rows differ: ${table}`);
   check('fresh_database_reconstructs_exact_claim_result_approval_and_original_references');
-  await failureCode(()=>getClaimCase(db,config.operator,config.proofId,handoff.claimId),'ORGANIZATION_ACCESS_REVOKED');check('revoked_operator_denied_after_restore');
-  assert.equal(report.recipientWrites.length,0);assert.equal(report.kmsCalls.length,0);check('restore_does_not_render_resign_or_publish');report.restore=restored;report.databaseRestoreVerified=true;
+  let policyHead=null,revoked;
+  for(const bytes of policies){const value=await verifyPolicyEnvelope(bytes,publicKey);assert.equal(value.event.previousSha256,policyHead);policyHead=value.envelope.eventSha256;if(value.event.change.table==='platform_memberships'&&value.event.change.key.id===config.memberId)revoked=value.event.change.after;}
+  assert.equal(policyHead,handoff.policyHead);assert.ok(revoked?.revoked_at);assert.equal(revoked.user_id,config.operator);assert.equal(revoked.organization_id,config.merchantId);
+  const member=(await db.query("SELECT policy_recovery_projection('platform_memberships',to_jsonb(t)) AS row FROM platform_memberships t WHERE id=$1",[config.memberId])).rows[0];assert.equal(canonicalize(member.row),canonicalize(revoked));check('restored_revoked_membership_matches_signed_policy');
+  const reconciled=await inspectPolicyRecoveryReconciliation(db);assert.equal(reconciled.matches,true);assert.ok(reconciled.checked>0);assert.equal(reconciled.trafficMayOpen,false);report.policyComparison=reconciled;
+  assert.equal((await db.query('SELECT writes_enabled FROM recovery_writer_fence WHERE singleton=1')).rows[0].writes_enabled,false);
+  await failureCode(()=>getClaimCase(db,config.operator,config.proofId,handoff.claimId),'POLICY_RECOVERY_UNAVAILABLE');check('restored_access_closed_pending_policy_reconciliation');
+  assert.equal(report.recipientWrites.length,0);assert.equal(report.kmsCalls.length,0);check('restore_does_not_render_resign_or_publish');report.databaseRestoreVerified=true;
  }
  report.status='PASSED';
 }catch(error){report.status='FAILED';report.failure={name:error.name,code:error.code??null,status:error.$metadata?.httpStatusCode??null,assertion:error.name==='AssertionError'?String(error.message).slice(0,500):undefined};process.exitCode=1;}
