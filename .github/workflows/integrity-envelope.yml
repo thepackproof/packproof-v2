@@ -37,7 +37,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npm run typecheck
         working-directory: backend
-      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts tests/envelope-jobs.test.ts tests/envelope-s3-store.test.ts tests/recovery-restore.test.ts
+      - run: npx vitest run tests/envelope-profile.test.ts tests/envelope-package.test.ts tests/envelope-jobs.test.ts tests/envelope-s3-store.test.ts tests/envelope-trust.test.ts tests/recovery-restore.test.ts
         working-directory: backend
         env:
           PACKPROOF_ENVELOPE_TEST_DATABASE_URL: postgres://envelope_test:synthetic_ci_only@localhost:5432/envelope_test

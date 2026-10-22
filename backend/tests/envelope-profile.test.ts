@@ -150,6 +150,8 @@ describe('independent Python package verification', () => {
     expect(independent(f)).toMatchObject({ status: 'VERIFIED', keyStatus: 'RETIRED' });
     f.trust!.keys[0].status = 'COMPROMISED';
     expect(independent(f)).toMatchObject({ status: 'INTEGRITY_INCOMPLETE', keyStatus: 'COMPROMISED', keyTrustedAtIssue: false });
+    f.trust!.keys[0].status = 'REVOKED';
+    expect(independent(f)).toMatchObject({ status: 'INTEGRITY_INCOMPLETE', keyStatus: 'REVOKED', keyTrustedAtIssue: false });
   });
   it('does not treat stale trust or claimed timestamps as fresh verified assurance', async () => {
     const f = await portableFixture(); f.trust!.nextReviewAt = '2026-10-22T04:45:00.000Z';

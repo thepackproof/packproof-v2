@@ -137,7 +137,7 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
         seen = set()
         for candidate in registry['keys']:
             exact(candidate, 'keyId publicKeyPem status validFrom validUntil statusEffectiveAt')
-            check(identifier(candidate['keyId']) and candidate['keyId'] not in seen and candidate['status'] in ('ACTIVE', 'RETIRED', 'COMPROMISED'), 'Invalid trust key identity')
+            check(identifier(candidate['keyId']) and candidate['keyId'] not in seen and candidate['status'] in ('ACTIVE', 'RETIRED', 'REVOKED', 'COMPROMISED'), 'Invalid trust key identity')
             seen.add(candidate['keyId'])
             start = stamp(candidate['validFrom'])
             end = stamp(candidate['validUntil']) if candidate['validUntil'] is not None else None
