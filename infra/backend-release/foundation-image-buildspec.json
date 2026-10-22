@@ -1,0 +1,30 @@
+{
+  "version": 0.2,
+  "phases": {
+    "install": {
+      "on-failure": "ABORT",
+      "commands": [
+        "set -eu",
+        "case \"$REVIEWED_SOURCE_SHA\" in 6bd6f74a89f01fcacecc06f888a8245d7927ddb9|99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9) ;; *) echo UNREVIEWED_SOURCE >&2; exit 1;; esac",
+        "test \"$IMAGE_REPOSITORY\" = 784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api",
+        "git init candidate",
+        "cd candidate",
+        "git remote add origin https://github.com/thepackproof/packproof-v2.git",
+        "git fetch --depth=1 origin \"$REVIEWED_SOURCE_SHA\"",
+        "git checkout --detach \"$REVIEWED_SOURCE_SHA\"",
+        "test \"$(git rev-parse HEAD)\" = \"$REVIEWED_SOURCE_SHA\"",
+        "git archive --format=tar HEAD | sha256sum"
+      ]
+    },
+    "build": {
+      "on-failure": "ABORT",
+      "commands": [
+        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com",
+        "docker build -f backend/Dockerfile --label org.opencontainers.image.revision=\"$REVIEWED_SOURCE_SHA\" -t \"$IMAGE_REPOSITORY:foundation-$REVIEWED_SOURCE_SHA\" .",
+        "docker run --rm --entrypoint node \"$IMAGE_REPOSITORY:foundation-$REVIEWED_SOURCE_SHA\" --input-type=module -e \"import {migrationInventory} from './dist/db/migrate.js'; const rows=await migrationInventory(); if(![86,91].includes(rows.length))process.exit(1); console.log(JSON.stringify({event:'image_migration_inventory',count:rows.length}));\"",
+        "docker push \"$IMAGE_REPOSITORY:foundation-$REVIEWED_SOURCE_SHA\"",
+        "docker image inspect --format '{{json .RepoDigests}}' \"$IMAGE_REPOSITORY:foundation-$REVIEWED_SOURCE_SHA\""
+      ]
+    }
+  }
+}

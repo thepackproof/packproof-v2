@@ -1,6 +1,6 @@
-# Proof Anywhere verifier 1.2.0
+# Proof Anywhere verifier 1.3.1
 
-Download `verify.py` separately from the PackProof repository/release. It is a standalone, read-only Python program; it does not import the PackProof server, log in, extract archive paths, execute package contents, fetch keys, or upload media. Python 3.10+ is required. Signature checks additionally require an installed OpenSSL executable; missing OpenSSL returns `SIGNATURE_UNCHECKED`.
+Download `verify.py` separately from the PackProof repository/release. It is a standalone, read-only Python program; it does not import the PackProof server, log in, extract archive paths, execute package contents, fetch keys, or upload media. Python 3.10+ is required. Signature checks additionally require an installed OpenSSL executable. Missing OpenSSL, process crashes, launch failures and timeouts return `SIGNATURE_UNCHECKED`; these are not mathematical evidence of an invalid signature. On Windows, use a native Windows OpenSSL executable supported by the host.
 
 ```bash
 python3 verify.py proof.zip --trust-list independently-obtained-trust.json

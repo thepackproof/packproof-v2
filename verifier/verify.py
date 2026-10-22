@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -194,8 +194,14 @@ def check_signature(raw, signature, keys):
             process = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, timeout=10,
                                      env={k: v for k, v in os.environ.items()
                                           if k not in ('OPENSSL_CONF', 'OPENSSL_MODULES', 'OPENSSL_ENGINES')})
+            if process.returncode not in (0, 1):
+                return {'status': 'SIGNATURE_UNCHECKED', 'verified': False, 'keyId': key_id,
+                        'detail': 'OpenSSL could not complete signature verification.'}
             valid = process.returncode == 0
-    except (ValueError, binascii.Error, OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError):
+        return {'status': 'SIGNATURE_UNCHECKED', 'verified': False, 'keyId': key_id,
+                'detail': 'Signature verification could not run in this environment.'}
+    except (ValueError, binascii.Error):
         valid = False
     return {'status': 'VERIFIED' if valid else 'INVALID_SIGNATURE', 'verified': valid, 'keyId': key_id,
             'algorithm': signature['algorithm'], 'signedAt': signature.get('signedAt'),

@@ -1,0 +1,36 @@
+{
+  "version": 0.2,
+  "phases": {
+    "install": {
+      "runtime-versions": {
+        "nodejs": 22
+      },
+      "on-failure": "ABORT",
+      "commands": [
+        "git init candidate",
+        "cd candidate",
+        "git remote add origin https://github.com/thepackproof/packproof-v2.git",
+        "git fetch --depth=1 origin \"$CANDIDATE_SHA\"",
+        "git checkout --detach \"$CANDIDATE_SHA\"",
+        "test \"$(git rev-parse HEAD)\" = \"$CANDIDATE_SHA\"",
+        "cd backend",
+        "npm ci --no-audit --no-fund",
+        "npm run build",
+        "curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem"
+      ]
+    },
+    "build": {
+      "on-failure": "ABORT",
+      "commands": [
+        "mkdir -p runtime-artifacts",
+        "node --input-type=module - <<'NODE'\nimport assert from 'node:assert/strict';\nimport pg from 'pg';\nimport {createHash,createHmac,pbkdf2Sync,randomBytes} from 'node:crypto';\nimport {writeFile} from 'node:fs/promises';\nimport {createPgDatabase} from './dist/db/postgres.js';\nassert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');\nassert.equal(process.env.PACKPROOF_TEST_DB_HOST,'packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com');\nconst secret=JSON.parse(process.env.ISOLATED_DB_SECRET);delete process.env.ISOLATED_DB_SECRET;assert.equal(secret.username,'packproof');\nprocess.env.PACKPROOF_ENVIRONMENT='staging';process.env.PACKPROOF_DB_CA_FILE='/tmp/packproof-rds-ca.pem';\nconst url=new URL('postgresql://'+process.env.PACKPROOF_TEST_DB_HOST+':5432/packproof_v2?sslmode=verify-full');url.username=secret.username;url.password=secret.password;\nconst owner=createPgDatabase(url.href);let temporary,separate,passed=false;\ntry{\n const name='pp_foundation_login_'+randomBytes(8).toString('hex'),password=randomBytes(32).toString('hex'),salt=randomBytes(24),salted=pbkdf2Sync(password,salt,4096,32,'sha256');\n const stored=createHash('sha256').update(createHmac('sha256',salted).update('Client Key').digest()).digest('base64');\n const server=createHmac('sha256',salted).update('Server Key').digest('base64');\n const verifier='SCRAM-SHA-256$4096:'+salt.toString('base64')+'$'+stored+':'+server;\n await owner.db.transaction(async tx=>{\n  await tx.query('CREATE ROLE '+pg.escapeIdentifier(name)+' LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 2 PASSWORD '+pg.escapeLiteral(verifier)+' VALID UNTIL '+pg.escapeLiteral(new Date(Date.now()+900000).toISOString()));\n  await tx.query('GRANT packproof TO '+pg.escapeIdentifier(name)+' WITH ADMIN FALSE, INHERIT FALSE, SET TRUE');\n });\n temporary=name;url.username=name;url.password=password;url.searchParams.set('options','-c role=packproof');separate=createPgDatabase(url.href);\n const identity=(await separate.db.query('SELECT current_user AS role,session_user AS login,current_database() AS database')).rows[0];\n assert.equal(identity.role,'packproof');assert.equal(identity.login,name);assert.equal(identity.database,'packproof_v2');\n assert.equal((await separate.db.query('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')).rows[0].ssl,true);\n const limits=(await owner.db.query('SELECT rolinherit,rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolconnlimit FROM pg_roles WHERE rolname=$1',[name])).rows[0];\n assert.equal(limits.rolconnlimit,2);delete limits.rolconnlimit;assert.ok(Object.values(limits).every(v=>v===false));passed=true;\n}catch(error){console.log(JSON.stringify({event:'foundation_login_probe',status:'FAILED',sqlState:/^[0-9A-Z]{5}$/.test(error?.code??'')?error.code:undefined}));process.exitCode=1;}\nfinally{await separate?.close();if(temporary)await owner.db.query('DROP ROLE '+pg.escapeIdentifier(temporary));await owner.close();}\nif(passed){const report={schema:'packproof.foundation-login-probe.v1',status:'PASSED',source:process.env.CANDIDATE_SHA,checks:['random_expiring_scram_login','no_implicit_owner_inheritance','explicit_owner_set_role','separate_tls_connection','temporary_role_removed'],database:'isolated-packproof_v2'};await writeFile('runtime-artifacts/login-probe.json',JSON.stringify(report));console.log(JSON.stringify(report));}\n\nNODE"
+      ]
+    }
+  },
+  "artifacts": {
+    "files": [
+      "**/*"
+    ],
+    "base-directory": "candidate/backend/runtime-artifacts"
+  }
+}
