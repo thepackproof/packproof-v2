@@ -226,6 +226,7 @@ import { receiveAdmittedUploadPart } from "./domain/resumable-upload.js";
 import { packingRequestsRouter, parcelScopeRouter } from "./http/packing-requests-router.js";
 import { recipientExportsRouter } from "./http/recipient-exports-router.js";
 import { claimCasesRouter } from "./http/claim-cases-router.js";
+import { envelopeTrustRouter } from "./http/envelope-trust-router.js";
 import { appendProofSupplement, getProofSupplementSnapshot } from "./domain/proof-supplements.js";
 import { requireCommerceAccess } from "./domain/commerce-lifecycle.js";
 import { rndRouter } from './rnd/router.js';
@@ -260,6 +261,7 @@ export interface AppDependencies {
   facebook?: FacebookOAuthRuntime;
   webhookConfig?: WebhookConfig;
   manifestSigning?: ManifestSigningRuntime;
+  envelopeTrustPublication?: import("./integrity/envelope-publication.js").EnvelopeTrustPublication | null;
   recipientPreservation?: import("./export/recipient-preservation.js").RecipientPreservationRuntime;
   requireDurableReceipts?: boolean;
   readinessProbes?: DependencyProbe[];
@@ -432,6 +434,7 @@ export function createApp(deps: AppDependencies): Express {
     await pipeline(archive,res);
   }));
 
+  app.use(envelopeTrustRouter(deps.envelopeTrustPublication));
   app.get("/.well-known/packproof-trust-registry.json", (_req,res)=>{
     res.setHeader("Cache-Control","no-store");
     res.setHeader("X-Content-Type-Options","nosniff");

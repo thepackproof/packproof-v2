@@ -34,6 +34,32 @@ The additive `.pkpr` transport is `packproof.signed-proof-package.v2`. Its fixed
 
 This format intentionally differs from the frozen manifest schema. Existing package v1 exports and the legacy verifier path stay available. Stage/source commitments describe the included scope; live retention remains a separately audited storage property.
 
+## Public key-history distribution
+
+`GET /.well-known/packproof-envelope-trust.json` publishes the verifier-compatible
+`packproof.envelope-trust.v1` snapshot without requiring a user login. It is
+disabled by default. Enable `PACKPROOF_ENVELOPE_TRUST_PUBLICATION_ENABLED=true`
+with a deployment-pinned HTTPS `PACKPROOF_ENVELOPE_ISSUER` and the existing
+`PACKPROOF_MANIFEST_SIGNED_TRUST_REGISTRY_FILE` and
+`PACKPROOF_MANIFEST_REGISTRY_AUTHORITY_KEYS_FILE` public-file settings.
+Publication does not enable signing, admission, workers or organization access.
+
+Startup, every response and readiness revalidate the current authority-signed
+registry against independently configured pins. The endpoint preserves dated
+ACTIVE, RETIRED, REVOKED and COMPROMISED states, filters to the supported P-256
+profile and sends `Cache-Control: no-store`. Missing, expired or tampered material
+returns 503 without exposing file paths or returning a cached successful snapshot.
+Disabled publication returns 404. No registry is generated or review date extended.
+
+The JSON response is an HTTPS-authenticated projection, not a new independently
+signed registry. A verifier operator must obtain it from an independently trusted
+HTTPS endpoint, check the expected issuer and explicitly pin the saved file; a
+URL or trust file supplied by an untrusted package is not a trust root. The original
+authority-signed registry remains separately available at the existing registry
+endpoint. Production publication and actual rotation/compromise acceptance remain
+deployment gates. The focused HTTP tests use generated keys and temporary public
+files, not production key authority or merchant evidence.
+
 ## Independent trust and results
 
 Verifier 1.4.0 adds `envelope.py`, using `rfc8785==0.1.4` and `cryptography==50.0.2`. It imports no backend code, uses a different cryptographic implementation and accepts no key or registry from the ZIP. Install `requirements-envelope.txt` in a dedicated environment, then:

@@ -3392,6 +3392,37 @@
         },
         "x-packproof-scope": "events:read"
       }
+    },
+    "/.well-known/packproof-envelope-trust.json": {
+      "servers": [
+        {
+          "url": "/"
+        }
+      ],
+      "get": {
+        "operationId": "getEnvelopeTrustHistory",
+        "security": [],
+        "summary": "Read independently authenticated envelope key history",
+        "description": "Opt-in public HTTPS projection of the current authority-signed registry. Issuer and authority pins are deployment configuration. Responses use no-store; stale or untrusted material fails closed. Consumers must authenticate the endpoint independently of a received package.",
+        "responses": {
+          "200": {
+            "description": "Current P-256 key history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeTrustSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key-history publication is disabled"
+          },
+          "503": {
+            "description": "Current independently authenticated key history is unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3399,7 +3430,7 @@
       "ApiKey": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "pp_sandbox_… or pp_live_…"
+        "bearerFormat": "pp_sandbox_\u2026 or pp_live_\u2026"
       },
       "AccountBearer": {
         "type": "http",
@@ -4507,6 +4538,90 @@
           },
           "requestId": {
             "type": "string"
+          }
+        }
+      },
+      "EnvelopeTrustSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "issuer",
+          "publishedAt",
+          "nextReviewAt",
+          "keys"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "packproof.envelope-trust.v1"
+            ]
+          },
+          "issuer": {
+            "type": "string",
+            "format": "uri"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextReviewAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "keys": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "keyId",
+                "publicKeyPem",
+                "status",
+                "validFrom",
+                "validUntil",
+                "statusEffectiveAt"
+              ],
+              "properties": {
+                "keyId": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "publicKeyPem": {
+                  "type": "string",
+                  "maxLength": 32768
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ACTIVE",
+                    "RETIRED",
+                    "REVOKED",
+                    "COMPROMISED"
+                  ]
+                },
+                "validFrom": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "validUntil": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "statusEffectiveAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              }
+            }
           }
         }
       }

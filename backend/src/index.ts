@@ -12,6 +12,7 @@ import {DomainError} from "./domain/errors.js";
 import {observationConfigFromEnv} from "./analytics/observation-router.js";
 import { initializeRecipientPreservation,validateRecipientDeployment } from "./export/recipient-runtime.js";
 import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
+import { initializeEnvelopeTrustPublication } from "./integrity/envelope-publication.js";
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
 import { assertRealDataRuntime } from './operations/integration-readiness.js';
@@ -62,6 +63,7 @@ const rnd=rndConfigFromEnv();
 assertResearchRuntimeIsolation(config,rnd);
 // Validate signing configuration before opening the database or starting workers.
 const manifestSigning = await initializeManifestSigningRuntime(systemClock);
+const envelopeTrustPublication = initializeEnvelopeTrustPublication(systemClock);
 const opened = await openDatabase(config);
 if(config.migrateOnStart) await migrate(opened.db);
 else await assertSchemaCurrent(opened.db,undefined,true);
@@ -107,6 +109,7 @@ if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(create
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 const readinessProbes=[
+  {name:'envelope-trust-publication',required:Boolean(envelopeTrustPublication),check:async()=>{envelopeTrustPublication?.snapshot();}},
   {name:'recipient-preservation',required:Boolean(recipientPreservation),check:async()=>{if(recipientPreservation)validateRecipientDeployment(config,systemClock);}},
   {name:'policy-recovery',check:()=>assertPolicyAccessSafe(opened.db)},
   {name:'database',check:()=>opened.db.query('SELECT 1')},
@@ -140,6 +143,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   observationConfig:observationConfigFromEnv(process.env),
   webhookConfig,
   manifestSigning,
+  envelopeTrustPublication,
   futurePlatform: futurePlatformFromEnv(process.env),
   releaseIdentity: config.release,
   credentialNamespace: config.credentialNamespace,
