@@ -22,3 +22,10 @@
 # other history scanning and all default rules.
 707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:79
 707ba1c2b26853cec39c6afb335fbb67e4e21c8d:backend/scripts/isolated-recovery-acceptance.mjs:generic-api-key:168
+
+# Reviewed CI 39721991163 / job 119637330040: these three fields are AWS
+# CodeBuild project:build UUID identifiers, verified against BatchGetBuilds.
+# They are public audit locators, not API credentials. Scope to exact history.
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-release-evidence-2026-10-22.json:generic-api-key:15
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-bridge-evidence-2026-10-22.json:generic-api-key:19
+be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-bridge-evidence-2026-10-22.json:generic-api-key:28

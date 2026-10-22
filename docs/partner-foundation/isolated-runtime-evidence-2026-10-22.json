@@ -1,0 +1,1149 @@
+{
+  "schema": "packproof.isolated-runtime-evidence.v1",
+  "date": "2026-10-22",
+  "status": "PASSED_WITH_STATED_LIMITS",
+  "scope": "Synthetic private foundation, actual ECS roles and non-owner database identities",
+  "image": {
+    "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-m1-20261021-runtime@sha256:37b60e0ad990f78e93485e3421f0265c9cea8a67e2441ccfa27a35d8cffad03e",
+    "buildId": "packproof-m1-20261021-runtime:00783eb6-cad9-455f-9798-80eaed8ee116",
+    "scan": {
+      "status": {
+        "status": "COMPLETE",
+        "description": "The scan was completed successfully."
+      },
+      "counts": {},
+      "findings": []
+    }
+  },
+  "roleProbes": [
+    {
+      "key": "acceptance/runtime/probes/api/038cfe7276aeb64a.json",
+      "version": "173rRAnjC8TrRddiY1bfWuKaNPbK0BJr",
+      "lastModified": "2026-10-22T03:28:37+00:00",
+      "report": {
+        "schema": "packproof.runtime-role-probe.v1",
+        "kind": "api",
+        "run": "038cfe7276aeb64a",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/5fbd559e757f4a059391be030dd1dc17",
+        "checks": [
+          "own_storage_write",
+          "conditional_creation",
+          "own_signing",
+          "other_signing_denied",
+          "api_journal_write_denied",
+          "external_fence_denies_existing_task_credentials"
+        ],
+        "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+        "initialPassed": true,
+        "status": "PASSED"
+      }
+    },
+    {
+      "key": "acceptance/runtime/probes/worker/fc37526b6516afbe.json",
+      "version": "ouUG0jRuxPJ614mG2DyHaYrr.OKeA52O",
+      "lastModified": "2026-10-22T03:28:36+00:00",
+      "report": {
+        "schema": "packproof.runtime-role-probe.v1",
+        "kind": "worker",
+        "run": "fc37526b6516afbe",
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/849a188430144d25b9950c49b279859b",
+        "checks": [
+          "own_storage_write",
+          "conditional_creation",
+          "own_signing",
+          "other_signing_denied",
+          "worker_version_delete_denied",
+          "external_fence_denies_existing_task_credentials"
+        ],
+        "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+        "initialPassed": true,
+        "status": "PASSED"
+      }
+    }
+  ],
+  "rolePolicyReview": {
+    "roles": [
+      {
+        "name": "packproof-m1-20261021-runtime-api",
+        "arn": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-api",
+        "trust": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "managedPolicies": [],
+        "inlinePolicies": [
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "s3:ListBucket",
+                "Resource": [
+                  "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+                  "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5"
+                ],
+                "Effect": "Allow",
+                "Sid": "DistinguishMissingMedia"
+              },
+              {
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject"
+                ],
+                "Resource": [
+                  "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/evidence/*",
+                  "arn:aws:s3:::packproof-m1-20261020-committedbucket-trlqhna2z8s5/evidence/*"
+                ],
+                "Effect": "Allow",
+                "Sid": "SyntheticMedia"
+              },
+              {
+                "Action": [
+                  "kms:GetPublicKey",
+                  "kms:Sign"
+                ],
+                "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                "Effect": "Allow",
+                "Sid": "ManifestSigning"
+              },
+              {
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject"
+                ],
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*",
+                "Effect": "Deny",
+                "Sid": "NoRecoveryJournal"
+              },
+              {
+                "Action": "kms:Sign",
+                "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d",
+                "Effect": "Deny",
+                "Sid": "NoRecoverySigning"
+              },
+              {
+                "Action": [
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:BypassGovernanceRetention",
+                  "s3:PutObjectRetention",
+                  "s3:PutObjectLegalHold",
+                  "kms:DisableKey",
+                  "kms:ScheduleKeyDeletion",
+                  "kms:PutKeyPolicy",
+                  "kms:CreateGrant",
+                  "secretsmanager:GetSecretValue",
+                  "iam:*"
+                ],
+                "Resource": "*",
+                "Effect": "Deny",
+                "Sid": "NoRetentionOrKeyAdministration"
+              },
+              {
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion"
+                ],
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/config/*",
+                "Effect": "Allow",
+                "Sid": "ReadTestConfiguration"
+              },
+              {
+                "Action": "s3:PutObject",
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/probes/api/*",
+                "Effect": "Allow",
+                "Sid": "WriteRoleProbe"
+              }
+            ]
+          }
+        ],
+        "simulation": [
+          {
+            "action": "kms:ScheduleKeyDeletion",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          },
+          {
+            "action": "kms:DisableKey",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          },
+          {
+            "action": "kms:PutKeyPolicy",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          }
+        ]
+      },
+      {
+        "name": "packproof-m1-20261021-runtime-worker",
+        "arn": "arn:aws:iam::784514617543:role/packproof-m1-20261021-runtime-worker",
+        "trust": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "managedPolicies": [],
+        "inlinePolicies": [
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": "s3:ListBucket",
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp",
+                "Effect": "Allow",
+                "Sid": "DistinguishMissingJournal"
+              },
+              {
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject"
+                ],
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-recoverybucket-aripohrxorbp/*",
+                "Effect": "Allow",
+                "Sid": "ProtectedJournal"
+              },
+              {
+                "Action": [
+                  "kms:GetPublicKey",
+                  "kms:Sign"
+                ],
+                "Resource": "arn:aws:kms:us-east-1:784514617543:key/1730036e-b64f-4137-8a1d-11964782b97d",
+                "Effect": "Allow",
+                "Sid": "RecoverySigning"
+              },
+              {
+                "Action": "kms:Sign",
+                "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                "Effect": "Deny",
+                "Sid": "NoManifestSigning"
+              },
+              {
+                "Action": [
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:BypassGovernanceRetention",
+                  "s3:PutObjectRetention",
+                  "s3:PutObjectLegalHold",
+                  "kms:DisableKey",
+                  "kms:ScheduleKeyDeletion",
+                  "kms:PutKeyPolicy",
+                  "kms:CreateGrant",
+                  "secretsmanager:GetSecretValue",
+                  "iam:*"
+                ],
+                "Resource": "*",
+                "Effect": "Deny",
+                "Sid": "NoRetentionOrKeyAdministration"
+              },
+              {
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion"
+                ],
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/config/*",
+                "Effect": "Allow",
+                "Sid": "ReadTestConfiguration"
+              },
+              {
+                "Action": "s3:PutObject",
+                "Resource": "arn:aws:s3:::packproof-m1-20261020-uploadbucket-8o4ikwomdg8h/acceptance/runtime/probes/worker/*",
+                "Effect": "Allow",
+                "Sid": "WriteRoleProbe"
+              },
+              {
+                "Action": "kms:GetPublicKey",
+                "Resource": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+                "Effect": "Allow",
+                "Sid": "ManifestPublicTrust"
+              }
+            ]
+          }
+        ],
+        "simulation": [
+          {
+            "action": "kms:ScheduleKeyDeletion",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          },
+          {
+            "action": "kms:DisableKey",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          },
+          {
+            "action": "kms:PutKeyPolicy",
+            "resource": "arn:aws:kms:${Region}:${Account}:${ResourceType}/${Id}",
+            "decision": "explicitDeny",
+            "missingContext": []
+          }
+        ]
+      }
+    ]
+  },
+  "protectionEvidence": {
+    "file": "runtime-protection-evidence-2026-10-22.json",
+    "compactJsonSha256": "17d4a9845c37836170f21f882f979fcdbbd7fe23ae06ceb497c030b3b3e7fc38"
+  },
+  "tls": {
+    "subject": "CN=packproof-m1.test",
+    "validFrom": "Oct 21 02:32:43 2026 GMT",
+    "validTo": "Oct 28 02:32:43 2026 GMT",
+    "host": "packproof-m1.test"
+  },
+  "limits": [
+    "Actual-device camera lifecycle and a consenting merchant pilot remain unverified.",
+    "KMS deletion/administration was checked by explicit denies and policy simulation, never by destructive requests."
+  ],
+  "protectedServiceDeployment": {
+    "status": "UPDATE_COMPLETE",
+    "apiTaskRevision": 6,
+    "workerTaskRevision": 6,
+    "protectionSha256": "17d4a9845c37836170f21f882f979fcdbbd7fe23ae06ceb497c030b3b3e7fc38"
+  },
+  "acceptance": {
+    "archive": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/6989c133-06a3-49f1-94d6-c7269ff37701/runtime.zip",
+      "versionId": "SX6rIL.UsBS6.MUYzJg63hSovFX3Hb_4",
+      "sha256": "1df999f27c7918e99d490a001dec8264811eae4c5329b780718c731174528477"
+    },
+    "report": {
+      "schema": "packproof.isolated-runtime-acceptance.v1",
+      "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+      "buildId": "packproof-m1-20261021-runtime:6989c133-06a3-49f1-94d6-c7269ff37701",
+      "startedAt": "2026-10-22T03:48:11.535809+00:00",
+      "checks": [
+        {
+          "name": "separate_healthy_private_fargate_tasks",
+          "passed": true
+        },
+        {
+          "name": "pinned_tls_readiness_and_unauthenticated_denial",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_developer",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_ownerA",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_ownerB",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_operatorA",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_operatorB",
+          "passed": true
+        },
+        {
+          "name": "cognito_mfa_api_identity_operatorC",
+          "passed": true
+        },
+        {
+          "name": "merchant_owner_and_developer_boundaries",
+          "passed": true
+        },
+        {
+          "name": "integration_namespace_conflict_is_explicit_and_does_not_transfer_ownership",
+          "passed": true
+        },
+        {
+          "name": "colliding_order_ids_stay_separate_and_retries_replay",
+          "passed": true
+        },
+        {
+          "name": "two_merchant_capture_finalize_and_export_over_https",
+          "passed": true
+        },
+        {
+          "name": "partner_scope_capture_intent_events_and_personal_auth_boundary",
+          "passed": true
+        },
+        {
+          "name": "revocation_aborts_existing_export_stream",
+          "passed": true,
+          "bytesReceived": 12698,
+          "completePackageBytes": 33587576,
+          "termination": "IncompleteRead"
+        },
+        {
+          "name": "revocation_blocks_already_queued_delivery_in_actual_worker",
+          "passed": true,
+          "queued": 2,
+          "transportCalls": 0
+        },
+        {
+          "name": "revocation_denies_open_capture_resume_and_preserves_synthetic_original",
+          "passed": true
+        },
+        {
+          "name": "merchant_export_after_partner_revocation_preserves_frozen_manifest_and_original",
+          "passed": true,
+          "frozenEntries": 2
+        },
+        {
+          "name": "delegation_revocation_denies_one_merchant_without_affecting_other",
+          "passed": true
+        },
+        {
+          "name": "credential_revocation_denies_remaining_access",
+          "passed": true
+        }
+      ],
+      "limits": [
+        "Synthetic identities in the isolated Cognito pool; no real person/device enrollment.",
+        "The synthetic developer email is admin-set only in this isolated pool; no email is sent.",
+        "This run does not authorize production or substitute for independent release review."
+      ],
+      "tasks": {
+        "api": {
+          "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/422d5517b36b4cd8b803701c79a64abd",
+          "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-api:6",
+          "imageDigest": "sha256:37b60e0ad990f78e93485e3421f0265c9cea8a67e2441ccfa27a35d8cffad03e",
+          "healthStatus": "HEALTHY"
+        },
+        "worker": {
+          "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/29c9e5425ad04fbd947342401307e53b",
+          "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-m1-20261021-runtime-worker:6",
+          "imageDigest": "sha256:37b60e0ad990f78e93485e3421f0265c9cea8a67e2441ccfa27a35d8cffad03e",
+          "healthStatus": "HEALTHY"
+        }
+      },
+      "userIds": {
+        "developer": "user_01M5GVJHSZEEVWZAEJPGPYZ231",
+        "ownerA": "user_01M5GVJKCBPRWB3H90DCN5V7XJ",
+        "ownerB": "user_01M5GVJMYXMQZDVKDF158EZ652",
+        "operatorA": "user_01M5GVJPG1F4SDN3ZQZF8P349W",
+        "operatorB": "user_01M5GVJR0CPQ99SJ2D58D158R0",
+        "operatorC": "user_01M5GVJSNS3VXQA8FC2HSE39M5"
+      },
+      "capture": {
+        "checks": [
+          "ownerA_operator_scope_capture_retry_upload_attestation_finalize_export",
+          "ownerB_operator_scope_capture_retry_upload_attestation_finalize_export"
+        ],
+        "proofs": [
+          {
+            "proofId": "proof_01M5GVK4KX8K3T2HJ06RBN8JP7",
+            "captureId": "cap_01M5GVKCDDM6XG7JSNDDJAWJ9A",
+            "evidenceId": "evd_01M5GVKCWTMEHADAQC1WMFXCR1",
+            "manifestSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+            "packageSha256": "e4d0e3f3b1a747d2e6346a618c00bcc34b84e25126e7323484edc04ddbba37b1",
+            "packageBytes": 33587576,
+            "sourceSha256": "6b1779302d85cc494cc386632aeffd299fbba25b3b08f2a03eaa75d6506a0c19",
+            "sourceBytes": 33556133,
+            "syntheticPaddingBytes": 33554432
+          },
+          {
+            "proofId": "proof_01M5GVK95XFDQ48AA6ZW6V38HZ",
+            "captureId": "cap_01M5GVMJY4P9F79DZ4XS3765AK",
+            "evidenceId": "evd_01M5GVMK62DF63RV0BPEHS1J1Y",
+            "manifestSha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+            "packageSha256": "5a47491932be67fdadf86d29a8ecbcbccd82f0e7ef787cf22457419d09485625",
+            "packageBytes": 33100,
+            "sourceSha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+            "sourceBytes": 1701,
+            "syntheticPaddingBytes": 0
+          }
+        ],
+        "interruptedCapture": {
+          "proofId": "proof_01M5GVMVAWHM6ZZ53PJPJ00A30",
+          "captureId": "cap_01M5GVMXGXQ02EKJPGNSETP48Y",
+          "registration": {
+            "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+            "byteSize": 1701,
+            "contentType": "video/mp4",
+            "recordedDurationMs": 200,
+            "interrupted": true
+          }
+        },
+        "status": "PASSED"
+      },
+      "queuedBeforeRevocation": {
+        "schema": "packproof.queued-revocation.v1",
+        "mode": "enqueue",
+        "webhookId": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV",
+        "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+        "transportCalls": 0,
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/df10b45914cf4c7983dee840a7a59629",
+        "databaseIdentity": {
+          "login": "m1_service_worker",
+          "database": "m1_service_20261021"
+        },
+        "before": [],
+        "dispatch": {
+          "delivered": 0,
+          "failed": 0
+        },
+        "after": [
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_01M5GVKS42MA80HBRJSZQE7A00:evidence.committed",
+            "state": "pending",
+            "attempts": 0,
+            "last_status": null,
+            "delivered_at": null
+          },
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_recovery_21a592de21e8d588518ff55044ed49d9f4ff4264f35013d4d3c2a4191795a755:proof.finalized",
+            "state": "pending",
+            "attempts": 0,
+            "last_status": null,
+            "delivered_at": null
+          }
+        ],
+        "status": "PASSED"
+      },
+      "queuedAfterRevocation": {
+        "schema": "packproof.queued-revocation.v1",
+        "mode": "dispatch",
+        "webhookId": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV",
+        "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+        "transportCalls": 0,
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/11936c8c5b464e609d973432c6598a2e",
+        "databaseIdentity": {
+          "login": "m1_service_worker",
+          "database": "m1_service_20261021"
+        },
+        "before": [
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_01M5GVKS42MA80HBRJSZQE7A00:evidence.committed",
+            "state": "pending",
+            "attempts": 0,
+            "last_status": null,
+            "delivered_at": null
+          },
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_recovery_21a592de21e8d588518ff55044ed49d9f4ff4264f35013d4d3c2a4191795a755:proof.finalized",
+            "state": "pending",
+            "attempts": 0,
+            "last_status": null,
+            "delivered_at": null
+          }
+        ],
+        "dispatch": {
+          "delivered": 0,
+          "failed": 2
+        },
+        "after": [
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_01M5GVKS42MA80HBRJSZQE7A00:evidence.committed",
+            "state": "pending",
+            "attempts": 1,
+            "last_status": null,
+            "delivered_at": null
+          },
+          {
+            "id": "wh_01M5GVKBEGEM7JBW6DSYH6GRRV:aud_recovery_21a592de21e8d588518ff55044ed49d9f4ff4264f35013d4d3c2a4191795a755:proof.finalized",
+            "state": "pending",
+            "attempts": 1,
+            "last_status": null,
+            "delivered_at": null
+          }
+        ],
+        "status": "PASSED"
+      },
+      "status": "PASSED",
+      "merchants": {
+        "ownerA": "org_01M5GVJSVCDQZPSK2DESTG9KCM",
+        "ownerB": "org_01M5GVJSWJTYTMS9XKJ6NZB70P"
+      },
+      "partner": "org_01M5GVJSZ8Q63S3NDMTQB2APMC",
+      "proofs": {
+        "ownerA": "proof_01M5GVK4KX8K3T2HJ06RBN8JP7",
+        "ownerB": "proof_01M5GVK95XFDQ48AA6ZW6V38HZ"
+      },
+      "syntheticUsersRemoved": 6
+    }
+  },
+  "verification": {
+    "archive": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/f0697ff4-7184-4629-acf7-6092791afa06/runtime.zip",
+      "versionId": "BQPfHYdsYw7g998Lq5yNli8NOmG6I4gS",
+      "sha256": "e15392a93e5119328b8d9bb533043a6fae66b06040a72149b26f4780d676c77a"
+    },
+    "report": {
+      "schema": "packproof.isolated-runtime-verification.v1",
+      "source": "ae99e06fb547d49edd223d31901510874c2e0e35",
+      "buildId": "packproof-m1-20261021-runtime:f0697ff4-7184-4629-acf7-6092791afa06",
+      "acceptanceArchive": {
+        "buildId": "6989c133-06a3-49f1-94d6-c7269ff37701",
+        "sha256": "1df999f27c7918e99d490a001dec8264811eae4c5329b780718c731174528477",
+        "versionId": "SX6rIL.UsBS6.MUYzJg63hSovFX3Hb_4"
+      },
+      "publicTrustSource": "Separate control-plane GetPublicKey for the pinned KMS ARN; committed public PEM outside both packages.",
+      "packages": [
+        {
+          "owner": "ownerA",
+          "proofId": "proof_01M5GVK4KX8K3T2HJ06RBN8JP7",
+          "manifestSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+          "packageSha256": "e4d0e3f3b1a747d2e6346a618c00bcc34b84e25126e7323484edc04ddbba37b1",
+          "verification": {
+            "verifierVersion": "1.3.0",
+            "status": "VERIFIED",
+            "proofId": "proof_01M5GVK4KX8K3T2HJ06RBN8JP7",
+            "manifestSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+            "evidenceVerified": 1,
+            "lifecycleEvidenceVerified": 0,
+            "archiveHashInventoryVerified": true,
+            "independentDigestMatched": true,
+            "files": [
+              {
+                "path": "README.txt",
+                "sha256": "37cf3bcce2a920219cea90c37c3c4ecd35f566eab7c53ded7c872f60aaa308ba",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "archive.json",
+                "sha256": "1cd18970771b0ab39e5eaafbcd37e768bb20946f995320d0007e924cc744cacb",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "attestations.json",
+                "sha256": "cd238461785a18b1a1e36db8a8c173d0083c626e322a0df9e572abcbce56a9ed",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "events.json",
+                "sha256": "e190fc36d7de697728b99b4932eac8654557be6cff4c119d8e624ed58a1e6e66",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "evidence/evd_01M5GVKCWTMEHADAQC1WMFXCR1.mp4",
+                "sha256": "6b1779302d85cc494cc386632aeffd299fbba25b3b08f2a03eaa75d6506a0c19",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "integrity/evidence.json",
+                "sha256": "42534fefc9d1867ed0952d494d82d33dc538de314b3d4013825ec8dfc084b28d",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "integrity/signatures.json",
+                "sha256": "15d842c545698ce5b59fb5de6e56547a2143a010293bea17a61f37eb40045bb0",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "lifecycle/stages.json",
+                "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "manifest.json",
+                "sha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "package.json",
+                "sha256": "8d61340f85f3af0bfa4115190a1e9b879660bb02696408ebbc4f3fe6354705aa",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "participants.json",
+                "sha256": "72dff6081444c4edfc42fd79734bacbaf7ca888fa37f42b1a7bc3ef96c7ebe63",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "proof-supplements.json",
+                "sha256": "0f739172ecfd264bf793bf197f4ccc7fe1603a2c702ed0b5daa3430af6125bb3",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "shipping.json",
+                "sha256": "7608bd6e9ea4bd99911980bc2d9c86c08b061784773c1a0c8ee2f199bb7a3949",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "transaction.json",
+                "sha256": "7f12b778870dafd39ffbf98bd8585058a7b435692c513b5ddf0b55785de14a7b",
+                "status": "HASH_MATCHED"
+              }
+            ],
+            "signatureVerified": true,
+            "signature": {
+              "status": "VERIFIED",
+              "verified": true,
+              "keyId": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+              "algorithm": "ECDSA_SHA_256",
+              "signedAt": "2026-10-22T03:48:59.634Z",
+              "timeMeaning": "Reported signing time is not independently timestamped filming time."
+            },
+            "trust": {
+              "status": "FRESH",
+              "generatedAt": "2026-10-21T02:49:34.623Z",
+              "expiresAt": "2026-10-28T02:49:34.624Z",
+              "networkUsed": false,
+              "limitation": "No online revocation check was performed. Trust depends on how this list was obtained."
+            },
+            "omissions": [],
+            "completeMedia": true,
+            "scope": {
+              "exportedBy": "service_actor_01M5GVK06QDRA5GDDXBBAAC9T0",
+              "kind": "PARTICIPANT_FULL_RECORD",
+              "policyVersion": 1
+            },
+            "supplements": {
+              "status": "EMPTY_RECEIVED_SNAPSHOT",
+              "coveredByRootSignature": false,
+              "chainContinuityVerified": true,
+              "signaturesVerified": false,
+              "keysTrustedAtSnapshot": false,
+              "fullyVerifiedReceivedChain": false,
+              "sequence": 0,
+              "headSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+              "coreManifestSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+              "snapshotAt": "2026-10-22T03:49:02.518Z",
+              "entries": [],
+              "completeness": "RECEIVED_SNAPSHOT_ONLY",
+              "currentRevocationKnowledge": "UNAVAILABLE_OFFLINE",
+              "snapshotTimeIndependentlyAttested": false,
+              "limitation": "This is the received signed chain only. An older valid prefix cannot prove that no later supplements exist."
+            },
+            "lifecycleSnapshot": {
+              "status": "NOT_INCLUDED_LEGACY_OR_UNDECLARED",
+              "signatureVerified": false,
+              "tenantBinding": "NOT_ESTABLISHED",
+              "freshness": "UNKNOWN_OFFLINE"
+            },
+            "sourceAuthentication": "NOT_INDEPENDENTLY_CHECKED",
+            "attestationVerification": "NOT_INDEPENDENTLY_CHECKED",
+            "policyCoverage": "NOT_EVALUATED",
+            "unresolvedConflicts": "NOT_EVALUATED",
+            "derivations": {
+              "status": "NONE_INCLUDED",
+              "verified": false
+            },
+            "otherSupplementalFiles": {
+              "status": "SELF_CONSISTENCY_ONLY",
+              "coveredByRootSignature": false
+            },
+            "limitations": [
+              "Integrity does not establish physical truth, authenticity, or liability.",
+              "The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.",
+              "A received signed chain cannot establish that no later events exist. Its export snapshot time is not independently attested.",
+              "Archive-included keys never establish trust. No media was uploaded."
+            ]
+          }
+        },
+        {
+          "owner": "ownerB",
+          "proofId": "proof_01M5GVK95XFDQ48AA6ZW6V38HZ",
+          "manifestSha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+          "packageSha256": "5a47491932be67fdadf86d29a8ecbcbccd82f0e7ef787cf22457419d09485625",
+          "verification": {
+            "verifierVersion": "1.3.0",
+            "status": "VERIFIED",
+            "proofId": "proof_01M5GVK95XFDQ48AA6ZW6V38HZ",
+            "manifestSha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+            "evidenceVerified": 1,
+            "lifecycleEvidenceVerified": 0,
+            "archiveHashInventoryVerified": true,
+            "independentDigestMatched": true,
+            "files": [
+              {
+                "path": "README.txt",
+                "sha256": "37cf3bcce2a920219cea90c37c3c4ecd35f566eab7c53ded7c872f60aaa308ba",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "archive.json",
+                "sha256": "7dceafb1738b88e18a09bd9ef8dc7bbc20f3e0201abc980bc01ed5b090bc8d9f",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "attestations.json",
+                "sha256": "e6696b4f9c99d3ee10371017117e628fd081e988a61e22f2982fa76f77c9cd1d",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "events.json",
+                "sha256": "3233776cf7dd81475b2438cc57a1c7a64e579605c4de2557a3c58c0033964503",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "evidence/evd_01M5GVMK62DF63RV0BPEHS1J1Y.mp4",
+                "sha256": "fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "integrity/evidence.json",
+                "sha256": "df00648b5195593416c94f2214d7da62cfc5e9cde4c71191c751975c8863e88a",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "integrity/signatures.json",
+                "sha256": "95001d2857ac1f47c0e24895b0400fa28c79800494248d86b42f924023dc00b8",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "lifecycle/stages.json",
+                "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "manifest.json",
+                "sha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "package.json",
+                "sha256": "cecbe2362af39d2e97e9ee73e04fc0d6ad12f3468780fe81a812beeff34d3690",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "participants.json",
+                "sha256": "bc51b69fc1f5c79b1aa8cc0f2a0105ed8e1a9d5e5633d53993a5642d9c56b865",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "proof-supplements.json",
+                "sha256": "e91ba98c5577cd74cb288a1b988cff4d35dd4697c664d81ecb7b7b6c4d95d8f0",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "shipping.json",
+                "sha256": "94871ac5c20d2fcf6514aac70e9b9717a82dd778f6798417d8b59c8f2c95e08f",
+                "status": "HASH_MATCHED"
+              },
+              {
+                "path": "transaction.json",
+                "sha256": "db1217ca3f4ea65e79d09a970b3685dc148d5c1fad58fddfd46b282cb5f62839",
+                "status": "HASH_MATCHED"
+              }
+            ],
+            "signatureVerified": true,
+            "signature": {
+              "status": "VERIFIED",
+              "verified": true,
+              "keyId": "arn:aws:kms:us-east-1:784514617543:key/6d65691f-a10c-4547-b806-896c3d660493",
+              "algorithm": "ECDSA_SHA_256",
+              "signedAt": "2026-10-22T03:49:25.678Z",
+              "timeMeaning": "Reported signing time is not independently timestamped filming time."
+            },
+            "trust": {
+              "status": "FRESH",
+              "generatedAt": "2026-10-21T02:49:34.623Z",
+              "expiresAt": "2026-10-28T02:49:34.624Z",
+              "networkUsed": false,
+              "limitation": "No online revocation check was performed. Trust depends on how this list was obtained."
+            },
+            "omissions": [],
+            "completeMedia": true,
+            "scope": {
+              "exportedBy": "service_actor_01M5GVK06QDRA5GDDXBBAAC9T0",
+              "kind": "PARTICIPANT_FULL_RECORD",
+              "policyVersion": 1
+            },
+            "supplements": {
+              "status": "EMPTY_RECEIVED_SNAPSHOT",
+              "coveredByRootSignature": false,
+              "chainContinuityVerified": true,
+              "signaturesVerified": false,
+              "keysTrustedAtSnapshot": false,
+              "fullyVerifiedReceivedChain": false,
+              "sequence": 0,
+              "headSha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+              "coreManifestSha256": "47bbab0c4a2fcc64669f76a3fb5268c1953043514d9106081fa07a0b1ab38867",
+              "snapshotAt": "2026-10-22T03:49:28.846Z",
+              "entries": [],
+              "completeness": "RECEIVED_SNAPSHOT_ONLY",
+              "currentRevocationKnowledge": "UNAVAILABLE_OFFLINE",
+              "snapshotTimeIndependentlyAttested": false,
+              "limitation": "This is the received signed chain only. An older valid prefix cannot prove that no later supplements exist."
+            },
+            "lifecycleSnapshot": {
+              "status": "NOT_INCLUDED_LEGACY_OR_UNDECLARED",
+              "signatureVerified": false,
+              "tenantBinding": "NOT_ESTABLISHED",
+              "freshness": "UNKNOWN_OFFLINE"
+            },
+            "sourceAuthentication": "NOT_INDEPENDENTLY_CHECKED",
+            "attestationVerification": "NOT_INDEPENDENTLY_CHECKED",
+            "policyCoverage": "NOT_EVALUATED",
+            "unresolvedConflicts": "NOT_EVALUATED",
+            "derivations": {
+              "status": "NONE_INCLUDED",
+              "verified": false
+            },
+            "otherSupplementalFiles": {
+              "status": "SELF_CONSISTENCY_ONLY",
+              "coveredByRootSignature": false
+            },
+            "limitations": [
+              "Integrity does not establish physical truth, authenticity, or liability.",
+              "The root signature does not cover later supplements. Each declared signed entry is checked separately; other export files remain inventory self-consistency only.",
+              "A received signed chain cannot establish that no later events exist. Its export snapshot time is not independently attested.",
+              "Archive-included keys never establish trust. No media was uploaded."
+            ]
+          }
+        }
+      ],
+      "status": "PASSED"
+    },
+    "afterRevocation": {
+      "status": "VERIFIED",
+      "signatureVerified": true,
+      "manifestSha256": "9e9c6e3f6387e16726ff800f4aa18633df7bf143edf3dce923c4959c6a527fee",
+      "evidenceVerified": 1,
+      "packageSha256": "c8822c4901568cd38d413db76b88a28c3861bc8a679b852aab8856d8112a3568",
+      "verifier": "Python verifier 1.3.0 with native OpenSSL 3.5.6 and separately retrieved pinned public trust"
+    }
+  },
+  "databaseInspection": {
+    "loginChecks": [
+      {
+        "login": "m1_service_api",
+        "database": "m1_service_20261021",
+        "can_create_schema_objects": false,
+        "can_change_writer_generation": false,
+        "can_publish_receipts": false
+      },
+      {
+        "login": "m1_service_worker",
+        "database": "m1_service_20261021",
+        "can_create_schema_objects": false,
+        "can_change_writer_generation": false,
+        "can_publish_receipts": true
+      }
+    ],
+    "writerFence": [
+      {
+        "singleton": 1,
+        "generation": "m1-runtime-20261021",
+        "writes_enabled": true
+      }
+    ],
+    "policyFence": [
+      {
+        "singleton": 1,
+        "mode": "NORMAL",
+        "durability_required": true,
+        "expected_sequence": null,
+        "expected_head_sha256": null,
+        "reconciled_sequence": "307",
+        "reconciled_head_sha256": "8a17ae805eaec3167adfde15b7ddda7fdf19d05b8a729231a93830dc0ae779a6",
+        "baseline_completed": true
+      }
+    ],
+    "roles": [
+      {
+        "rolname": "m1_service_api",
+        "rolcanlogin": true,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      },
+      {
+        "rolname": "m1_service_worker",
+        "rolcanlogin": true,
+        "rolsuper": false,
+        "rolcreatedb": false,
+        "rolcreaterole": false,
+        "rolbypassrls": false
+      }
+    ],
+    "coreDelivery": [
+      {
+        "state": "DURABLE",
+        "count": "26"
+      }
+    ],
+    "policyDelivery": [
+      {
+        "state": "DURABLE",
+        "count": "307"
+      }
+    ]
+  },
+  "syntheticIdentityCleanup": {
+    "removed": 6,
+    "remainingPoolUsers": 0,
+    "paginationRemaining": false
+  },
+  "sourceEquivalence": {
+    "deployedSource": "ae99e06fb547d49edd223d31901510874c2e0e35",
+    "ciCandidate": "99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9",
+    "scope": "The intervening commit adds the migration operator, its tests, an inventory report, workflow gate and Docker copies. Application source and the deployed revocation harness are unchanged."
+  },
+  "exactVersionRetentionReads": {
+    "status": "PASSED",
+    "records": [
+      {
+        "key": "evidence/proof_01M5GVK4KX8K3T2HJ06RBN8JP7/evd_01M5GVKCWTMEHADAQC1WMFXCR1/committed/sha256-6b1779302d85cc494cc386632aeffd299fbba25b3b08f2a03eaa75d6506a0c19",
+        "versionId": "YtqinNfzlCWSTh35SBoJ9uQqkDJmR4wW",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-20T03:48:48.532000+00:00"
+        }
+      },
+      {
+        "key": "evidence/proof_01M5GVK95XFDQ48AA6ZW6V38HZ/evd_01M5GVMK62DF63RV0BPEHS1J1Y/committed/sha256-fc4ad329298bd1bc4b15bb07977f4b282c47d242f59ed3a78f198c625ea48c05",
+        "versionId": "fSErCczHMYoUsdhHen0_gZTwVo.CCHSI",
+        "retention": {
+          "Mode": "GOVERNANCE",
+          "RetainUntilDate": "2027-01-20T03:49:22.010000+00:00"
+        }
+      }
+    ],
+    "limit": "Upload-time default retention only; later-stage extension and legal-hold reconciliation require their own checks."
+  },
+  "finalPause": {
+    "observedAt": "2026-10-22T04:40:09.265Z",
+    "status": "PAUSED",
+    "assets": {
+      "assetsStatus": "UPDATE_COMPLETE",
+      "parameters": [
+        {
+          "ParameterKey": "WriterFence",
+          "ParameterValue": "CLOSED"
+        },
+        {
+          "ParameterKey": "ComputeEnabled",
+          "ParameterValue": "false"
+        },
+        {
+          "ParameterKey": "EgressAvailabilityZone",
+          "ParameterValue": "us-east-1a"
+        },
+        {
+          "ParameterKey": "CandidateCommit",
+          "ParameterValue": "ae99e06fb547d49edd223d31901510874c2e0e35"
+        }
+      ],
+      "runningTasks": []
+    },
+    "network": {
+      "projectsFound": [],
+      "projectsAbsent": [
+        "packproof-m1-20261021-runtime"
+      ],
+      "natGateways": [
+        {
+          "id": "nat-03d3790b625d70eeb",
+          "state": "deleted"
+        }
+      ],
+      "routeTables": [
+        {
+          "id": "rtb-05ee97c6869a5baab",
+          "routes": [
+            {
+              "DestinationCidrBlock": "10.42.0.0/16",
+              "GatewayId": "local",
+              "Origin": "CreateRouteTable",
+              "State": "active"
+            }
+          ]
+        }
+      ],
+      "removedResources": []
+    },
+    "closeBuild": "packproof-m1-20261021-runtime:dee6d933-fec7-4048-9914-3789b5d93393",
+    "archive": {
+      "bucket": "packproof-m1-20261020-uploadbucket-8o4ikwomdg8h",
+      "key": "acceptance/runtime/dee6d933-fec7-4048-9914-3789b5d93393/runtime.zip",
+      "versionId": "ZckT8MRtCleVQnrvz.vOvohpAo4XeT22",
+      "sha256": "947d9f5684f794b9a55beaa00bf0f03c65e8c261cb581df435d4aade1e74fa28"
+    },
+    "database": {
+      "source": "99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9",
+      "database": "m1_service_20261021",
+      "writerFence": [
+        {
+          "singleton": 1,
+          "generation": "m1-runtime-20261021",
+          "writes_enabled": false
+        }
+      ],
+      "policyFence": [
+        {
+          "singleton": 1,
+          "mode": "NORMAL",
+          "durability_required": true,
+          "expected_sequence": null,
+          "expected_head_sha256": null,
+          "reconciled_sequence": "307",
+          "reconciled_head_sha256": "8a17ae805eaec3167adfde15b7ddda7fdf19d05b8a729231a93830dc0ae779a6",
+          "baseline_completed": true
+        }
+      ],
+      "roles": [
+        {
+          "rolname": "m1_service_api",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        },
+        {
+          "rolname": "m1_service_worker",
+          "rolcanlogin": false,
+          "rolsuper": false,
+          "rolcreatedb": false,
+          "rolcreaterole": false,
+          "rolbypassrls": false
+        }
+      ],
+      "coreDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "26"
+        }
+      ],
+      "policyDelivery": [
+        {
+          "state": "DURABLE",
+          "count": "307"
+        }
+      ]
+    }
+  }
+}

@@ -1,8 +1,17 @@
 # Full-release continuation — 2026-10-22
 
-The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. Production has not been changed by this continuation.
+The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
 
-## Candidate repairs
+
+## Completed foundation release - 22 October 2026, 04:20 UTC
+
+PR #108 merged candidate `99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9`; main merge `c4f331fb27996e465e880c79f141d9caf3ee0b00` has the identical tree. Exact-candidate CI passed every required job, including 1,401 backend tests (16 skipped), full web/mobile and real PostgreSQL gates. The expanded private HTTPS acceptance passed 19 checks, including active-stream and queued-dispatch revocation. Three package instances verified independently. These are synthetic integration results, not camera-device or merchant-adoption evidence.
+
+The compatibility bridge completed its canary, then the five exact additive migrations applied in one production transaction. All 91 receipts match. All 21 frozen manifest signatures and all 29 exact original evidence versions (95,560,373 bytes) verified under both bridge and candidate against the migrated database. Existing inventory and runtime-authority digests stayed unchanged. The candidate image `sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2` completed the native 5%-then-100% canary at 04:19:05 UTC with no alarm. Task revision 48 is the sole running production task. Health/readiness/meta, unauthenticated denial and CORS passed at 100%; exact deployed configuration matches the reviewed request. Only image and three release bindings changed.
+
+The expiring migration login was removed, the temporary migration stack and both IAM roles are absent, and its task definition is inactive. Audit logs are retained. The bridge image remains the tested fallback only while organization tables are unactivated. Organization APIs remain disabled: production Object Lock/protected recovery, separated authority, shadow comparison and explicit cohort ownership still need their own implementation and evidence. Actual-device M2-02 and consenting-merchant M2-08 remain unverified. M1-05 permits documented production gaps; the scoped M1-06 review is by the implementing agent, not an independent human. See [release evidence](foundation-release-evidence-2026-10-22.json), [runtime evidence](isolated-runtime-evidence-2026-10-22.json) and [technical review](RELEASE-REVIEW.md).
+
+## Earlier candidate-repair checkpoint
 
 Based on PR #108 head `9af5c39c5cc231d5d0fb5df91919783d940aaf63`:
 
@@ -59,3 +68,9 @@ Candidate `26a138ffed80584204988ae54a22a9f1b774265a` passed backend, mobile, Pos
 The new deployed harness checks an already-started export with a 32 MiB inert MP4 `free` atom to enforce backpressure. This is synthetic padding, not camera-device evidence. After revocation the stream must abort, the API must stay ready, and a direct merchant export must preserve exact frozen manifest and evidence bytes. The isolated TLS proxy propagates an expected upstream reset safely.
 
 Queued delivery is exercised by one-shot tasks using the actual worker task definition, injected configuration and non-owner login. The normal dispatcher first persists deliveries without sending; after grant revocation it must record failed attempts with zero transport invocations and no delivered receipt. The observation callback fails closed if reached and never contacts an external receiver. The build role gains only the exact isolated worker family, its two task roles and bounded task cleanup. These changes are prepared acceptance work; results are not claimed until the deployed run completes.
+
+## Release-record follow-up
+
+PR #110 records the deployed release and exact-source tooling. Its first secret scan flagged three CodeBuild project/build UUIDs as generic API keys; the exact historical commit/file/rule/line identifiers were reviewed and classified as non-secret audit locators. A subsequent web run exposed a detached-element race in the no-readable-label assertion. The test now queries inside waitFor and accepts the typographic apostrophe; the focused scenario passed locally. No application behavior changed. The refreshed broad CI result must be read at the final PR head.
+
+The isolated runtime is now paused with zero tasks, both logins NOLOGIN, writes disabled, WriterFence=CLOSED and ComputeEnabled=false. The close archive is SHA-256 `947d9f5684f794b9a55beaa00bf0f03c65e8c261cb581df435d4aade1e74fa28`; exact version and observed infrastructure are in the runtime evidence. Customer production remains on the successfully released candidate.

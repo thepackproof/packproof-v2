@@ -1,0 +1,255 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "One-shot exact 088-092 foundation migration. No service or networking changes; owner injection only at task launch. Remove roles and task definition after verified completion.",
+  "Resources": {
+    "Logs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "/packproof/packproof-foundation-migrate-20261022",
+        "RetentionInDays": 30
+      }
+    },
+    "TaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-foundation-migrate-20261022-task",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "no-aws-api-authority",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Deny",
+                  "Action": "*",
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-foundation-migrate-20261022-execution",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "exact-image-owner-injection-and-log-stream",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Logs",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "TaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "packproof-foundation-migrate-20261022",
+        "Cpu": "256",
+        "Memory": "512",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "TaskRole",
+            "Arn"
+          ]
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ExecutionRole",
+            "Arn"
+          ]
+        },
+        "ContainerDefinitions": [
+          {
+            "Name": "migration",
+            "Image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2",
+            "Essential": true,
+            "ReadonlyRootFilesystem": true,
+            "Command": [
+              "node",
+              "scripts/foundation-migrate-cli.mjs",
+              "--inspect"
+            ],
+            "Environment": [
+              {
+                "Name": "NODE_ENV",
+                "Value": "production"
+              },
+              {
+                "Name": "AWS_REGION",
+                "Value": "us-east-1"
+              },
+              {
+                "Name": "PACKPROOF_ENVIRONMENT",
+                "Value": "production"
+              },
+              {
+                "Name": "PACKPROOF_MIGRATE_ON_START",
+                "Value": "false"
+              },
+              {
+                "Name": "PACKPROOF_OPERATOR_PURPOSE",
+                "Value": "foundation-production-migration"
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_SHA",
+                "Value": "99bb2dfe0eb16d8d513617fdd4b9608d7baac3f9"
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_IMAGE",
+                "Value": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:bfe92a04ea17de5b44bf3e7c7d34929669b40ef903d14f81d3be33cfef6362a2"
+              },
+              {
+                "Name": "PACKPROOF_RELEASE_VERSION",
+                "Value": "foundation-migration-20261022"
+              },
+              {
+                "Name": "PACKPROOF_COMPATIBILITY_IMAGE_DIGEST",
+                "Value": "sha256:ffbc53e26799717463909a051c8fe4aa510dde6a122fcf3536dcfd8cf35cb55d"
+              },
+              {
+                "Name": "PACKPROOF_DB_HOST",
+                "Value": "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com"
+              },
+              {
+                "Name": "PACKPROOF_DB_NAME",
+                "Value": "packproof_v2"
+              },
+              {
+                "Name": "PACKPROOF_DB_PORT",
+                "Value": "5432"
+              },
+              {
+                "Name": "PACKPROOF_DB_SSLMODE",
+                "Value": "verify-full"
+              },
+              {
+                "Name": "PACKPROOF_DB_CA_FILE",
+                "Value": "/app/certs/rds-us-east-1-bundle.pem"
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "PACKPROOF_DB_USER",
+                "ValueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96:username::"
+              },
+              {
+                "Name": "PACKPROOF_DB_PASSWORD",
+                "ValueFrom": "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96:password::"
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "Logs"
+                },
+                "awslogs-region": "us-east-1",
+                "awslogs-stream-prefix": "migration"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TaskDefinition": {
+      "Value": {
+        "Ref": "TaskDefinition"
+      }
+    },
+    "LogGroup": {
+      "Value": {
+        "Ref": "Logs"
+      }
+    }
+  }
+}

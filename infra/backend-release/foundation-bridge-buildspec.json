@@ -1,0 +1,53 @@
+{
+  "version": 0.2,
+  "phases": {
+    "install": {
+      "runtime-versions": {
+        "nodejs": 22
+      },
+      "on-failure": "ABORT",
+      "commands": [
+        "mkdir -p runtime-artifacts",
+        "git init candidate",
+        "cd candidate",
+        "git remote add origin https://github.com/thepackproof/packproof-v2.git",
+        "git fetch --depth=1 origin \"$CANDIDATE_SHA\"",
+        "git checkout --detach \"$CANDIDATE_SHA\"",
+        "test \"$(git rev-parse HEAD)\" = \"$CANDIDATE_SHA\"",
+        "cd backend",
+        "npm ci --no-audit --no-fund",
+        "npm run build",
+        "curl --fail --silent --show-error --proto =https --tlsv1.2 -o /tmp/packproof-rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem",
+        "node --input-type=module - <<'NODE'\nimport assert from 'node:assert/strict';\nimport {spawnSync} from 'node:child_process';\nassert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');\nconst secret=JSON.parse(process.env.ISOLATED_DB_SECRET);delete process.env.ISOLATED_DB_SECRET;\nassert.equal(secret.username,'packproof');\nassert.equal(process.env.PACKPROOF_TEST_DB_HOST,'packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com');\nconst url=new URL('postgresql://'+process.env.PACKPROOF_TEST_DB_HOST+':5432/packproof_v2?sslmode=verify-full');url.username=secret.username;url.password=secret.password;\nconst result=spawnSync(process.execPath,['node_modules/vitest/vitest.mjs','run','tests/foundation-migrate.test.ts','--pool=threads','--maxWorkers=1','--reporter=default','--reporter=junit','--outputFile='+process.env.CODEBUILD_SRC_DIR+'/runtime-artifacts/foundation-migration.xml'],{stdio:'inherit',env:{...process.env,PACKPROOF_TEST_DATABASE_URL:url.href,PACKPROOF_DB_CA_FILE:'/tmp/packproof-rds-ca.pem',PACKPROOF_ENVIRONMENT:'staging'}});\nassert.equal(result.status,0);\n\nNODE",
+        "cd \"$CODEBUILD_SRC_DIR\"",
+        "git init bridge",
+        "cd bridge",
+        "git remote add origin https://github.com/thepackproof/packproof-v2.git",
+        "git fetch --depth=1 origin \"$BRIDGE_SHA\"",
+        "git checkout --detach \"$BRIDGE_SHA\"",
+        "test \"$(git rev-parse HEAD)\" = \"$BRIDGE_SHA\"",
+        "cd backend",
+        "npm ci --no-audit --no-fund",
+        "npm run build",
+        "node node_modules/vitest/vitest.mjs run tests/foundation-bridge.test.ts --pool=threads --maxWorkers=1",
+        "node --input-type=module - <<'NODE'\nimport assert from 'node:assert/strict';\nimport {randomBytes} from 'node:crypto';\nimport {writeFile} from 'node:fs/promises';\nimport {createPgDatabase} from './dist/db/postgres.js';\nimport {assertSchemaCurrent} from './dist/db/migrate.js';\nimport {migrate} from '../../candidate/backend/dist/db/migrate.js';\nimport {insertUser} from '../../candidate/backend/dist/domain/users.js';\nassert.equal(process.env.PACKPROOF_TEST_PURPOSE,'isolated-m1-synthetic');\nconst secret=JSON.parse(process.env.ISOLATED_DB_SECRET);delete process.env.ISOLATED_DB_SECRET;\nassert.equal(secret.username,'packproof');\nassert.equal(process.env.PACKPROOF_TEST_DB_HOST,'packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com');\nprocess.env.PACKPROOF_DB_CA_FILE='/tmp/packproof-rds-ca.pem';process.env.PACKPROOF_ENVIRONMENT='staging';\nconst url=new URL('postgresql://'+process.env.PACKPROOF_TEST_DB_HOST+':5432/packproof_v2?sslmode=verify-full');url.username=secret.username;url.password=secret.password;\nconst admin=createPgDatabase(url.href),schema='bridge_gate_'+randomBytes(8).toString('hex');\nawait admin.db.query('CREATE SCHEMA '+schema);url.searchParams.set('options','-c search_path='+schema);\nconst db=createPgDatabase(url.href);const report={schema:'packproof.foundation-bridge-verification.v1',bridgeSource:process.env.BRIDGE_SHA,candidateSource:process.env.CANDIDATE_SHA,checks:[]};\ntry{\n await migrate(db.db,process.cwd()+'/migrations');\n await assertSchemaCurrent(db.db);report.checks.push('bridge_accepts_86_migration_baseline');\n await migrate(db.db,process.env.CODEBUILD_SRC_DIR+'/candidate/backend/migrations');\n await assertSchemaCurrent(db.db);report.checks.push('bridge_accepts_91_migration_unactivated_schema');\n const clock={now:()=>new Date()},user=await insertUser(db.db,clock);\n await db.db.query(\"INSERT INTO platform_organizations(id,kind,name,owner_user_id,environment,created_at) VALUES('org_bridge_fixture','PARTNER','Synthetic rollback guard',$1,'sandbox',$2)\",[user,clock.now().toISOString()]);\n await assert.rejects(assertSchemaCurrent(db.db),/organization-aware/);report.checks.push('bridge_refuses_organization_activation');\n report.status='PASSED';\n}finally{await db.close();await admin.db.query('DROP SCHEMA '+schema+' CASCADE');await admin.close();}\nawait writeFile(process.env.CODEBUILD_SRC_DIR+'/runtime-artifacts/bridge-verification.json',JSON.stringify(report,null,2)+'\\n');console.log(JSON.stringify(report));\n\nNODE"
+      ]
+    },
+    "build": {
+      "on-failure": "ABORT",
+      "commands": [
+        "cd \"$CODEBUILD_SRC_DIR/bridge\"",
+        "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com",
+        "docker build -f backend/Dockerfile --label org.opencontainers.image.revision=\"$BRIDGE_SHA\" -t \"$IMAGE_REPOSITORY:$BRIDGE_SHA\" .",
+        "docker push \"$IMAGE_REPOSITORY:$BRIDGE_SHA\"",
+        "aws ecr describe-images --repository-name packproof-m1-20261021-runtime --image-ids imageTag=\"$BRIDGE_SHA\" --output json > \"$CODEBUILD_SRC_DIR/runtime-artifacts/bridge-image.json\""
+      ]
+    }
+  },
+  "artifacts": {
+    "files": [
+      "**/*"
+    ],
+    "base-directory": "runtime-artifacts"
+  }
+}
