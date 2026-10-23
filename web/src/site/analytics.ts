@@ -7,6 +7,7 @@ function analyticsPath(path:string){if(path==="/signup")return "/register";if(pa
 /** Anonymous aggregate counts only. No cookies, persistent identifiers, URL
  * parameters, account tokens, or referrer strings leave this module. */
 export function recordPublicEvent(event:Event,path=window.location.pathname){
+  path=path.replace(/\/+$/,"")||"/";
   if(!publicPaths.has(path)||navigator.doNotTrack==="1"||(navigator as Navigator&{globalPrivacyControl?:boolean}).globalPrivacyControl)return;
   const device=window.innerWidth<768?"mobile":window.innerWidth<1100?"tablet":"desktop";
   void fetch(`${defaultApiBaseUrl().replace(/\/$/,"")}/analytics/events`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event,path:analyticsPath(path),device}),credentials:"omit",referrerPolicy:"no-referrer",keepalive:true}).catch(()=>{});
@@ -18,6 +19,7 @@ export function installPublicAnalytics(){
     else if(destination.hostname==="play.google.com")recordPublicEvent("PLAY_STORE_CLICK");
     else if(destination.origin===window.location.origin&&["/signup","/register"].includes(destination.pathname))recordPublicEvent("SIGNUP_STARTED");
     else if(destination.origin===window.location.origin&&destination.pathname==="/login")recordPublicEvent("LOGIN_CLICK");
-    else if(link.matches(".pp-button,.site-button,.pp-actions a"))recordPublicEvent("CTA_CLICK");
+    else if(link.matches(".pp-button,.site-button,.pp-actions a,.eim-sample-link,.eim-inline-link"))recordPublicEvent("CTA_CLICK");
   };document.addEventListener("click",click);return()=>document.removeEventListener("click",click);
 }
+
