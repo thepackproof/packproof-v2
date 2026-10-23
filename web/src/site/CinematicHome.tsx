@@ -83,7 +83,8 @@ function Platform() {
 function Closing() {
   return <section className="eim-finale" data-scene><div className="eim-finale-beam" aria-hidden="true" /><div className="eim-finale-orbits" aria-hidden="true"><i /><i /><i /></div><div className="eim-home-width"><p className="eim-overline"><span className="eim-live-dot" />EVIDENCE IN MOTION. CONTEXT THAT STAYS.</p><h2>When the shipment<br />is questioned,<br /><span>show the record.</span></h2><div className="eim-actions"><Action href="/signup">Create your account</Action><Action href="/sample/" secondary>Explore a sample Proof</Action></div><p className="eim-finale-note">Capture what happened. Preserve what was recorded.<br />Give the review a clearer place to start.</p><div className="eim-finale-signature"><ProofMark size={28} /><span>ORDER</span><i /><span>EVIDENCE</span><i /><span>SHIPPING</span><b>ONE PROOF.</b></div></div></section>;
 }
-export function CinematicHome() { return <main id="main-content" className="eim-home"><Hero /><Assembly /><Sources /><LivingProof /><Packing /><Integrity /><Audiences /><Platform /><Closing /></main>; }
+export function CinematicHome() { return <main id="main-content" tabIndex={-1} className="eim-home"><Hero /><Assembly /><Sources /><LivingProof /><Packing /><Integrity /><Audiences /><Platform /><Closing /></main>; }
+
 
 
 

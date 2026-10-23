@@ -46,12 +46,13 @@ export function Website() {
     return <Suspense fallback={<main className="app-loading" role="status"><Brand/><p>Opening PackProof…</p></main>}><App authInitialView={path === "/signup" ? "create-account" : "sign-in"}/></Suspense>;
   }
   return <CinematicShell path={path}>{path === "/" ? <CinematicHome/> :
-    cinematicPaths.has(path) ? <main id="main-content"><CinematicPage path={path}/></main> :
-    <main id="main-content" className="public-site eim-legacy-content">{
+    cinematicPaths.has(path) ? <main id="main-content" tabIndex={-1}><CinematicPage path={path}/></main> :
+    <main id="main-content" tabIndex={-1} className="public-site eim-legacy-content">{
       path === "/sample" ? <Demo/> : path === "/contact" ? <Contact/> :
       ["/privacy","/new/privacy","/terms","/new/terms"].includes(path) ? <Legal kind={path.endsWith("privacy") ? "privacy" : "terms"}/> :
       <section className="page-intro site-width"><Eyebrow>PAGE NOT FOUND</Eyebrow><h1>This one’s<br/>off the route.</h1><p>Let’s get you back to a clearer path.</p><a href="/" className="eim-button site-button">Back to PackProof <Glyph/></a></section>
     }</main>}
   </CinematicShell>;
 }
+
 

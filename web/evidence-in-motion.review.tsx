@@ -12,7 +12,9 @@ function Preview(){
     const click=(event:MouseEvent)=>{
       const link=(event.target as Element)?.closest?.("a");
       const href=link?.getAttribute("href");
-      if(!link || !href || !href.startsWith("/") || event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)return;
+      if(!link || !href || event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)return;
+      if(href.startsWith("#") && !href.startsWith("#/")){ event.preventDefault(); document.getElementById(href.slice(1))?.scrollIntoView({behavior:document.querySelector(".eim-site")?.getAttribute("data-motion")==="reduced"?"instant":"smooth"}); return; }
+      if(!href.startsWith("/"))return;
       const destination=new URL(href,"https://thepackproof.com");
       const next=destination.pathname.replace(/\/$/,"")||"/";
       if(pages.has(next)){
@@ -23,7 +25,8 @@ function Preview(){
     return()=>{window.removeEventListener("popstate",update);document.removeEventListener("click",click);};
   },[]);
   useEffect(()=>{document.title=(publicPageTitles[path]||"Design preview")+" — PackProof";},[path]);
-  return <CinematicShell path={path}>{path==="/" ? <CinematicHome/> : <main id="main-content"><CinematicPage path={path}/></main>}</CinematicShell>;
+  return <CinematicShell path={path}>{path==="/" ? <CinematicHome/> : <main id="main-content" tabIndex={-1}><CinematicPage path={path}/></main>}</CinematicShell>;
 }
 createRoot(document.getElementById("root")!).render(<Preview/>);
+
 
