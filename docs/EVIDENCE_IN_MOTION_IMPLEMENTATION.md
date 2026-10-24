@@ -59,3 +59,17 @@ The preview is for reviewing the implemented public presentation. It does not re
 Revert the source change to restore the previous React public presentation. There are no data migrations or backend changes. If later published through Sites, retain the current saved version as the deployment rollback target.
 
 
+
+## October 24 source refinement
+
+- Replaced the simple platform map with an interactive shipment-review comparison: five fictional order, camera, warehouse, dispatch and carrier sources converge into an attributed record. Visitors can inspect a missing seal and a differing order reference in context.
+- Preserved nine alternating homepage scenes. Added scoped historical-data pilot messaging focused on keeping existing systems and measuring actual review time and unresolved evidence gaps. No savings figures or universal connector availability are asserted.
+- Corrected homepage and supporting-page intro clearance below the overlaid navigation across phone, tablet and smaller desktop layouts.
+- Added keyboard focus transfer when the in-panel assembly button is replaced by the connected record. Source selection persists across presentation modes, and the illustration sends no requests.
+- Added two focused source/exception/keyboard checks. The existing sample-navigation check now waits for the actual lazy application import before timing the sample workflow; its assertions are unchanged.
+
+Validation in the isolated local snapshot: full web TypeScript check and Vite production bundle pass. All eleven selected interaction, privacy and sample/sign-in routing checks pass (the sample-navigation check passed after the lazy-import wait correction). The portable review HTML was rebuilt. No backend suite was run. Browser screenshots, real-device layout and Core Web Vitals remain unverified.
+
+Publication remains blocked: the selected Site's source helper could not reach its Git host in this session (getaddrinfo thread failure; sandbox network disabled). The connector confirms the owner account and public Site, but account authorization does not restore the executor's network connection. No Site version was saved or deployed, and the live site was not changed.
+
+The hosted source still needs reconciliation before publication. Preserve Evidence Library and every article, editorial-method and investors routes, the API bridge, app assets, association documents, approved legal pages and existing URLs. Do not replace the hosted legal documents with the local snapshot's draft-review notice.

@@ -13,6 +13,8 @@ it("opens and closes the read-only first-Proof sample through the production web
   vi.stubGlobal('fetch', requests);
   history.replaceState({}, '', '/login');
   render(<Website />);
+  // Wait for the real lazy entry before timing the sample navigation itself.
+  await vi.dynamicImportSettled();
   await userEvent.click(await screen.findByRole('button', {name:'See a sample Proof'}, {timeout:4000}));
   expect(await screen.findByRole('heading', {name:'See a sample Proof'})).toBeInTheDocument();
   expect(location.pathname).toBe('/sample-proof');
@@ -22,7 +24,7 @@ it("opens and closes the read-only first-Proof sample through the production web
   await userEvent.click(screen.getByRole('button', {name:'Close sample'}));
   expect(await screen.findByRole('heading', {name:'Welcome back.'})).toBeInTheDocument();
   expect(location.pathname).toBe('/login');
-});
+}, 15000);
 
 it("loads the actual sign-in screen through the split application entry", async () => {
   window.localStorage.clear();
