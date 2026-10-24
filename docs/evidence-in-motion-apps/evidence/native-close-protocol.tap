@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: installed launch accepts only an explicit absolute executable argument
+ok 1 - installed launch accepts only an explicit absolute executable argument
+  ---
+  duration_ms: 1.1255
+  type: 'test'
+  ...
+# Subtest: installed application executable and actual asar must match the packaged candidate
+ok 2 - installed application executable and actual asar must match the packaged candidate
+  ---
+  duration_ms: 30.3898
+  type: 'test'
+  ...
+# Subtest: diagnostic polling tolerates only an incomplete append and exposes fresh rows for restart checks
+ok 3 - diagnostic polling tolerates only an incomplete append and exposes fresh rows for restart checks
+  ---
+  duration_ms: 14.2678
+  type: 'test'
+  ...
+# Subtest: normal window close requires zero exit without a signal and rejects pre-existing exits
+ok 4 - normal window close requires zero exit without a signal and rejects pre-existing exits
+  ---
+  duration_ms: 0.4118
+  type: 'test'
+  ...
+# Subtest: fatal diagnostics appended after renderer readiness make even a zero-exit shutdown fail
+ok 5 - fatal diagnostics appended after renderer readiness make even a zero-exit shutdown fail
+  ---
+  duration_ms: 12.0183
+  type: 'test'
+  ...
+# Subtest: Windows close request uses a file helper with exact owned PID/executable arguments and explicit delivery acknowledgement
+ok 6 - Windows close request uses a file helper with exact owned PID/executable arguments and explicit delivery acknowledgement
+  ---
+  duration_ms: 0.4175
+  type: 'test'
+  ...
+# Subtest: missing, wrong-process, ambiguous, failed and timed-out Windows delivery cannot pass as a normal close
+ok 7 - missing, wrong-process, ambiguous, failed and timed-out Windows delivery cannot pass as a normal close
+  ---
+  duration_ms: 0.23
+  type: 'test'
+  ...
+# Subtest: shutdown evidence contains only bounded fixed lifecycle codes and timestamps
+ok 8 - shutdown evidence contains only bounded fixed lifecycle codes and timestamps
+  ---
+  duration_ms: 1.0253
+  type: 'test'
+  ...
+# Subtest: Windows helper acknowledgments stay UTF-8 under an inherited Unicode console without weakening identity checks
+ok 9 - Windows helper acknowledgments stay UTF-8 under an inherited Unicode console without weakening identity checks
+  ---
+  duration_ms: 602.9972
+  type: 'test'
+  ...
+# Subtest: close helper failures expose bounded protocol metadata without raw process output or paths
+ok 10 - close helper failures expose bounded protocol metadata without raw process output or paths
+  ---
+  duration_ms: 0.3927
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 725.0581

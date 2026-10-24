@@ -29,7 +29,10 @@ function requestWindowsClose(child, executable, run = spawnSync) {
   const count = targetMatches && Number.isSafeInteger(reported.matchedWindows) && reported.matchedWindows >= 0 && reported.matchedWindows <= 1000 ? reported.matchedWindows : null;
   const delivered = result.status === 0 && !result.error && targetMatches && count === 1 && reported.delivered === true;
   const failureCode = targetMatches && ['NO_UNIQUE_OWNED_WINDOW', 'WINDOW_CLOSE_POST_FAILED'].includes(reported.failureCode) ? reported.failureCode : 'OWNED_WINDOW_CLOSE_NOT_CONFIRMED';
-  return { method, delivered, matchedWindows: count, failureCode: delivered ? null : failureCode };
+  const helperStatus = Number.isSafeInteger(result.status) ? result.status : null;
+  const helperError = ['ETIMEDOUT', 'ENOENT', 'EACCES', 'EPERM', 'ENOBUFS'].includes(result.error?.code) ? result.error.code : result.error ? 'OTHER_HELPER_ERROR' : null;
+  const acknowledgment = delivered ? 'confirmed' : !reported ? 'invalid-json' : !targetMatches ? 'target-mismatch' : count === null ? 'invalid-window-count' : result.status !== 0 || result.error ? 'helper-failed' : count !== 1 ? 'non-unique-window' : 'delivery-not-confirmed';
+  return { method, delivered, matchedWindows: count, failureCode: delivered ? null : failureCode, helperStatus, helperError, acknowledgment };
 }
 function diagnosticRows(file) {
   if (!fs.existsSync(file)) return [];
