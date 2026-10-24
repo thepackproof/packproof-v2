@@ -1,5 +1,5 @@
 import {SIGNAL_ENABLED} from "../experience/signal";
-import {SignalText,SignalSteps,SignalGuide,SignalBadge} from "../ui/Signal";
+import {SignalText,SignalSteps,SignalGuide,SignalBadge,SignalSources} from "../ui/Signal";
 import {BottomSheet} from "../ui/Sheets";
 import { requiresRecordingRecovery } from '../capture/recording-review';
 import { nativeStudyForCapture } from "../analytics/native-study";
@@ -174,7 +174,7 @@ export function CaptureScreen() {
       <RemainingShipmentNotice value={app.proof} />
     </View> : null}
     {SIGNAL_ENABLED && !incomplete && <SignalSteps step={inFlight?3:capture?2:1}/>}
-    {SIGNAL_ENABLED && reviewing && <SignalText kind="title">Review your take.</SignalText>}
+    {SIGNAL_ENABLED && reviewing && <><SignalText kind="title">Review your take.</SignalText><SignalText kind="small" muted>Review the original recording, then confirm the packing statement.</SignalText><SignalSources order={Boolean(txn?.externalReference || txn?.provenance)} evidence shipment={Boolean(txn?.shipping?.carrier || txn?.shipping?.trackingNumber)}/></>}
     {SIGNAL_ENABLED && incomplete && <><SignalBadge>Recording interrupted</SignalBadge><SignalText kind="title">Your take{'\n'}is still here.</SignalText><SignalText muted>It ended early. Any surviving footage stays on this device.</SignalText></>}
     <ErrorBanner message={app.error} />
     {researchProductionEnabled() && app.proof && app.session && !capture && !inFlight && !reviewOnly && !isGradingWorkflow(app.proof.workflowType) ? <>

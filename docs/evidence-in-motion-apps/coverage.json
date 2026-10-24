@@ -1,0 +1,5637 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-10-24",
+  "purpose": "Review and evidence index; entries are obligations, not test passes",
+  "source": {
+    "repository": "thepackproof/packproof-v2",
+    "baselineCommit": "b08daf7982bedb6916702b5e4ee237a314f726da",
+    "localReconstructionCommit": "da5feca",
+    "localReconstructionIsUpstream": false,
+    "candidateCommit": null,
+    "archive": "Official public codeload main archive; SHA reconciled by release owner",
+    "hostedBaselineCommit": "5b454f836872cc9292b4b12fc4709674bb5c2d37",
+    "hostedSavedVersion": 62,
+    "backendProductionRevision": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+    "backendChanged": false
+  },
+  "design": {
+    "fileKey": "4AtxdZJxHvpWVF3cCX14Z0",
+    "url": "https://www.figma.com/design/4AtxdZJxHvpWVF3cCX14Z0?node-id=22-1921",
+    "pageNode": "22:1921",
+    "historicalPageNode": "0:1",
+    "revision": "EIM v1, 2026-10-24",
+    "immutableVersionId": null,
+    "ledger": "figma-design-ledger.json",
+    "contract": "design-contract.md",
+    "limitation": "Named contract over saved editable nodes; supported APIs did not expose immutable Figma history revision. Final post-fix screenshots for 29:2357, 25:2168 and 28:2372 were blocked by Starter quota; runtime 200% text unverified."
+  },
+  "statusVocabulary": [
+    "Passed",
+    "Failed",
+    "Not executed",
+    "Not applicable"
+  ],
+  "evidenceRules": [
+    "A source mapping is not a runtime pass.",
+    "A build is not visual or physical-device acceptance.",
+    "Not applicable needs an actual scope/capability reason; lack of access is Not executed.",
+    "Every pass records candidate commit, environment, device or browser, date and inspectable evidence.",
+    "Reuse unchanged-owner evidence only with commit/configuration/platform relevance."
+  ],
+  "inheritedStates": [
+    {
+      "id": "S01",
+      "state": "Home",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "2:294",
+        "mobileNode": "24:1984",
+        "webNode": "25:2026",
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Current workspace, pending work, exact resume targets",
+      "routeContext": "home",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "ios": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s01",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M06",
+      "acceptanceFamilies": [
+        "T01",
+        "T06",
+        "T07",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/mobile-task/MobileHomeScreen.tsx",
+          "web/src/signal/EvidenceSources.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S02",
+      "state": "Library local",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "2:295",
+        "mobileNode": "26:2033",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Owner-scoped local original, distinct from confirmed record",
+      "routeContext": "proofs",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s02",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T04",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S03",
+      "state": "Name item",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:296",
+        "mobileNode": "26:2068",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Persisted entry and existing idempotent create operation",
+      "routeContext": "manual",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ManualCreateScreen.tsx",
+        "ios": "mobile/src/screens/ManualCreateScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s03",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M03",
+      "acceptanceFamilies": [
+        "T01",
+        "T05",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S04",
+      "state": "Capture guide",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:297",
+        "mobileNode": "26:2081",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Exact Proof, capture authority, actual permissions",
+      "routeContext": "capture",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s04",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M03",
+      "acceptanceFamilies": [
+        "T01",
+        "T03",
+        "T05",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S05",
+      "state": "Recording",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:298",
+        "mobileNode": "24:2027",
+        "webNode": "25:2071",
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Native session, real timer, working Stop and item identity",
+      "routeContext": "capture",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s05",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T01",
+        "T03",
+        "T12",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S06",
+      "state": "Leave recording",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:299",
+        "mobileNode": "26:2096",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Same active session; stop waits for actual persistence",
+      "routeContext": "capture",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s06",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M04",
+      "acceptanceFamilies": [
+        "T03",
+        "T04",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S07",
+      "state": "Review unchecked",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:300",
+        "mobileNode": "26:2111",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Selected valid take; submit blocked until declaration",
+      "routeContext": "capture/review",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s07",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M03",
+      "acceptanceFamilies": [
+        "T01",
+        "T02",
+        "T04",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S08",
+      "state": "Review checked",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:301",
+        "mobileNode": "24:2047",
+        "webNode": "25:2103",
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Consent bound to current identity/revision; duplicate-safe submit",
+      "routeContext": "capture/review",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s08",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M01",
+      "acceptanceFamilies": [
+        "T01",
+        "T02",
+        "T04",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S09",
+      "state": "Uploading",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "2:302",
+        "mobileNode": "26:2129",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Persisted operation and actual transport progress",
+      "routeContext": "submission",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s09",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T01",
+        "T02",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S10",
+      "state": "Upload paused",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "2:303",
+        "mobileNode": "26:2145",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Classified cause and same-operation resume",
+      "routeContext": "submission",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s10",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T02",
+        "T05",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S11",
+      "state": "Confirmed receipt",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-02"
+      ],
+      "design": {
+        "oldNode": "2:304",
+        "mobileNode": "24:2068",
+        "webNode": "25:2137",
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Fresh/reconciled canonical outcome and matching evidence/receipts",
+      "routeContext": "submission/complete",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "ios": "mobile/src/screens/SignalSubmissionScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s11",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M08",
+      "acceptanceFamilies": [
+        "T01",
+        "T02",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalSubmissionScreen.tsx",
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/experience/signal/submission-presentation.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S12",
+      "state": "Connected record",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-02"
+      ],
+      "design": {
+        "oldNode": "2:305",
+        "mobileNode": "24:2086",
+        "webNode": "25:2168",
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Authorized original, statements, source history, supported actions",
+      "routeContext": "proof",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ProofDetailScreen.tsx",
+        "ios": "mobile/src/screens/ProofDetailScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s12",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M05",
+      "acceptanceFamilies": [
+        "T01",
+        "T07",
+        "T09",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/components/WorkspaceProofRecord.tsx",
+          "web/src/components/ConnectedChronology.tsx"
+        ],
+        "android": [
+          "mobile/src/ui/SignalProofRecord.tsx",
+          "mobile/src/copy/eim-record.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/SignalProofRecord.tsx",
+          "mobile/src/copy/eim-record.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S13",
+      "state": "Activity saved",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "2:306",
+        "mobileNode": "26:2160",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Actual completion event; correct cold/warm destination",
+      "routeContext": "activity",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s13",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T01",
+        "T06",
+        "T07",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S14",
+      "state": "Recovered recording",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "2:307",
+        "mobileNode": "26:2194",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Inspected surviving file; interruption metadata; eligibility separate",
+      "routeContext": "capture/recovery",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s14",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M04",
+      "acceptanceFamilies": [
+        "T03",
+        "T04",
+        "T05",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S15",
+      "state": "Share Proof",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-02",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "2:308",
+        "mobileNode": "26:2213",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Actual link operation and access policy",
+      "routeContext": "sharing",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/SharingScreen.tsx",
+        "ios": "mobile/src/screens/SharingScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s15",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M04",
+      "acceptanceFamilies": [
+        "T07",
+        "T08",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S16",
+      "state": "Original viewer",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-02",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "2:309",
+        "mobileNode": "26:2228",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Exact authorized object, full orientation/aspect, correct return",
+      "routeContext": "proof/media",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ProofDetailScreen.tsx",
+        "ios": "mobile/src/screens/ProofDetailScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s16",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M07",
+      "acceptanceFamilies": [
+        "T04",
+        "T08",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/components/WorkspaceProofRecord.tsx",
+          "web/src/components/ConnectedChronology.tsx"
+        ],
+        "android": [
+          "mobile/src/ui/SignalProofRecord.tsx",
+          "mobile/src/copy/eim-record.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/SignalProofRecord.tsx",
+          "mobile/src/copy/eim-record.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S17",
+      "state": "Home saved",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "2:310",
+        "mobileNode": "26:2244",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Canonical recent record and consistent counts",
+      "routeContext": "home",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "ios": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s17",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M06",
+      "acceptanceFamilies": [
+        "T01",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/mobile-task/MobileHomeScreen.tsx",
+          "web/src/signal/EvidenceSources.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S18",
+      "state": "Retake candidate",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-01",
+        "REQ-02",
+        "REQ-09"
+      ],
+      "design": {
+        "oldNode": "2:311",
+        "mobileNode": "26:2282",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Retain selected take; separately persist and accept candidate",
+      "routeContext": "capture/retake",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/CaptureScreen.tsx",
+        "ios": "mobile/src/screens/CaptureScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s18",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M04",
+      "acceptanceFamilies": [
+        "T02",
+        "T04",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/screens/PackingStationScreen.tsx",
+          "web/src/signal/Signal.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/CaptureScreen.tsx",
+          "mobile/src/ui/Signal.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S19",
+      "state": "Home paused",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "8:1329",
+        "mobileNode": "26:2301",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Same paused operation and useful next action",
+      "routeContext": "home",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "ios": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s19",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M06",
+      "acceptanceFamilies": [
+        "T05",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/mobile-task/MobileHomeScreen.tsx",
+          "web/src/signal/EvidenceSources.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S20",
+      "state": "Home uploading",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08"
+      ],
+      "design": {
+        "oldNode": "8:1411",
+        "mobileNode": "26:2336",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Observe actual transfer/confirmation; reopening never restarts",
+      "routeContext": "home",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "ios": "mobile/src/screens/WorkspaceHomeScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s20",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M06",
+      "acceptanceFamilies": [
+        "T02",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/mobile-task/MobileHomeScreen.tsx",
+          "web/src/signal/EvidenceSources.tsx"
+        ],
+        "android": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "ios": [
+          "mobile/src/screens/SignalHomeScreen.tsx"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S21",
+      "state": "Link copied",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-02"
+      ],
+      "design": {
+        "oldNode": "8:1494",
+        "mobileNode": "26:2371",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Successful clipboard write for intended record",
+      "routeContext": "sharing",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/SharingScreen.tsx",
+        "ios": "mobile/src/screens/SharingScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s21",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M01",
+      "acceptanceFamilies": [
+        "T08",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S22",
+      "state": "Library saved",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "8:1626",
+        "mobileNode": "26:2384",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Canonical record; stable filters, selection, refresh",
+      "routeContext": "proofs",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s22",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T01",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S23",
+      "state": "Library paused",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "12:1441",
+        "mobileNode": "26:2419",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Same operation/reason as Home and Activity",
+      "routeContext": "proofs",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s23",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T05",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S24",
+      "state": "Library uploading",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "12:1587",
+        "mobileNode": "26:2453",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Actual progress; stable row identity and scroll",
+      "routeContext": "proofs",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/MyProofsScreen.tsx",
+        "ios": "mobile/src/screens/MyProofsScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s24",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T02",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S25",
+      "state": "Activity local",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "12:1733",
+        "mobileNode": "26:2487",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Owner-scoped journal event, distinct from server confirmation",
+      "routeContext": "activity",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s25",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T04",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S26",
+      "state": "Activity paused",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "12:1831",
+        "mobileNode": "26:2519",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Actual reason, exact operation, useful recovery destination",
+      "routeContext": "activity",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s26",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M02",
+      "acceptanceFamilies": [
+        "T05",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    },
+    {
+      "id": "S27",
+      "state": "Activity uploading",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-05"
+      ],
+      "design": {
+        "oldNode": "12:1911",
+        "mobileNode": "26:2553",
+        "webNode": null,
+        "revision": "EIM v1, 2026-10-24",
+        "immutableVersionId": null
+      },
+      "requiredBinding": "Observe continuing operation without owning/restarting it",
+      "routeContext": "activity",
+      "implementation": {
+        "web": "web/src/App.tsx",
+        "android": "mobile/src/screens/ActivityScreen.tsx",
+        "ios": "mobile/src/screens/ActivityScreen.tsx",
+        "windows": "desktop/src/renderer/App.tsx",
+        "macos": "desktop/src/renderer/App.tsx",
+        "mappingStatus": "Existing integration point; candidate mapping requires review",
+        "candidateStatus": "Presentation source applied or shared styling inherited; per-state behavior/fidelity acceptance pending"
+      },
+      "fixture": {
+        "key": "eim.s27",
+        "status": "Descriptor only; deterministic runtime fixture evidence not attached",
+        "policy": "Synthetic design fixtures never enter production business data"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T02",
+        "T06",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "authorityReferenceIds": [
+        "web",
+        "android",
+        "ios",
+        "windows",
+        "macos"
+      ],
+      "candidatePresentationPaths": {
+        "web": [
+          "web/src/signal/Signal.tsx",
+          "web/src/signal/signal.css"
+        ],
+        "android": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "ios": [
+          "mobile/src/ui/Signal.tsx",
+          "mobile/src/theme/signal.ts"
+        ],
+        "windows": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ],
+        "macos": [
+          "desktop/src/renderer/SignalDesktop.tsx",
+          "desktop/src/renderer/evidence-in-motion.css"
+        ]
+      }
+    }
+  ],
+  "requiredProductionStates": [
+    {
+      "id": "P01",
+      "state": "Loading",
+      "designNode": "27:2260",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.loading",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Current owner loading; retain readable local work while remote response is pending."
+    },
+    {
+      "id": "P02",
+      "state": "Refresh failed",
+      "designNode": "27:2266",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.refresh-failed",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T05",
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Refresh failed without clearing cached authorized records or local originals; explicit retry."
+    },
+    {
+      "id": "P03",
+      "state": "First use",
+      "designNode": "27:2274",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.first-use",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Actually empty owner-scoped workspace; real creation action and no synthetic completed record."
+    },
+    {
+      "id": "P04",
+      "state": "No results",
+      "designNode": "27:2282",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.no-results",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T10",
+        "T11"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Current query/filter/page scope is explicit; preserve filters and provide reset."
+    },
+    {
+      "id": "P05",
+      "state": "Expired session",
+      "designNode": "27:2290",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.expired-session",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T05",
+        "T07",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Expired authenticated owner prompts sign-in; queued operation stays bound to original account."
+    },
+    {
+      "id": "P06",
+      "state": "Forbidden record",
+      "designNode": "27:2298",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.forbidden-record",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T07",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Server authorization denial for exact supplied record; no substitute Proof."
+    },
+    {
+      "id": "P07",
+      "state": "Missing record",
+      "designNode": "27:2306",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.missing-record",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T07",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Exact missing record stays missing; no fallback to most recent Proof."
+    },
+    {
+      "id": "P08",
+      "state": "Permission denied",
+      "designNode": "27:2314",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.permission-denied",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T12",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Actual contextual camera permission denial; preserve entry and allowed retry."
+    },
+    {
+      "id": "P09",
+      "state": "Permission permanently denied",
+      "designNode": "27:2322",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.permission-permanently-denied",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T12",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Actual permanent denial; explain settings action without discarding entered/local work."
+    },
+    {
+      "id": "P10",
+      "state": "Camera failure",
+      "designNode": "27:2330",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.camera-failure",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T12",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Actual native camera/start failure; keep existing take and clear failed-session state truthfully."
+    },
+    {
+      "id": "P11",
+      "state": "Low storage",
+      "designNode": "27:2338",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.low-storage",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T04",
+        "T12",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Measured storage failure before or during capture; inspect surviving media and preserve previous take."
+    },
+    {
+      "id": "P12",
+      "state": "Stopping/checking",
+      "designNode": "27:2346",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.stopping-checking",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T04",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Native Stop in progress then actual validation/durable metadata; no premature local-save promise."
+    },
+    {
+      "id": "P13",
+      "state": "Missing/corrupt media",
+      "designNode": "27:2352",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.missing-corrupt-media",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T03",
+        "T04",
+        "T05",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Inspected missing/corrupt media; distinguish recoverable file from eligible continuous capture."
+    },
+    {
+      "id": "P14",
+      "state": "Retake failure",
+      "designNode": "27:2360",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.retake-failure",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T04",
+        "T06",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Candidate failure preserves previous take, accepted selection and existing consent until replacement acceptance."
+    },
+    {
+      "id": "P15",
+      "state": "Queued",
+      "designNode": "27:2368",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.queued",
+        "status": "Descriptor only"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T02",
+        "T05",
+        "T06",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Persisted same-operation queue; never invent percent or start another worker on open."
+    },
+    {
+      "id": "P16",
+      "state": "Confirming",
+      "designNode": "27:2376",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.confirming",
+        "status": "Descriptor only"
+      },
+      "motionId": "M09",
+      "acceptanceFamilies": [
+        "T02",
+        "T06",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Actual commit/preservation/finalization unresolved; transfer completion alone cannot show mint receipt."
+    },
+    {
+      "id": "P17",
+      "state": "Expired media access",
+      "designNode": "27:2384",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.expired-media-access",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T07",
+        "T08",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Expired or forbidden media URL renews only under current authorization; exact original identity retained."
+    },
+    {
+      "id": "P18",
+      "state": "Share failure",
+      "designNode": "27:2392",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.share-failure",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T08",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Real authorized link/clipboard operation failed; no copied/sent claim and recoverable retry."
+    },
+    {
+      "id": "P19",
+      "state": "Interrupted upgrade",
+      "designNode": "27:2400",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.interrupted-upgrade",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T13",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Versioned repeatable upgrade resumes without storage reset, signing change or automatic unknown-record deletion."
+    },
+    {
+      "id": "P20",
+      "state": "Photo task",
+      "designNode": "27:2406",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.photo-task",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T08",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "Exact saved photo result advances exact current task; stale callback cannot advance next task."
+    },
+    {
+      "id": "P21",
+      "state": "Motion preferences",
+      "designNode": "27:2414",
+      "designRevision": "EIM v1, 2026-10-24",
+      "requirementIds": [
+        "REQ-03",
+        "REQ-04",
+        "REQ-06",
+        "REQ-07",
+        "REQ-08",
+        "REQ-09"
+      ],
+      "routeContext": "Affected route; bind to existing classified outcome",
+      "implementationMappingStatus": "Pending candidate control audit",
+      "realDataOwner": "Existing auth, capture, queue, file, share or upgrade owner for this outcome",
+      "fixture": {
+        "key": "eim.production.motion-preferences",
+        "status": "Descriptor only"
+      },
+      "motionId": null,
+      "acceptanceFamilies": [
+        "T11",
+        "T12",
+        "T10"
+      ],
+      "platforms": {
+        "web": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "android": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "ios": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "windows": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        },
+        "macos": {
+          "sourceReview": "Not executed",
+          "visualComparison": "Not executed",
+          "integration": "Not executed",
+          "physicalDevice": "Not executed",
+          "evidence": [],
+          "context": null,
+          "knownDiscrepancy": "Candidate implementation and platform evidence are not yet attached."
+        }
+      },
+      "requiredBinding": "System/Reduced/Off respects OS and current capture/station/background suppression without owner remount."
+    }
+  ],
+  "acceptanceFamilies": [
+    {
+      "id": "T01",
+      "name": "Real creation/capture/review/declaration/upload/receipt/fresh record",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT01",
+        "AT18"
+      ]
+    },
+    {
+      "id": "T02",
+      "name": "Missing or stale consent, partial upload, unknown finalize outcome and receipt modes",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT02",
+        "AT08",
+        "AT09",
+        "AT12",
+        "AT18",
+        "AT24",
+        "AT25"
+      ]
+    },
+    {
+      "id": "T03",
+      "name": "Controlled Back/Stop, background/lock/native failure/force termination",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT03",
+        "AT04",
+        "AT20",
+        "AT24"
+      ]
+    },
+    {
+      "id": "T04",
+      "name": "Restart after local save, accepted and failed retake, cleanup race",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT05",
+        "AT06",
+        "AT26"
+      ]
+    },
+    {
+      "id": "T05",
+      "name": "Offline policy/reconnect/auth expiry/unknown outcome",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT07",
+        "AT08",
+        "AT12",
+        "AT24"
+      ]
+    },
+    {
+      "id": "T06",
+      "name": "Concurrent Proofs, rapid switching, late callbacks, duplicate actions",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT10",
+        "AT11",
+        "AT15",
+        "AT26"
+      ]
+    },
+    {
+      "id": "T07",
+      "name": "Account/workspace/access boundaries, cold/warm links and notifications",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT13",
+        "AT14",
+        "AT15"
+      ]
+    },
+    {
+      "id": "T08",
+      "name": "Sequential photo tasks, original media orientation/expiry, share/copy",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT16",
+        "AT17"
+      ]
+    },
+    {
+      "id": "T09",
+      "name": "Chronology/source gaps/late events/neutral integrity language/immutable core",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": []
+    },
+    {
+      "id": "T10",
+      "name": "All inherited and production states, utility reachability and visible controls",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT19",
+        "AT27",
+        "AT28"
+      ]
+    },
+    {
+      "id": "T11",
+      "name": "Keyboard/screen reader/200% text/narrow layout/themes/motion modes",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT23"
+      ]
+    },
+    {
+      "id": "T12",
+      "name": "Measured startup/camera/scroll/memory/long media/low storage",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT20"
+      ]
+    },
+    {
+      "id": "T13",
+      "name": "Pending-work upgrade/interrupted migration/activation/rollback",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": [
+        "AT21",
+        "AT22"
+      ]
+    },
+    {
+      "id": "T14",
+      "name": "Station and platform-specific native behavior and exact release artifacts",
+      "status": "Not executed",
+      "evidence": null,
+      "commit": null,
+      "environment": null,
+      "device": null,
+      "date": null,
+      "inheritedAcceptanceIds": []
+    }
+  ],
+  "inheritedAcceptanceMapping": {
+    "source": "PackProof_SIGNAL_Implementation_Plan_for_ASTRA_2026-10-20.docx, section 13, pages 18-20; authoritative text read on 2026-10-24",
+    "mappingStatus": "Mapped from source; execution pending",
+    "releaseRule": "Every applicable row must pass. Required unavailable hardware remains Not executed and blocks that platform release; optional unsupported capability exclusions need actual reason.",
+    "entries": [
+      {
+        "id": "AT01",
+        "scenario": "Complete real journey",
+        "families": [
+          "T01"
+        ],
+        "requiredResult": "Create, record, stop, play, attest, upload/finalize the exact Proof/take and reopen its canonical record.",
+        "evidenceRequired": "Device recording and backend result",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT02",
+        "scenario": "Missing declaration",
+        "families": [
+          "T02"
+        ],
+        "requiredResult": "UI blocks submission and server rejects finalization without required seller packing attestation.",
+        "evidenceRequired": "UI and API test",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT03",
+        "scenario": "Controlled leave",
+        "families": [
+          "T03"
+        ],
+        "requiredResult": "App/hardware Back and gestures share policy; keep recording retains session; local save waits for stop/persistence.",
+        "evidenceRequired": "Device recording and local events",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT04",
+        "scenario": "Active interruption",
+        "families": [
+          "T03"
+        ],
+        "requiredResult": "Background, lock, native failure and force termination show inspected surviving media without imaginary timer/recovery.",
+        "evidenceRequired": "Physical-device matrix and journals",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT05",
+        "scenario": "Stop after local save",
+        "families": [
+          "T04"
+        ],
+        "requiredResult": "After a promised local save, force-stop/relaunch recovers the correct readable take, identities and pending work.",
+        "evidenceRequired": "Device restart and playback",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT06",
+        "scenario": "Explicit retake",
+        "families": [
+          "T04"
+        ],
+        "requiredResult": "Cancel/failure keeps original; durably stored candidate is selected only after acceptance and resets consent.",
+        "evidenceRequired": "Device flow and selection journal",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT07",
+        "scenario": "Offline entry and capture",
+        "families": [
+          "T05"
+        ],
+        "requiredResult": "Persist offline form without fabricated Proof; follow verified existing-session policy; reconnect without duplicate creation.",
+        "evidenceRequired": "Offline scenario and API identity",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT08",
+        "scenario": "Lost upload connection",
+        "families": [
+          "T02",
+          "T05"
+        ],
+        "requiredResult": "Real progress/cause and same-operation resume or restart preserve original media.",
+        "evidenceRequired": "Network interruption and operation events",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT09",
+        "scenario": "Lost finalize response",
+        "families": [
+          "T02"
+        ],
+        "requiredResult": "Reconcile server-finalized existing outcome after dropped response without duplicate evidence/premature cleanup.",
+        "evidenceRequired": "Fault injection and canonical result",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT10",
+        "scenario": "Duplicate or stale events",
+        "families": [
+          "T06"
+        ],
+        "requiredResult": "Duplicate taps/callbacks/delayed responses cannot finalize twice, replace newer take or update another Proof.",
+        "evidenceRequired": "Targeted integration scenario",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT11",
+        "scenario": "Two pending Proofs",
+        "families": [
+          "T06"
+        ],
+        "requiredResult": "Independent identities, progress, errors and retries remain correct under central concurrency.",
+        "evidenceRequired": "Device or integration scenario",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT12",
+        "scenario": "Authorization expiry",
+        "families": [
+          "T02",
+          "T05"
+        ],
+        "requiredResult": "Specific sign-in/reconfirmation/upload-authorization response preserves the same Proof/take/operation.",
+        "evidenceRequired": "Expiry faults and restart",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT13",
+        "scenario": "Account switch",
+        "families": [
+          "T07"
+        ],
+        "requiredResult": "No A records/responses under B and no A queued writes using B credentials; authorized-owner resumption only.",
+        "evidenceRequired": "Two-account UI and server-write scenario",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT14",
+        "scenario": "Links and notifications",
+        "families": [
+          "T07"
+        ],
+        "requiredResult": "Warm/cold/signed-out entries resolve exact supplied Proof; missing/forbidden never substitute another record.",
+        "evidenceRequired": "Deep-link and notification matrix",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT15",
+        "scenario": "Rapid record switching",
+        "families": [
+          "T06",
+          "T07"
+        ],
+        "requiredResult": "Delayed A cannot overwrite B; intended list/viewer context restores.",
+        "evidenceRequired": "Request-order integration scenario",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT16",
+        "scenario": "Original playback",
+        "families": [
+          "T08"
+        ],
+        "requiredResult": "Correct original plays with full orientation/aspect; authorization/decoder failures remain specific.",
+        "evidenceRequired": "Portrait and landscape physical-device media",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT17",
+        "scenario": "Share and copy",
+        "families": [
+          "T08"
+        ],
+        "requiredResult": "Actual link opens intended Proof under access policy; Copied follows clipboard success; recoverable failure.",
+        "evidenceRequired": "Pasted link and native operation",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT18",
+        "scenario": "Fresh saved fetch",
+        "families": [
+          "T01",
+          "T02"
+        ],
+        "requiredResult": "Relaunch/fresh server fetch reproduce canonical saved record without timer/demo flags.",
+        "evidenceRequired": "Fresh app and API read",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT19",
+        "scenario": "Clean install",
+        "families": [
+          "T10"
+        ],
+        "requiredResult": "Intentional empty Home/library/Activity; no synthetic evidence, sample IDs/history or placeholder links in production.",
+        "evidenceRequired": "Clean-install screenshots",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT20",
+        "scenario": "Device constraints",
+        "families": [
+          "T03",
+          "T12"
+        ],
+        "requiredResult": "Permission/permanent denial, no space, hardware/start failures offer specific actions without losing work.",
+        "evidenceRequired": "Physical-device failure cases",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT21",
+        "scenario": "Upgrade local work",
+        "families": [
+          "T13"
+        ],
+        "requiredResult": "Production-to-candidate upgrade preserves drafts/interrupted takes/queue/saved records and repair paths for unknown records.",
+        "evidenceRequired": "Old-to-new install and migration report",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT22",
+        "scenario": "Rollback",
+        "families": [
+          "T13"
+        ],
+        "requiredResult": "Actual supported UI/binary rollback or forward-fix preserves readable pending work and backend compatibility.",
+        "evidenceRequired": "Rollback exercise and schema report",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT23",
+        "scenario": "Accessibility and layout",
+        "families": [
+          "T11"
+        ],
+        "requiredResult": "Widths, larger text, keyboard/insets, screen reader and reduced motion preserve task order and reachable actions.",
+        "evidenceRequired": "Device checks and screenshots",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT24",
+        "scenario": "Restart between stages",
+        "families": [
+          "T02",
+          "T03",
+          "T05"
+        ],
+        "requiredResult": "Restart during stopping/validation/transfer/confirmation reconciles to one truthful next action.",
+        "evidenceRequired": "Stage-boundary interruption matrix",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT25",
+        "scenario": "Receipt capability modes",
+        "families": [
+          "T02"
+        ],
+        "requiredResult": "Strict mode matches receipts; intentionally supported compatibility mode stays truthful and never authorizes unverified cleanup.",
+        "evidenceRequired": "Capability and cleanup scenarios",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT26",
+        "scenario": "Replacement commit race",
+        "families": [
+          "T04",
+          "T06"
+        ],
+        "requiredResult": "Acceptance-cleanup crash or stale upload cannot delete both takes, promote wrong take or mutate finalized evidence.",
+        "evidenceRequired": "Journal fault injection",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT27",
+        "scenario": "Full visual coverage",
+        "families": [
+          "T10"
+        ],
+        "requiredResult": "All approved nodes correspond to real integrated states; discrepancies resolved; system UI differences have equivalent verified behavior.",
+        "evidenceRequired": "27-state coverage manifest",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      },
+      {
+        "id": "AT28",
+        "scenario": "Every visible control",
+        "families": [
+          "T10"
+        ],
+        "requiredResult": "Real-data search/filter/tab/avatar/menu/share/viewer/retry/return actions work with intentional empty/error states.",
+        "evidenceRequired": "Interaction audit",
+        "status": "Not executed",
+        "applicability": "Determine from current platform/capability; unavailable access is not an exclusion",
+        "evidence": null,
+        "commit": null,
+        "environment": null,
+        "device": null,
+        "date": null
+      }
+    ]
+  },
+  "authorityReferences": {
+    "web": {
+      "presentation": [
+        "web/src/App.tsx",
+        "web/src/proof-presentation.ts"
+      ],
+      "operations": [
+        "web/src/capture-queue.ts",
+        "web/src/capture-preflight.ts"
+      ]
+    },
+    "android": {
+      "navigation": [
+        "mobile/src/app/Root.tsx",
+        "mobile/src/app/navigation.ts"
+      ],
+      "operations": [
+        "mobile/src/app/PackProofProvider.tsx",
+        "mobile/src/capture/engine.ts",
+        "mobile/src/capture.ts"
+      ]
+    },
+    "ios": {
+      "navigation": [
+        "mobile/src/app/Root.tsx",
+        "mobile/src/app/navigation.ts"
+      ],
+      "operations": [
+        "mobile/src/app/PackProofProvider.tsx",
+        "mobile/src/capture/engine.ts",
+        "mobile/src/capture.ts"
+      ]
+    },
+    "windows": {
+      "presentation": [
+        "desktop/src/renderer/App.tsx",
+        "desktop/src/renderer/presentation.ts"
+      ],
+      "operations": [
+        "desktop/src/main/evidence/engine.ts",
+        "desktop/src/main/evidence/store.ts"
+      ]
+    },
+    "macos": {
+      "presentation": [
+        "desktop/src/renderer/App.tsx",
+        "desktop/src/renderer/presentation.ts"
+      ],
+      "operations": [
+        "desktop/src/main/evidence/engine.ts",
+        "desktop/src/main/evidence/store.ts"
+      ]
+    }
+  },
+  "verificationContextContract": {
+    "statusVocabulary": [
+      "Passed",
+      "Failed",
+      "Not executed",
+      "Not applicable"
+    ],
+    "requiredOnExecution": [
+      "candidateCommit",
+      "environmentOrBackend",
+      "browserOrDeviceAndOS",
+      "date",
+      "scenarioOrCommand",
+      "evidenceLocation",
+      "knownDiscrepancy"
+    ],
+    "dimensions": [
+      "sourceReview",
+      "visualComparison",
+      "integration",
+      "physicalDevice"
+    ],
+    "note": "Store executed results per platform under evidence; a single status never substitutes one dimension for another."
+  },
+  "candidateStatus": {
+    "web": "sourceImplemented; exact local build and focused checks passed; real journey/publication pending",
+    "android": "sourceImplemented; source compiler/focused checks passed; physical phone and signed AAB pending",
+    "ios": "Shared source implemented; Mac/signing/device validation not executed",
+    "windows": "Renderer source implemented; compiler passed; native package/hardware/upgrade pending",
+    "macos": "Renderer source implemented; compiler passed; signed Mac/native validation pending",
+    "candidateCommit": null,
+    "remotePipeline": "Pending release-owner push and exact-source CI"
+  },
+  "tokens": {
+    "version": "1.0.0",
+    "source": "packages/evidence-in-motion/tokens.v1.json",
+    "generator": "packages/evidence-in-motion/generate-tokens.mjs",
+    "generated": [
+      "packages/evidence-in-motion/tokens.generated.ts",
+      "packages/evidence-in-motion/tokens.generated.css"
+    ],
+    "sourceSha256": "a4ea0bdb72812779f94a7905a48b45c8e17cb1120c98d9b41803c1a1bf2fa93b",
+    "checkEvidence": "evidence/tokens-check.json",
+    "nativeTypography": "Genuine Inter display/receipt 40/44/800; secondary 14/20/500; installed fidelity pending"
+  },
+  "finalLocalEvidence": {
+    "webBuild": "evidence/web-exact-build.log",
+    "webFocused": {
+      "path": "evidence/web-exact-tests.log",
+      "passed": 28,
+      "files": 7
+    },
+    "webAudit": "evidence/web-exact-audit.json",
+    "mobileAudit": "evidence/mobile-audit.json",
+    "nativeCompiler": "evidence/native-compiler.log",
+    "desktopCompiler": "evidence/desktop-compiler.log",
+    "nativeEarlierFocused": {
+      "path": "evidence/native-focused-61.tap",
+      "passed": 61
+    },
+    "nativeLatestFocused": {
+      "path": "evidence/native-release-source-review.tap",
+      "passed": 12
+    },
+    "motion": {
+      "path": "evidence/motion-policy.tap",
+      "passed": 4
+    },
+    "themeChronology": {
+      "path": "evidence/theme-and-chronology.log",
+      "passed": 19
+    },
+    "fonts": {
+      "path": "evidence/font-assets.tap",
+      "passed": 3
+    },
+    "browser": "evidence/browser-and-release-review.json",
+    "candidateCommit": null,
+    "scope": "Local snapshots only; no full real-operation/physical/store gate inferred"
+  },
+  "releaseReadiness": {
+    "web": "Not ready: real authenticated capture-to-canonical-record journey, affected hosted routes and publication identity pending",
+    "android": "Not ready: no attached physical phone, signed candidate/critical device/pending-work upgrade gates pending",
+    "ios": "Not ready: signed Mac/device build and physical acceptance not executed",
+    "windows": "Not ready: native package/hardware/upgrade gates not executed",
+    "macos": "Not ready: native signed package/hardware/upgrade gates not executed",
+    "adb": {
+      "server": "Running",
+      "attachedDevices": 0
+    },
+    "play": {
+      "liveVersion": "1.0.1",
+      "liveVersionCode": 71,
+      "rolloutPercent": 100,
+      "candidateVersionCode": 72,
+      "candidateSubmitted": false
+    },
+    "authorization": "User authorized completed webapp/Android production publication; no new routine permission required"
+  }
+}

@@ -1,3 +1,4 @@
+import { eimLayout } from '../../../packages/evidence-in-motion/tokens.generated';
 export type ColorScheme = "light" | "dark";
 
 export type AppearancePreference = "system" | "light" | "dark";
@@ -272,52 +273,38 @@ export function sourceColor(colors: ThemeColors, kind: "PROOF" | "COMMERCE" | "S
   }
 }
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-  huge: 40,
-} as const;
+export const spacing = eimLayout.spacing;
 
-export const radii = {
-  sm: 8,
-  md: 8,
-  lg: 10,
-  pill: 8,
-} as const;
+export const radii = eimLayout.radii;
 
 export const typography = {
-  pageTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 36, lineHeight: 40, fontWeight: "700" as const },
-  sectionTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 25, lineHeight: 30, fontWeight: "600" as const },
-  cardTitle: { fontFamily: "Manrope-SemiBold", fontSize: 16, lineHeight: 22, fontWeight: "600" as const },
-  body: { fontFamily: "Manrope", fontSize: 16, lineHeight: 24, fontWeight: "400" as const },
-  bodyStrong: { fontFamily: "Manrope-SemiBold", fontSize: 16, lineHeight: 24, fontWeight: "600" as const },
-  secondary: { fontFamily: "Manrope", fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
-  secondaryStrong: { fontFamily: "Manrope-SemiBold", fontSize: 14, lineHeight: 20, fontWeight: "600" as const },
-  caption: { fontFamily: "Manrope-SemiBold", fontSize: 14, lineHeight: 20, fontWeight: "600" as const },
-  finePrint: { fontFamily: "Manrope", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
-  button: { fontFamily: "Manrope-SemiBold", fontSize: 16, lineHeight: 20, fontWeight: "600" as const },
-  greeting: { fontFamily: "Manrope-SemiBold", fontSize: 22, lineHeight: 30, fontWeight: "600" as const },
+  pageTitle: { fontFamily: "Inter-Bold", fontSize: 36, lineHeight: 40, fontWeight: "700" as const },
+  sectionTitle: { fontFamily: "Inter-Bold", fontSize: 25, lineHeight: 30, fontWeight: "600" as const },
+  cardTitle: { fontFamily: "Inter-SemiBold", fontSize: 16, lineHeight: 22, fontWeight: "600" as const },
+  body: { fontFamily: "Inter", fontSize: 16, lineHeight: 24, fontWeight: "400" as const },
+  bodyStrong: { fontFamily: "Inter-SemiBold", fontSize: 16, lineHeight: 24, fontWeight: "600" as const },
+  secondary: { fontFamily: "Inter", fontSize: 14, lineHeight: 20, fontWeight: "400" as const },
+  secondaryStrong: { fontFamily: "Inter-SemiBold", fontSize: 14, lineHeight: 20, fontWeight: "600" as const },
+  caption: { fontFamily: "Inter-SemiBold", fontSize: 14, lineHeight: 20, fontWeight: "600" as const },
+  finePrint: { fontFamily: "Inter", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
+  button: { fontFamily: "Inter-SemiBold", fontSize: 16, lineHeight: 20, fontWeight: "600" as const },
+  greeting: { fontFamily: "Inter-SemiBold", fontSize: 22, lineHeight: 30, fontWeight: "600" as const },
 } as const;
 
 /** Native sp targets for G1. No fixed heights or font-scale caps accompany these. */
 export const taskFirstTypography = {
-  pageTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
-  sectionTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 20, lineHeight: 26, fontWeight: "700" as const, letterSpacing: -0.3 },
-  cardTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 19, lineHeight: 25, fontWeight: "700" as const, letterSpacing: -0.3 },
-  rowTitle: { fontFamily: "SpaceGrotesk-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
-  body: { fontFamily: "Manrope", fontSize: 15, lineHeight: 23, fontWeight: "400" as const },
-  bodyStrong: { fontFamily: "Manrope-SemiBold", fontSize: 15, lineHeight: 23, fontWeight: "600" as const },
-  secondary: { fontFamily: "Manrope", fontSize: 13, lineHeight: 20, fontWeight: "400" as const },
-  secondaryStrong: { fontFamily: "Manrope-SemiBold", fontSize: 13, lineHeight: 20, fontWeight: "600" as const },
-  caption: { fontFamily: "Manrope-SemiBold", fontSize: 12, lineHeight: 18, fontWeight: "600" as const },
-  finePrint: { fontFamily: "Manrope", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
-  button: { fontFamily: "SpaceGrotesk-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
-  greeting: { fontFamily: "SpaceGrotesk-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
+  pageTitle: { fontFamily: "Inter-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
+  sectionTitle: { fontFamily: "Inter-Bold", fontSize: 20, lineHeight: 26, fontWeight: "700" as const, letterSpacing: -0.3 },
+  cardTitle: { fontFamily: "Inter-Bold", fontSize: 19, lineHeight: 25, fontWeight: "700" as const, letterSpacing: -0.3 },
+  rowTitle: { fontFamily: "Inter-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
+  body: { fontFamily: "Inter", fontSize: 15, lineHeight: 23, fontWeight: "400" as const },
+  bodyStrong: { fontFamily: "Inter-SemiBold", fontSize: 15, lineHeight: 23, fontWeight: "600" as const },
+  secondary: { fontFamily: "Inter", fontSize: 13, lineHeight: 20, fontWeight: "400" as const },
+  secondaryStrong: { fontFamily: "Inter-SemiBold", fontSize: 13, lineHeight: 20, fontWeight: "600" as const },
+  caption: { fontFamily: "Inter-SemiBold", fontSize: 12, lineHeight: 18, fontWeight: "600" as const },
+  finePrint: { fontFamily: "Inter", fontSize: 12, lineHeight: 18, fontWeight: "400" as const },
+  button: { fontFamily: "Inter-Bold", fontSize: 14, lineHeight: 20, fontWeight: "700" as const },
+  greeting: { fontFamily: "Inter-Bold", fontSize: 27, lineHeight: 33, fontWeight: "700" as const, letterSpacing: -0.6 },
 } as const;
 
 export const sizes = {

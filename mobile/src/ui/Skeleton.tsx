@@ -1,28 +1,11 @@
-import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { radii } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
-import { motion, shouldUseLargeMotion } from "../theme/motion";
 
 export function SkeletonBlock(props: { height?: number; width?: number | `${number}%`; radius?: number }) {
-  const { colors, reducedMotion } = useTheme();
-  const opacity = useRef(new Animated.Value(0.45)).current;
-  useEffect(() => {
-    if (!shouldUseLargeMotion(reducedMotion)) {
-      opacity.setValue(0.6);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.85, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity, reducedMotion]);
+  const { colors } = useTheme();
   return (
-    <Animated.View
+    <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[
@@ -32,7 +15,7 @@ export function SkeletonBlock(props: { height?: number; width?: number | `${numb
           width: props.width ?? "100%",
           borderRadius: props.radius ?? radii.sm,
           backgroundColor: colors.surfacePressed,
-          opacity,
+          opacity: 0.6,
         },
       ]}
     />

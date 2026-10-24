@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-24",
+  "scope": "Development-only gallery using the production EIM components and prominently labeled synthetic fixtures",
+  "source": "work/current-source/packproof-v2-main",
+  "observedViewports": [{"width":390,"height":844},{"width":1280,"height":720}],
+  "passed": ["Light and dark Home composition inspected", "Headline cascade defect repaired: mobile 40px, desktop 48px", "Mobile gutters restored to 24px at the reference width", "Text-link controls no longer inherit native gray button chrome", "Mobile receipt limitation text wraps without horizontal clipping", "Connected chronology source selection exposes exact fixture origin, time and identifier", "Motion Off sets data-motion=off and disables hero animation", "No horizontal overflow at the inspected widths"],
+  "limitations": ["Synthetic fixtures do not establish real-data end-to-end acceptance", "No browser camera recording performed", "Gallery has an additional review toolbar that is absent in production", "Requested viewport overrides did not consistently resize existing tabs; only measured sizes above are reported", "320px, 200% zoom, full screen-reader and native installed screenshots remain unexecuted"],
+  "criticalDeviceGate": {"adbServer": "started successfully through host runtime", "attachedDevices":0, "physicalAcceptance":"Not executed"},
+  "playBaseline": {"verifiedAccount":"nericollin@thepackproof.com","package":"com.packproof.mobile","latestUploadedVersionCode":71,"productionVersion":"1.0.1","productionRolloutPercent":100,"managedPublishing":"off","countryScope":1,"candidateVersionCode":72,"candidateSubmitted":false},
+  "liveApi": {"verifiedUrl":"https://thepackproof.com/api/meta","environment":"production","commit":"399f306a2fdac37511c8659c73d5a059dd759b7a","version":"1.0.3-m2-bridge-399f306a","backendChanged":false}
+}

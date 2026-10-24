@@ -1224,7 +1224,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" && !(mobileTask && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) ? (
         <PackingStationScreen
-          onHome={()=>go("/")}
+          onHome={()=>go("/app")}
           onView={proofId=>go(`/proofs/${encodeURIComponent(proofId)}`)}
           onCaptureActive={setCaptureActive}
           authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}

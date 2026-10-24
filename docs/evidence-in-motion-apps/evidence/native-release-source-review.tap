@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: connected history keeps deterministic identity order, unknown time and source distinctions
+ok 1 - connected history keeps deterministic identity order, unknown time and source distinctions
+  ---
+  duration_ms: 2.6977
+  type: 'test'
+  ...
+# Subtest: record source markers expose only actual sources and do not invent a shipment from an order label
+ok 2 - record source markers expose only actual sources and do not invent a shipment from an order label
+  ---
+  duration_ms: 0.2182
+  type: 'test'
+  ...
+# Subtest: event focus cannot substitute an unrelated or ambiguous stage original
+ok 3 - event focus cannot substitute an unrelated or ambiguous stage original
+  ---
+  duration_ms: 0.2511
+  type: 'test'
+  ...
+# Subtest: distinct provider or conflicting event representations remain inspectable
+ok 4 - distinct provider or conflicting event representations remain inspectable
+  ---
+  duration_ms: 0.2053
+  type: 'test'
+  ...
+# Subtest: actual audit-shaped chronology links the exact committed original or stage without hash substitution
+ok 5 - actual audit-shaped chronology links the exact committed original or stage without hash substitution
+  ---
+  duration_ms: 0.5124
+  type: 'test'
+  ...
+# Subtest: receipt requires canonical finalization and both matching durable server receipts
+ok 6 - receipt requires canonical finalization and both matching durable server receipts
+  ---
+  duration_ms: 0.705
+  type: 'test'
+  ...
+# Subtest: a retake candidate cannot submit or start another replacement before an explicit durable choice
+ok 7 - a retake candidate cannot submit or start another replacement before an explicit durable choice
+  ---
+  duration_ms: 0.7515
+  type: 'test'
+  ...
+# Subtest: queued and unsubmitted operations never manufacture active transfer progress
+ok 8 - queued and unsubmitted operations never manufacture active transfer progress
+  ---
+  duration_ms: 1.6768
+  type: 'test'
+  ...
+# Subtest: 100 percent transport remains distinct from canonical receipt confirmation
+ok 9 - 100 percent transport remains distinct from canonical receipt confirmation
+  ---
+  duration_ms: 0.171
+  type: 'test'
+  ...
+# Subtest: confirmation, expired sign-in and discard retain useful exact-operation actions
+ok 10 - confirmation, expired sign-in and discard retain useful exact-operation actions
+  ---
+  duration_ms: 0.0981
+  type: 'test'
+  ...
+# Subtest: missing, present and unknown local originals have distinct truthful copy
+ok 11 - missing, present and unknown local originals have distinct truthful copy
+  ---
+  duration_ms: 0.3141
+  type: 'test'
+  ...
+# Subtest: Proof-key transport progress cannot be borrowed by a foreign or ambiguous operation
+ok 12 - Proof-key transport progress cannot be borrowed by a foreign or ambiguous operation
+  ---
+  duration_ms: 0.2684
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 283.8657

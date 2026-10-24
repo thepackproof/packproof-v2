@@ -88,6 +88,14 @@ export function AccountScreen(props: {
           <input type="radio" name="packproof-appearance" value={option.id} checked={theme.preference === option.id} onChange={() => theme.setPreference(option.id)} />
         </label>)}</fieldset>
       </SettingsDisclosure>
+      <SettingsDisclosure title="Motion">
+        <fieldset className="appearance-list" style={{border:0,padding:0,margin:0}}><legend className="meta">Choose how PackProof moves</legend>{([
+          {id:'system',label:'System',hint:'Follow device accessibility settings'},
+          {id:'reduced',label:'Reduced',hint:'No movement or scale; brief state changes only'},
+          {id:'off',label:'Off',hint:'Immediate presentation changes'},
+        ] as const).map(option=><label key={option.id} className={`appearance-row${theme.motionPreference===option.id?' appearance-row-selected':''}`}><span><strong>{option.label}</strong><span className="meta" style={{display:'block'}}>{option.hint}</span></span><input type="radio" name="packproof-motion" value={option.id} checked={theme.motionPreference===option.id} onChange={()=>theme.setMotionPreference(option.id)}/></label>)}</fieldset>
+        <p className="note">Recording controls and upload feedback stay available in every mode. Your device's reduced-motion setting is always respected.</p>
+      </SettingsDisclosure>
       <SettingsDisclosure title="Help & support" id="support"><button className="btn btn-secondary" onClick={replayTutorial}>Replay Tutorial</button>
         <p className="note">Choose an order, record the item being packed and sealed, then review the recording and confirm what you are shipping. PackProof shows when saving is complete.</p>
         <p className="note">If saving is interrupted, return to that Proof to continue. Keep your local recording until PackProof confirms it is preserved.</p>

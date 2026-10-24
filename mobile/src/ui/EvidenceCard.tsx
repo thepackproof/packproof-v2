@@ -3,7 +3,6 @@ import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, typography } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
-import { motion } from "../theme/motion";
 import { formatBytes, formatDuration } from "../capture";
 
 export function EvidenceCard(props: {
@@ -45,7 +44,7 @@ export function ProgressState(props: { label: string; percent?: number | null; d
     if (reducedMotion || !known) { progress.setValue(percent / 100); return; }
     // Interpolate only observed bytes. No timer advances or manufactures progress.
     const animation = Animated.timing(progress, {
-      toValue: percent / 100, duration: motion.duration.normal, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      toValue: percent / 100, duration: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true,
     });
     animation.start();
     return () => animation.stop();

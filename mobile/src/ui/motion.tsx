@@ -1,261 +1,95 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import {
-  Animated,
-  Easing,
-  Pressable,
-  type GestureResponderEvent,
-  type PressableProps,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { motion, shouldUseLargeMotion } from "../theme/motion";
-import { useTheme } from "../theme/ThemeProvider";
+import { useEffect, useRef, type ReactNode } from 'react';
+import { Animated, Easing, Pressable, type GestureResponderEvent, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { motion, policyDuration } from '../theme/motion';
+import { useTheme } from '../theme/ThemeProvider';
 
-/** Presentation-only acknowledgment. Never remounts children or advances domain state. */
+const shown = new Set<string>();
+function markShown(key: string) {
+  shown.add(key);
+  if (shown.size > 128) { const oldest = shown.values().next().value; if (oldest) shown.delete(oldest); }
+}
+const ease = Easing.bezier(0.2, 0.75, 0.2, 1);
+/** Presentation-only response. Children and all durable owners retain their identity. */
 export function StateTransition({ eventKey, children, style }: { eventKey: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { reducedMotion } = useTheme();
-  const previous = useRef(eventKey);
+  const { motionMode } = useTheme(); const previous = useRef(eventKey);
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    const changed = previous.current !== eventKey; previous.current = eventKey;
-    opacity.stopAnimation();
-    if (reducedMotion || !changed) { opacity.setValue(1); return; }
-    opacity.setValue(0.7);
-    const animation=Animated.timing(opacity,{toValue:1,duration:220,useNativeDriver:true});
-    animation.start(); return () => animation.stop();
-  },[eventKey,reducedMotion,opacity]);
-  return <Animated.View style={[style,{opacity}]}>{children}</Animated.View>;
+    const changed = previous.current !== eventKey; previous.current = eventKey; opacity.stopAnimation();
+    if (motionMode === 'off' || !changed) { opacity.setValue(1); return; }
+    opacity.setValue(0.86);
+    const animation = Animated.timing(opacity, { toValue: 1, duration: policyDuration(motionMode, 220), easing: ease, useNativeDriver: true });
+    animation.start(); return () => { animation.stop(); opacity.setValue(1); };
+  }, [eventKey, motionMode, opacity]);
+  return <Animated.View style={[style, { opacity }]}>{children}</Animated.View>;
 }
-
-type PressableScaleProps = Omit<PressableProps, "style" | "children"> & {
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  pressedStyle?: StyleProp<ViewStyle>;
-  scaleTo?: number;
+type PressableScaleProps = Omit<PressableProps, 'style' | 'children'> & {
+  children: ReactNode; style?: StyleProp<ViewStyle>; pressedStyle?: StyleProp<ViewStyle>; scaleTo?: number;
 };
-
 export function PressableScale(props: PressableScaleProps) {
   const { children, style, pressedStyle, scaleTo, onPressIn, onPressOut, ...rest } = props;
-  const { reducedMotion } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-  const target = scaleTo ?? motion.pressScale;
-  useEffect(() => {
-    if (reducedMotion || rest.disabled) scale.setValue(1);
-    return () => scale.stopAnimation();
-  }, [reducedMotion, rest.disabled, scale]);
-
+  const { motionMode } = useTheme(); const scale = useRef(new Animated.Value(1)).current;
+  useEffect(() => { scale.stopAnimation(); scale.setValue(1); return () => scale.stopAnimation(); }, [motionMode, rest.disabled, scale]);
   function animateTo(value: number) {
-    if (!shouldUseLargeMotion(reducedMotion)) {
-      scale.setValue(1);
-      return;
-    }
-    Animated.spring(scale, {
-      toValue: value,
-      useNativeDriver: true,
-      ...motion.spring.press,
-    }).start();
+    scale.stopAnimation();
+    if (motionMode !== 'full') { scale.setValue(1); return; }
+    Animated.timing(scale, { toValue: value, duration: 100, easing: ease, useNativeDriver: true }).start();
   }
-
-  function handlePressIn(event: GestureResponderEvent) {
-    animateTo(target);
-    onPressIn?.(event);
-  }
-
-  function handlePressOut(event: GestureResponderEvent) {
-    animateTo(1);
-    onPressOut?.(event);
-  }
-
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable {...rest} onPressIn={handlePressIn} onPressOut={handlePressOut} style={(state) => [style, state.pressed ? { opacity: 0.76 } : null, state.pressed ? pressedStyle : null]}>
-        {children}
-      </Pressable>
-    </Animated.View>
-  );
+  return <Animated.View style={{ transform: [{ scale }] }}><Pressable {...rest}
+    onPressIn={(event: GestureResponderEvent) => { animateTo(scaleTo ?? motion.pressScale); onPressIn?.(event); }}
+    onPressOut={(event: GestureResponderEvent) => { animateTo(1); onPressOut?.(event); }}
+    style={state => [style, state.pressed ? { opacity: 0.8 } : null, state.pressed ? pressedStyle : null]}>{children}</Pressable></Animated.View>;
 }
+export function LiftPressable(props: PressableScaleProps) { return <PressableScale {...props} scaleTo={props.scaleTo ?? motion.liftScale} />; }
 
-/** A subtle upward lift reserved for primary record cards and other navigation surfaces. */
-export function LiftPressable(props: PressableScaleProps) {
-  const { children, style, pressedStyle, onPressIn, onPressOut, ...rest } = props;
-  const { reducedMotion } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
+/** A non-owning entrance. Status text and actions are visible and usable from the first frame. */
+export function PresentationalReveal(props: { children: ReactNode; style?: StyleProp<ViewStyle>; onceKey?: string; eventKey?: string; duration?: number; index?: number; suppressed?: boolean }) {
+  const { motionMode } = useTheme(); const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
-    if (reducedMotion || rest.disabled) { scale.setValue(1); translateY.setValue(0); }
-    return () => { scale.stopAnimation(); translateY.stopAnimation(); };
-  }, [reducedMotion, rest.disabled, scale, translateY]);
-
-  function animate(active: boolean) {
-    if (!shouldUseLargeMotion(reducedMotion)) {
-      scale.setValue(1);
-      translateY.setValue(0);
-      return;
-    }
-    Animated.parallel([
-      Animated.spring(scale, { toValue: active ? motion.liftScale : 1, useNativeDriver: true, ...motion.spring.cinematic }),
-      Animated.spring(translateY, { toValue: active ? -2 : 0, useNativeDriver: true, ...motion.spring.cinematic }),
-    ]).start();
-  }
-
-  return (
-    <Animated.View style={{ transform: [{ translateY }, { scale }] }}>
-      <Pressable
-        {...rest}
-        onPressIn={(event) => { animate(true); onPressIn?.(event); }}
-        onPressOut={(event) => { animate(false); onPressOut?.(event); }}
-        style={(state) => [style, state.pressed ? pressedStyle : null]}
-      >
-        {children}
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-export function FadeSlideIn(props: { index?: number; children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { reducedMotion } = useTheme();
-  const opacity = useRef(new Animated.Value(shouldUseLargeMotion(reducedMotion) ? 0 : 1)).current;
-  const translate = useRef(new Animated.Value(shouldUseLargeMotion(reducedMotion) ? motion.listOffset : 0)).current;
-
-  useEffect(() => {
-    if (!shouldUseLargeMotion(reducedMotion)) {
-      opacity.setValue(1);
-      translate.setValue(0);
-      return;
-    }
-    const delay = Math.min(props.index ?? 0, 8) * motion.stagger;
+    opacity.stopAnimation(); translateY.stopAnimation();
+    const repeated = Boolean(props.onceKey && shown.has(props.onceKey));
+    if (props.onceKey) markShown(props.onceKey);
+    if (props.suppressed || repeated || motionMode === 'off') { opacity.setValue(1); translateY.setValue(0); return; }
+    opacity.setValue(0.86); translateY.setValue(motionMode === 'full' ? motion.listOffset : 0);
+    const duration = policyDuration(motionMode, props.duration ?? motion.duration.reveal);
     const animation = Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: motion.duration.reveal,
-        delay,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translate, {
-        toValue: 0,
-        duration: motion.duration.reveal,
-        delay,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration, easing: ease, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration, easing: ease, useNativeDriver: true }),
     ]);
-    animation.start();
-    return () => animation.stop();
-  }, [opacity, props.index, reducedMotion, translate]);
-
-  return (
-    <Animated.View style={[props.style, { opacity, transform: [{ translateY: translate }] }]}>
-      {props.children}
-    </Animated.View>
-  );
+    animation.start(); return () => { animation.stop(); opacity.setValue(1); translateY.setValue(0); };
+  }, [motionMode, props.onceKey, props.eventKey, props.duration, props.suppressed, opacity, translateY]);
+  return <Animated.View style={[props.style, { opacity, transform: [{ translateY }] }]}>{props.children}</Animated.View>;
 }
-
-/** Screen-level continuity cue: a very small scale/slide settle rather than a hard route swap. */
-export function RouteReveal(props: { routeKey: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const { reducedMotion } = useTheme();
-  const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (!shouldUseLargeMotion(reducedMotion)) {
-      opacity.setValue(1);
-      translateY.setValue(0);
-      scale.setValue(1);
-      return;
-    }
-    opacity.setValue(0.72);
-    translateY.setValue(8);
-    scale.setValue(0.992);
-    const animation = Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: motion.duration.shared, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, ...motion.spring.cinematic }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, ...motion.spring.cinematic }),
-    ]);
-    animation.start();
-    return () => animation.stop();
-  }, [opacity, props.routeKey, reducedMotion, scale, translateY]);
-
-  return <Animated.View style={[{ flex: 1 }, props.style, { opacity, transform: [{ translateY }, { scale }] }]}>{props.children}</Animated.View>;
+export function FadeSlideIn(props: { index?: number; children: ReactNode; style?: StyleProp<ViewStyle>; onceKey?: string }) {
+  return <PresentationalReveal {...props} />;
 }
-
-export function PulseOpacity(props: {
-  children?: ReactNode;
-  style?: StyleProp<ViewStyle>;
-  active?: boolean;
-}) {
-  const { reducedMotion } = useTheme();
-  const opacity = useRef(new Animated.Value(0.55)).current;
-
-  useEffect(() => {
-    if (!props.active || !shouldUseLargeMotion(reducedMotion)) {
-      opacity.setValue(1);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: motion.duration.trackingPulse,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.55,
-          duration: motion.duration.trackingPulse,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity, props.active, reducedMotion]);
-
-  return <Animated.View style={[props.style, { opacity }]}>{props.children}</Animated.View>;
+export function RouteReveal(props: { routeKey: string; children: ReactNode; style?: StyleProp<ViewStyle>; suppressed?: boolean }) {
+  // Existing route identity is only a presentation trigger; this wrapper never owns the recorder.
+  const cameraRoute = /capture|recording|camera|station/i.test(props.routeKey);
+  return <PresentationalReveal eventKey={props.routeKey} suppressed={props.suppressed || cameraRoute} duration={240} style={[{ flex: 1 }, props.style]}>{props.children}</PresentationalReveal>;
 }
-
-/** Slow, low-amplitude breathing cue for a current tracking point or active verification mark. */
+/** Stable meaningful state markers replace persistent decorative loops. */
+export function PulseOpacity(props: { children?: ReactNode; style?: StyleProp<ViewStyle>; active?: boolean }) {
+  return <Animated.View style={props.style}>{props.children}</Animated.View>;
+}
 export function PulseScale(props: { children: ReactNode; active?: boolean; style?: StyleProp<ViewStyle>; amount?: number }) {
-  const { reducedMotion } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!props.active || !shouldUseLargeMotion(reducedMotion)) {
-      scale.setValue(1);
-      return;
-    }
-    const amount = props.amount ?? 1.04;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(scale, { toValue: amount, duration: motion.duration.trackingPulse, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: motion.duration.trackingPulse, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [props.active, props.amount, reducedMotion, scale]);
-  return <Animated.View style={[props.style, { transform: [{ scale }] }]}>{props.children}</Animated.View>;
+  return <Animated.View style={props.style}>{props.children}</Animated.View>;
 }
-
-/** One-shot verification halo. It intentionally does not loop. */
-export function SuccessHalo(props: { children: ReactNode; active?: boolean; color: string; style?: StyleProp<ViewStyle> }) {
-  const { reducedMotion } = useTheme();
-  const scale = useRef(new Animated.Value(0.78)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+/** Confirmed receipt flourish; callers provide actual confirmation and optional operation identity. */
+export function SuccessHalo(props: { children: ReactNode; active?: boolean; color: string; style?: StyleProp<ViewStyle>; operationKey?: string }) {
+  const { motionMode } = useTheme(); const played = useRef(false);
+  const scale = useRef(new Animated.Value(1)).current, opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!props.active || !shouldUseLargeMotion(reducedMotion)) {
-      scale.setValue(1);
-      opacity.setValue(0);
-      return;
-    }
-    scale.setValue(0.78);
-    opacity.setValue(0.26);
+    opacity.stopAnimation(); scale.stopAnimation();
+    const key = props.operationKey ? `receipt:${props.operationKey}` : undefined;
+    if (!props.active || motionMode !== 'full' || played.current || (key && shown.has(key))) { opacity.setValue(0); scale.setValue(1); return; }
+    played.current = true; if (key) markShown(key);
+    scale.setValue(0.96); opacity.setValue(0.2);
     const animation = Animated.parallel([
-      Animated.timing(scale, { toValue: 1.42, duration: motion.duration.success, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: motion.duration.success, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1.06, duration: motion.duration.success, easing: ease, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: motion.duration.success, easing: ease, useNativeDriver: true }),
     ]);
-    animation.start();
-    return () => animation.stop();
-  }, [opacity, props.active, reducedMotion, scale]);
+    animation.start(); return () => { animation.stop(); opacity.setValue(0); scale.setValue(1); };
+  }, [props.active, props.operationKey, motionMode, opacity, scale]);
   return <Animated.View pointerEvents="none" style={[props.style, { borderColor: props.color, opacity, transform: [{ scale }] }]}>{props.children}</Animated.View>;
 }

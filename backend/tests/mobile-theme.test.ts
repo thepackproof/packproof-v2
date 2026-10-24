@@ -1,3 +1,4 @@
+import { signalColors } from '../../mobile/src/theme/signal.ts';
 import { describe, expect, it } from "vitest";
 import {
   formatCognitoError,
@@ -29,14 +30,14 @@ const luminance = (hex: string) => {
 const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
 
 describe("mobile appearance and theme tokens", () => {
-  it("defaults unselected or invalid appearance to light and preserves explicit choices", () => {
-    expect(parseAppearancePreference(null)).toBe("light");
-    expect(parseAppearancePreference(undefined)).toBe("light");
-    expect(parseAppearancePreference("sepia")).toBe("light");
+  it("defaults unselected or invalid appearance to system and preserves explicit choices", () => {
+    expect(parseAppearancePreference(null)).toBe("system");
+    expect(parseAppearancePreference(undefined)).toBe("system");
+    expect(parseAppearancePreference("sepia")).toBe("system");
     expect(parseAppearancePreference("dark")).toBe("dark");
     expect(parseAppearancePreference("light")).toBe("light");
     expect(parseAppearancePreference("system")).toBe("system");
-    expect(resolveColorScheme(parseAppearancePreference(null), "dark")).toBe("light");
+    expect(resolveColorScheme(parseAppearancePreference(null), "dark")).toBe("dark");
   });
 
   it("resolves system, light, and dark without mixing them", () => {
@@ -111,11 +112,26 @@ describe("mobile appearance and theme tokens", () => {
   });
 });
 
+it('keeps the Evidence in Motion work surfaces, action labels and source roles readable', () => {
+  for (const scheme of ['light', 'dark'] as const) {
+    const colors = signalColors(scheme);
+    for (const surface of [colors.background, colors.surface, colors.surfaceElevated, colors.surfacePressed]) {
+      expect(contrast(colors.textPrimary, surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors.textSecondary, surface)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(colors.textOnPrimary, colors.primary)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colors.success, colors.surface)).toBeGreaterThanOrEqual(3);
+    for (const [text, surface] of [[colors.accentText, colors.accentSoft], [colors.successText, colors.successSoft], [colors.warningText, colors.warningSoft], [colors.error, colors.errorSoft], [colors.shipmentText, colors.shipmentSoft]]) {
+      expect(contrast(text!, surface!)).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
 describe("reduced motion helpers", () => {
   it("keeps functionality but shortens large motion", () => {
     expect(shouldUseLargeMotion(true)).toBe(false);
     expect(shouldUseLargeMotion(false)).toBe(true);
-    expect(motionDuration(true, 360)).toBe(120);
+    expect(motionDuration(true, 360)).toBe(100);
     expect(motionDuration(false, 360)).toBe(360);
   });
 });

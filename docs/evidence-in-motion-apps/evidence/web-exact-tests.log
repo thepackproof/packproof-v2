@@ -1,0 +1,8 @@
+
+ RUN  v4.1.12 C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/current-source/packproof-v2-main/web
+
+
+ Test Files  7 passed (7)
+      Tests  28 passed (28)
+   Start at  10:49:56
+   Duration  10.62s (transform 6.01s, setup 5.07s, import 13.91s, tests 4.40s, environment 21.02s)

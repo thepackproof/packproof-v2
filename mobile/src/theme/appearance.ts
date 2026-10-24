@@ -6,8 +6,8 @@ export function parseAppearancePreference(raw: string | null | undefined): Appea
   if (raw === "light" || raw === "dark" || raw === "system") {
     return raw;
   }
-  // Missing values belong to the previous automatic default, not an explicit choice.
-  return "light";
+  // Existing explicit choices are retained; new installs follow the device preference.
+  return "system";
 }
 
 export function resolveColorScheme(

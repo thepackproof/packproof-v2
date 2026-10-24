@@ -1,0 +1,1 @@
+{"status":"passed","version":"1.0.0","source":"packages/evidence-in-motion/tokens.v1.json","sourceSha256":"a4ea0bdb72812779f94a7905a48b45c8e17cb1120c98d9b41803c1a1bf2fa93b","outputs":["packages/evidence-in-motion/tokens.generated.ts","packages/evidence-in-motion/tokens.generated.css"],"platforms":["mobile","web","desktop"]}

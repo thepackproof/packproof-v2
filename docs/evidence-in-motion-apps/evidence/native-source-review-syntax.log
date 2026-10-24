@@ -1,0 +1,9 @@
+Native source re-review syntax; 2026-10-24T14:44:26.510Z
+mobile/src/screens/SignalHomeScreen.tsx: 0 syntax errors
+mobile/src/screens/SignalSubmissionScreen.tsx: 0 syntax errors
+mobile/src/ui/Signal.tsx: 0 syntax errors
+mobile/src/ui/SignalProofRecord.tsx: 0 syntax errors
+mobile/src/ui/ProofEvidencePreview.tsx: 0 syntax errors
+mobile/src/copy/eim-record.ts: 0 syntax errors
+mobile/src/experience/signal/submission-presentation.ts: 0 syntax errors
+{"files":7,"syntaxErrors":0,"scope":"changed source syntax; no device acceptance"}

@@ -1,0 +1,376 @@
+TAP version 13
+# Subtest: connected history keeps deterministic identity order, unknown time and source distinctions
+ok 1 - connected history keeps deterministic identity order, unknown time and source distinctions
+  ---
+  duration_ms: 13.2275
+  type: 'test'
+  ...
+# Subtest: record source markers expose only actual sources and do not invent a shipment from an order label
+ok 2 - record source markers expose only actual sources and do not invent a shipment from an order label
+  ---
+  duration_ms: 0.7726
+  type: 'test'
+  ...
+# Subtest: event focus cannot substitute an unrelated or ambiguous stage original
+ok 3 - event focus cannot substitute an unrelated or ambiguous stage original
+  ---
+  duration_ms: 0.1415
+  type: 'test'
+  ...
+# Subtest: manual review cannot submit with unchecked consent, pending checks, offline blocking, or a busy owner
+ok 4 - manual review cannot submit with unchecked consent, pending checks, offline blocking, or a busy owner
+  ---
+  duration_ms: 0.5944
+  type: 'test'
+  ...
+# Subtest: consent for another original, Proof, account, server, or metadata revision cannot enable confirmation
+ok 5 - consent for another original, Proof, account, server, or metadata revision cannot enable confirmation
+  ---
+  duration_ms: 0.1401
+  type: 'test'
+  ...
+# Subtest: Android participant links and ordinary resume entries execute the same fresh action owner
+ok 6 - Android participant links and ordinary resume entries execute the same fresh action owner
+  ---
+  duration_ms: 2.2674
+  type: 'test'
+  ...
+# Subtest: an action chosen from a stale recording-needed card uses the freshly finalized record
+ok 7 - an action chosen from a stale recording-needed card uses the freshly finalized record
+  ---
+  duration_ms: 0.2071
+  type: 'test'
+  ...
+# Subtest: buyer, removed participant and unknown server state cannot route into seller capture
+ok 8 - buyer, removed participant and unknown server state cannot route into seller capture
+  ---
+  duration_ms: 0.2654
+  type: 'test'
+  ...
+# Subtest: fresh committed evidence uses the existing confirmation owner
+ok 9 - fresh committed evidence uses the existing confirmation owner
+  ---
+  duration_ms: 0.2122
+  type: 'test'
+  ...
+# Subtest: authorized receiving stage remains separate from the finalized root record
+ok 10 - authorized receiving stage remains separate from the finalized root record
+  ---
+  duration_ms: 0.394
+  type: 'test'
+  ...
+# Subtest: grading work stays with its current workflow owner rather than ordinary shipment capture
+ok 11 - grading work stays with its current workflow owner rather than ordinary shipment capture
+  ---
+  duration_ms: 0.3101
+  type: 'test'
+  ...
+# Subtest: explicit evidence views and legacy participant links remain viewers even when unfinished
+ok 12 - explicit evidence views and legacy participant links remain viewers even when unfinished
+  ---
+  duration_ms: 0.2476
+  type: 'test'
+  ...
+# Subtest: history-share links authorize the viewer before opening the requested history share
+ok 13 - history-share links authorize the viewer before opening the requested history share
+  ---
+  duration_ms: 0.3317
+  type: 'test'
+  ...
+# Subtest: account switch during a history-view fetch prevents applying the share locator
+ok 14 - account switch during a history-view fetch prevents applying the share locator
+  ---
+  duration_ms: 0.4602
+  type: 'test'
+  ...
+# Subtest: account switch and failed refresh cannot navigate using a stale actionable record
+ok 15 - account switch and failed refresh cannot navigate using a stale actionable record
+  ---
+  duration_ms: 0.4658
+  type: 'test'
+  ...
+# Subtest: handled resume failures are not acknowledgements of an opened deep link
+ok 16 - handled resume failures are not acknowledgements of an opened deep link
+  ---
+  duration_ms: 0.2576
+  type: 'test'
+  ...
+# Subtest: handled action outcome distinguishes successful recovery from a pre-action auth failure
+ok 17 - handled action outcome distinguishes successful recovery from a pre-action auth failure
+  ---
+  duration_ms: 0.1514
+  type: 'test'
+  ...
+# Subtest: default Android creation is manual while explicit advanced and legacy routes remain reachable
+ok 18 - default Android creation is manual while explicit advanced and legacy routes remain reachable
+  ---
+  duration_ms: 0.0854
+  type: 'test'
+  ...
+# Subtest: new Android catalog defaults to all without changing the legacy baseline or another account defaults
+ok 19 - new Android catalog defaults to all without changing the legacy baseline or another account defaults
+  ---
+  duration_ms: 0.0645
+  type: 'test'
+  ...
+# Subtest: advanced creation survives restart without carrying selected Proof, consent or unknown modes
+ok 20 - advanced creation survives restart without carrying selected Proof, consent or unknown modes
+  ---
+  duration_ms: 0.3081
+  type: 'test'
+  ...
+# Subtest: Home, list resume and deep-link resume select the same interrupted original before a completed take
+ok 21 - Home, list resume and deep-link resume select the same interrupted original before a completed take
+  ---
+  duration_ms: 1.9456
+  type: 'test'
+  ...
+# Subtest: multiple playable originals use the canonical stable session choice regardless of array order or connectivity
+ok 22 - multiple playable originals use the canonical stable session choice regardless of array order or connectivity
+  ---
+  duration_ms: 8.2154
+  type: 'test'
+  ...
+# Subtest: entry capture selection cannot use foreign originals and points failed work at its precise recovery task
+ok 23 - entry capture selection cannot use foreign originals and points failed work at its precise recovery task
+  ---
+  duration_ms: 0.2968
+  type: 'test'
+  ...
+# Subtest: timeline orders reported times without rewriting canonical events and keeps category counts
+ok 24 - timeline orders reported times without rewriting canonical events and keeps category counts
+  ---
+  duration_ms: 3.9509
+  type: 'test'
+  ...
+# Subtest: only valid bookmarks for the exact root original become replay chapters
+ok 25 - only valid bookmarks for the exact root original become replay chapters
+  ---
+  duration_ms: 0.2808
+  type: 'test'
+  ...
+# Subtest: corrections remove superseded chapters while preserving source history
+ok 26 - corrections remove superseded chapters while preserving source history
+  ---
+  duration_ms: 0.184
+  type: 'test'
+  ...
+# Subtest: receipt acknowledgment is derived from receipt stages, never carrier delivery or returns
+ok 27 - receipt acknowledgment is derived from receipt stages, never carrier delivery or returns
+  ---
+  duration_ms: 0.1807
+  type: 'test'
+  ...
+# Subtest: new proof view state starts independent tab offsets
+ok 28 - new proof view state starts independent tab offsets
+  ---
+  duration_ms: 0.4476
+  type: 'test'
+  ...
+# Subtest: activity highlights keep shipment and evidence milestones while detailed history retains every access
+ok 29 - activity highlights keep shipment and evidence milestones while detailed history retains every access
+  ---
+  duration_ms: 0.3353
+  type: 'test'
+  ...
+# Subtest: ordinary Proof finalization guidance cannot be overwritten by a stale server capture instruction
+ok 30 - ordinary Proof finalization guidance cannot be overwritten by a stale server capture instruction
+  ---
+  duration_ms: 0.3632
+  type: 'test'
+  ...
+# Subtest: Proof completion labels reflect canonical state and do not expose internal enums
+ok 31 - Proof completion labels reflect canonical state and do not expose internal enums
+  ---
+  duration_ms: 0.1495
+  type: 'test'
+  ...
+# Subtest: the same Proof includes committed receipt and return originals without mixing stage identities
+ok 32 - the same Proof includes committed receipt and return originals without mixing stage identities
+  ---
+  duration_ms: 0.6093
+  type: 'test'
+  ...
+# Subtest: completion never celebrates local or uploaded states as a saved Proof
+ok 33 - completion never celebrates local or uploaded states as a saved Proof
+  ---
+  duration_ms: 0.4013
+  type: 'test'
+  ...
+# Subtest: access grouping preserves exact events and separates actor, link, source and UTC window
+ok 34 - access grouping preserves exact events and separates actor, link, source and UTC window
+  ---
+  duration_ms: 0.6875
+  type: 'test'
+  ...
+# Subtest: correction policy protects imported and captured facts, including stale deep links
+ok 35 - correction policy protects imported and captured facts, including stale deep links
+  ---
+  duration_ms: 0.2154
+  type: 'test'
+  ...
+# Subtest: a fresh screen leaves native scrolling uncontrolled
+ok 36 - a fresh screen leaves native scrolling uncontrolled
+  ---
+  duration_ms: 1.952
+  type: 'test'
+  ...
+# Subtest: saved position waits for geometry and async content without saving initial zero events
+ok 37 - saved position waits for geometry and async content without saving initial zero events
+  ---
+  duration_ms: 0.2063
+  type: 'test'
+  ...
+# Subtest: restoration clamps to available content and runs only once after later layout changes
+ok 38 - restoration clamps to available content and runs only once after later layout changes
+  ---
+  duration_ms: 0.1954
+  type: 'test'
+  ...
+# Subtest: a drag cancels delayed restoration permanently and preserves the user's new position
+ok 39 - a drag cancels delayed restoration permanently and preserves the user's new position
+  ---
+  duration_ms: 0.1694
+  type: 'test'
+  ...
+# Subtest: a new gesture also releases acknowledgement gating if native restoration has not completed
+ok 40 - a new gesture also releases acknowledgement gating if native restoration has not completed
+  ---
+  duration_ms: 0.1275
+  type: 'test'
+  ...
+# Subtest: native pixel rounding is accepted while stale positions are ignored
+ok 41 - native pixel rounding is accepted while stale positions are ignored
+  ---
+  duration_ms: 0.1113
+  type: 'test'
+  ...
+# Subtest: returning to a saved tab gets a new one-shot restoration with short content clamped to zero
+ok 42 - returning to a saved tab gets a new one-shot restoration with short content clamped to zero
+  ---
+  duration_ms: 0.3677
+  type: 'test'
+  ...
+# Subtest: receipt requires canonical finalization and both matching durable server receipts
+ok 43 - receipt requires canonical finalization and both matching durable server receipts
+  ---
+  duration_ms: 1.3742
+  type: 'test'
+  ...
+# Subtest: a retake candidate cannot submit or start another replacement before an explicit durable choice
+ok 44 - a retake candidate cannot submit or start another replacement before an explicit durable choice
+  ---
+  duration_ms: 0.7004
+  type: 'test'
+  ...
+# Subtest: empty and completed-only accounts recommend manual creation without a marketplace
+ok 45 - empty and completed-only accounts recommend manual creation without a marketplace
+  ---
+  duration_ms: 1.1348
+  type: 'test'
+  ...
+# Subtest: empty requires reconciled online history and absence of all authorized local and order work
+ok 46 - empty requires reconciled online history and absence of all authorized local and order work
+  ---
+  duration_ms: 0.4332
+  type: 'test'
+  ...
+# Subtest: submission continuation does not promise a second consent or premature completion
+ok 47 - submission continuation does not promise a second consent or premature completion
+  ---
+  duration_ms: 0.3313
+  type: 'test'
+  ...
+# Subtest: pristine linked orders enter rank five while a manual draft remains rank three
+ok 48 - pristine linked orders enter rank five while a manual draft remains rank three
+  ---
+  duration_ms: 0.672
+  type: 'test'
+  ...
+# Subtest: every actionable rank wins in exact order, without mutating input
+ok 49 - every actionable rank wins in exact order, without mutating input
+  ---
+  duration_ms: 0.4162
+  type: 'test'
+  ...
+# Subtest: passive uploads and retry backoff never displace a draft or count as attention
+ok 50 - passive uploads and retry backoff never displace a draft or count as attention
+  ---
+  duration_ms: 0.2372
+  type: 'test'
+  ...
+# Subtest: attention counts unique records while active transfer counts unique jobs
+ok 51 - attention counts unique records while active transfer counts unique jobs
+  ---
+  duration_ms: 7.2664
+  type: 'test'
+  ...
+# Subtest: permissions, invalid targets and finalized records exclude capture actions
+ok 52 - permissions, invalid targets and finalized records exclude capture actions
+  ---
+  duration_ms: 0.2211
+  type: 'test'
+  ...
+# Subtest: unknown or inconsistent completion requests reconciliation, never completed
+ok 53 - unknown or inconsistent completion requests reconciliation, never completed
+  ---
+  duration_ms: 0.3056
+  type: 'test'
+  ...
+# Subtest: offline permits usable local review but defers server-only work and counts waiting separately
+ok 54 - offline permits usable local review but defers server-only work and counts waiting separately
+  ---
+  duration_ms: 0.3721
+  type: 'test'
+  ...
+# Subtest: corrupt and interrupted captures never become review evidence
+ok 55 - corrupt and interrupted captures never become review evidence
+  ---
+  duration_ms: 0.1826
+  type: 'test'
+  ...
+# Subtest: urgency precedes recency; selection and fixture order cannot override priority
+ok 56 - urgency precedes recency; selection and fixture order cannot override priority
+  ---
+  duration_ms: 0.8866
+  type: 'test'
+  ...
+# Subtest: focused manual creation survives newly actionable work and refreshes offline explanation
+ok 57 - focused manual creation survives newly actionable work and refreshes offline explanation
+  ---
+  duration_ms: 0.1373
+  type: 'test'
+  ...
+# Subtest: focused recommendation stays stable only while valid; another device completion invalidates it
+ok 58 - focused recommendation stays stable only while valid; another device completion invalidates it
+  ---
+  duration_ms: 0.0967
+  type: 'test'
+  ...
+# Subtest: native adapter removes foreign account/server recordings and keeps automatic retries passive
+ok 59 - native adapter removes foreign account/server recordings and keeps automatic retries passive
+  ---
+  duration_ms: 0.7641
+  type: 'test'
+  ...
+# Subtest: tap-time routing uses refreshed permissions/state and never stale capture or finalization actions
+ok 60 - tap-time routing uses refreshed permissions/state and never stale capture or finalization actions
+  ---
+  duration_ms: 0.3068
+  type: 'test'
+  ...
+# Subtest: saved capture resume requires fresh capture permission; offline permits playback only
+ok 61 - saved capture resume requires fresh capture permission; offline permits playback only
+  ---
+  duration_ms: 0.3814
+  type: 'test'
+  ...
+1..61
+# tests 61
+# suites 0
+# pass 61
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 498.1461

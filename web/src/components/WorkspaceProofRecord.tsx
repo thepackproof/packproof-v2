@@ -1,4 +1,5 @@
 import {SIGNAL_ENABLED,SignalBadge} from "../signal/Signal";
+import { ConnectedChronology, connectedEventIdentity, connectedOriginals, originalForChronologyEvent, originalIdentity } from "./ConnectedChronology";
 import {hasSignalReceipt} from "../../../mobile/src/experience/signal/receipt";
 import {isGradingWorkflow} from "@packproof/copy/custody";
 import { ProofNotificationMute } from "./NotificationCenter";
@@ -59,80 +60,100 @@ export function WorkspaceProofRecord(props: {
   nextAction?: ReactNode;
 }) {
   const { proof } = props;
-  const [signalDetails,setSignalDetails]=useState(false),[savedSignal,setSavedSignal]=useState<string|null>(null);
-  const signalOwner=`${props.api?.recoveryScope}:${props.currentUserId}:${proof.proofId}:${proof.version}`;
-  useEffect(()=>{let active=true;setSavedSignal(null);if(props.api)void props.api.getRecoveryStatus(proof.proofId).then(recovery=>{if(active&&proof.evidence.some(item=>hasSignalReceipt(proof,recovery,{proofId:proof.proofId,evidenceId:item.evidenceId})))setSavedSignal(signalOwner);}).catch(()=>{});return()=>{active=false;};},[props.api,signalOwner]);
+  const [signalDetails, setSignalDetails] = useState(false);
+  const [savedSignal, setSavedSignal] = useState<string | null>(null);
+  const signalOwner = `${props.api?.recoveryScope}:${props.currentUserId}:${proof.proofId}:${proof.version}`;
+  useEffect(() => {
+    let active = true;
+    setSavedSignal(null);
+    if (props.api) void props.api.getRecoveryStatus(proof.proofId).then(recovery => {
+      if (active && proof.evidence.some(item => hasSignalReceipt(proof, recovery, { proofId: proof.proofId, evidenceId: item.evidenceId }))) setSavedSignal(signalOwner);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [props.api, signalOwner]);
   const scope = `${props.api?.recoveryScope || location.origin}.${props.currentUserId}.${proof.proofId}`;
   const [savedTab, setTab] = useViewState<RecordTab>(`proof.${scope}.recordTab`, "Recording");
-  const tab = tabs.includes(savedTab) ? savedTab : "Recording";
+  const [selectedSourceId, setSelectedSourceId] = useViewState<string | null>(`proof.${scope}.selectedSource`, null);
+  const [sourceFocus, setSourceFocus] = useState<{ eventId: string; evidenceId: string; stageId: string | null } | null>(null);
+  const evolved = SIGNAL_ENABLED && !isGradingWorkflow(proof.workflowType);
+  const tab = !evolved || signalDetails ? tabs.includes(savedTab) ? savedTab : "Recording" : "Recording";
   const record = useRef<HTMLElement>(null);
   const controls = useRef<Array<HTMLButtonElement | null>>([]);
   const title = proof.transaction.itemTitle?.trim() || "Untitled item";
-  const reference = proofReference(proof.proofId,proof.transaction.externalReference);
+  const reference = proofReference(proof.proofId, proof.transaction.externalReference);
 
   function select(next: RecordTab, focus = false) {
     if (next !== "Recording") record.current?.querySelectorAll<HTMLMediaElement>("video,audio").forEach(media => media.pause());
     setTab(next);
     const button = controls.current[tabs.indexOf(next)];
     if (focus) button?.focus({ preventScroll: true });
-    button?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    button?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
   }
 
-  if(SIGNAL_ENABLED&&!isGradingWorkflow(proof.workflowType)&&!signalDetails)return <article ref={record} className="signal-record-summary" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}><SignalBadge state={savedSignal===signalOwner?'saved':'local'}>{savedSignal===signalOwner?'Saved to PackProof':proof.status==='FINALIZED'?'Recording received':props.presentation?.displayStatus||'In progress'}</SignalBadge><p className="signal-mono">{reference||proof.proofId}</p><h1>{title}</h1><p>{[proof.transaction.itemDescription,formatWhen(proof.createdAt)].filter(Boolean).join(' · ')}</p><RemainingShipmentNotice value={proof} />{props.nextAction}{props.api&&<UploadRecoveryCards api={props.api} userId={props.currentUserId} proof={proof} onReview={props.onOpenStation} onStage={props.onOpenReceipt}/>}<RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence}/>{props.onReviewSharing&&<button className="btn" onClick={props.onReviewSharing}>Share Proof <span aria-hidden="true">↗</span></button>}<button className="btn btn-secondary" onClick={()=>setSignalDetails(true)}>Recording history and details</button><p className="signal-mono">{proof.proofId}</p></article>;
-  return <article ref={record} className="workspace-proof-record" aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
-    {SIGNAL_ENABLED&&<button className="btn btn-tertiary" onClick={()=>setSignalDetails(false)}>Back to your Proof</button>}
+  function selectSource(entry: ChronologyEntry) {
+    const eventId = connectedEventIdentity(entry);
+    setSelectedSourceId(eventId);
+    const original = originalForChronologyEvent(proof, entry);
+    if (original?.validationStatus === "COMMITTED") setSourceFocus({ eventId, evidenceId: original.evidenceId, stageId: original.stageId });
+    else setSourceFocus(null);
+  }
+  return <article ref={record} className={`workspace-proof-record${evolved ? " eim-connected-record" : ""}`} aria-label="Proof record" data-context-anchor={`proof-record-${proof.proofId}`}>
     <header className="record-top">
-      <div><h2>{title}</h2>{reference && <p>{reference}</p>}<details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}</details></div>
-      <span className={`record-seal ${proof.status === "FINALIZED" ? "is-sealed" : ""}`}><Glyph name={proof.status === "FINALIZED" ? "shield" : "file"} size={18}/>{packingRecordLabel(proof.status)}</span>
+      <div>
+        {evolved && <p className="eim-record-eyebrow">CONNECTED PROOF RECORD</p>}
+        {evolved ? <h1>{title}</h1> : <h2>{title}</h2>}
+        {reference && <p>{reference}</p>}
+        {evolved && <p className="eim-record-role">{props.role ? `Your access: ${props.role.toLowerCase()}` : "Authorized record view"} · Created {formatWhen(proof.createdAt)}</p>}
+        <details className="record-order-details"><summary>Order details</summary><p>{[quantityLabel(proof.transaction.quantity), moneyLabel(proof.transaction.transactionValue, proof.transaction.currency)].filter(Boolean).join(" · ") || "No additional order details"}</p><p>{proof.transaction.provenance ? `From ${providerDisplay(proof.transaction.provenance.provider)}. Imported order details are read-only.` : "Order details supplied by a participant."}</p>{proof.transaction.provenance?.importedAt && <p>Imported {formatWhen(proof.transaction.provenance.importedAt)}</p>}<p className="eim-record-id">{proof.proofId}</p></details>
+      </div>
+      {evolved ? <SignalBadge state={savedSignal === signalOwner ? "saved" : "local"}>{savedSignal === signalOwner ? "Saved to PackProof" : proof.status === "FINALIZED" ? "Record finalized" : props.presentation?.displayStatus || "In progress"}</SignalBadge>
+        : <span className={`record-seal ${proof.status === "FINALIZED" ? "is-sealed" : ""}`}><Glyph name={proof.status === "FINALIZED" ? "shield" : "file"} size={18}/>{packingRecordLabel(proof.status)}</span>}
     </header>
-    <RemainingShipmentNotice value={proof} />
-    <p className="record-source-note">Shipment: {shipmentRecordLabel(proof.shipmentObservations?.identity?.trackingNumber || proof.transaction.shipping?.trackingNumber, proof.shipmentObservations?.latest?.eventType)}</p>
-    {props.nextAction}
-    <div className="record-tabs" role="tablist" aria-label="Proof record views">
-      {tabs.map((name, index) => <button
-        key={name}
-        ref={element => { controls.current[index] = element; }}
-        id={`record-${proof.proofId}-${name}-tab`}
-        type="button"
-        role="tab"
-        aria-selected={tab === name}
-        aria-controls={`record-${proof.proofId}-${name}-panel`}
-        tabIndex={tab === name ? 0 : -1}
-        onClick={() => select(name)}
-        onKeyDown={event => {
-          const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
-            : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
-            : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
-          if (next !== null) { event.preventDefault(); select(tabs[next], true); }
-        }}
-      >{name}</button>)}
-    </div>
-    <div className="record-body" hidden={tab !== "Recording"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Recording-panel`} aria-labelledby={`record-${proof.proofId}-Recording-tab`}>
+    <div className="eim-record-notices"><RemainingShipmentNotice value={proof} />{props.nextAction}</div>
+    {evolved && <div className="eim-record-context" aria-label="Record sources">
+      <span><Glyph name="store" size={16}/>{proof.transaction.provenance ? `Order · ${providerDisplay(proof.transaction.provenance.provider)}` : "Order · participant supplied"}</span>
+      {proof.evidence.some(item => item.validationStatus === "COMMITTED") && <span><Glyph name="film" size={16}/>Committed evidence</span>}
+      {(proof.shipmentObservations?.identity?.trackingNumber || proof.transaction.shipping?.trackingNumber) && <span><Glyph name="box" size={16}/>{shipmentRecordLabel(proof.shipmentObservations?.identity?.trackingNumber || proof.transaction.shipping?.trackingNumber, proof.shipmentObservations?.latest?.eventType)}</span>}
+    </div>}
+    {(!evolved || signalDetails) && <div className="record-tabs" role="tablist" aria-label="Proof record views">
+      {tabs.map((name, index) => <button key={name} ref={element => { controls.current[index] = element; }} id={`record-${proof.proofId}-${name}-tab`} type="button" role="tab" aria-selected={tab === name} aria-controls={`record-${proof.proofId}-${name}-panel`} tabIndex={tab === name ? 0 : -1} onClick={() => select(name)} onKeyDown={event => {
+        const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null;
+        if (next !== null) { event.preventDefault(); select(tabs[next], true); }
+      }}>{name}</button>)}
+    </div>}
+    <div className="record-body" hidden={tab !== "Recording"} role={evolved && !signalDetails ? undefined : "tabpanel"} tabIndex={evolved && !signalDetails ? undefined : 0} id={`record-${proof.proofId}-Recording-panel`} aria-labelledby={evolved && !signalDetails ? undefined : `record-${proof.proofId}-Recording-tab`}>
       {props.api && <UploadRecoveryCards api={props.api} userId={props.currentUserId} proof={proof} onReview={props.onOpenStation} onStage={props.onOpenReceipt} />}
-      <RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence} />
+      <div className={evolved ? "eim-record-layout" : undefined}>
+        {evolved && <ConnectedChronology proof={proof} selectedId={selectedSourceId} onSelect={selectSource} onOpenEvent={props.onOpenEvent}/>}
+        <section className={evolved ? "eim-record-evidence" : undefined} aria-label={evolved ? "Original evidence and participant statements" : undefined}>
+          {evolved && <div className="eim-evidence-heading"><div><p className="eim-record-eyebrow">SOURCE MATERIAL</p><h2>Original evidence</h2></div><span>Full frame · original file</span></div>}
+          <RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence} focusEvidence={sourceFocus}/>
+        </section>
+      </div>
     </div>
     <div className="record-body" hidden={tab !== "Activity"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Activity-panel`} aria-labelledby={`record-${proof.proofId}-Activity-tab`}>
       {tab === "Activity" && <>
         {props.api && <ProofNotificationMute api={props.api} proofId={proof.proofId}/>}
-        <ProofTimeline entries={proof.chronology ?? []} audit={proof.events ?? []} finalizedAt={proof.finalizedAt} onSelect={props.onOpenEvent} />
+        <ProofTimeline entries={proof.chronology ?? []} audit={proof.events ?? []} finalizedAt={proof.finalizedAt} onSelect={props.onOpenEvent}/>
         {proof.status === "FINALIZED" && <p className="note record-source-note">The packing record was locked {formatWhen(proof.finalizedAt)}. Later carrier reports and receipt or return stages are added separately.</p>}
       </>}
     </div>
     <div className="record-body" hidden={tab !== "Tracking"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Tracking-panel`} aria-labelledby={`record-${proof.proofId}-Tracking-tab`}>
       {tab === "Tracking" && <div className="stack">
-        {props.api && proof.participants.some(p=>p.userId===props.currentUserId&&p.role==="SELLER") && <TrackingIntake api={props.api} proof={proof} onSaved={()=>window.dispatchEvent(new Event("packproof:records-updated"))}/>}
-        <ShipmentTracking events={proof.shipmentObservations?.events ?? []} carrier={proof.shipmentObservations?.identity?.carrier ?? proof.transaction.shipping?.carrier} trackingNumber={proof.shipmentObservations?.identity?.trackingNumber ?? proof.transaction.shipping?.trackingNumber} registration={proof.captureShipping?.registration} sync={proof.shipmentSync} />
+        {props.api && proof.participants.some(p => p.userId === props.currentUserId && p.role === "SELLER") && <TrackingIntake api={props.api} proof={proof} onSaved={() => window.dispatchEvent(new Event("packproof:records-updated"))}/>}
+        <ShipmentTracking events={proof.shipmentObservations?.events ?? []} carrier={proof.shipmentObservations?.identity?.carrier ?? proof.transaction.shipping?.carrier} trackingNumber={proof.shipmentObservations?.identity?.trackingNumber ?? proof.transaction.shipping?.trackingNumber} registration={proof.captureShipping?.registration} sync={proof.shipmentSync}/>
         {props.trackingTools}
       </div>}
     </div>
+    {evolved && <footer className="eim-record-footer">
+      {props.onReviewSharing && <button className="btn" onClick={props.onReviewSharing}><Glyph name="share" size={18}/>Share Proof</button>}
+      <button className="btn btn-secondary" onClick={() => { if (signalDetails) select("Recording"); setSignalDetails(value => !value); }}>{signalDetails ? "Back to your Proof" : "Recording history and details"}</button>
+      <p>A connected history of recorded sources. It does not independently verify the physical parcel or establish continuous physical custody.</p>
+    </footer>}
   </article>;
 }
-
-function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; api?: PackProofApi; load?: (id: string) => Promise<Blob>; scope: string }) {
-  const evidence = [
-    ...proof.evidence.filter(item => item.validationStatus === "COMMITTED").map(item => ({ ...item, stageId: null as string | null })),
-    ...(proof.commerceStages ?? []).flatMap(stage => stage.evidence.filter(item => item.committedAt).map(item => ({ ...item, stageId: stage.stageId, evidenceType: stage.type, validationStatus: "COMMITTED", digest: null }))),
-  ];
+function RecordEvidence({ proof, api, load, scope, focusEvidence }: { proof: CanonicalProof; api?: PackProofApi; load?: (id: string) => Promise<Blob>; scope: string; focusEvidence?: { eventId: string; evidenceId: string; stageId: string | null } | null }) {
+  const evidence = connectedOriginals(proof, true);
   const preview = useEvidenceBlob(proof.proofId);
   const [selected, setSelected] = useViewState<string | null>(`proof.${scope}.recordEvidence`, null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -140,7 +161,7 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
   const [retry, setRetry] = useState(0);
   const video = useRef<HTMLVideoElement>(null);
   const pendingSeek = useRef<number | null>(null);
-  const current = evidence.find(item => item.evidenceId === preview.selectedId);
+  const current = evidence.find(item => originalIdentity(item) === preview.selectedId);
 
   function playbackKey(id: string) { return `packproof.view.recordPlayback.${scope}.${id}`; }
   function restoreTime(id: string) {
@@ -148,25 +169,25 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
     catch { return 0; }
   }
   async function open(id: string, at?: number) {
-    const item = evidence.find(candidate => candidate.evidenceId === id);
+    const item = evidence.find(candidate => originalIdentity(candidate) === id);
     if (!item || (!item.stageId && !load) || (item.stageId && !api)) return;
     pendingSeek.current = at ?? restoreTime(id);
     setSelected(id);
-    if (current?.evidenceId === id && preview.url && video.current) {
+    if (current && originalIdentity(current) === id && preview.url && video.current) {
       video.current.currentTime = Math.min(pendingSeek.current, Number.isFinite(video.current.duration) ? video.current.duration : pendingSeek.current);
       pendingSeek.current = null;
       video.current.focus({ preventScroll: true });
       return;
     }
-    const loader = item.stageId ? () => api!.featureDownload(proof.proofId, `lifecycle/stages/${item.stageId}/evidence/${id}`) : load!;
+    const loader = item.stageId ? () => api!.featureDownload(proof.proofId, `lifecycle/stages/${item.stageId}/evidence/${item.evidenceId}`) : () => load!(item.evidenceId);
     await preview.open(id, item.contentType, loader);
   }
 
   useEffect(() => {
     if ((!load && !api) || !evidence.length) return;
-    const first = evidence.find(item => item.evidenceId === selected)
+    const first = evidence.find(item => originalIdentity(item) === selected)
       ?? evidence.find(item => mediaType(item.contentType).startsWith("video/")) ?? evidence[0];
-    void open(first.evidenceId);
+    void open(originalIdentity(first));
     // Re-run after StrictMode's cleanup invalidates the first media request.
     // A fresh parent callback should not reload a playing original.
   }, [Boolean(load), evidence.length]);
@@ -184,6 +205,12 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
     return () => { active = false; };
   }, [api, proof.proofId, proof.updatedAt, retry]);
 
+  useEffect(() => {
+    if (!focusEvidence) return;
+    const item = evidence.find(candidate => candidate.evidenceId === focusEvidence.evidenceId && candidate.stageId === focusEvidence.stageId);
+    if (!item || (!item.stageId && !load) || (item.stageId && !api)) return;
+    void open(originalIdentity(item));
+  }, [focusEvidence, Boolean(load), api]);
   const visibleBookmarks = bookmarks.filter(bookmark => !current?.stageId && !bookmark.stageId && bookmark.evidenceId === current?.evidenceId
     && bookmark.sourceHash === (current?.digest?.sha256 || current?.sha256) && Boolean(bookmark.sourceHash)
     && typeof bookmark.startMs === "number" && Number.isFinite(bookmark.startMs) && bookmark.startMs >= 0
@@ -194,7 +221,10 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
   if (!evidence.length) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>Recording has not been added yet</strong><p>Record the item being packed and sealed.</p></div>;
   if (!load && !api) return <div className="evidence-placeholder"><span><Glyph name="film" size={28} /></span><strong>{evidence.length} saved file{evidence.length === 1 ? "" : "s"}</strong><p>Media playback isn’t available in this view.</p></div>;
 
+  const selectedOriginal = current && !current.stageId ? proof.evidence.find(item => item.evidenceId === current.evidenceId) : undefined;
+  const contributor = proof.participants.find(item => item.userId === selectedOriginal?.submittedBy)?.role;
   return <div className="record-evidence stack">
+    {current && <div className="eim-original-provenance"><span>{current.stageId ? "Receipt or return evidence" : contributor ? `${contributor.toLowerCase()} recording` : "Recorded evidence"}</span><details><summary>Original identity and reference</summary><dl><div><dt>Evidence identifier</dt><dd>{current.evidenceId}</dd></div>{current.stageId && <div><dt>Stage identifier</dt><dd>{current.stageId}</dd></div>}{selectedOriginal?.receivedAt && <div><dt>Received by PackProof</dt><dd>{selectedOriginal.receivedAt}</dd></div>}{current.committedAt && <div><dt>Committed</dt><dd>{current.committedAt}</dd></div>}{(current.digest?.sha256 || current.sha256) && <div><dt>Recorded SHA-256 reference</dt><dd>{current.digest?.sha256 || current.sha256}</dd></div>}</dl><p>A recorded reference identifies the file. It does not independently authenticate the physical events shown.</p></details></div>}
     {preview.url && current ? <EvidencePreview
       url={preview.url}
       contentType={preview.contentType}
@@ -207,18 +237,18 @@ function RecordEvidence({ proof, api, load, scope }: { proof: CanonicalProof; ap
         player.currentTime = Math.min(pendingSeek.current, Number.isFinite(player.duration) ? player.duration : pendingSeek.current);
         pendingSeek.current = null;
       }}
-      onTimeUpdate={event => { try { sessionStorage.setItem(playbackKey(current.evidenceId), String(event.currentTarget.currentTime)); } catch { /* Playback works without storage. */ } }}
+      onTimeUpdate={event => { try { sessionStorage.setItem(playbackKey(originalIdentity(current)), String(event.currentTarget.currentTime)); } catch { /* Playback works without storage. */ } }}
     /> : <div className="evidence-placeholder" aria-busy={preview.busy}><span><Glyph name={preview.busy ? "clock" : "film"} size={28} /></span><strong>{preview.busy ? "Loading your evidence…" : "Open the recorded evidence"}</strong><p>The original file is retrieved securely from this Proof.</p></div>}
     {evidence.length > 1 && <div className="evidence-file-tabs" aria-label="Evidence files">{evidence.map((item, index) => {
       const type = mediaType(item.contentType);
       const label = type.startsWith("video/") ? "Video" : type.startsWith("image/") ? "Image" : type === "application/pdf" ? "Document" : "File";
-      return <button type="button" key={item.evidenceId} aria-pressed={current?.evidenceId === item.evidenceId} onClick={() => void open(item.evidenceId)}><Glyph name={type.startsWith("video/") ? "film" : "file"} size={17} />{label} {index + 1}</button>;
+      return <button type="button" key={originalIdentity(item)} aria-pressed={current && originalIdentity(current) === originalIdentity(item)} onClick={() => void open(originalIdentity(item))}><Glyph name={type.startsWith("video/") ? "film" : "file"} size={17} />{label} {index + 1}</button>;
     })}</div>}
-    {preview.error && <div className="banner banner-error" role="alert"><p>{preview.error}</p><button className="btn btn-secondary" onClick={() => void open(preview.selectedId || evidence[0].evidenceId)}>Retry evidence</button></div>}
+    {preview.error && <div className="banner banner-error" role="alert"><p>{preview.error}</p><button className="btn btn-secondary" onClick={() => void open(preview.selectedId || originalIdentity(evidence[0]))}>Retry evidence</button></div>}
     {preview.url && preview.contentType.startsWith("video/") && <>
       {visibleBookmarks.length > 0 ? <div className="record-chapters" aria-label="Recorded source moments">{visibleBookmarks.map(bookmark => <button type="button" key={bookmark.anchorId} onClick={() => void open(bookmark.evidenceId!, bookmark.startMs! / 1000)} title={`Source: ${bookmark.sourceCategory.replaceAll("_", " ").toLowerCase()}`}>{elapsed(bookmark.startMs!)} · {bookmark.label}</button>)}</div> : null}
     </>}
-    {(proof.attestations ?? []).filter(statement => !statement.relatedEvidenceId || statement.relatedEvidenceId === current?.evidenceId).map(statement => <section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
+    {(proof.attestations ?? []).filter(statement => !current?.stageId && (!statement.relatedEvidenceId || statement.relatedEvidenceId === current?.evidenceId)).map(statement => <section className="record-declaration" key={statement.attestationId} aria-label="Participant statement">
       <StatusBadge label="Attestation recorded" tone="success" />
       <h3>{proof.participants.find(participant => participant.userId === statement.attestedBy)?.role === "SELLER" ? "Seller declaration" : "Participant statement"}</h3>
       <p>{statement.statementText || (statement.statement === "PACKED_DESCRIBED_ITEM" ? "Seller attested to packing the described item" : statement.statement)}</p>

@@ -41,7 +41,7 @@ export function Button(props: {
       style={[
         styles.base,
         ANDROID_TASK_FIRST_REBUILD && styles.taskFirst,
-        SIGNAL_ENABLED && {minHeight:variant==='tertiary'?48:56,borderRadius:12},
+        SIGNAL_ENABLED && {minHeight:variant==='tertiary'?48:56,borderRadius:8},
         {
           backgroundColor: palette.background,
           borderWidth: palette.borderWidth,

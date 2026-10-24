@@ -22,7 +22,7 @@ import { participantLinkEntry } from "../experience/proof-entry";
 import { MobileTabBar } from "../ui/MobileTabBar";
 import { ActivityScreen } from "../screens/ActivityScreen";
 import { typography } from "../theme/tokens";
-import { useTheme } from "../theme/ThemeProvider";
+import { useTheme, useMotionSuppression } from "../theme/ThemeProvider";
 import { applySystemBars } from "../theme/system-bars";
 import { Logo } from "../ui/Logo";
 import { AuthScreen } from "../screens/AuthScreen";
@@ -64,6 +64,7 @@ function RootContent() {
   const latestApp=useRef(app);latestApp.current=app;
   const pendingLinkOwner=useRef<string|null>(null);
   const theme = useTheme();
+  useMotionSuppression("capture-and-station", app.captureStatus === "capturing" || app.route.name === "station");
   const immersive = isImmersiveRoute(app.route) && app.route.name !== "capture" && app.route.name !== "station";
   const [captureIntent,setCaptureIntent]=useState<string|null>(null);
   const [linkedProofId, setLinkedProofId] = useState<string | null>(null);
