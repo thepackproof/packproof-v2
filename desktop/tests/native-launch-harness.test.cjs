@@ -79,3 +79,37 @@ test('shutdown evidence contains only bounded fixed lifecycle codes and timestam
   assert.equal(shutdownDiagnostics(Array(100).fill(rows[0])).length,32);
   assert.throws(()=>assertCleanShutdown({exitCode:0,signalCode:null},'normal-window-close',[{category:'SYSTEM',code:'QUIT_FAILED'}]),/QUIT_FAILED/);
 });
+
+test('Windows helper acknowledgments stay UTF-8 under an inherited Unicode console without weakening identity checks', { skip: process.platform !== 'win32' }, () => {
+  const { spawnSync } = require('node:child_process');
+  const helper = fs.readFileSync(path.join(__dirname, '../scripts/request-native-close-windows.ps1'), 'utf8');
+  const begin = helper.indexOf('[Console]::OutputEncoding =');
+  const end = helper.indexOf('$expectedPath =');
+  assert.ok(begin >= 0 && end > begin);
+  // Execute only the production protocol prelude, never process lookup or a UI close.
+  const protocol = helper.slice(begin, end);
+  const payload = "@{method='owned-visible-window-wm-close';processId=1234;matchedWindows=1;delivered=$true}";
+  const invoke = code => spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', code], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 16384 });
+  const child = { pid: 1234 }, executable = path.resolve('PackProof Dev.exe');
+  const inheritedUnicode = '[Console]::OutputEncoding=[Text.Encoding]::Unicode;';
+  const unpinned = invoke(`${inheritedUnicode} ${payload} | ConvertTo-Json -Compress`);
+  assert.equal(unpinned.status, 0);assert.ok(unpinned.stdout.includes('\0'));
+  const rejected = requestWindowsClose(child, executable, () => unpinned);
+  assert.equal(rejected.delivered, false);assert.equal(rejected.matchedWindows, null);
+  const pinned = invoke(`${inheritedUnicode}\n${protocol}\nWrite-NativeCloseAcknowledgment ${payload}`);
+  assert.equal(pinned.status, 0);assert.equal(pinned.error, undefined);
+  assert.ok(!pinned.stdout.includes('\0'));assert.notEqual(pinned.stdout.codePointAt(0), 0xFEFF);
+  assert.deepEqual(JSON.parse(pinned.stdout), { method: 'owned-visible-window-wm-close', processId: 1234, matchedWindows: 1, delivered: true });
+  const accepted = requestWindowsClose(child, executable, () => pinned);
+  assert.equal(accepted.delivered, true);assert.equal(accepted.acknowledgment, 'confirmed');
+  assert.equal(requestWindowsClose({ pid: 9999 }, executable, () => pinned).delivered, false);
+  assert.equal(requestWindowsClose(child, executable, () => ({ ...pinned, status: 1 })).delivered, false);
+});
+
+test('close helper failures expose bounded protocol metadata without raw process output or paths', () => {
+  const child = { pid: 1234 }, executable = path.resolve('private candidate', 'PackProof Dev.exe');
+  const result = requestWindowsClose(child, executable, () => ({ status: null, error: { code: 'ETIMEDOUT', message: executable }, stdout: 'private raw stdout', stderr: 'private raw stderr' }));
+  assert.equal(result.delivered, false);assert.equal(result.helperStatus, null);assert.equal(result.helperError, 'ETIMEDOUT');assert.equal(result.acknowledgment, 'invalid-json');
+  assert.ok(!JSON.stringify(result).includes('private'));
+  assert.throws(() => assertCleanShutdown({ exitCode: 0, signalCode: null }, 'normal-close-request-not-confirmed', []), /zero-exit/);
+});
