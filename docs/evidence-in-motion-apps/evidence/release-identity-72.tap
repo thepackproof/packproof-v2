@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: production profile pins store AAB 72 and retains the existing runtime and upload key
+ok 1 - production profile pins store AAB 72 and retains the existing runtime and upload key
+  ---
+  duration_ms: 2.5523
+  type: 'test'
+  ...
+# Subtest: production config binds worker source, authenticated release guards and UX without a review marker
+ok 2 - production config binds worker source, authenticated release guards and UX without a review marker
+  ---
+  duration_ms: 121.1257
+  type: 'test'
+  ...
+# Subtest: production refuses stale version, missing worker source, development auth, camera spike and wrong platform
+ok 3 - production refuses stale version, missing worker source, development auth, camera spike and wrong platform
+  ---
+  duration_ms: 663.1273
+  type: 'test'
+  ...
+# Subtest: signed AAB workflow resolves production identity before dispatch and freezes the existing credential
+ok 4 - signed AAB workflow resolves production identity before dispatch and freezes the existing credential
+  ---
+  duration_ms: 197.978
+  type: 'test'
+  ...
+# Subtest: signed AAB workflow rejects false or missing task-first flag even when the runner environment enables it
+ok 5 - signed AAB workflow rejects false or missing task-first flag even when the runner environment enables it
+  ---
+  duration_ms: 2.4508
+  type: 'test'
+  ...
+# Subtest: signed AAB workflow rejects false or missing restoration flag even when the runner environment enables it
+ok 6 - signed AAB workflow rejects false or missing restoration flag even when the runner environment enables it
+  ---
+  duration_ms: 1.8607
+  type: 'test'
+  ...
+# Subtest: signed AAB workflow rejects missing or mismatched receipt scope before publishing artifact identity
+ok 7 - signed AAB workflow rejects missing or mismatched receipt scope before publishing artifact identity
+  ---
+  duration_ms: 64.9117
+  type: 'test'
+  ...
+# Subtest: signed AAB workflow rejects a completed artifact from the wrong source or release identity
+ok 8 - signed AAB workflow rejects a completed artifact from the wrong source or release identity
+  ---
+  duration_ms: 570.2026
+  type: 'test'
+  ...
+# Subtest: next standard Android candidate advances the installed baseline and retains account media protection
+ok 9 - next standard Android candidate advances the installed baseline and retains account media protection
+  ---
+  duration_ms: 63.2524
+  type: 'test'
+  ...
+# Subtest: store profiles preserve the existing Play package and signing credential
+ok 10 - store profiles preserve the existing Play package and signing credential
+  ---
+  duration_ms: 345.92
+  type: 'test'
+  ...
+# Subtest: native Gradle outputs are ignored while local module source remains part of release identity
+ok 11 - native Gradle outputs are ignored while local module source remains part of release identity
+  ---
+  duration_ms: 236.147
+  type: 'test'
+  ...
+# Subtest: production research mode rejects lab mode, other profiles and unsafe HTTPS authority
+ok 12 - production research mode rejects lab mode, other profiles and unsafe HTTPS authority
+  ---
+  duration_ms: 869.3644
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3236.9702

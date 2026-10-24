@@ -1,0 +1,12 @@
+{
+  "date":"2026-10-24",
+  "pullRequest":"https://github.com/thepackproof/packproof-v2/pull/130",
+  "implementationCommit":"07921d204bb9cbd96f4cf819f777c5a2d4322789",
+  "candidateBranch":"feat/evidence-in-motion-apps",
+  "hostedCandidate":{"sourceCommit":"211688b808ee70dcd01e2ce5deaa18143e034785","savedVersion":64,"archiveSha256":"052a88445ce4ffda66afd93122d70c4560ba8a70c173b30cd4f04b2c9e0c4936","deployed":false},
+  "android":{"package":"com.packproof.mobile","version":"1.0.1","candidateVersionCode":72,"liveVersionCode":71,"candidateSubmitted":false},
+  "ciFollowup":{"motionHarness":"9 focused checks passed after real policy injection","releaseIdentity":"12 checks passed for reviewed72 identity","webCompatibility":"5 previously failing navigation/digest/preservation checks passed; semantics retained","secretScanner":"3 exact public Figma/provenance-digest false positives reviewed; scoped full-line exceptions added","backendSourceAudit":"Inherited body-parser1.20.8 gate repaired to1.20.9; source lock audit0; no backend deployment"},
+  "remainingCriticalGates":["Final exact-source remote CI/build results", "Real authenticated web camera-to-receipt journey", "Physical Android recording/interruption/recovery/retake/receipt", "Pending-work upgrade and applicable rollback/forward-fix acceptance"],
+  "otherPlatformGates":["iOS signed physical-device acceptance", "Windows/macOS signed distribution and station/upgrade evidence", "Remaining design fidelity and accessibility constraints"],
+  "authorization":"Webapp and Android production publication authorized upon completion; no new authorization requested"
+}

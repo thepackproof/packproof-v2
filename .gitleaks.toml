@@ -242,3 +242,21 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^research/qualification/witness/test_operator_profile\.py$''']
 regexes = ['''^\n?        for pem in \('-----BEGIN PRIVATE KEY-----\\nREDACTED\\n-----END PRIVATE KEY-----',\r?\n                    '-----BEGIN PUBLIC KEY-----\\n' \+ base64\.b64encode\(b'X' \* 44\)\.decode\(\) \+ '\\n-----END PUBLIC KEY-----'\):\r?$''']
+
+# Reviewed CI 40104871407: public Figma locator and recomputed token digest.
+# Bind exact non-secret values to their exact provenance files and full lines.
+[[allowlists]]
+description = "Exact public Evidence in Motion Figma file locator; not an access credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/evidence-in-motion-apps/(figma-design-ledger|coverage)\.json$''']
+regexes = ['''^\n?[ \t]*"fileKey": "4AtxdZJxHvpWVF3cCX14Z0",\r?$''']
+
+[[allowlists]]
+description = "Exact recomputed EIM v1 font/token source digest; not authentication material."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^packages/evidence-in-motion/tokens\.generated\.ts$''']
+regexes = ['''^\n?export const eimTokenDigest = "a4ea0bdb72812779f94a7905a48b45c8e17cb1120c98d9b41803c1a1bf2fa93b" as const;\r?$''']
