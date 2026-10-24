@@ -21,7 +21,7 @@ function useMotionPreference() {
   const [paused, setPaused] = useState(() => {
     try { return localStorage.getItem("packproof.motion") === "reduced"; } catch { return false; }
   });
-  const [systemReduced, setSystemReduced] = useState(() => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+  const [systemReduced, setSystemReduced] = useState(() => typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false));
   useEffect(() => {
     const query = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     if (!query) return;
@@ -133,7 +133,7 @@ function CinematicFooter() {
     <div className="eim-footer-top"><div><Wordmark footer /><p>Neutral evidence infrastructure<br />for e-commerce.</p><a className="eim-footer-contact" href="mailto:admin@thepackproof.com">Let’s build a clearer record <Glyph size={17} /></a></div>
       <div className="eim-footer-column"><h2>Explore</h2><a href="/how-it-works/">How it works</a><a href="/sample/">Sample Proof</a><a href="/evidence-integrity/">Evidence integrity</a><a href="/proof-anywhere/">Independent verification</a><a href="/download/">Get PackProof</a></div>
       <div className="eim-footer-column"><h2>Built for</h2><a href="/sellers/">Sellers</a><a href="/buyers/">Buyers</a><a href="/reviewers/">Reviewers</a><a href="/platform-api/">Platforms & developers</a><a href="/integrations/">Connections</a></div>
-      <div className="eim-footer-column"><h2>PackProof</h2><a href="/about/">Our story</a><a href="/contact/">Contact</a><a href="/security/">Security</a><a href="https://thepackproof.com/evidence-library/">Evidence Library <span aria-hidden="true">↗</span></a><div className="eim-social-links"><a href="https://x.com/packproof" target="_blank" rel="noreferrer" aria-label="PackProof on X">X</a><a href="https://facebook.com/packproof" target="_blank" rel="noreferrer" aria-label="PackProof on Facebook">Fb</a><a href="https://instagram.com/thepackproof" target="_blank" rel="noreferrer" aria-label="PackProof on Instagram">Ig</a></div></div>
+      <div className="eim-footer-column"><h2>PackProof</h2><a href="/about/">Our story</a><a href="/contact/">Contact</a><a href="/security/">Security</a><a href="https://thepackproof.com/evidence-library/">Evidence Library <span aria-hidden="true">↗</span></a><a href="/evidence-library/editorial-method/">Editorial method</a><a href="/investors">Investor deck</a><div className="eim-social-links"><a href="https://x.com/packproof" target="_blank" rel="noreferrer" aria-label="PackProof on X">X</a><a href="https://facebook.com/packproof" target="_blank" rel="noreferrer" aria-label="PackProof on Facebook">Fb</a><a href="https://instagram.com/thepackproof" target="_blank" rel="noreferrer" aria-label="PackProof on Instagram">Ig</a></div></div>
     </div>
     <div className="eim-footer-bottom"><span>© {new Date().getFullYear()} PackProof</span><span className="eim-footer-neutral">The record informs. People decide.</span><div><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a></div></div>
     <div className="eim-footer-type" aria-hidden="true">SHOW THE PROOF.</div>
