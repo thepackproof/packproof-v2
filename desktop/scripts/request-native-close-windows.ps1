@@ -4,6 +4,15 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($env:APP_ENV -ne 'development' -or $env:CI -ne 'true') { throw 'Native close automation is restricted to isolated development CI.' }
+# This is a machine protocol, not formatted PowerShell display output. Windows
+# hosts can start powershell.exe with a Unicode console code page; Node reads
+# the pipe as UTF-8. Pin bytes explicitly and flush the PostMessage acknowledgment.
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+function Write-NativeCloseAcknowledgment {
+  param([Parameter(Mandatory = $true)][hashtable]$Acknowledgment)
+  [Console]::Out.WriteLine(($Acknowledgment | ConvertTo-Json -Compress))
+  [Console]::Out.Flush()
+}
 $expectedPath = [IO.Path]::GetFullPath($ExpectedExecutable)
 $ownedProcess = Get-Process -Id $OwnedProcessId -ErrorAction Stop
 if (-not [String]::Equals($ownedProcess.Path, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) { throw 'The target process is not the owned candidate executable.' }
@@ -48,14 +57,14 @@ public static class PackProofNativeClose {
 '@
 $windows = @([PackProofNativeClose]::VisibleApplicationWindows($OwnedProcessId))
 if ($windows.Count -ne 1) {
-  @{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $false; failureCode = 'NO_UNIQUE_OWNED_WINDOW' } | ConvertTo-Json -Compress
+  Write-NativeCloseAcknowledgment @{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $false; failureCode = 'NO_UNIQUE_OWNED_WINDOW' }
   exit 1
 }
 $ownedProcess.Refresh()
 if ($ownedProcess.HasExited -or -not [String]::Equals($ownedProcess.Path, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) { throw 'The owned candidate exited or changed before the close request.' }
 $delivered = [PackProofNativeClose]::RequestClose($windows[0], $OwnedProcessId)
 if (-not $delivered) {
-  @{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $false; failureCode = 'WINDOW_CLOSE_POST_FAILED' } | ConvertTo-Json -Compress
+  Write-NativeCloseAcknowledgment @{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $false; failureCode = 'WINDOW_CLOSE_POST_FAILED' }
   exit 1
 }
-@{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $true } | ConvertTo-Json -Compress
+Write-NativeCloseAcknowledgment @{ method = 'owned-visible-window-wm-close'; processId = $OwnedProcessId; matchedWindows = $windows.Count; delivered = $true }
