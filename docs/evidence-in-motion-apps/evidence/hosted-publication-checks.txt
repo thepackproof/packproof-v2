@@ -1,0 +1,100 @@
+
+> test:seo
+> node --test web/scripts/sites-worker.check.mjs web/scripts/evidence-library.check.mjs
+
+TAP version 13
+# (node:34428) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: launch content is crawlable and has unique metadata, matching schema, real links and image assets
+ok 1 - launch content is crawlable and has unique metadata, matching schema, real links and image assets
+  ---
+  duration_ms: 487.9585
+  type: 'test'
+  ...
+# Subtest: published articles return full HTML, redirects preserve queries, missing slugs are true 404s
+ok 2 - published articles return full HTML, redirects preserve queries, missing slugs are true 404s
+  ---
+  duration_ms: 29.3394
+  type: 'test'
+  ...
+# Subtest: analytics persists aggregate events with server-owned dimensions and rejects malformed inputs
+ok 3 - analytics persists aggregate events with server-owned dimensions and rejects malformed inputs
+  ---
+  duration_ms: 16.1312
+  type: 'test'
+  ...
+# Subtest: admin reporting verifies current roles each time and fails closed
+ok 4 - admin reporting verifies current roles each time and fails closed
+  ---
+  duration_ms: 2.0684
+  type: 'test'
+  ...
+# Subtest: serves app deep links through the HTML entry point and keeps asset 404s
+ok 5 - serves app deep links through the HTML entry point and keeps asset 404s
+  ---
+  duration_ms: 19.6143
+  type: 'test'
+  ...
+# Subtest: serves mobile workspace destinations as app routes and Downloads as prerendered public HTML
+ok 6 - serves mobile workspace destinations as app routes and Downloads as prerendered public HTML
+  ---
+  duration_ms: 2.5743
+  type: 'test'
+  ...
+# Subtest: serves the voluntary first Proof sample through the app shell without indexing it
+ok 7 - serves the voluntary first Proof sample through the app shell without indexing it
+  ---
+  duration_ms: 0.4833
+  type: 'test'
+  ...
+# Subtest: serves association JSON directly on apex and www, including extensionless AASA
+ok 8 - serves association JSON directly on apex and www, including extensionless AASA
+  ---
+  duration_ms: 3.2055
+  type: 'test'
+  ...
+# Subtest: does not publish SPA HTML or redirects as association documents
+ok 9 - does not publish SPA HTML or redirects as association documents
+  ---
+  duration_ms: 0.5744
+  type: 'test'
+  ...
+# Subtest: handoff link previews only fetch static HTML and send no identifying referrer
+ok 10 - handoff link previews only fetch static HTML and send no identifying referrer
+  ---
+  duration_ms: 0.2049
+  type: 'test'
+  ...
+# Subtest: redirects the public account deletion URL to the existing deletion flow
+ok 11 - redirects the public account deletion URL to the existing deletion flow
+  ---
+  duration_ms: 0.1196
+  type: 'test'
+  ...
+# Subtest: proxies only to the fixed API and never forwards the private Site cookie
+ok 12 - proxies only to the fixed API and never forwards the private Site cookie
+  ---
+  duration_ms: 0.4186
+  type: 'test'
+  ...
+# Subtest: redirects www to the main domain while preserving paths and query strings
+ok 13 - redirects www to the main domain while preserving paths and query strings
+  ---
+  duration_ms: 0.2455
+  type: 'test'
+  ...
+# Subtest: returns a useful API error when the upstream cannot be reached
+ok 14 - returns a useful API error when the upstream cannot be reached
+  ---
+  duration_ms: 1.4823
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1507.4626

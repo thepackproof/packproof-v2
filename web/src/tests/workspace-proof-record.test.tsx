@@ -65,14 +65,16 @@ describe("simplified live Proof record", () => {
     const load = vi.fn(async () => new Blob(["original"], { type: "video/mp4" }));
     const props = { proof, currentUserId: userId, loadEvidence: load };
     const first = render(<WorkspaceProofRecord {...props} />);
+    const initialPlayer = await screen.findByLabelText("Recorded packing evidence");
     await userEvent.click(screen.getByRole("button", { name: "Recording history and details" }));
     const player = await screen.findByLabelText("Recorded packing evidence") as HTMLVideoElement;
+    expect(player).toBe(initialPlayer);
     fireEvent.timeUpdate(player, { target: { currentTime: 12 } });
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     expect(screen.getByLabelText("Recorded packing evidence")).not.toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: "Recording" }));
     expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
-    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
     first.unmount();
     const second = render(<WorkspaceProofRecord {...props} />);

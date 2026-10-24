@@ -173,7 +173,7 @@ export function ProofScreen(props: {
   }
 
   return (
-    <main className="page stack">
+    <main className="page stack eim-proof-page">
       {props.api && <RndWebPanel proofId={proof.proofId} api={props.api} loadEvidence={props.onLoadEvidence}/>}
       <PageHeader
         title="Proof"

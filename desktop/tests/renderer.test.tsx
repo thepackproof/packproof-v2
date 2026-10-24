@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Auth } from '../src/renderer/Auth';
@@ -28,12 +30,42 @@ describe('desktop renderer safety and shared presentation',()=>{
     expect(html).toMatch(/class="primary full" disabled=""/);
     expect(html).not.toContain('value="Bearer');
   });
-  it('offers no enabled record action before the camera and a Proof are ready',()=>{
+  it('offers preparation actions while keeping actual recording controls unavailable before camera and Proof readiness',()=>{
     const html=renderToStaticMarkup(<PackingStation proofId={null} orders={[]} settings={system.settings} chooseProof={()=>{}} onBusy={()=>{}} onSaved={()=>{}} onSettings={()=>{}}/>);
-    expect(html).toContain('Camera needs attention');
-    expect(html).toMatch(/class="primary" disabled=""/);
-    expect(html).toContain('Select a synchronized order');
+    expect(html).toContain('What are you packing?');
+    expect(html).toContain('Pack an item');
+    expect(html).toContain('Select a Proof');
+    expect(html).toMatch(/aria-label="Stop recording" disabled=""/);
+    const captureControls=[...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].filter(match=>
+      /aria-label="(?:Start|Stop) recording"/.test(match[1])||/(?:^|>)(?:Record packing|Start recording|Stop recording)(?:<|$)/.test(match[2].trim()));
+    expect(captureControls.length).toBeGreaterThan(0);
+    expect(captureControls.every(match=>/\bdisabled(?:="")?/.test(match[1]))).toBe(true);
     expect(html).not.toContain('Secured by PackProof');
+  });
+  it('the actual begin command requires a loaded Proof, matching allowance, ready camera stream and idle phase',async()=>{
+    const file=new URL('../src/renderer/PackingStation.tsx',import.meta.url);
+    const source=ts.createSourceFile(file.pathname,readFileSync(file,'utf8'),ts.ScriptTarget.ES2022,true,ts.ScriptKind.TSX);
+    const station=source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='PackingStation');
+    if(!station||!ts.isFunctionDeclaration(station))throw new Error('PackingStation owner unavailable');
+    const begin=station.body?.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='begin');
+    if(!begin)throw new Error('Capture begin command unavailable');
+    const body=ts.transpileModule(`return (${begin.getText(source)});`,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+    const ready={proof:{proofId:'exact-proof'},allowance:{proofId:'exact-proof'},stream:{current:{}},cameraReady:true,phaseRef:{current:'ready'}};
+    const blocked=[
+      {...ready,proof:null},{...ready,allowance:null},{...ready,allowance:{proofId:'different-proof'}},
+      {...ready,stream:{current:null}},{...ready,cameraReady:false},
+      ...['starting','recording','saving','review'].map(phase=>({...ready,phaseRef:{current:phase}})),
+    ];
+    for(const state of blocked){
+      let passed=false;
+      const ports={...state,setError:()=>{passed=true;throw new Error('capture preconditions passed');}};
+      const start=new Function(...Object.keys(ports),body)(...Object.values(ports));
+      await start();expect(passed).toBe(false);
+    }
+    let passed=false;
+    const ports={...ready,setError:()=>{passed=true;throw new Error('capture preconditions passed');}};
+    const start=new Function(...Object.keys(ports),body)(...Object.values(ports));
+    await expect(start()).rejects.toThrow('capture preconditions passed');expect(passed).toBe(true);
   });
   it('uses the backend shipping normalization and never accepts a partial tracking match',()=>{
     const tracking='9400111899223856928877';

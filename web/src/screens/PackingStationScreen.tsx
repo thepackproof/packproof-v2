@@ -1,3 +1,4 @@
+import { useMotionSuppression } from '../theme/ThemeProvider';
 import { SIGNAL_ENABLED, SignalSteps, SignalGuide, SignalSheet, SignalProgress, SignalReceipt } from "../signal/Signal";
 import { hasSignalReceipt, signalDuration } from "../../../mobile/src/experience/signal/receipt";
 import { beginBrowserEngine, BrowserCaptureJournal, captureEngineEnabled, type EngineSession } from "../capture/engine";
@@ -57,6 +58,7 @@ export function PackingStationScreen(props: {
     undefined,
     initialStationState,
   );
+  useMotionSuppression('web-capture', state.phase === 'RECORDING' || !props.initialProofId);
   const [leaveOpen,setLeaveOpen]=useState(false),[retakeOpen,setRetakeOpen]=useState(false);
   const [savedProof,setSavedProof]=useState<CanonicalProof|null>(null);
   const [replacementPending,setReplacementPending]=useState(false);
@@ -683,7 +685,7 @@ export function PackingStationScreen(props: {
       // PackProofApi is account-bound by App; its old token supplier returns null after an account change.
       const result = await resumeStationRecording(props.api, props.userId, () => true, progress => {
         studyTimer.current?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');
-        if (mountedRef.current) dispatch({ type: "PROCESSING_PROGRESS", submitStep: progress.step, uploadPercent: progress.uploadPercent });
+        if (mountedRef.current && studyScope.current === owner && pendingRef.current?.uploadKey === pending.uploadKey && pendingRef.current?.order.proofId === pending.order.proofId) dispatch({ type: "PROCESSING_PROGRESS", submitStep: progress.step, uploadPercent: progress.uploadPercent });
       });
       // The receipt observes this exact account, Proof and evidence after the queue finishes.
       const [canonical,recovery]=await Promise.all([props.api.getProof(pending.order.proofId),props.api.getRecoveryStatus(pending.order.proofId)]);
@@ -706,7 +708,7 @@ export function PackingStationScreen(props: {
     try{await observeAcceptedSave(pending);}catch(error){if(mountedRef.current){setSavePaused(true);setLocalError(error instanceof Error?error.message:'Uploading paused. Your recording is retained.');}}
     finally{if(mountedRef.current)setBusy(false);}
   }
-  useEffect(()=>observeStationProgress(props.api.recoveryScope,props.userId,progress=>{if(stateRef.current.phase==='PROCESSING')dispatch({type:'PROCESSING_PROGRESS',submitStep:progress.step,uploadPercent:progress.uploadPercent});}),[props.api,props.userId]);
+  useEffect(()=>observeStationProgress(props.api.recoveryScope,props.userId,progress=>{const pending=pendingRef.current;if(stateRef.current.phase==='PROCESSING'&&pending?.order.proofId===progress.proofId&&pending.uploadKey===progress.uploadKey)dispatch({type:'PROCESSING_PROGRESS',submitStep:progress.step,uploadPercent:progress.uploadPercent});}),[props.api,props.userId]);
 
   async function processVideo(blob: Blob, _contentType: string, _handle: string) {
     const order = orderRef.current;
@@ -831,7 +833,7 @@ export function PackingStationScreen(props: {
       {SIGNAL_ENABLED && !pendingRef.current?.finishConfirmed && !pendingRef.current?.evidenceId && !replacementPending && <button className="btn btn-tertiary" disabled={busy || !recordingDurable} onClick={()=>setRetakeOpen(true)}>Retake recording</button>}
       <a href={previewUrl} download="packproof-recording.webm">Download local recording</a>
     </div> : null}
-    {state.phase === "PROCESSING" ? <SignalProgress percent={state.uploadPercent} confirming={state.submitStep!=="upload"} paused={savePaused}>
+    {state.phase === "PROCESSING" ? <SignalProgress percent={state.uploadPercent} confirming={state.submitStep!=="upload"} paused={savePaused} originalAvailable={recordingDurable && !!pendingRef.current?.file?.size}>
       {savePaused&&<button className="btn" disabled={busy} onClick={()=>void resumeAcceptedSave()}>Resume saving</button>}<button className="btn btn-secondary" onClick={props.onHome}>Continue to Home</button></SignalProgress> : null}
     {state.phase === "PROOF_CREATED" && SIGNAL_ENABLED && savedProof ? <SignalReceipt title={state.order?.itemSummary || "Packing record"} proofId={savedProof.proofId} savedAt={savedProof.finalizedAt!} duration={signalDuration(durationRef.current)} onView={()=>props.onView?.(savedProof.proofId)} onHome={()=>props.onHome?.()}/> : state.phase === "PROOF_CREATED" ? <section className="section stack"><h2>Recording received</h2><p>Your recording has been received. Keep your local original until preservation is confirmed.</p><a className="btn" href={`/proofs/${encodeURIComponent(state.order?.proofId || "")}`}>View Proof</a>{state.completion === "FINALIZED" ? <button className="btn btn-secondary" onClick={() => dispatch({type:"RESET"})}>Pack next order</button> : null}</section> : null}
     {(!SIGNAL_ENABLED || !state.order) && <details className="ws-remote-controls"><summary>Remote camera controls</summary><RelayStationPanel api={props.api} userId={props.userId} queue={props.queue} localProofId={state.order?.proofId} localPhase={state.phase} onRole={setRelayRole} start={startPacking} finish={async()=>{await finishPacking();}} selectProof={async(id)=>{if(stateRef.current.phase==="RECORDING"||pendingRef.current)throw new Error("Finish saving the current recording before selecting another order.");void beginStudy().then(timer=>timer?.event('order_selected'));const proof=await props.api.getProof(id);const context=stationContextFromProof(proof);orderRef.current=context;dispatch({type:"RESTORE_LOCAL",state:{...initialStationState(),phase:"READY_TO_RECORD",order:context}});}}/>{relayRole === "CONTROLLER" ? <p>Recording is controlled on the connected camera.</p> : null}</details>}

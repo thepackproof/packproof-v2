@@ -85,3 +85,28 @@ test('renamed fonts retain original attribution and the SIL Open Font License', 
   assert.match(license, /The Inter Project Authors/);
   assert.match(license, /SIL OPEN FONT LICENSE Version 1\.1/);
 });
+
+test('Medium and ExtraBold resolve to genuine static weights with unique native names', () => {
+  const additional = [
+    { file: 'Inter-Medium.ttf', alias: 'Inter-Medium', weight: 500 },
+    { file: 'Inter-ExtraBold.ttf', alias: 'Inter-ExtraBold', weight: 800 },
+  ];
+  const names = new Set(faces.map(face => readFont(face.file).name(6)));
+  const outlines = new Set(faces.map(face => createHash('sha256').update(readFont(face.file).tables.get('glyf')).digest('hex')));
+  const provider = fs.readFileSync(path.join(__dirname, '../src/theme/ThemeProvider.tsx'), 'utf8');
+  for (const face of additional) {
+    const { tables, name } = readFont(face.file);
+    assert.equal(tables.get('OS/2').readUInt16BE(4), face.weight);
+    assert.equal(tables.has('fvar'), false, 'Required native face is static');
+    assert.ok(tables.get('maxp').readUInt16BE(4) > 0, 'Native glyphs are present');
+    assert.ok(!names.has(name(6)), 'No native PostScript name collision');
+    names.add(name(6));
+    const outline = createHash('sha256').update(tables.get('glyf')).digest('hex');
+    assert.ok(!outlines.has(outline), 'The requested weight has its own glyph outlines');
+    outlines.add(outline);
+    assert.ok(provider.includes(`'${face.alias}': require('../../assets/fonts/${face.file}')`), 'Face is registered by the native provider');
+    assert.match(name(0), /Inter Project Authors/);
+    assert.match(name(13), /SIL Open Font License/i);
+  }
+  assert.equal(names.size, 5);
+});

@@ -147,3 +147,86 @@
 @media(prefers-reduced-motion:reduce){.proof-list .proof-row{transition:none}.proof-list .proof-row:hover{transform:none}}
 
 .notification-setting{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;font-size:1rem}.notification-setting input{width:22px;height:22px;accent-color:#1769D2}.notification-history{list-style:none;padding:0;display:grid;gap:12px}.notification-history li{display:grid;gap:5px;border-left:2px solid #1769D2;padding-left:12px}.notification-history time{font-size:.8125rem;color:var(--muted)}
+
+/* Evidence in Motion: one stable evidence viewer beside inspectable source history. */
+.signal-shell .page.eim-proof-page{max-width:1240px;width:100%;gap:24px}
+.signal-shell .eim-connected-record{overflow:visible;background:var(--signal-paper);border:1px solid var(--signal-line);border-radius:16px}
+.signal-shell .eim-connected-record .record-top{align-items:flex-start;background:#0A172A;border-color:#29415E;border-radius:15px 15px 0 0;padding:24px;color:#fff}
+.signal-shell .eim-connected-record .record-top h1{font-family:Inter,system-ui,sans-serif;font-size:28px;line-height:34px;font-weight:700;letter-spacing:-.035em;color:#fff;margin:8px 0;overflow-wrap:anywhere}
+.signal-shell .eim-connected-record .record-top p,.signal-shell .eim-connected-record .record-top summary{color:#A5B6CB}
+.signal-shell .eim-connected-record .record-top .signal-badge-local{background:#17304C;color:#D9E3EF}
+.signal-shell .eim-connected-record .record-top .signal-badge-saved{background:#21D6A0;color:#073D2E}
+.signal-shell .eim-connected-record .eim-record-eyebrow{font-size:12px;line-height:18px;font-weight:700;letter-spacing:.09em;color:var(--signal-secondary);margin:0}
+.signal-shell .eim-connected-record .record-top .eim-record-eyebrow{color:#65DFF7}
+.signal-shell .eim-record-role{font-size:14px;line-height:20px}
+.signal-shell .eim-record-id{overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.eim-record-notices{padding:0 24px}
+.eim-record-notices:has(>*){padding-top:20px}
+.eim-record-notices .proof-next-action{position:static;margin:0;background:var(--signal-canvas);box-shadow:none}
+.eim-record-context{display:flex;align-items:center;flex-wrap:wrap;gap:12px 24px;padding:20px 24px;border-bottom:1px solid var(--signal-line)}
+.eim-record-context>span{display:inline-flex;align-items:center;gap:8px;font-size:14px;line-height:20px;color:var(--signal-secondary)}
+.eim-record-context svg{color:var(--signal-primary);flex:none}
+.eim-connected-record .record-body{padding:24px;animation:none}
+.eim-record-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:32px;align-items:start}
+.eim-chronology{min-width:0}
+.eim-chronology-heading,.eim-evidence-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
+.signal-shell .eim-chronology-heading h2,.signal-shell .eim-evidence-heading h2{font-family:Inter,system-ui,sans-serif;font-size:20px;line-height:26px;font-weight:700;margin:4px 0 0;letter-spacing:-.02em}
+.eim-chronology-heading>span{display:grid;place-items:center;width:36px;height:36px;border-radius:8px;background:var(--signal-cobalt-wash);color:var(--signal-cobalt-ink);font-variant-numeric:tabular-nums}
+.signal-shell .eim-chronology-note{font-size:14px;line-height:20px;margin-bottom:20px}
+.eim-source-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column}
+.eim-source-list>li{position:relative;padding:0 0 12px}
+.eim-source-list>li:not(:last-child)::before{content:'';position:absolute;top:42px;bottom:-6px;left:19px;width:1px;background:var(--signal-line)}
+.eim-source-node{width:100%;display:flex;align-items:flex-start;gap:12px;padding:12px 0;min-height:80px;text-align:left;color:var(--signal-ink);background:transparent;border:0;border-radius:8px;cursor:pointer}
+.eim-source-symbol{position:relative;z-index:1;display:grid;place-items:center;width:40px;height:40px;flex:none;border:1px solid var(--signal-line);border-radius:12px;background:var(--signal-paper);color:var(--signal-primary)}
+.eim-source-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.eim-source-copy>small,.eim-source-copy>time{font-size:12px;line-height:18px;color:var(--signal-secondary)}
+.eim-source-copy>strong{font-size:16px;line-height:22px;font-weight:600;overflow-wrap:anywhere}
+.eim-source-chevron{display:grid;place-items:center;width:32px;min-height:40px;color:var(--signal-secondary);font-size:22px;flex:none}
+.eim-source-list>.is-selected>.eim-source-node{background:var(--signal-cobalt-wash);padding-inline:8px}
+.eim-source-list>.is-selected .eim-source-symbol{border-color:var(--signal-primary);background:var(--signal-primary);color:#fff}
+.eim-source-inspector{position:relative;margin:0 0 12px 52px;padding:16px;border:1px solid var(--signal-line);border-radius:12px;background:var(--signal-canvas);overflow-wrap:anywhere}
+.signal-shell .eim-source-inspector p{font-size:14px;line-height:20px;margin:0 0 12px}
+.eim-source-inspector dl{display:grid;gap:12px;margin:16px 0}
+.eim-source-inspector dt{font-size:12px;line-height:18px;color:var(--signal-secondary)}
+.eim-source-inspector dd{font-size:13px;line-height:20px;margin:2px 0 0}
+.eim-source-inspector blockquote{font-size:14px;line-height:22px;padding-left:12px;margin:16px 0;border-left:2px solid var(--signal-primary)}
+.eim-source-limit{border-top:1px solid var(--signal-line);padding-top:12px}
+.eim-source-association{font-weight:600;color:var(--signal-cobalt-ink)!important}
+.eim-source-empty{display:grid;gap:12px;padding:24px;border:1px dashed var(--signal-line);border-radius:16px}
+.eim-source-unavailable{padding:12px;border:1px solid var(--signal-line);border-radius:8px;margin-bottom:12px!important}
+.eim-new-activity{width:100%;margin-bottom:16px}
+.eim-record-evidence{min-width:0}
+.eim-evidence-heading{align-items:flex-start;flex-wrap:wrap}
+.eim-evidence-heading>span{font-size:12px;line-height:18px;color:var(--signal-secondary)}
+.eim-record-evidence .document-canvas{background:#06101E;border-radius:16px;overflow:hidden}
+.eim-record-evidence video,.eim-record-evidence img{display:block;width:100%;max-height:520px;object-fit:contain;background:#06101E}
+.eim-record-evidence .document-toolbar{padding-bottom:16px}
+.signal-shell .eim-record-evidence .record-declaration{border:1px solid var(--signal-line);border-radius:12px;padding:20px;background:var(--signal-canvas)}
+.signal-shell .eim-record-evidence .record-declaration .status-badge{display:none}
+.signal-shell .eim-record-evidence .record-declaration h3{font-family:Inter,system-ui,sans-serif;font-size:16px;line-height:22px}
+.signal-shell .eim-record-evidence .record-declaration p{font-size:14px;line-height:20px}
+.eim-record-footer{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:24px;border-top:1px solid var(--signal-line)}
+.signal-shell .eim-record-footer>p{flex-basis:100%;font-size:14px;line-height:20px;max-width:760px}
+.eim-connected-record .record-order-details>summary{min-height:48px}
+.eim-connected-record .document-download{min-width:48px;min-height:48px}
+@media(max-width:1050px){.eim-record-layout{grid-template-columns:minmax(0,1fr);gap:32px}.eim-record-evidence{grid-row:1}.eim-source-inspector{margin-left:52px}.eim-record-footer>.btn{flex:1 1 220px}}
+@media(max-width:480px){.signal-shell .eim-connected-record .record-top,.eim-record-context,.eim-connected-record .record-body,.eim-record-footer{padding:20px}.eim-record-notices{padding-inline:20px}.eim-source-inspector{margin-left:0}.signal-shell .page.eim-proof-page{padding-inline:20px}.signal-shell .eim-connected-record .record-top h1{font-size:28px;line-height:34px}.eim-evidence-heading>span{flex-basis:100%}.eim-record-footer>.btn{width:100%;flex-basis:100%}}
+@media(prefers-reduced-motion:no-preference){html:not([data-motion=off]):not([data-motion=reduced]) .eim-source-inspector{animation:eim-source-reveal 220ms cubic-bezier(.2,.75,.2,1)}html:not([data-motion=off]):not([data-motion=reduced]) .eim-source-symbol{transition:color 180ms ease,background-color 180ms ease,border-color 180ms ease}@keyframes eim-source-reveal{from{opacity:.65;transform:translateY(4px)}to{opacity:1;transform:none}}}
+html[data-motion=off] .eim-connected-record *,html[data-motion=reduced] .eim-connected-record *{scroll-behavior:auto;animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){.eim-connected-record *{animation:none!important;transition:none!important;scroll-behavior:auto}}
+.eim-original-provenance{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;font-size:12px;line-height:18px;color:var(--signal-secondary)}
+.eim-original-provenance>span{text-transform:capitalize;padding-top:12px}
+.eim-original-provenance details{max-width:100%;font-size:12px;line-height:18px}
+.eim-original-provenance summary{cursor:pointer;min-height:48px;display:flex;align-items:center;color:var(--signal-cobalt-ink)}
+.eim-original-provenance dl{display:grid;gap:12px;padding:16px;border:1px solid var(--signal-line);border-radius:8px;margin:0 0 12px}
+.eim-original-provenance dd{margin:4px 0 0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.signal-shell .eim-original-provenance p{font-size:12px;line-height:18px;max-width:420px}
+/* Desktop source inspection gets its own adjacent pane; original media keeps one owner. */
+.eim-chronology-layout,.eim-chronology-events{min-width:0}.eim-source-copy{overflow-wrap:anywhere}
+.eim-inspector-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.signal-shell .eim-inspector-heading .eim-record-eyebrow{margin:0}
+.eim-inspector-heading .text-link{flex:none;min-width:48px}
+.eim-inspector-empty{min-width:0;padding:24px;border:1px dashed var(--signal-line);border-radius:12px;background:var(--signal-canvas);display:grid;gap:12px;align-content:start}
+.signal-shell .eim-inspector-empty h3{margin:0;font-size:20px;line-height:26px}
+.signal-shell .eim-inspector-empty p{font-size:14px;line-height:20px}
+@media(min-width:1200px){.eim-record-layout{grid-template-columns:minmax(0,1fr);gap:32px}.eim-record-evidence{min-width:0}.eim-chronology-layout.is-wide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:start;gap:24px}.eim-source-pane{min-width:0;position:sticky;top:24px;max-height:calc(100dvh - 48px);overflow:auto;scrollbar-gutter:stable}.eim-source-pane .eim-source-inspector{margin:0;padding:24px}.eim-source-pane .eim-inspector-empty{min-height:200px}}

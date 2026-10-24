@@ -1,0 +1,40 @@
+
+> build
+> node web/scripts/build-sites.mjs
+
+
+> @packproof/v2-web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+Γ£ô 289 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture/identifiers.ts is dynamically imported by C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture-queue.ts, C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture-queue.ts but also statically imported by C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/screens/PackingStationScreen.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/assets/coach-worker-E17_u56G.js             0.39 kB
+dist/index.html                                  1.07 kB Γöé gzip:   0.54 kB
+dist/assets/identifier-worker-D7BG-oY8.js       38.02 kB
+dist/assets/zxing_reader-BxB2YfIY.wasm       1,093.29 kB Γöé gzip: 460.98 kB
+dist/assets/GradingProofScreen-CXtigpIR.css     10.82 kB Γöé gzip:   2.49 kB
+dist/assets/AdminWorkspace-4rImWVkP.css         19.62 kB Γöé gzip:   4.06 kB
+dist/assets/App-DVZuj92Z.css                    45.08 kB Γöé gzip:   7.90 kB
+dist/assets/index-Bt00Nvkq.css                 376.21 kB Γöé gzip:  67.24 kB
+dist/assets/GradingPreview-O-yRTnw3.js           1.00 kB Γöé gzip:   0.63 kB
+dist/assets/GradingDetails-CoQobJ-T.js           5.09 kB Γöé gzip:   1.97 kB
+dist/assets/GradingProofScreen-D_RzvAjU.js      19.86 kB Γöé gzip:   6.58 kB
+dist/assets/AdminWorkspace-612jjwJm.js          29.98 kB Γöé gzip:   9.41 kB
+dist/assets/index-F-Z0Sci3.js                  398.05 kB Γöé gzip: 120.89 kB
+dist/assets/App-Cjz-IkH_.js                    563.14 kB Γöé gzip: 163.99 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Γ£ô built in 2.63s
+[plugin vite:reporter] 
+(!) C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture/identifiers.ts is dynamically imported by C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture-queue.ts, C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/capture-queue.ts but also statically imported by C:/Users/neric/Documents/Codex/2026-10-24/new-chat-3/work/hosted-source/web/src/screens/PackingStationScreen.tsx, dynamic import will not move module into another chunk.
+
+Evidence Library: 16 articles, 7 topics, 16 prerendered public pages.

@@ -13,6 +13,7 @@ export interface ProofRecordViewState {
   selectedEvidenceStageId?: string | null;
   selectedShipmentId?: string | null;
   playbackTimes?: Record<string, number>;
+  connectedRecord?: { offset: number; source: 'ALL' | 'COMMERCE' | 'EVIDENCE' | 'SHIPMENT'; eventIdentity: string | null };
   offsets: Record<ProofRecordTab, number>;
 }
 

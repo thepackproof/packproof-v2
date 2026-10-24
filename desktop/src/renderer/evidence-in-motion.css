@@ -1,0 +1,97 @@
+/* Evidence in Motion: presentation over the existing protected workstation owners. */
+@font-face{font-family:Inter;src:url('/fonts/Inter-variable.ttf') format('truetype');font-weight:100 900;font-display:swap}
+:root{font-family:Inter,system-ui,sans-serif;background:#F6F9FD;color:#0A172A;font-size:16px}
+body{min-width:320px}
+.signal-shell.signal-desktop{--text:var(--signal-ink);font-family:Inter,system-ui,sans-serif}
+[data-theme=dark] .signal-shell.signal-desktop{}
+.signal-desktop h1,.signal-desktop h2,.signal-desktop h3,.signal-desktop .brand,.signal-desktop button,.signal-desktop input,.signal-desktop textarea,.signal-desktop select{font-family:Inter,system-ui,sans-serif}
+.signal-desktop h1{font-size:40px;line-height:1.12;letter-spacing:-1.2px;font-weight:750;overflow-wrap:anywhere}
+.signal-desktop h2{font-size:20px;line-height:26px;letter-spacing:-.3px;font-weight:700}
+.signal-desktop h3{font-size:18px;line-height:24px;font-weight:650}
+.signal-desktop p{font-size:16px;line-height:24px}
+.signal-desktop button{border-radius:8px;transition:background 100ms cubic-bezier(.2,.75,.2,1),border-color 160ms cubic-bezier(.2,.75,.2,1);font-weight:650}
+.signal-desktop :focus-visible{outline:3px solid #3478FF;outline-offset:4px}
+.signal-desktop button.primary{background:var(--signal-primary);border-color:var(--signal-primary);color:white;font-size:16px;line-height:22px}
+.signal-desktop button.primary:hover{background:var(--signal-pressed);border-color:var(--signal-pressed)}
+.signal-desktop .sidebar{width:240px;padding:32px 20px;background:#0A172A;color:#F6F9FD;border-right:1px solid #29425F}
+.signal-desktop .sidebar .brand{color:#fff;font-size:24px;letter-spacing:-.7px;margin:0 12px 40px}
+.signal-desktop .sidebar nav button{color:#A5B6CB;font-size:16px;background:transparent;border:1px solid transparent}
+.signal-desktop .sidebar nav button:hover,.signal-desktop .sidebar nav button.active{color:#fff;background:#10243D;border-color:#29425F}
+.signal-desktop .sidebar nav button.active::before{background:#65DFF7}
+.signal-desktop .sidebar summary,.signal-desktop .sidebar .station-online,.signal-desktop .sidebar .profile-button small{color:#A5B6CB}
+.signal-desktop .sidebar .profile-button{color:white;border-top-color:#29425F}
+.signal-desktop .sidebar .profile-button strong{color:white}
+.signal-desktop .sidebar .profile-button .avatar{background:#163158;color:#65DFF7}
+.signal-desktop .sidebar .signal-more-nav{border-top-color:#29425F}
+.signal-desktop .sidebar .signal-more-nav button{color:#A5B6CB;background:transparent}
+.signal-desktop .sidebar .signal-more-nav button:hover{color:white;background:#10243D}
+.signal-desktop .sidebar :focus-visible{outline-color:#65DFF7}
+.signal-desktop .workspace{margin-left:240px}
+.signal-desktop .workspace-content{padding:40px 48px 64px;max-width:1360px}
+.signal-desktop .topbar{padding:0 48px;font-family:Inter,sans-serif;letter-spacing:.08em;font-size:12px;background:var(--signal-canvas)}
+.signal-desktop .panel{border-radius:16px;padding:24px}
+.signal-desktop .page-heading{margin-bottom:32px}
+.signal-desktop .signal-home-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:48px}
+.signal-desktop .signal-home-primary{gap:20px}
+.signal-desktop .signal-display{font-size:48px;line-height:52px;font-weight:800;letter-spacing:-1.3px}
+.signal-desktop .eim-source-hero{min-height:200px;padding:24px;border-radius:16px;background:radial-gradient(ellipse at 90% 0,#173B6B 0,transparent 65%),#0A172A;color:white;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden}
+.signal-desktop .eim-source-hero h2{font-size:24px;line-height:30px;color:white;margin:0;overflow-wrap:anywhere}
+.signal-desktop .eim-source-hero p{color:#A5B6CB;font-size:14px;line-height:20px;overflow-wrap:anywhere}
+.signal-desktop .eim-source-kicker{color:#65DFF7;font-size:12px;line-height:18px;font-weight:650;letter-spacing:.08em}
+.signal-desktop .eim-source-markers{display:flex;flex-wrap:wrap;gap:8px 16px;list-style:none;margin:4px 0 0;padding:0}
+.signal-desktop .eim-source-markers li{display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;color:#D5E3F5}
+.signal-desktop .eim-source-markers svg{width:20px;height:20px;color:#65DFF7}
+.signal-desktop .eim-source-hero .signal-badge{align-self:flex-start}
+.signal-desktop .eim-next-action{width:100%;justify-content:space-between}
+.signal-desktop .signal-home-records .signal-section-title{border:0;padding:0}
+.signal-desktop .signal-home-records .signal-proof-row{padding:16px;background:var(--signal-paper);border:1px solid var(--signal-line);border-radius:16px;gap:16px}
+.signal-desktop .signal-home-records .task-proof-list{gap:12px}
+.signal-desktop .signal-home-records .task-proof-list>li{padding:0;border:0}
+.signal-desktop .signal-proof-row:hover{border-color:#3478FF;background:var(--signal-paper)}
+.signal-desktop .signal-desktop-thumbnail{height:72px;border-radius:12px}
+.signal-desktop .eim-home-empty{padding:32px 24px;background:var(--signal-paper);border:1px dashed var(--signal-line);border-radius:16px}
+.signal-desktop .eim-home-empty h3{margin:16px 0 8px}
+.signal-desktop .signal-record-heading h1{margin:12px 0}
+.signal-desktop .eim-record-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);gap:24px;align-items:start}
+.signal-desktop .eim-original-focus,.signal-desktop .eim-record-context{min-width:0;background:var(--signal-paper);border:1px solid var(--signal-line);border-radius:16px;overflow:hidden}
+.signal-desktop .eim-original-focus .signal-original-video{height:340px;border-radius:0;background:#06101E;object-fit:contain}
+.signal-desktop .eim-original-caption{display:grid;gap:8px;padding:20px}
+.signal-desktop .eim-original-caption small{color:var(--signal-secondary);font-size:14px;line-height:20px}
+.signal-desktop .eim-record-context{padding:24px}
+.signal-desktop .eim-record-context h2{margin:0 0 24px}
+.signal-desktop .eim-record-context dl,.signal-desktop .eim-source-inspector dl{display:grid;gap:8px;margin:0 0 24px}
+.signal-desktop .eim-record-context dt,.signal-desktop .eim-source-inspector dt{font-size:12px;line-height:18px;color:var(--signal-secondary);margin-top:8px}
+.signal-desktop .eim-record-context dd,.signal-desktop .eim-source-inspector dd{margin:0;font-size:14px;line-height:20px;overflow-wrap:anywhere}
+.signal-desktop .eim-source-selection{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 20px}
+.signal-desktop .eim-source-selection button{display:flex;align-items:flex-start;flex-direction:column;gap:4px;min-width:110px;flex:1}
+.signal-desktop .eim-source-selection button[aria-pressed=true]{border-color:#3478FF;background:var(--signal-cobalt-wash);color:var(--signal-cobalt-ink)}
+.signal-desktop .eim-chronology{display:grid;gap:24px;padding-top:8px}
+.signal-desktop .eim-chronology>div>h2{margin:0 0 8px}
+.signal-desktop .eim-chronology-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,1fr);gap:32px;align-items:start}
+.signal-desktop .eim-chronology ol{list-style:none;margin:0;padding:0}
+.signal-desktop .eim-chronology li{position:relative;padding:0 0 12px}
+.signal-desktop .eim-chronology li:not(:last-child)::before{content:'';position:absolute;width:1px;top:30px;bottom:-14px;left:26px;background:var(--signal-line)}
+.signal-desktop .eim-chronology li button{position:relative;display:flex;gap:16px;align-items:flex-start;text-align:left;width:100%;padding:16px;border:1px solid transparent;background:transparent;transition:background 200ms cubic-bezier(.2,.75,.2,1),border-color 200ms cubic-bezier(.2,.75,.2,1)}
+.signal-desktop .eim-chronology li button[aria-pressed=true]{background:var(--signal-cobalt-wash);border-color:var(--signal-line)}
+.signal-desktop .eim-chronology li button>span:last-child{min-width:0;display:grid;gap:8px}
+.signal-desktop .eim-chronology li button small{font-size:14px;line-height:20px;color:var(--signal-secondary)}
+.eim-source-dot{width:20px;height:20px;border-radius:50%;background:var(--signal-paper);border:5px solid #3478FF;flex:none;margin-top:1px;z-index:1}
+.eim-source-dot.is-shipment{border-color:#086E86}.eim-source-dot.is-commerce{border-color:#425D9B}
+.signal-desktop .eim-source-inspector{padding:24px;background:var(--signal-paper);border:1px solid var(--signal-line);border-radius:16px}
+.signal-desktop .eim-source-inspector h3{margin:12px 0}
+.signal-desktop .eim-source-inspector p{margin-bottom:16px}
+.signal-desktop .signal-note{font-size:14px;line-height:20px;color:var(--signal-secondary)}
+.signal-desktop .signal-record-meta{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}
+.signal-desktop .settings-grid label,.signal-desktop .settings-grid p,.signal-desktop .settings-grid select{font-size:16px;line-height:24px}
+.signal-desktop .signal-camera-live,.signal-desktop .camera-surface{background:#06101E}
+.signal-desktop .signal-recording-label{background:#06101Ee6;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums}
+.signal-desktop .record-dot{animation:none}
+.signal-desktop .signal-badge.is-saved{background:#E3F8F0;color:#075941}
+@keyframes eim-home-assembly{from{opacity:.86;transform:translateY(6px)}to{opacity:1;transform:none}}
+[data-motion=full] .signal-desktop .eim-source-hero.is-entrance{animation:eim-home-assembly 520ms cubic-bezier(.2,.75,.2,1) both}
+[data-motion=off] .signal-desktop *,[data-motion=off] .signal-desktop *::before,[data-motion=off] .signal-desktop *::after,[data-motion-suppressed=true] .signal-desktop *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+[data-motion=reduced] .signal-desktop *,[data-motion=reduced] .signal-desktop *::before,[data-motion=reduced] .signal-desktop *::after{animation:none!important;transition-duration:80ms!important;transform:none!important;scroll-behavior:auto!important}
+@media(prefers-reduced-motion:reduce){.signal-desktop *,.signal-desktop *::before,.signal-desktop *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(max-width:1200px){.signal-desktop .workspace-content{padding:32px}.signal-desktop .topbar{padding:0 32px}.signal-desktop .signal-home-grid{gap:32px}.signal-desktop .signal-display{font-size:38px;line-height:44px}.signal-desktop .eim-record-layout{grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr)}}
+@media(max-width:1000px){.signal-desktop .sidebar{width:208px;padding:28px 16px}.signal-desktop .workspace{margin-left:208px}.signal-desktop .signal-home-grid,.signal-desktop .eim-record-layout,.signal-desktop .eim-chronology-layout{grid-template-columns:1fr}.signal-desktop .signal-record-meta{grid-template-columns:1fr}.signal-desktop .eim-original-focus .signal-original-video{height:320px}}
+@media(max-width:800px){.signal-desktop .sidebar{width:80px;padding:24px 12px}.signal-desktop .sidebar .brand{margin:0 0 32px}.signal-desktop .workspace{margin-left:80px}.signal-desktop .workspace-content{padding:24px}.signal-desktop .topbar{padding:0 24px}.signal-desktop .signal-display{font-size:32px;line-height:38px}.signal-desktop h1{font-size:28px;line-height:34px}.signal-desktop .signal-record-heading{align-items:stretch}}

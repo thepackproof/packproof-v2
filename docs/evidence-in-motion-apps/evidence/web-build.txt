@@ -1,0 +1,28 @@
+
+> @packproof/v2-web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+Γ£ô 277 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) <candidate-source>/web/src/capture/identifiers.ts is dynamically imported by <candidate-source>/web/src/capture-queue.ts, <candidate-source>/web/src/capture-queue.ts but also statically imported by <candidate-source>/web/src/screens/PackingStationScreen.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/assets/coach-worker-E17_u56G.js           0.39 kB
+dist/index.html                                1.05 kB Γöé gzip:   0.53 kB
+dist/assets/identifier-worker-D7BG-oY8.js     38.02 kB
+dist/assets/zxing_reader-BxB2YfIY.wasm     1,093.29 kB Γöé gzip: 460.98 kB
+dist/assets/AdminWorkspace-4rImWVkP.css       19.62 kB Γöé gzip:   4.06 kB
+dist/assets/App-DX7laZbQ.css                  47.60 kB Γöé gzip:   8.50 kB
+dist/assets/index-rigCnyF3.css               312.66 kB Γöé gzip:  58.08 kB
+dist/assets/AdminWorkspace-lnb3Lgi_.js        29.99 kB Γöé gzip:   9.42 kB
+dist/assets/index-FEjLUFNZ.js                385.98 kB Γöé gzip: 117.03 kB
+dist/assets/App-YxsIA10t.js                  566.36 kB Γöé gzip: 162.98 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Γ£ô built in 2.05s

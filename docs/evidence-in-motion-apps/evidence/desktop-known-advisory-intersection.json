@@ -1,0 +1,71 @@
+{
+  "scope": "Offline exact-version intersection with already fetched npm advisory evidence; not a complete desktop audit",
+  "findings": [
+    {
+      "name": "fast-uri",
+      "version": "3.1.8",
+      "location": "node_modules/fast-uri",
+      "dev": true,
+      "severity": "moderate",
+      "title": "fast-uri vulnerable to URI scheme spoofing via percent-encoded scheme decoding",
+      "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg",
+      "range": ">=3.0.0 <3.1.9",
+      "sourceAudit": "mobile-audit-before.json"
+    },
+    {
+      "name": "fast-uri",
+      "version": "3.1.8",
+      "location": "node_modules/fast-uri",
+      "dev": true,
+      "severity": "low",
+      "title": "fast-uri vulnerable to improper path equivalence in relative reference normalization",
+      "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h",
+      "range": ">=3.0.0 <3.1.9",
+      "sourceAudit": "mobile-audit-before.json"
+    },
+    {
+      "name": "fast-uri",
+      "version": "3.1.8",
+      "location": "node_modules/fast-uri",
+      "dev": true,
+      "severity": "moderate",
+      "title": "fast-uri vulnerable to host confusion via unchecked WHATWG host canonicalization",
+      "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr",
+      "range": ">=3.1.3 <3.1.9",
+      "sourceAudit": "mobile-audit-before.json"
+    },
+    {
+      "name": "fast-uri",
+      "version": "3.1.8",
+      "location": "node_modules/fast-uri",
+      "dev": true,
+      "severity": "low",
+      "title": "fast-uri vulnerable to scheme injection via an unescaped first-segment colon in suffix references",
+      "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp",
+      "range": ">=3.0.0 <3.1.9",
+      "sourceAudit": "mobile-audit-before.json"
+    },
+    {
+      "name": "undici",
+      "version": "6.29.0",
+      "location": "node_modules/node-gyp/node_modules/undici",
+      "dev": true,
+      "severity": "moderate",
+      "title": "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+      "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685",
+      "range": ">=6.5.0 <6.29.1",
+      "sourceAudit": "mobile-audit-before.json"
+    },
+    {
+      "name": "undici",
+      "version": "6.29.0",
+      "location": "node_modules/node-gyp/node_modules/undici",
+      "dev": true,
+      "severity": "high",
+      "title": "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings",
+      "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c",
+      "range": ">=6.23.0 <6.29.1",
+      "sourceAudit": "mobile-audit-before.json"
+    }
+  ]
+}

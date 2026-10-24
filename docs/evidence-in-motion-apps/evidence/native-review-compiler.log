@@ -1,0 +1,2 @@
+mobile\src\theme\motion.ts:1: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+{"projectDiagnostics":1,"changedUiDiagnostics":0,"installedDependencyFallback":true}

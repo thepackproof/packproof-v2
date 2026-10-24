@@ -370,16 +370,16 @@ async function withBrowserLock<T>(key:string, run:()=>Promise<T>):Promise<T> {
   try { return await current; } finally { if (browserLockFallback.get(key)===current) browserLockFallback.delete(key); }
 }
 const stationJobs = new Map<string, Promise<StationSubmitResult>>();
-type StationProgress={step:SubmitStep;uploadPercent:number|null};
+type StationProgress={step:SubmitStep;uploadPercent:number|null;proofId:string;uploadKey:string};
 const stationProgress=new Map<string,StationProgress>();
 const stationObservers=new Map<string,Set<(progress:StationProgress)=>void>>();
 export function observeStationProgress(apiScope:string,userId:string,listener:(progress:StationProgress)=>void):()=>void{
   const key=`${apiScope}:${stationCaptureKey(userId)}`;
   const listeners=stationObservers.get(key)??new Set();listeners.add(listener);stationObservers.set(key,listeners);
-  const snapshot=stationProgress.get(key);if(snapshot)listener(snapshot);
+  const snapshot=stationProgress.get(key);if(snapshot){try{listener(snapshot);}catch{/* A presentation observer cannot interrupt an accepted upload. */}}
   return()=>{listeners.delete(listener);if(!listeners.size)stationObservers.delete(key);};
 }
-function emitStationProgress(key:string,progress:StationProgress){stationProgress.set(key,progress);for(const listener of stationObservers.get(key)??[])listener(progress);}
+function emitStationProgress(key:string,progress:StationProgress){stationProgress.set(key,progress);for(const listener of stationObservers.get(key)??[]){try{listener(progress);}catch{/* A presentation observer cannot interrupt an accepted upload. */}}}
 
 /** The station page and app-level worker join the same accepted operation. No new declaration prompt. */
 export function resumeStationRecording(api:PackProofApi,userId:string,active:()=>boolean,onProgress?:(progress:{step:SubmitStep;uploadPercent:number|null})=>void):Promise<StationSubmitResult> {
@@ -453,7 +453,7 @@ export function resumeStationRecording(api:PackProofApi,userId:string,active:()=
             if(!pending.evidenceId)throw new Error("Upload identity is unavailable. Original retained.");
             await trackTransfer(api,pending.key,()=>api.uploadResumable(pending.order.proofId,pending.evidenceId!,pending.file,value=>{assertCurrent(active);progress(value);}));assertCurrent(active);
           },
-        },onProgress:progress=>{assertCurrent(active);if(studyState.step!==progress.step&&import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:progress.step==='finalize'?'finalizing':progress.step==='commit'?'committing':progress.step==='attest'?'waiting':'uploading'});studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);emitStationProgress(jobKey,progress);},
+        },onProgress:progress=>{assertCurrent(active);if(studyState.step!==progress.step&&import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE==='true')study?.event('upload_state_changed',{uploadState:progress.step==='finalize'?'finalizing':progress.step==='commit'?'committing':progress.step==='attest'?'waiting':'uploading'});studyState.step=progress.step;study?.phase(progress.step==='finalize'?'finalization':progress.step==='attest'?'confirmation':'upload');onProgress?.(progress);emitStationProgress(jobKey,{...progress,proofId:pending.order.proofId,uploadKey:pending.uploadKey});},
       });
       pending.committed = true; await saveStationCapture(pending); assertCurrent(active);
       proof=await api.getProof(pending.order.proofId);assertCurrent(active);

@@ -33,8 +33,8 @@ export function CinematicCompletion({ visible }: { visible: boolean }) {
       <FinalizationMark finalized size={26} color={colors.successText} animateOnMount />
     </View>
     <View style={styles.copy}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>Proof completed</Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Your recording is saved and the record is sealed.</Text>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>Proof finalized</Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>The server has finalized this record. Open it to review the recorded evidence.</Text>
     </View>
   </Animated.View>;
 }

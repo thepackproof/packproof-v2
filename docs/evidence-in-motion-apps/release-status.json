@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-24",
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/130",
+  "implementationCommit": "07921d204bb9cbd96f4cf819f777c5a2d4322789",
+  "candidateBranch": "feat/evidence-in-motion-apps",
+  "hostedCandidate": {
+    "sourceCommit": "c093b45f35f4b68cfd8a1f6cb902404535f46339",
+    "savedVersion": 65,
+    "archiveSha256": "1b6b8129241a472ee957226ff3ea34893c0113dcc276aafdeddd4f17ae81d51e",
+    "deployed": false,
+    "includesAdjacentInspectorRepair": true,
+    "buildEvidence": "evidence/hosted-final-package-65.log",
+    "previousSavedVersion": 64
+  },
+  "android": {
+    "package": "com.packproof.mobile",
+    "version": "1.0.1",
+    "candidateVersionCode": 72,
+    "liveVersionCode": 71,
+    "candidateSubmitted": false
+  },
+  "ciFollowup": {
+    "motionHarness": "9 focused checks passed after real policy injection",
+    "releaseIdentity": "12 checks passed for reviewed72 identity",
+    "webCompatibility": "5 previously failing navigation/digest/preservation checks passed; semantics retained",
+    "secretScanner": "3 exact public Figma/provenance-digest false positives reviewed; scoped full-line exceptions added",
+    "backendSourceAudit": "Inherited body-parser1.20.8 gate repaired to1.20.9; source lock audit0; no backend deployment"
+  },
+  "remainingCriticalGates": [
+    "Final exact-source remote CI/build results after desktop security dependency changes, including Windows rerun and outstanding Backend status",
+    "Real authenticated web camera-to-receipt journey",
+    "Physical Android recording/interruption/recovery/retake/receipt",
+    "Pending-work upgrade and applicable rollback/forward-fix acceptance"
+  ],
+  "otherPlatformGates": [
+    "iOS signed physical-device acceptance",
+    "Windows/macOS signed distribution and station/upgrade evidence",
+    "Remaining design fidelity and accessibility constraints"
+  ],
+  "authorization": "Webapp and Android production publication authorized upon completion; no new authorization requested",
+  "remoteCiCheckpoint": {
+    "revision": "35ed110",
+    "scope": "Observed existing revision; not a final candidate SHA or assertion that later local edits passed CI",
+    "sourceChecks": "Passed",
+    "webBundle": "Passed",
+    "androidJavaScriptExport": "Passed; not a signed AAB",
+    "macIntelReviewInstaller": "Passed; physical/signature/distribution acceptance not inferred",
+    "macArmReviewInstaller": "Passed; physical/signature/distribution acceptance not inferred",
+    "windows": "Stale renderer assertion fixed;8renderer tests passed locally within final44-check set; remote rerun pending security dependency changes",
+    "ios": "Passed iOS simulator app and Share Extension at existing35ed110 checkpoint; signed physical-device acceptance not executed",
+    "broadPullRequest": {
+      "web": "Passed",
+      "mobile": "Passed",
+      "threeDependencyAudits": "Passed",
+      "secretScanner": "Passed",
+      "postgres": "Passed",
+      "backend": "Running; outcome pending"
+    }
+  },
+  "presentationFollowup": {
+    "adjacentDesktopInspector": "Fixed in both local source trees at widths >=1200; actual1280x720 fixture inspection confirmed470px aside, no overflow, exact trigger focus restored on Close",
+    "currentFocusedTests": "12 passed in2files",
+    "hostedFocusedTests": "12 passed in2files",
+    "typecheck": "Passed",
+    "realWebJourney": "Not executed",
+    "physicalAndroid": "Not executed; ADB running with0attached devices"
+  },
+  "desktopExactLocal": {
+    "dependencyResolution": "Exact lock resolved using npm11;7audit findings addressed",
+    "audit": {
+      "reportedVulnerabilities": 0,
+      "evidence": "evidence/desktop-audit.json",
+      "beforeEvidence": "evidence/desktop-audit-before.json"
+    },
+    "fullProjectCompiler": {
+      "result": "Passed with exact dependencies",
+      "evidence": "evidence/desktop-exact-compiler.log"
+    },
+    "focusedChecks": {
+      "passed": 44,
+      "files": 5,
+      "scope": "Zod IPC, capture engine, chronology source, renderer and builder compatibility",
+      "evidence": "evidence/desktop-exact-security-and-capture.log"
+    },
+    "windowsRenderer": {
+      "passed": 8,
+      "includedInFocused44": true
+    },
+    "remoteRerun": "Pending for exact final dependency/source state",
+    "nativePhysicalOrDistributionAcceptance": "Not executed"
+  }
+}

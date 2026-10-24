@@ -359,7 +359,7 @@ describe("PackProof web reference client", () => {
     expect(
       screen.getByText(/Participant statement recorded by PackProof/),
     ).toBeInTheDocument();
-    expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888"))
+    expect(screen.getByText("8af291d4deadbeefcafebabef00d000011112222333344445555666677778888", { selector: ".digest" }))
       .toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Activity" }));
     const history = screen.getByRole("tabpanel", { name: "Activity" });
@@ -472,8 +472,10 @@ describe("PackProof web reference client", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Proof actions" }));
     await userEvent.click(screen.getByRole("button", { name: "Evidence and claim tools" }));
+    // Original identity also exposes this value. Inspect the wrapping technical digest.
     const digest = await screen.findByText(
       "8af291d4deadbeefcafebabef00d000011112222333344445555666677778888",
+      { selector: ".digest" },
     );
     expect(digest.className).toContain("digest");
     expect(screen.getByRole("heading", { name: "Vintage camera" })).toBeInTheDocument();

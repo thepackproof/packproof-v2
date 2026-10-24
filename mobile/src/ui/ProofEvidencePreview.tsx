@@ -22,7 +22,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
   initialTime?: number;
   onTime?: (seconds: number) => void;
 }) {
-  const app = usePackProof(), { colors } = useTheme();
+  const app = usePackProof(), { colors, motionMode } = useTheme();
   const [downloading, setDownloading] = useState(false), [downloadError, setDownloadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false), [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -30,8 +30,19 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
   const playbackPosition = useRef(initialTime);
   const [imageRatio, setImageRatio] = useState(1);
   const dimensions = useWindowDimensions();
-  useEffect(() => { if (!active) setExpanded(false); }, [active]);
+  const visible = active && app.route.name !== 'event';
+  useEffect(() => { if (!visible) setExpanded(false); }, [visible]);
   const lock = useRef(false);
+  const mounted = useRef(true);
+  const ownerUserId = app.session?.userId, ownerApiBaseUrl = app.apiBaseUrl, ownerProofId = app.proof?.proofId;
+  const contextKey = JSON.stringify([ownerApiBaseUrl, ownerUserId, ownerProofId, evidence.stageId ?? null, evidence.evidenceId, active, app.route.name === 'event']);
+  const latestContext = useRef(contextKey); latestContext.current = contextKey;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  function sameContext() { return mounted.current && latestContext.current === contextKey; }
+  function assertOriginalContext() {
+    if (!sameContext() || !active || app.route.name === 'event' || !ownerUserId || !ownerProofId) throw new Error('Open this original in its original account and Proof.');
+    app.client.assertCaptureAccount(ownerUserId, ownerApiBaseUrl);
+  }
   const contentType = (evidence.contentType ?? "application/octet-stream").split(";")[0].trim().toLowerCase();
   // Both routes authorize access and verify the stored original against its committed digest.
   const uri = evidence.stageId
@@ -43,12 +54,14 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
     if (retrying) return;
     setRetrying(true); setDownloadError(null);
     try {
+      assertOriginalContext();
       await app.ensureAuth();
-      // Recreate the player with the refreshed session; the prior native player may already be released.
+      assertOriginalContext();
+      // Recreate the player with this account's refreshed session only.
       setPlaybackAttempt(value => value + 1);
     } catch {
-      setDownloadError("Playback authorization could not be refreshed. Sign in again or retry when connected.");
-    } finally { setRetrying(false); }
+      if (sameContext()) setDownloadError('Playback authorization could not be refreshed. Sign in to the original account or retry when connected.');
+    } finally { if (sameContext()) setRetrying(false); }
   }
   async function download() {
     if (lock.current) return;
@@ -56,27 +69,31 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
     setDownloading(true); setDownloadError(null);
     let destination: string | null = null;
     try {
+      assertOriginalContext();
       await app.ensureAuth();
-      if (!FileSystem.cacheDirectory || !(await Sharing.isAvailableAsync())) throw new Error("Saving this file is unavailable on this device.");
-      const extensions: Record<string, string> = { "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" };
-      destination = `${FileSystem.cacheDirectory}packproof-${evidence.evidenceId.replace(/[^a-zA-Z0-9_-]/g, "_")}.${extensions[contentType] ?? "bin"}`;
+      assertOriginalContext();
+      if (!FileSystem.cacheDirectory || !(await Sharing.isAvailableAsync())) throw new Error('Saving this file is unavailable on this device.');
+      assertOriginalContext();
+      const extensions: Record<string, string> = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
+      // Each UI download owns its own temporary file; another account or attempt cannot replace/delete it.
+      destination = `${FileSystem.cacheDirectory}packproof-original-${Date.now()}-${Math.random().toString(36).slice(2)}.${extensions[contentType] ?? 'bin'}`;
       const result = await FileSystem.downloadAsync(uri, destination, { headers: app.client.authorizedDownloadHeaders() });
-      if (result.status < 200 || result.status >= 300) throw new Error("The original could not be downloaded. Check your connection and try again.");
-      await Sharing.shareAsync(result.uri, { mimeType: contentType, dialogTitle: "Save original evidence" });
+      assertOriginalContext();
+      if (result.status < 200 || result.status >= 300) throw new Error('The original could not be downloaded. Check your connection and try again.');
+      await Sharing.shareAsync(result.uri, { mimeType: contentType, dialogTitle: 'Save original evidence' });
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : "The original could not be downloaded.");
+      if (sameContext()) setDownloadError(error instanceof Error ? error.message : 'The original could not be downloaded.');
     } finally {
       if (destination) await FileSystem.deleteAsync(destination, { idempotent: true }).catch(() => undefined);
-      lock.current = false; setDownloading(false);
+      lock.current = false; if (sameContext()) setDownloading(false);
     }
-  }
-  return <View style={styles.stack}>
+  }  return <View style={styles.stack}>
     <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
       <View style={[styles.toolbar, { borderBottomColor: colors.border }]}>
         <View style={styles.heading}><Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text></View>
-        <IconButton label="Save original evidence" onPress={() => void download()} disabled={downloading}>{downloading ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="download-outline" size={23} color={colors.textPrimary} />}</IconButton>
+        <IconButton label="Save original evidence" onPress={() => void download()} disabled={downloading || !visible}>{downloading ? <ActivityIndicator color={colors.accent} /> : <Ionicons name="download-outline" size={23} color={colors.textPrimary} />}</IconButton>
       </View>
-      {video ? <OriginalVideo key={playbackAttempt} uri={uri} token={token} active={active} bookmarks={bookmarks} labelOffsetMs={labelOffsetMs} initialTime={playbackPosition.current} onTime={seconds => { playbackPosition.current = seconds; onTime?.(seconds); }} onRetry={() => void retryPlayback()} retrying={retrying} /> : picture ? <View style={styles.canvas}>
+      {video ? <OriginalVideo key={playbackAttempt} uri={uri} token={token} active={visible} bookmarks={bookmarks} labelOffsetMs={labelOffsetMs} initialTime={playbackPosition.current} onTime={seconds => { playbackPosition.current = seconds; onTime?.(seconds); }} onRetry={() => void retryPlayback()} retrying={retrying} /> : picture ? <View style={styles.canvas}>
         <PressableScale onPress={() => setExpanded(true)} accessibilityRole="button" accessibilityLabel="Expand original image">
           <Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={[styles.image, { aspectRatio: imageRatio, maxHeight: dimensions.height * 0.6 }]} onLoadStart={() => { setImageLoading(true); setImageError(false); }} onLoadEnd={() => setImageLoading(false)} onLoad={event => { const { width, height } = event.nativeEvent.source; if (width > 0 && height > 0) setImageRatio(width / height); }} resizeMode="contain" accessibilityLabel={title} onError={() => { setImageLoading(false); setImageError(true); }} />
         </PressableScale>
@@ -84,7 +101,7 @@ export function ProofEvidencePreview({ evidence, title, bookmarks, labelOffsetMs
       </View> : <View style={styles.canvas}><Text style={[styles.meta, { color: colors.textSecondary }]}>Save the original to open this file on your device.</Text><Button label="Save original" variant="secondary" loading={downloading} onPress={() => void download()} /></View>}
     </View>
     {downloadError ? <Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>{downloadError}</Text> : null}
-    <Modal visible={expanded} animationType="fade" onRequestClose={() => setExpanded(false)}><View style={[styles.expanded, { backgroundColor: colors.background }]}><Button label="Close image" variant="secondary" onPress={() => setExpanded(false)} /><Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={styles.fullImage} resizeMode="contain" accessibilityLabel={title} /></View></Modal>
+    <Modal visible={expanded} animationType={motionMode === 'full' ? 'fade' : 'none'} onRequestClose={() => setExpanded(false)}><View style={[styles.expanded, { backgroundColor: colors.background }]}><Button label="Close image" variant="secondary" onPress={() => setExpanded(false)} /><Image source={{ uri, headers: { Authorization: `Bearer ${token}` } }} style={styles.fullImage} resizeMode="contain" accessibilityLabel={title} /></View></Modal>
   </View>;
 }
 
@@ -117,7 +134,7 @@ function OriginalVideo({ uri, token, active, bookmarks, labelOffsetMs, initialTi
   }
   const scannerBookmark = Number.isFinite(labelOffsetMs) && labelOffsetMs! >= 0 && !bookmarks.some(anchor => anchor.sourceType === "SCANNER_TRIGGERED" && Math.abs(anchor.startMs - labelOffsetMs!) < 1000);
   return <View style={styles.canvas}>
-    <VideoView player={player} style={[styles.video,SIGNAL_ENABLED&&{height:250,borderRadius:16,backgroundColor:"#18221F"}]} nativeControls allowsFullscreen contentFit="contain" accessibilityLabel="Original evidence recording" />
+    <VideoView player={player} style={[styles.video,SIGNAL_ENABLED&&{height:250,borderRadius:16,backgroundColor:colors.scanBackground}]} nativeControls allowsFullscreen contentFit="contain" accessibilityLabel="Original evidence recording" />
     {loading ? <View accessibilityLiveRegion="polite" style={styles.stack}><ActivityIndicator accessibilityLabel="Loading original recording" color={colors.accent} /><Text style={[styles.meta, { color: colors.textSecondary }]}>Loading original recording…</Text></View> : !error ? <Text style={[styles.meta, { color: colors.textSecondary }]}>Original recording ready. Use the playback controls to review it.</Text> : null}
     {error ? <View style={styles.stack}><Text accessibilityRole="alert" style={[styles.meta, { color: colors.error }]}>The original recording could not load. Check your connection and retry.</Text><Button label="Retry original playback" variant="secondary" onPress={onRetry} loading={retrying} /></View> : null}
     {bookmarks.length || scannerBookmark ? <View style={styles.bookmarks} accessibilityLabel="Original recording bookmarks">

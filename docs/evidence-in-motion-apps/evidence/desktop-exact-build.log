@@ -1,0 +1,19 @@
+Exit code: 0
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 95 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/renderer/index.html                                0.82 kB │ gzip:   0.44 kB
+dist/renderer/assets/identifier-worker-BR9eEaDC.js     38.02 kB
+dist/renderer/assets/zxing_reader-BxB2YfIY.wasm     1,093.29 kB │ gzip: 460.98 kB
+dist/renderer/assets/sample-packing-DiquOKpR.mp4    2,660.39 kB
+dist/renderer/assets/index-Ferx44YI.css               105.18 kB │ gzip:  19.64 kB
+dist/renderer/assets/index-DSydy1CA.js                361.56 kB │ gzip: 111.57 kB
+✓ built in 1.24s
+
+▲ [WARNING] Cannot find base config file "expo/tsconfig.base" [tsconfig.json]
+
+    ../mobile/tsconfig.json:22:13:
+      22 │   "extends": "expo/tsconfig.base"
+         ╵              ~~~~~~~~~~~~~~~~~~~~

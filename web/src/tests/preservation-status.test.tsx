@@ -31,7 +31,8 @@ it("checks preservation inside the canonical record",async()=>{
   expect(await screen.findByRole("status")).toHaveTextContent("Recording received. Preservation in progress.");
   expect(api.getRecoveryStatus).toHaveBeenCalledWith("proof");
   expect(api.getProof).toHaveBeenCalledWith("proof");
-  expect(screen.getByText("Recording saved · seal pending")).toBeInTheDocument();
+  expect(screen.getByText("In progress")).not.toHaveClass("signal-badge-saved");
+  expect(screen.queryByText("Saved to PackProof")).not.toBeInTheDocument();
   expect(screen.queryByText("Packing record sealed")).not.toBeInTheDocument();
   expect(screen.queryByText("Proof finalized and available.")).not.toBeInTheDocument();
 });

@@ -1,0 +1,155 @@
+
+ RUN  v4.1.11 <candidate-source>/web
+
+┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖x┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ» Failed Tests 1 ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»
+
+ FAIL  src/tests/mobile-task.test.tsx > does not flash first-account copy while loading and labels cached completion after refresh failure
+TestingLibraryElementError: Unable to find an element with the text: Checking your recordsΓÇª. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <main
+      aria-busy="true"
+      class="page library-page mobile-home-page eim-home eim-home-assemble"
+    >
+      <header
+        class="eim-home-heading"
+      >
+        <div>
+          <p
+            class="signal-mono"
+          >
+            PACKPROOF WORKSPACE
+          </p>
+          <h1
+            class="signal-display"
+          >
+            Pack it.
+            <br />
+            Keep the proof.
+          </h1>
+        </div>
+        <p>
+          Record how you pack. Keep what matters.
+        </p>
+      </header>
+      <div
+        class="signal-home-grid"
+      >
+        <section
+          aria-label="Your next task"
+          class="signal-home-primary"
+        >
+          <div
+            aria-label="Your evidence workspace"
+            class="eim-source-constellation"
+          >
+            <div
+              class="eim-source-heading"
+            >
+              <span
+                aria-hidden="true"
+                class="eim-source-mark"
+              >
+                P
+              </span>
+              <span>
+                Evidence in motion
+                <small>
+                  One packing journey. One clear record.
+                </small>
+              </span>
+            </div>
+            <p
+              class="eim-hero-empty"
+            >
+              Start with your item. Add the packing recording, then keep the submitted evidence together.
+            </p>
+          </div>
+          <div
+            class="eim-next-action"
+          >
+            <div>
+              <p
+                class="signal-mono"
+              >
+                READY WHEN YOU ARE
+              </p>
+              <p>
+                Record your item as you pack and seal it, then keep the evidence together.
+              </p>
+            </div>
+            <button
+              class="btn"
+            >
+              Pack an item
+              <span
+                aria-hidden="true"
+              >
+                ΓåÆ
+              </span>
+            </button>
+          </div>
+        </section>
+        <section
+          aria-label="Your records"
+          class="signal-home-records"
+        >
+          <div
+            class="signal-section-title"
+          >
+            <h2>
+              Your records
+            </h2>
+            <button
+              class="text-link"
+            >
+              View all Proofs 
+              <span
+                aria-hidden="true"
+              >
+                ΓåÆ
+              </span>
+            </button>
+          </div>
+          <p
+            role="status"
+          >
+            Checking your records.
+          </p>
+          <p
+            class="eim-record-limitation"
+          >
+            PackProof preserves submitted evidence. It does not decide the outcome of a dispute.
+          </p>
+        </section>
+      </div>
+      <span
+        class="visually-hidden"
+        data-recommendation="create_proof:::"
+      />
+    </main>
+  </div>
+</body>
+ Γ¥» Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ Γ¥» node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ Γ¥» src/tests/mobile-task.test.tsx:81:17
+     79|   const view = render(<MobileHomeScreen {...props} proofs={[]} loadingΓÇª
+     80|   expect(screen.queryByRole("heading", { name: "Create your first ProoΓÇª
+     81|   expect(screen.getByText("Checking your recordsΓÇª")).toBeInTheDocumentΓÇª
+       |                 ^
+     82|   view.rerender(<MobileHomeScreen {...props} error="Cannot refresh" prΓÇª
+     83|   expect(screen.getByRole("alert")).toHaveTextContent("Cannot refresh"ΓÇª
+
+ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/1]ΓÄ»
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 27 passed (28)
+   Start at  09:53:05
+   Duration  3.06s (transform 835ms, setup 797ms, import 3.06s, tests 1.24s, environment 4.20s)

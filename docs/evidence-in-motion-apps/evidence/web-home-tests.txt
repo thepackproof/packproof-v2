@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 <candidate-source>/web
+
+┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  09:53:31
+   Duration  1.93s (transform 275ms, setup 173ms, import 630ms, tests 150ms, environment 823ms)

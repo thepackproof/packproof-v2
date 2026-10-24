@@ -1,0 +1,14 @@
+Native syntax validation; current source; 2026-10-24T14:19:17.802Z
+mobile/src/ui/Signal.tsx: 0 syntax errors
+mobile/src/screens/SignalHomeScreen.tsx: 0 syntax errors
+mobile/src/ui/SignalProofRecord.tsx: 0 syntax errors
+mobile/src/screens/SignalSubmissionScreen.tsx: 0 syntax errors
+mobile/src/ui/RecordThumbnail.tsx: 0 syntax errors
+mobile/src/app/Root.tsx: 0 syntax errors
+mobile/src/ui/Button.tsx: 0 syntax errors
+mobile/src/ui/MobileTabBar.tsx: 0 syntax errors
+mobile/src/ui/ManualReviewConfirmation.tsx: 0 syntax errors
+mobile/src/ui/CinematicCompletion.tsx: 0 syntax errors
+mobile/src/screens/AccountScreen.tsx: 0 syntax errors
+mobile/src/screens/CaptureScreen.tsx: 0 syntax errors
+{"files":12,"syntaxErrors":0,"scope":"syntax only, installed TypeScript fallback; no physical-device acceptance"}

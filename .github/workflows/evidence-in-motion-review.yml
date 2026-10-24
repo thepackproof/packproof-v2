@@ -1,0 +1,328 @@
+name: Evidence in Motion review
+
+on:
+  push:
+    branches: [feat/evidence-in-motion-apps]
+    paths:
+      - 'mobile/**'
+      - 'web/**'
+      - 'desktop/src/renderer/**'
+      - 'packages/**'
+      - '.github/workflows/evidence-in-motion-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-in-motion-review-${{ github.ref }}
+  cancel-in-progress: true
+
+# Candidate checks and exports only. Signing remains in the existing main-only
+# Android AAB workflow and distribution policy. Neither workflow submits to Play.
+jobs:
+  source-and-web:
+    name: Exact-source focused checks and web bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      VITE_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            web/package-lock.json
+            backend/package-lock.json
+      - name: Install exact mobile, web and shared test-runner locks
+        run: |
+          npm ci --prefix mobile
+          npm ci --prefix web
+          npm ci --prefix backend
+      - name: Enforce dependency security gates for affected clients
+        run: |
+          mkdir -p "$RUNNER_TEMP/eim-review"
+          npm audit --prefix mobile --audit-level=high --json > "$RUNNER_TEMP/eim-review/mobile-audit.json"
+          npm audit --prefix web --audit-level=high --json > "$RUNNER_TEMP/eim-review/web-audit.json"
+      - name: Check token generation and source types
+        run: |
+          node packages/evidence-in-motion/generate-tokens.mjs --check
+          npm run typecheck --prefix mobile
+          npm run typecheck --prefix web
+      - name: Check actual receipt, recovery, progress, chronology and motion boundaries
+        run: |
+          node --import ./backend/node_modules/tsx/dist/loader.mjs --test \
+            mobile/tests/evidence-motion-policy.test.ts \
+            mobile/tests/signal-submission-presentation.test.ts \
+            mobile/tests/eim-record.test.ts \
+            mobile/tests/signal-receipt.test.ts \
+            mobile/tests/recording-review.test.ts \
+            mobile/tests/photo-submission-recovery.test.ts \
+            mobile/tests/recording-recovery-inspection.test.ts \
+            mobile/tests/proof-navigation.test.ts
+          node --test mobile/tests/font-assets.test.cjs
+          npm run test:build-security --prefix mobile
+      - name: Check focused web interactions
+        working-directory: web
+        run: |
+          npx vitest run \
+            src/tests/eim-home-priority.test.tsx \
+            src/tests/signal-capture-lifecycle.test.tsx \
+            src/tests/signal-retake.test.ts \
+            src/tests/connected-chronology.test.tsx \
+            src/tests/workspace-proof-record.test.tsx \
+            src/tests/recovery.test.tsx \
+            src/tests/proof-navigation.test.tsx
+          npm run test:links
+      - name: Build web production assets
+        run: npm run build --prefix web
+      - name: Record exact source and artifact digests
+        run: |
+          git diff --exit-code
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const files = [];
+          function visit(dir) {
+            for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+              const file = path.join(dir, entry.name);
+              if (entry.isDirectory()) visit(file);
+              else files.push({path: file.replaceAll(path.sep, '/'), bytes: fs.statSync(file).size,
+                sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')});
+            }
+          }
+          visit('web/dist');
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'eim-review/web-build-evidence.json'),
+            JSON.stringify({sourceSha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
+              scope: 'Production web assets; no publication or physical-device acceptance', files}, null, 2) + '\n');
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-in-motion-checks-${{ github.sha }}
+          path: ${{ runner.temp }}/eim-review
+          if-no-files-found: warn
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evidence-in-motion-web-${{ github.sha }}
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 30
+
+  android-export:
+    name: Android production JavaScript export
+    needs: source-and-web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile
+      - name: Export exact production-profile Android JavaScript
+        working-directory: mobile
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const cp = require('node:child_process');
+          const profiles = require('./eas.json').build;
+          const layers = [], seen = new Set();
+          for (let name = 'production'; name; name = profiles[name].extends) {
+            if (seen.has(name) || !profiles[name]) throw Error('Invalid production profile inheritance');
+            seen.add(name); layers.unshift(profiles[name].env || {});
+          }
+          Object.assign(process.env, ...layers, {
+            EAS_BUILD_PROFILE: 'production', EAS_BUILD_PLATFORM: 'android',
+            EAS_BUILD_GIT_COMMIT_HASH: process.env.GITHUB_SHA,
+            EXPO_PUBLIC_PACKPROOF_BUILD_SHA: process.env.GITHUB_SHA,
+          });
+          const {expo} = require('./app.config.js');
+          if (expo.android.package !== 'com.packproof.mobile' || expo.version !== '1.0.1'
+              || expo.android.versionCode !== 72 || expo.extra.packproofBuildSha !== process.env.GITHUB_SHA
+              || expo.extra.packproofInternalReview || expo.extra.packproofResearch !== false
+              || expo.extra.packproofResearchProduction !== true || expo.android.allowBackup !== false
+              || expo.android.usesCleartextTraffic !== false) throw Error('Production source/identity mismatch');
+          const output = path.resolve('dist/eim-android-export');
+          const result = cp.spawnSync(process.execPath, ['node_modules/expo/bin/cli', 'export',
+            '--platform', 'android', '--output-dir', output], {stdio: 'inherit', env: process.env});
+          if (result.error || result.status !== 0) throw result.error || Error('Android export failed');
+          fs.writeFileSync(path.join(output, 'source-evidence.json'), JSON.stringify({
+            sourceSha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
+            package: expo.android.package, version: expo.version, versionCode: expo.android.versionCode,
+            scope: 'JavaScript export only; not a signed Android binary or device validation',
+          }, null, 2) + '\n');
+          NODE
+          git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evidence-in-motion-android-export-${{ github.sha }}
+          path: mobile/dist/eim-android-export
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    needs: android-export
+    name: iOS simulator app and Share Extension
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EAS_BUILD_PROFILE: ios-simulator
+      EAS_BUILD_GIT_COMMIT_HASH: ${{ github.sha }}
+      EXPO_PUBLIC_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      EXPO_PUBLIC_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
+      EXPO_PUBLIC_PACKPROOF_AUTH_MODE: cognito
+      EXPO_PUBLIC_COGNITO_USER_POOL_ID: us-east-1_GdgTeYaOO
+      EXPO_PUBLIC_COGNITO_CLIENT_ID: 34pnucunllka2jcs8hsq762m5e
+      EXPO_PUBLIC_COGNITO_REGION: us-east-1
+      EXPO_PUBLIC_PACKPROOF_SIGNAL: 'true'
+      EXPO_PUBLIC_PACKPROOF_MOBILE_TASK_UX: 'true'
+      EXPO_PUBLIC_PACKPROOF_IN_VIDEO_SHIPPING: 'true'
+      EXPO_PUBLIC_PACKPROOF_FIRST_PROOF_EXPERIENCE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            backend/package-lock.json
+      - name: Select installed Xcode 26 or newer
+        run: |
+          set -euo pipefail
+          XCODE_APP=$(python3 - <<'PY'
+          import glob, re
+          candidates = []
+          for app in glob.glob('/Applications/Xcode_*.app'):
+            match = re.search(r'Xcode_(\d+)\.(\d+)', app)
+            if match and int(match[1]) >= 26 and 'beta' not in app.lower():
+              candidates.append(((int(match[1]), int(match[2])), app))
+          if not candidates: raise SystemExit('Xcode 26+ is required for the iOS release gate.')
+          print(max(candidates)[1])
+          PY
+          )
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+      - run: npm ci
+      - run: npm ci
+        working-directory: backend
+      - run: npm run typecheck
+      - name: Generate iOS native project and resolve Pods
+        run: |
+          npx expo prebuild --platform ios --no-install
+          cd ios
+          pod install
+      - name: Verify generated Share Extension project
+        run: |
+          test -s ios/PackProof.xcodeproj/project.pbxproj
+          node --test tests/order-share-plugin.test.cjs
+      - name: Compile app, Swift modules, and Share Extension
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace ios/PackProof.xcworkspace -scheme PackProof \
+            -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/packproof-ios" \
+            CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/ios-build.log"
+      - name: Package simulator application
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/packproof-ios/Build/Products/Release-iphonesimulator/PackProof.app" \
+            dist/PackProof-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-in-motion-ios-simulator-${{ github.sha }}
+          retention-days: 30
+          path: |
+            mobile/dist/PackProof-iOS-Simulator.zip
+            ${{ runner.temp }}/ios-build.log
+
+  desktop:
+    name: Desktop review / ${{ matrix.platform }} / ${{ matrix.arch }}
+    needs: android-export
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            platform: win32
+            target: win
+            arch: x64
+          - runner: macos-15-intel
+            platform: darwin
+            target: mac
+            arch: x64
+          - runner: macos-15
+            platform: darwin
+            target: mac
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    env:
+      APP_ENV: development
+      VITE_PACKPROOF_SIGNAL: 'true'
+      VITE_PACKPROOF_BUILD_SHA: ${{ github.sha }}
+      PACKPROOF_BUILD_ARCH: ${{ matrix.arch }}
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
+      PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_WEB_BASE_URL || 'https://thepackproof.com' }}
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID || '34pnucunllka2jcs8hsq762m5e' }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID || 'us-east-1_GdgTeYaOO' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_FOR_PULL_REQUEST: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Check canonical tokens, source chronology and durable capture
+        if: matrix.platform == 'win32'
+        run: |
+          npm audit --audit-level=high
+          node ../packages/evidence-in-motion/generate-tokens.mjs --check
+          npx vitest run tests/evidence-engine.test.ts tests/source-chronology.test.ts tests/renderer.test.tsx tests/security.test.ts tests/build-dependency-compatibility.test.ts
+          node --test tests/release-policy.test.cjs
+      - run: npm run build
+      - name: Package isolated review installers
+        run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
+      - name: Verify packaged artifact inventory
+        run: node scripts/verify-artifacts.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evidence-in-motion-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
+          retention-days: 30
+          path: |
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt

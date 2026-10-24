@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: OS reduced motion is never overridden by a saved presentation preference
+ok 1 - OS reduced motion is never overridden by a saved presentation preference
+  ---
+  duration_ms: 0.9425
+  type: 'test'
+  ...
+# Subtest: active capture, station, background and performance suppression take immediate precedence
+ok 2 - active capture, station, background and performance suppression take immediate precedence
+  ---
+  duration_ms: 0.1869
+  type: 'test'
+  ...
+# Subtest: runtime preference changes return to the system mode after Reduced and Off
+ok 3 - runtime preference changes return to the system mode after Reduced and Off
+  ---
+  duration_ms: 0.5057
+  type: 'test'
+  ...
+# Subtest: unknown or absent stored preferences defer to the OS; Off is exactly immediate
+ok 4 - unknown or absent stored preferences defer to the OS; Off is exactly immediate
+  ---
+  duration_ms: 0.0817
+  type: 'test'
+  ...
+# Subtest: the focused Activity recovery destination exposes inspection for the selected interrupted take
+ok 5 - the focused Activity recovery destination exposes inspection for the selected interrupted take
+  ---
+  duration_ms: 64.103
+  type: 'test'
+  ...
+# Subtest: inspection opens the exact surviving original without a submit or capture command
+ok 6 - inspection opens the exact surviving original without a submit or capture command
+  ---
+  duration_ms: 4.9781
+  type: 'test'
+  ...
+# Subtest: missing media never offers a surviving-video playback control
+ok 7 - missing media never offers a surviving-video playback control
+  ---
+  duration_ms: 2.9765
+  type: 'test'
+  ...
+# Subtest: the journey cannot celebrate a raw FINALIZED status when the validated presentation is incomplete
+ok 8 - the journey cannot celebrate a raw FINALIZED status when the validated presentation is incomplete
+  ---
+  duration_ms: 17.6188
+  type: 'test'
+  ...
+# Subtest: state acknowledgments keep content stationary, bound reduced fades and make Off immediate
+ok 9 - state acknowledgments keep content stationary, bound reduced fades and make Off immediate
+  ---
+  duration_ms: 6.5335
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 629.5591

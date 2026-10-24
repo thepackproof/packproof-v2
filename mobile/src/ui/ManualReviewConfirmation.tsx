@@ -41,7 +41,7 @@ export function ManualReviewConfirmation({ binding, onPress, disabled = false, l
 
 const styles = StyleSheet.create({
   root: { gap: 12 },
-  declaration: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: SIGNAL_ENABLED?24:12, minHeight: 76, borderWidth: 1, borderRadius: 12 },
+  declaration: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: SIGNAL_ENABLED?20:12, minHeight: 76, borderWidth: 1, borderRadius: 16 },
   copy: { flex: 1, minWidth: 0, gap: 6 },
   statement: { ...signalType.small },
   hint: { ...signalType.caption },

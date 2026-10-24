@@ -1,10 +1,8 @@
-import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { TimelineEventModel, TimelineIcon } from "../copy/chronology";
 import { spacing, typography, sourceColor } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
-import { motion, shouldUseLargeMotion } from "../theme/motion";
 import { SourceBadge } from "./SourceBadge";
 
 const ICONS: Record<TimelineIcon, keyof typeof Ionicons.glyphMap> = {
@@ -24,26 +22,13 @@ export function Timeline(props: {
   emptyLabel?: string;
   onSelect: (event: TimelineEventModel) => void;
 }) {
-  const { colors, reducedMotion } = useTheme();
-  const opacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!shouldUseLargeMotion(reducedMotion) || props.events.length === 0) {
-      opacity.setValue(1);
-      return;
-    }
-    opacity.setValue(0.35);
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: motion.duration.slow,
-      useNativeDriver: true,
-    }).start();
-  }, [opacity, props.events.length, reducedMotion]);
+  const { colors } = useTheme();
 
   if (props.events.length === 0) {
     return <Text style={[styles.empty, { color: colors.textSecondary }]}>{props.emptyLabel ?? "No history is available yet."}</Text>;
   }
   return (
-    <Animated.View style={[styles.list, { opacity }]} accessibilityLabel="Proof record timeline">
+    <View style={styles.list} accessibilityLabel="Proof record timeline">
       {props.events.map((event, index) => (
         <TimelineEvent
           key={event.id}
@@ -52,7 +37,7 @@ export function Timeline(props: {
           onPress={() => props.onSelect(event)}
         />
       ))}
-    </Animated.View>
+    </View>
   );
 }
 

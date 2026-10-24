@@ -13,12 +13,12 @@ export function MobileNavigation(props: { session: WebSession; route: string; ad
   const go = (path: string) => { setOpen(false); props.onGo(path); };
   const tabs = [
     { label: "Home", icon: "home", path: "/app", routes: ["home"] },
-    { label: "Proofs", icon: "file", path: "/proofs", routes: ["proofs", "proof", "receipt", "event", "invitation", "invite", "finalize"] },
+    { label: "Proofs", icon: "file", path: "/proofs", routes: ["proofs", "proof", "receipt", "event", "invitation", "invite", "finalize", "create", "scan", "station"] },
     
     { label: "Activity", icon: "bell", path: "/activity", routes: ["activity", "uploads"] },
   ];
   return <>
-    <header className="task-mobile-header"><a href="/app" onClick={event => { event.preventDefault(); go("/app"); }}><img className="signal-mark" src="/signal/mark.svg" alt="" /><strong>packproof</strong></a><button ref={trigger} className="task-profile-trigger" aria-label="Open profile menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{(props.session.displayName || props.session.username || "P").slice(0, 1).toUpperCase()}</button></header>
+    <header className="task-mobile-header"><a href="/app" onClick={event => { event.preventDefault(); go("/app"); }}><img className="signal-mark" src="/signal/mark.svg" alt="" /><strong>packproof</strong></a><span className="eim-rail-caption">Evidence in motion.<br/>Your record, within reach.</span><button ref={trigger} className="task-profile-trigger" aria-label="Open profile menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{(props.session.displayName || props.session.username || "P").slice(0, 1).toUpperCase()}</button></header>
     <nav className="task-mobile-tabs" aria-label="Primary navigation">{tabs.map(tab => <a key={tab.path} href={tab.path} aria-current={tab.routes.includes(props.route) ? "page" : undefined} onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); go(tab.path); } }}><img className="signal-nav-icon" src={`/signal/${tab.label.toLowerCase()}.svg`} alt=""/><span>{tab.label}</span></a>)}</nav>
     <dialog className="task-profile-dialog" ref={dialog} aria-labelledby="task-profile-title" onCancel={() => setOpen(false)} onClose={() => { setOpen(false); trigger.current?.focus(); }}>
       <div className="task-section-heading"><h2 id="task-profile-title">{props.session.displayName || "Your account"}</h2><button className="btn btn-secondary" onClick={() => setOpen(false)} aria-label="Close profile menu">Close</button></div>

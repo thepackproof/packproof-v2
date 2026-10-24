@@ -1,3 +1,4 @@
+import { policyDuration, type MotionMode } from '../src/theme/motion';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -65,18 +66,27 @@ test('the journey cannot celebrate a raw FINALIZED status when the validated pre
  assert.match(text(Journey({...props,completed:true})),/Evidence saved to PackProof/);
 });
 
-test('state acknowledgments keep content stationary and settle immediately with reduced motion',()=>{
- const refs:any[]=[],effects:Array<()=>unknown>=[],timings:any[]=[];let cursor=0,reducedMotion=false;
+test('state acknowledgments keep content stationary, bound reduced fades and make Off immediate',()=>{
+ const refs:any[]=[],effects:Array<()=>unknown>=[],timings:any[]=[];let cursor=0,motionMode:MotionMode='full';
+ const ease={kind:'presentation-ease'};
  class Value {constructor(public value:number){} setValue(v:number){this.value=v;} stopAnimation(){} }
  const Transition=component('../src/ui/motion.tsx','StateTransition',{
-  useTheme:()=>({reducedMotion}),useRef:(value:unknown)=>refs[cursor++]??(refs[cursor-1]={current:value}),
-  useEffect:(effect:()=>unknown)=>effects.push(effect),
+  useTheme:()=>({motionMode,reducedMotion:motionMode!=='full'}),useRef:(value:unknown)=>refs[cursor++]??(refs[cursor-1]={current:value}),
+  useEffect:(effect:()=>unknown)=>effects.push(effect),policyDuration,ease,
   Animated:{View:'AnimatedView',Value,timing:(value:Value,options:any)=>{timings.push({value,options});return {start(){},stop(){}};}},
  });
  const child={retainedPlayer:true};
  function render(key:string){cursor=0;const result=Transition({eventKey:key,children:child});effects.splice(0).forEach(f=>f());return result;}
  const first=render('pending');assert.equal(timings.length,0);assert.equal(first.props.children[0],child);
  const changed=render('confirmed');assert.equal(timings.length,1);assert.equal(timings[0].options.toValue,1);
+ assert.equal(timings[0].options.duration,220);assert.equal(timings[0].options.easing,ease);assert.equal(timings[0].options.useNativeDriver,true);
  assert.equal(changed.props.style[1].transform,undefined);assert.equal(changed.props.children[0],child);
- reducedMotion=true;const reduced=render('next-task');assert.equal(timings.length,1);assert.equal(reduced.props.style[1].opacity.value,1);
+ motionMode='reduced';const reduced=render('next-task');assert.equal(timings.length,2);
+ assert.equal(timings[1].options.duration,policyDuration('reduced',220));assert.ok(timings[1].options.duration<=100);
+ assert.equal(timings[1].options.toValue,1);assert.equal(reduced.props.style[1].transform,undefined);assert.equal(reduced.props.children[0],child);
+ // The status and the retained player remain visible while the brief fade settles.
+ assert.ok(reduced.props.style[1].opacity.value>=0.8);
+ motionMode='off';const off=render('final-task');assert.equal(timings.length,2);
+ assert.equal(off.props.style[1].opacity.value,1);assert.equal(off.props.style[1].transform,undefined);assert.equal(off.props.children[0],child);
+ assert.equal(policyDuration('off',220),0);
 });

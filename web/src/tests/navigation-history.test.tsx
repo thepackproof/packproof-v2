@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
-import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {Website} from '../site/PublicSite';
 import {saveSession} from '../auth/session';
@@ -46,14 +46,15 @@ it.each([0,4200])('restores list position, query, filter and selected row focus 
  render(<Website/>);
  // The production wrapper lazy-loads the app; a cold test transform can exceed
  // Testing Library's one-second default before the mocked list request starts.
- const row=await screen.findByRole('button',{name:/Shipment 4.*Proof finalized/},{timeout:6500});
+ const row=await screen.findByRole('button',{name:'View Proof: Shipment 4'},{timeout:6500});
+ expect(within(row).getByText('Proof finalized')).toBeInTheDocument();
  scrollPosition=217;fireEvent.scroll(window);
  const originalTop=row.getBoundingClientRect().top;
  await user.click(row);
  await screen.findByRole('article',{name:'Proof record'});
  await waitFor(()=>expect(scrollPosition).toBe(0));
  await user.click(screen.getByRole('button',{name:'Back'}));
- const restored=await screen.findByRole('button',{name:/Shipment 4.*Proof finalized/},{timeout:6500});
+ const restored=await screen.findByRole('button',{name:'View Proof: Shipment 4'},{timeout:6500});
  await waitFor(()=>{
   expect(scrollPosition).toBe(217);
   expect(restored.getBoundingClientRect().top).toBe(originalTop);

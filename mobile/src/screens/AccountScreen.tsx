@@ -244,13 +244,31 @@ export function AccountScreen({ initialSection }: { initialSection?: AccountSect
       {section === "appearance" ? <View style={styles.appearance} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
         {APPEARANCE_OPTIONS.map(option => {
           const selected = theme.preference === option.id;
-          return <PressableScale key={option.id} onPress={() => void theme.setPreference(option.id)} accessibilityRole="radio" accessibilityState={{ selected }} style={[styles.appearanceRow, { borderColor: selected ? colors.primary : colors.border, backgroundColor: colors.surface }]}>
+          return <PressableScale key={option.id} onPress={() => void theme.setPreference(option.id).catch(() => app.setError('Appearance changed for this session but could not be saved.'))} accessibilityRole="radio" accessibilityState={{ selected }} style={[styles.appearanceRow, { borderColor: selected ? colors.primary : colors.border, backgroundColor: colors.surface }]}>
             <View style={styles.rowCopy}><Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{option.label}</Text><Text style={[styles.meta, { color: colors.textSecondary }]}>{option.hint}</Text></View>
             <Ionicons name={selected ? "radio-button-on-outline" : "radio-button-off-outline"} size={24} color={selected ? colors.primary : colors.textSecondary} />
           </PressableScale>;
         })}
       </View> : null}
 
+      {section === "appearance" ? <>
+        <SectionHeader title="Motion" />
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>System follows your device. Reduced keeps brief fades. Off shows changes immediately. Your device's reduced-motion setting is always respected.</Text>
+        <View style={styles.appearance} accessibilityRole="radiogroup" accessibilityLabel="Motion preference">
+          {([
+            { id: 'system', label: 'System', hint: 'Follow this device' },
+            { id: 'reduced', label: 'Reduced', hint: 'Brief state fades, without travel or scale' },
+            { id: 'off', label: 'Off', hint: 'Immediate presentation changes' },
+          ] as const).map(option => <PressableScale key={option.id}
+            accessibilityRole="radio" accessibilityLabel={`${option.label}. ${option.hint}`}
+            accessibilityState={{ selected: theme.motionPreference === option.id }}
+            onPress={() => void theme.setMotionPreference(option.id).catch(() => app.setError('Motion changed for this session but could not be saved.'))}
+            style={[styles.appearanceRow, { backgroundColor: colors.surface, borderColor: theme.motionPreference === option.id ? colors.primary : colors.border }]}>
+            <View style={styles.rowCopy}><Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{option.label}</Text><Text style={[styles.meta, { color: colors.textSecondary }]}>{option.hint}</Text></View>
+            <Ionicons name={theme.motionPreference === option.id ? 'radio-button-on-outline' : 'radio-button-off-outline'} size={24} color={theme.motionPreference === option.id ? colors.primary : colors.textSecondary} />
+          </PressableScale>)}
+        </View>
+      </> : null}
       {section === "help" ? <><ReplayTutorial/>
         <SectionHeader title="Make a recording" />
         <Text style={[styles.body, { color: colors.textSecondary }]}>{ANDROID_TASK_FIRST_REBUILD ? "Choose Pack an item, or select a linked order. Keep the item and package in view as you pack and seal. Show the label if available, then review and confirm the required statement." : "Choose an order, then record the item and package as you pack and seal it. Show the shipping label during that same recording. Review your video and confirm the shipping statement."}</Text>
