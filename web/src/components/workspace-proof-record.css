@@ -221,3 +221,12 @@ html[data-motion=off] .eim-connected-record *,html[data-motion=reduced] .eim-con
 .eim-original-provenance dl{display:grid;gap:12px;padding:16px;border:1px solid var(--signal-line);border-radius:8px;margin:0 0 12px}
 .eim-original-provenance dd{margin:4px 0 0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .signal-shell .eim-original-provenance p{font-size:12px;line-height:18px;max-width:420px}
+/* Desktop source inspection gets its own adjacent pane; original media keeps one owner. */
+.eim-chronology-layout,.eim-chronology-events{min-width:0}.eim-source-copy{overflow-wrap:anywhere}
+.eim-inspector-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.signal-shell .eim-inspector-heading .eim-record-eyebrow{margin:0}
+.eim-inspector-heading .text-link{flex:none;min-width:48px}
+.eim-inspector-empty{min-width:0;padding:24px;border:1px dashed var(--signal-line);border-radius:12px;background:var(--signal-canvas);display:grid;gap:12px;align-content:start}
+.signal-shell .eim-inspector-empty h3{margin:0;font-size:20px;line-height:26px}
+.signal-shell .eim-inspector-empty p{font-size:14px;line-height:20px}
+@media(min-width:1200px){.eim-record-layout{grid-template-columns:minmax(0,1fr);gap:32px}.eim-record-evidence{min-width:0}.eim-chronology-layout.is-wide{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);align-items:start;gap:24px}.eim-source-pane{min-width:0;position:sticky;top:24px;max-height:calc(100dvh - 48px);overflow:auto;scrollbar-gutter:stable}.eim-source-pane .eim-source-inspector{margin:0;padding:24px}.eim-source-pane .eim-inspector-empty{min-height:200px}}

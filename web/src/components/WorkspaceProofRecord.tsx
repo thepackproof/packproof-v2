@@ -124,11 +124,11 @@ export function WorkspaceProofRecord(props: {
     <div className="record-body" hidden={tab !== "Recording"} role={evolved && !signalDetails ? undefined : "tabpanel"} tabIndex={evolved && !signalDetails ? undefined : 0} id={`record-${proof.proofId}-Recording-panel`} aria-labelledby={evolved && !signalDetails ? undefined : `record-${proof.proofId}-Recording-tab`}>
       {props.api && <UploadRecoveryCards api={props.api} userId={props.currentUserId} proof={proof} onReview={props.onOpenStation} onStage={props.onOpenReceipt} />}
       <div className={evolved ? "eim-record-layout" : undefined}>
-        {evolved && <ConnectedChronology proof={proof} selectedId={selectedSourceId} onSelect={selectSource} onOpenEvent={props.onOpenEvent}/>}
         <section className={evolved ? "eim-record-evidence" : undefined} aria-label={evolved ? "Original evidence and participant statements" : undefined}>
           {evolved && <div className="eim-evidence-heading"><div><p className="eim-record-eyebrow">SOURCE MATERIAL</p><h2>Original evidence</h2></div><span>Full frame · original file</span></div>}
           <RecordEvidence key={scope} scope={scope} proof={proof} api={props.api} load={props.loadEvidence} focusEvidence={sourceFocus}/>
         </section>
+        {evolved && <ConnectedChronology proof={proof} selectedId={selectedSourceId} onSelect={selectSource} onClose={()=>setSelectedSourceId(null)} onOpenEvent={props.onOpenEvent}/>}
       </div>
     </div>
     <div className="record-body" hidden={tab !== "Activity"} role="tabpanel" tabIndex={0} id={`record-${proof.proofId}-Activity-panel`} aria-labelledby={`record-${proof.proofId}-Activity-tab`}>
@@ -168,15 +168,16 @@ function RecordEvidence({ proof, api, load, scope, focusEvidence }: { proof: Can
     try { const value = Number(sessionStorage.getItem(playbackKey(id))); return Number.isFinite(value) && value >= 0 ? value : 0; }
     catch { return 0; }
   }
-  async function open(id: string, at?: number) {
+  async function open(id: string, at?: number, focusPlayer = true) {
     const item = evidence.find(candidate => originalIdentity(candidate) === id);
     if (!item || (!item.stageId && !load) || (item.stageId && !api)) return;
     pendingSeek.current = at ?? restoreTime(id);
     setSelected(id);
     if (current && originalIdentity(current) === id && preview.url && video.current) {
+      if (!focusPlayer && at === undefined) { pendingSeek.current = null; return; }
       video.current.currentTime = Math.min(pendingSeek.current, Number.isFinite(video.current.duration) ? video.current.duration : pendingSeek.current);
       pendingSeek.current = null;
-      video.current.focus({ preventScroll: true });
+      if (focusPlayer) video.current.focus({ preventScroll: true });
       return;
     }
     const loader = item.stageId ? () => api!.featureDownload(proof.proofId, `lifecycle/stages/${item.stageId}/evidence/${item.evidenceId}`) : () => load!(item.evidenceId);
@@ -209,7 +210,7 @@ function RecordEvidence({ proof, api, load, scope, focusEvidence }: { proof: Can
     if (!focusEvidence) return;
     const item = evidence.find(candidate => candidate.evidenceId === focusEvidence.evidenceId && candidate.stageId === focusEvidence.stageId);
     if (!item || (!item.stageId && !load) || (item.stageId && !api)) return;
-    void open(originalIdentity(item));
+    void open(originalIdentity(item), undefined, false);
   }, [focusEvidence, Boolean(load), api]);
   const visibleBookmarks = bookmarks.filter(bookmark => !current?.stageId && !bookmark.stageId && bookmark.evidenceId === current?.evidenceId
     && bookmark.sourceHash === (current?.digest?.sha256 || current?.sha256) && Boolean(bookmark.sourceHash)

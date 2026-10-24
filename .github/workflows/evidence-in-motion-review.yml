@@ -306,8 +306,9 @@ jobs:
       - name: Check canonical tokens, source chronology and durable capture
         if: matrix.platform == 'win32'
         run: |
+          npm audit --audit-level=high
           node ../packages/evidence-in-motion/generate-tokens.mjs --check
-          npx vitest run tests/evidence-engine.test.ts tests/source-chronology.test.ts tests/renderer.test.tsx
+          npx vitest run tests/evidence-engine.test.ts tests/source-chronology.test.ts tests/renderer.test.tsx tests/security.test.ts tests/build-dependency-compatibility.test.ts
           node --test tests/release-policy.test.cjs
       - run: npm run build
       - name: Package isolated review installers
@@ -324,3 +325,4 @@ jobs:
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
+            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt

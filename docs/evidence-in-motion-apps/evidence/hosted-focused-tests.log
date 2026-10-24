@@ -1,0 +1,9 @@
+
+ RUN  v4.1.12 <hosted-source>/web
+
+┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖┬╖
+
+ Test Files  7 passed (7)
+      Tests  22 passed (22)
+   Start at  10:55:38
+   Duration  27.26s (transform 3.64s, setup 26.81s, import 21.58s, tests 3.22s, environment 108.44s)

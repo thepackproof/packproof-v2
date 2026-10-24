@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ConnectedChronology, connectedEventIdentity, originalForChronologyEvent, originalIdentity } from "../components/ConnectedChronology";
 import { WorkspaceProofRecord } from "../components/WorkspaceProofRecord";
 import { canonicalProof } from "./fixtures";
@@ -107,4 +107,68 @@ it("selecting an audit-linked source loads that exact original in the existing v
   fireEvent.click(within(chronology).getByRole("button", { expanded: false }));
   await waitFor(() => expect(load).toHaveBeenLastCalledWith(second.evidenceId));
   expect(screen.getByRole("region", { name: `Source details: ${entry.title}` })).toHaveTextContent("Linked committed original");
+});
+
+
+it("places the desktop source inspector beside chronology, restores close focus and preserves the player across responsive changes", async () => {
+  let wide = true;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const media = {
+    get matches() { return wide; }, media: "(min-width: 1200px)", onchange: null,
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
+    addListener: (listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
+    removeListener: (listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
+    dispatchEvent: () => true,
+  } as MediaQueryList;
+  vi.spyOn(window, "matchMedia").mockReturnValue(media);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: vi.fn(() => "blob:responsive-original") });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: vi.fn() });
+  sessionStorage.clear();
+  const proof = { ...canonicalProof, evidence: [{ ...canonicalProof.evidence[0], contentType: "video/mp4" }], chronology: [first, carrier] };
+  const load = vi.fn(async (_id: string) => new Blob(["original"], { type: "video/mp4" }));
+  render(<WorkspaceProofRecord proof={proof} currentUserId="user_seller" loadEvidence={load}/>);
+  const player = await screen.findByLabelText("Recorded packing evidence");
+  const chronology = screen.getByRole("region", { name: "Connected source chronology" });
+  const evidenceSource = within(chronology).getByRole("button", { name: /Evidence event/ });
+  (player as HTMLVideoElement).currentTime = 37;
+  evidenceSource.focus();
+  fireEvent.click(evidenceSource);
+  await waitFor(() => expect(evidenceSource).toHaveFocus());
+  expect((player as HTMLVideoElement).currentTime).toBe(37);
+  const desktopInspector = screen.getByRole("region", { name: `Source details: ${first.title}` });
+  const pane = desktopInspector.closest(".eim-source-pane");
+  expect(pane).not.toBeNull();
+  expect(pane?.closest("li")).toBeNull();
+  expect(pane?.parentElement).toHaveClass("eim-chronology-layout");
+  expect(pane?.parentElement?.querySelector("ol")?.closest(".eim-chronology-events")?.parentElement).toBe(pane?.parentElement);
+  expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
+
+  const carrierSource = within(chronology).getByRole("button", { name: /Carrier scan reported/ });
+  carrierSource.focus();
+  fireEvent.click(carrierSource);
+  expect(carrierSource).toHaveFocus();
+  const carrierInspector = screen.getByRole("region", { name: `Source details: ${carrier.title}` });
+  expect(screen.queryByRole("region", { name: `Source details: ${first.title}` })).not.toBeInTheDocument();
+  fireEvent.click(within(carrierInspector).getByRole("button", { name: "Close source details" }));
+  await waitFor(() => expect(carrierSource).toHaveFocus());
+  expect(screen.queryByRole("region", { name: /Source details:/ })).not.toBeInTheDocument();
+
+  fireEvent.click(evidenceSource);
+  act(() => {
+    wide = false;
+    for (const listener of listeners) listener({ matches: false, media: media.media } as MediaQueryListEvent);
+  });
+  const mobileInspector = screen.getByRole("region", { name: `Source details: ${first.title}` });
+  expect(mobileInspector.closest("li")).not.toBeNull();
+  expect(mobileInspector.closest(".eim-source-pane")).toBeNull();
+  expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
+  act(() => {
+    wide = true;
+    for (const listener of listeners) listener({ matches: true, media: media.media } as MediaQueryListEvent);
+  });
+  expect(screen.getByRole("region", { name: `Source details: ${first.title}` }).closest(".eim-source-pane")).not.toBeNull();
+  expect(screen.getByLabelText("Recorded packing evidence")).toBe(player);
+  expect(load).toHaveBeenCalledTimes(1);
 });

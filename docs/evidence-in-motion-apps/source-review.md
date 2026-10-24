@@ -1,6 +1,6 @@
 # Independent implementation source review
 
-Reviewed October 24, 2026 against the attached Evidence in Motion plan and inherited SIGNAL acceptance obligations. Snapshot: uncommitted candidate over upstream b08daf7982bedb6916702b5e4ee237a314f726da; local reconstruction da5feca is not upstream provenance. This is a source review, not a real capture, installed visual or release acceptance result.
+Reviewed October 24, 2026 against the attached Evidence in Motion plan and inherited SIGNAL acceptance obligations. Initial review snapshot: uncommitted candidate over upstream b08daf7982bedb6916702b5e4ee237a314f726da; local reconstruction da5feca is not upstream provenance. This is a source review, not a real capture, installed visual or release acceptance result.
 
 ## Concrete findings and follow-through
 
@@ -20,7 +20,7 @@ Native route ownership is scoped by API/account/Proof. Web ProofScreen keys Work
 
 ## Remaining acceptance obligations
 
-Verify all applicable inherited and production states, every visible control and large chronology behavior with real owners. In particular, source code alone cannot establish physical interruption/recovery, promised local-file survival, same-operation upload reconciliation, fresh canonical receipt, account isolation, old-to-new pending-work upgrade, actual rollback or signed store artifact identity. ADB daemon startup failure leaves those physical scenarios Not executed.
+Verify all applicable inherited and production states, every visible control and large chronology behavior with real owners. In particular, source code alone cannot establish physical interruption/recovery, promised local-file survival, same-operation upload reconciliation, fresh canonical receipt, account isolation, old-to-new pending-work upgrade, actual rollback or signed store artifact identity. The ADB daemon is now running with zero attached physical devices, so those physical scenarios remain Not executed.
 
 Visual contract completion, runtime fidelity, automated build/checks and publication are separate facts. Open findings should be updated with the actual repair paths, candidate SHA and affected check evidence; do not erase this review history to imply the defect never existed.
 ## Follow-through checkpoint
@@ -56,4 +56,18 @@ The actual hosted source baseline is 5b454f836872cc9292b4b12fc4709674bb5c2d37 (l
 
 The corrected hosted production build passed TypeScript, Vite, Evidence Library generation (16 articles, 7 topics and 16 prerendered public pages), and Worker compilation. Fourteen publication/bridge/association/routing checks passed. Source-linked chronology fixes were ported to both trees and focused record tests passed. These are candidate checks, not production publication or a real camera journey.
 
-At the inspected 1280px gallery width, source details expand inline within the chronology column. The plan's adjacent desktop inspector treatment still needs fidelity review. Other remaining visual/device limits are listed in browser-and-release-review.json. No unsupported screenshot or physical-device acceptance is asserted.
+The earlier inline-only desktop treatment was corrected in both source trees: at widths of at least 1200 CSS pixels, source details open in a responsive adjacent aside. Release-owner browser inspection at 1280x720 measured a 470px inspector with no horizontal overflow; Close restored focus to the exact source trigger. Current and hosted focused output each show 12 passed tests in 2 files, plus local TypeScript pass. This closes that specific presentation gap for the inspected fixture composition; other viewport/accessibility/native and real-data acceptance remains open. See evidence/browser-and-release-review.json and adjacent-inspector logs.
+
+## Remote review checkpoint and remaining limits
+
+Existing revision 35ed110 has passed remote source/web/Android JavaScript export and Mac Intel/ARM review-installer jobs. Android JavaScript export is not a signed AAB, and review installers do not prove physical native or production-signing acceptance. Broad PR Web/Mobile, three audits, scanner and PostgreSQL checks passed at the reported checkpoint; Backend remains running, iOS simulator app and Share Extension passed at the existing checkpoint, and Windows stale assertion is fixed locally; final remote rerun is pending. Do not describe the full pipeline as passed or later source edits as covered by those results.
+
+Hosted saved version 65/source c093b45f35f4b68cfd8a1f6cb902404535f46339 remains not deployed and includes the inspector repair. Real authenticated camera-to-receipt journey, phone interruption/recovery/upgrade, remaining fidelity/accessibility constraints and applicable native distribution gates remain Not executed.
+
+## Final saved-source and desktop evidence freeze
+
+Current hosted candidate: saved version 65, source c093b45f35f4b68cfd8a1f6cb902404535f46339, archive SHA-256 1b6b8129241a472ee957226ff3ea34893c0113dcc276aafdeddd4f17ae81d51e. It includes the adjacent-inspector repair and remains not deployed. Saved exact-build/package evidence: evidence/hosted-final-package-65.log.
+
+Desktop exact lock resolution with npm 11 addressed seven reported audit findings; the before report remains evidence/desktop-audit-before.json, and final evidence/desktop-audit.json reports zero vulnerabilities. Exact-dependency full-project compilation passed (evidence/desktop-exact-compiler.log). Focused Zod IPC/capture/source/renderer/builder compatibility checks passed: 44 tests in five files (evidence/desktop-exact-security-and-capture.log), including eight renderer tests after stale assertion correction. These final exact-dependency results supersede earlier desktop fallback-only evidence, without establishing hardware, upgrade, signing or production-distribution acceptance.
+
+The existing 35ed110 iOS simulator application and Share Extension passed. Final remote rerun after desktop security/source changes remains pending; real web camera-to-canonical-record, physical Android recovery/upgrade, signed iOS device, Windows/macOS hardware/distribution and remaining accessibility/fidelity gates remain unexecuted. No further tests were run while reconciling this documentation.

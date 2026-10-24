@@ -12,7 +12,14 @@
     "hostedBaselineCommit": "5b454f836872cc9292b4b12fc4709674bb5c2d37",
     "hostedSavedVersion": 62,
     "backendProductionRevision": "399f306a2fdac37511c8659c73d5a059dd759b7a",
-    "backendChanged": false
+    "backendChanged": false,
+    "hostedCandidate": {
+      "sourceCommit": "c093b45f35f4b68cfd8a1f6cb902404535f46339",
+      "savedVersion": 65,
+      "archiveSha256": "1b6b8129241a472ee957226ff3ea34893c0113dcc276aafdeddd4f17ae81d51e",
+      "deployed": false,
+      "includesAdjacentInspectorRepair": true
+    }
   },
   "design": {
     "fileKey": "4AtxdZJxHvpWVF3cCX14Z0",
@@ -5566,7 +5573,7 @@
     "windows": "Renderer source implemented; compiler passed; native package/hardware/upgrade pending",
     "macos": "Renderer source implemented; compiler passed; signed Mac/native validation pending",
     "candidateCommit": null,
-    "remotePipeline": "Pending release-owner push and exact-source CI"
+    "remotePipeline": "Existing35ed110 source/web/AndroidJSexport/MacIntel+ARMreview installers/iOSsimulator+ShareExtension passed; final remote rerun pending desktop security changes and outstanding Backend status. Not final all-green CI."
   },
   "tokens": {
     "version": "1.0.0",
@@ -5613,14 +5620,49 @@
     },
     "browser": "evidence/browser-and-release-review.json",
     "candidateCommit": null,
-    "scope": "Local snapshots only; no full real-operation/physical/store gate inferred"
+    "scope": "Local snapshots only; no full real-operation/physical/store gate inferred",
+    "adjacentInspector": {
+      "current": {
+        "path": "evidence/adjacent-inspector-current-tests.log",
+        "passed": 12,
+        "files": 2
+      },
+      "hosted": {
+        "path": "evidence/adjacent-inspector-hosted-tests.log",
+        "passed": 12,
+        "files": 2
+      },
+      "typecheck": "evidence/adjacent-inspector-typecheck.log",
+      "browserEvidence": "evidence/browser-and-release-review.json",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "asideWidthCssPixels": 470,
+      "sourceFocusRestoredOnClose": true,
+      "fixtureOnly": true
+    },
+    "hostedBuild": "evidence/hosted-production-build-final.log",
+    "hostedEarlierFocused": {
+      "path": "evidence/hosted-focused-tests.log",
+      "passed": 22,
+      "files": 7
+    },
+    "hostedFinalPackage": "evidence/hosted-final-package-65.log",
+    "desktopExact": {
+      "audit": "evidence/desktop-audit.json",
+      "compiler": "evidence/desktop-exact-compiler.log",
+      "focused": "evidence/desktop-exact-security-and-capture.log",
+      "passed": 44,
+      "files": 5
+    }
   },
   "releaseReadiness": {
     "web": "Not ready: real authenticated capture-to-canonical-record journey, affected hosted routes and publication identity pending",
     "android": "Not ready: no attached physical phone, signed candidate/critical device/pending-work upgrade gates pending",
-    "ios": "Not ready: signed Mac/device build and physical acceptance not executed",
-    "windows": "Not ready: native package/hardware/upgrade gates not executed",
-    "macos": "Not ready: native signed package/hardware/upgrade gates not executed",
+    "ios": "Existing35ed110 simulator app+ShareExtension passed; signed physical-device/native acceptance unexecuted",
+    "windows": "Stale assertion fixed;8renderer checks included in44exact-dependency local passes; final remote rerun pending security changes; native hardware/upgrade/distribution acceptance unexecuted",
+    "macos": "Review Intel/ARM installers passed at existing CI checkpoint; physical hardware/upgrade and production-signing acceptance remain unexecuted",
     "adb": {
       "server": "Running",
       "attachedDevices": 0

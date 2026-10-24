@@ -152,3 +152,28 @@ Browser fixtures were labeled synthetic. No browser camera recording or actual c
 The latest native source review added a pure submission-presentation projection over existing CapturePhase and exact operation transport progress. It distinguishes queued, confirmation-needed and actual/unknown original availability, with matching recovery/sign-in actions. Canonical receipt UI identity includes the actual evidence ID and is no longer reset solely by a phase change. Record-source association uses current backend chronology identities and account guards. These repairs retain existing capture/receipt authorities; their 12 focused checks do not replace real-device or server-outcome acceptance.
 
 Practical decision: Go for remote source review/CI and review-build preparation; stop production activation until applicable real-journey, physical capture/recovery/upgrade and release-provenance gates are executed. Existing user web/Android production authorization remains valid; no new broad permission is needed.
+
+## Adjacent inspector and remote checkpoint follow-up
+
+| Verification | Observed result | Evidence |
+| --- | --- | --- |
+| Current-source chronology/record focused checks | 12 passed in 2 files after responsive adjacent-inspector and focus-restoration repair | evidence/adjacent-inspector-current-tests.log |
+| Hosted-source matching focused checks | 12 passed in 2 files | evidence/adjacent-inspector-hosted-tests.log |
+| Current-source affected TypeScript | Passed | evidence/adjacent-inspector-typecheck.log |
+| Actual desktop gallery follow-up | Measured 1280x720; responsive aside 470px at >=1200 CSS pixels; no horizontal overflow; Close restored exact source trigger focus | evidence/browser-and-release-review.json, adjacentInspectorFollowup |
+| Hosted production candidate build | Passed TypeScript/Vite/Worker and public generation;289 modules, 563.14 KB app warning,16 articles/7 topics/16 prerendered pages | evidence/hosted-production-build-final.log |
+| Earlier hosted focused set | 22 passed in 7 files; later inspector checks supplement this source checkpoint | evidence/hosted-focused-tests.log |
+
+The inspector review used explicitly synthetic fixtures. It closes the prior inline-only desktop presentation gap for the measured composition, without establishing real-data/native acceptance or all-width/200% accessibility.
+
+Release-owner observed remote checkpoint 35ed110: source checks, web bundle, Android JavaScript export and Mac Intel/ARM review installers passed. Broad PR Web/Mobile, three dependency audits, scanner and PostgreSQL passed. Backend is running; iOS simulator app and Share Extension passed at the existing checkpoint; Windows stale assertion is fixed locally; final remote rerun is pending. No final all-green CI or later-source coverage is claimed. Review installers are not physical or production-signing acceptance; Android export is not a signed AAB.
+
+Hosted saved 65/source c093b45f35f4b68cfd8a1f6cb902404535f46339 remains not deployed; its exact archive includes the inspector repair. Real authenticated web journey, physical phone capture/recovery/upgrade, remaining design/accessibility constraints and applicable native distribution gates remain Not executed.
+
+## Final saved-source and desktop evidence freeze
+
+Current hosted candidate: saved version 65, source c093b45f35f4b68cfd8a1f6cb902404535f46339, archive SHA-256 1b6b8129241a472ee957226ff3ea34893c0113dcc276aafdeddd4f17ae81d51e. It includes the adjacent-inspector repair and remains not deployed. Saved exact-build/package evidence: evidence/hosted-final-package-65.log.
+
+Desktop exact lock resolution with npm 11 addressed seven reported audit findings; the before report remains evidence/desktop-audit-before.json, and final evidence/desktop-audit.json reports zero vulnerabilities. Exact-dependency full-project compilation passed (evidence/desktop-exact-compiler.log). Focused Zod IPC/capture/source/renderer/builder compatibility checks passed: 44 tests in five files (evidence/desktop-exact-security-and-capture.log), including eight renderer tests after stale assertion correction. These final exact-dependency results supersede earlier desktop fallback-only evidence, without establishing hardware, upgrade, signing or production-distribution acceptance.
+
+The existing 35ed110 iOS simulator application and Share Extension passed. Final remote rerun after desktop security/source changes remains pending; real web camera-to-canonical-record, physical Android recovery/upgrade, signed iOS device, Windows/macOS hardware/distribution and remaining accessibility/fidelity gates remain unexecuted. No further tests were run while reconciling this documentation.
