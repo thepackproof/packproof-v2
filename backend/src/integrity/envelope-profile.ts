@@ -50,7 +50,7 @@ export function validateCoverage(value: unknown): asserts value is IntegrityCove
   const paths = new Map<string, CoverageArtifact>();
   for (const item of artifacts) {
     exact(item, ['path', 'kind', 'sha256', 'byteSize', 'required', 'storage', 'sourcePath']);
-    requireThat(safePath(item.path) && !paths.has(item.path as string) && !['package.json', 'integrity/envelope.jws.json', 'integrity/coverage.json'].includes(item.path as string), 'INVALID_ARTIFACT_PATH');
+    requireThat(safePath(item.path) && !paths.has(item.path as string) && !['package.json', 'integrity/envelope.jws.json', 'integrity/coverage.json', 'integrity/timestamp.json'].includes(item.path as string), 'INVALID_ARTIFACT_PATH');
     requireThat(['MANIFEST', 'ORIGINAL', 'DERIVATIVE'].includes(item.kind as string) && digest(item.sha256) && Number.isSafeInteger(item.byteSize) && (item.byteSize as number) >= 0 && typeof item.required === 'boolean', 'INVALID_ARTIFACT');
     exact(item.storage, ['bucket', 'key', 'versionId']);
     requireThat(text(item.storage.bucket, 63) && text(item.storage.key, 1024) && text(item.storage.versionId, 1024) && item.storage.versionId !== 'null', 'EXACT_OBJECT_VERSION_REQUIRED');
