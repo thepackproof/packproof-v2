@@ -156,7 +156,7 @@ jobs:
               || expo.extra.packproofInternalReview || expo.extra.packproofResearch !== false
               || expo.extra.packproofResearchProduction !== true || expo.android.allowBackup !== false
               || expo.android.usesCleartextTraffic !== false) throw Error('Production source/identity mismatch');
-          const output = path.join(process.env.RUNNER_TEMP, 'eim-android-export');
+          const output = path.resolve('dist/eim-android-export');
           const result = cp.spawnSync(process.execPath, ['node_modules/expo/bin/cli', 'export',
             '--platform', 'android', '--output-dir', output], {stdio: 'inherit', env: process.env});
           if (result.error || result.status !== 0) throw result.error || Error('Android export failed');
@@ -170,7 +170,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: evidence-in-motion-android-export-${{ github.sha }}
-          path: ${{ runner.temp }}/eim-android-export
+          path: mobile/dist/eim-android-export
           if-no-files-found: error
           retention-days: 30
 
