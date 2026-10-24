@@ -37,7 +37,7 @@ describe('desktop renderer safety and shared presentation',()=>{
     expect(html).toContain('Select a Proof');
     expect(html).toMatch(/aria-label="Stop recording" disabled=""/);
     const captureControls=[...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].filter(match=>
-      /aria-label="(?:Start|Stop) recording"/.test(match[1])||/^(?:Record packing|Start recording|Stop recording)$/.test(match[2].replace(/<[^>]*>/g,'').trim()));
+      /aria-label="(?:Start|Stop) recording"/.test(match[1])||/(?:^|>)(?:Record packing|Start recording|Stop recording)(?:<|$)/.test(match[2].trim()));
     expect(captureControls.length).toBeGreaterThan(0);
     expect(captureControls.every(match=>/\bdisabled(?:="")?/.test(match[1]))).toBe(true);
     expect(html).not.toContain('Secured by PackProof');
