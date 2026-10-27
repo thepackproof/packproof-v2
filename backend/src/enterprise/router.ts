@@ -17,7 +17,7 @@ const run=(fn:(q:EnterpriseRequest,s:Response)=>Promise<void>)=>(q:Request,s:Res
 export function enterpriseRouter(deps:AppDependencies){
  const r=express.Router();
  r.use((_q,s,n)=>{s.setHeader('Cache-Control','private, no-store');s.setHeader('X-Content-Type-Options','nosniff');s.setHeader('Referrer-Policy','no-referrer');s.setHeader('PackProof-API-Profile','packproof.enterprise/v1');try{requireEnterpriseFeature();n();}catch(e){n(e);}});
- r.use(distributedRateLimit(deps.db,{scope:'enterprise-ingress',limit:60,windowMs:60000}));
+ r.use(distributedRateLimit(deps.db,{scope:'enterprise-ingress',limit:120,windowMs:60000}));
  r.use((q,s,n)=>{void authenticateEnterprise(deps.db,deps.clock,deps.auth,q.headers,s.locals.operationId).then(a=>{(q as EnterpriseRequest).enterpriseActor=a;n();}).catch(n);});
  r.use(distributedRateLimit(deps.db,{scope:'enterprise-actor',limit:120,windowMs:60000,subject:q=>(q as EnterpriseRequest).enterpriseActor.userId}));
  async function tenant(db:Database,id:string){const o=(await db.query<{tenant_id:string}>('SELECT tenant_id FROM platform_organizations WHERE id=$1 AND enabled=true',[id])).rows[0];if(!o?.tenant_id)throw absent();return {tenantId:o.tenant_id};}

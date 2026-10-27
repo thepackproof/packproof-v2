@@ -25,7 +25,7 @@ export async function dossierView(db:Database,clock:Clock,a:EnterpriseActor,id:s
  JOIN enterprise_assertions a ON a.record_id=r.id JOIN enterprise_order_lines l ON l.id=a.order_line_id WHERE l.order_id=$1`,[id])).rows;
  const linkedAssets=(await db.query<{id:string;document_key:string;sha256:string;byte_size:number;content_type:string;record_id:string}>(`SELECT DISTINCT e.id,e.document_key,e.sha256,e.byte_size,e.content_type,ra.record_id FROM enterprise_assets e
  JOIN enterprise_record_assets ra ON ra.asset_id=e.id JOIN enterprise_record_heads h ON h.record_id=ra.record_id JOIN enterprise_assertions a ON a.record_id=ra.record_id
- JOIN enterprise_order_lines l ON l.id=a.order_line_id WHERE l.order_id=$1 ORDER BY e.id`,[id])).rows;
+ JOIN enterprise_order_lines l ON l.id=a.order_line_id WHERE l.order_id=$1 AND (SELECT count(*) FROM enterprise_assets v WHERE v.source_id=e.source_id AND v.document_key=e.document_key)=1 ORDER BY e.id`,[id])).rows;
  const reconciliation=reconcile(assertions);
  for(const r of records){
   if(r.normalized.timeConfidence==='UNKNOWN'||r.normalized.timeConfidence==='AMBIGUOUS')reconciliation.exceptions.push(exception('SOURCE_TIMESTAMP_'+r.normalized.timeConfidence,null,[r.id],'Source time cannot be placed precisely in chronology.','Local timestamp and timezone are retained; ingest time is separate.'));

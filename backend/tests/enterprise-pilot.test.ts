@@ -39,7 +39,7 @@ describe('enterprise pilot acceptance',()=>{
   const list=await request(h.app).get(root+'/dossiers').query({siteId}).set(auth(owner));expect(list.status,JSON.stringify(list.body)).toBe(200);expect(list.body.items).toHaveLength(3);
   normalId=list.body.items.find((x:any)=>x.externalId==='SYNTH-NORMAL').id;splitId=list.body.items.find((x:any)=>x.externalId==='SYNTH-SPLIT').id;varianceId=list.body.items.find((x:any)=>x.externalId==='SYNTH-VARIANCE').id;
   const n=await request(h.app).get(root+'/dossiers/'+normalId).set(auth(owner));expect(n.status).toBe(200);expect(n.body.reconciliation.exceptions).toHaveLength(0);expect(n.body.reconciliation.lines[0].stages.ACKNOWLEDGED.quantity).toBe('10');
-  const s=await request(h.app).get(root+'/dossiers/'+splitId).set(auth(owner));expect(s.body.fulfillments).toHaveLength(2);expect(s.body.reconciliation.lines[0].stages.LOADED.quantity).toBe('10');
+  const s=await request(h.app).get(root+'/dossiers/'+splitId).set(auth(owner));expect(s.body.fulfillments).toHaveLength(2);expect(s.body.reconciliation.lines).toHaveLength(2);expect(s.body.reconciliation.lines[1].stages.LOADED.quantity).toBe('20');expect(s.body.reconciliation.lines[0].stages.LOADED.quantity).toBe('10');
   const v=await request(h.app).get(root+'/dossiers/'+varianceId).set(auth(owner));expect(v.body.reconciliation.exceptions.map((e:any)=>e.code)).toEqual(expect.arrayContaining(['LOAD_QTY_DIFFERS_FROM_PICK','HANDOFF_RECORD_NOT_FOUND']));expect(v.body.reconciliation.lines[0].stages.ACKNOWLEDGED).toBeUndefined();expect(v.body.confidence.businessClaimSupported).toBe(false);
   const original=await request(h.app).get(root+'/imports/'+firstBatch+'/original').set(auth(owner)).buffer(true).parse(binary);expect(original.status).toBe(200);expect(original.body.equals(Buffer.from(envelope.contentBase64,'base64'))).toBe(true);
  });
@@ -63,6 +63,15 @@ describe('enterprise pilot acceptance',()=>{
   expect((await post('/dossiers/'+normalId+'/annotations',{disposition:'NOTE',reason:'Synthetic walkthrough; no physical fulfillment claim.'},reviewer)).status).toBe(201);
   await expect(h.db.query("UPDATE enterprise_source_records SET revision='erased' WHERE id=$1",[d.body.timeline[0].id])).rejects.toThrow();
   const raw=await request(h.app).get(root+'/dossiers/'+normalId+'/records/'+d.body.timeline[0].id).set(auth(reviewer));expect(raw.status).toBe(200);expect(raw.body.raw_payload.order_id).toBe('SYNTH-NORMAL');
+ });
+ it('joins independently sourced records only through an approved same-site key namespace',async()=>{
+  const w=await post('/sites/'+siteId+'/sources',{name:'Synthetic WMS',freshnessHours:8760});expect(w.status).toBe(201);
+  const mapping={...canonicalMapping,orderNamespaceSourceId:sourceId,fulfillmentNamespaceSourceId:sourceId};
+  expect((await post('/sources/'+w.body.id+'/mappings',{mapping,approvalReference:'SYNTHETIC_SME_VERIFIED_KEY_NAMESPACE'})).status).toBe(201);
+  await importRows([{record_key:'wms-pick',revision:'1',stage:'PICKED',order_id:'SYNTH-NORMAL',fulfillment_id:'SYN-SHIP-N',source_timezone:'America/New_York',occurred_at_local:'2026-10-14T09:00:00',lines:[{line_id:'1',quantity:'10',uom:'EA'}]}],[],w.body.id);
+  const d=await request(h.app).get(root+'/dossiers/'+normalId).set(auth(owner));expect(d.body.timeline.some((x:any)=>x.sourceName==='Synthetic WMS')).toBe(true);expect(d.body.reconciliation.lines[0].stages.PICKED.quantity).toBe('10');
+  const alien=await post('/sites/'+otherSite+'/sources',{name:'Different merchant source',freshnessHours:8760},other);
+  const denied=await post('/sources/'+w.body.id+'/mappings',{mapping:{...mapping,version:'2',orderNamespaceSourceId:alien.body.id},approvalReference:'INVALID_CROSS_SITE'});expect(denied.status).toBe(400);
  });
  it('withholds mixed UOM and unknown times and uses exact decimal arithmetic',async()=>{
   await importRows([{record_key:'uom-extra',revision:'1',stage:'ACKNOWLEDGED',order_id:'SYNTH-NORMAL',fulfillment_id:'SYN-SHIP-N',lines:[{line_id:'1',quantity:'1',uom:'CASE'}]}]);
@@ -88,6 +97,15 @@ describe('enterprise pilot acceptance',()=>{
   const r=await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope);expect(r.status,JSON.stringify(r.body)).toBe(200);
   expect((await request(h.app).get(root+'/dossiers/'+normalId).set('Authorization','Bearer '+credential.token)).status).toBe(404);
   await post('/sources/'+sourceId+'/service-grants',{principalId:principal.id,expiresAt:'2026-11-01T00:00:00Z',revoked:true});expect((await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope)).status).toBe(404);
+ });
+ it('associates late originals unambiguously and rejects digest failures on retrieval',async()=>{
+  const row={record_key:'late-ticket',revision:'1',stage:'HANDOFF',order_id:'SYNTH-VARIANCE',lines:[{line_id:'1'}],document_keys:['late-ticket.pdf']};
+  await importRows([row]);const bytes=syntheticTicket('SYNTH-LATE');
+  await importRows([row],[{documentKey:'late-ticket.pdf',contentType:'application/pdf',base64:bytes.toString('base64')}]);
+  const d=await request(h.app).get(root+'/dossiers/'+varianceId).set(auth(owner)),event=d.body.timeline.find((x:any)=>x.recordKey==='late-ticket');expect(event.evidence).toHaveLength(1);
+  const asset=(await h.db.query<{object_key:string}>('SELECT object_key FROM enterprise_assets WHERE id=$1',[event.evidence[0].id])).rows[0];
+  const originalGet=h.objectStore.get.bind(h.objectStore);h.objectStore.get=async(k,ref)=>k===asset.object_key?{body:Buffer.from('tampered'),contentType:'application/pdf'}:originalGet(k,ref);
+  try{const r=await request(h.app).get(root+'/dossiers/'+varianceId+'/evidence/'+event.evidence[0].id).set(auth(owner));expect(r.status).toBe(409);expect(r.body.error.code).toBe('ENTERPRISE_ORIGINAL_INTEGRITY_FAILURE');}finally{h.objectStore.get=originalGet;}
  });
  it('measures baseline and pilot duration without inventing ROI',async()=>{
   // Advance the clock first so the suite also exercises a new distributed rate window.

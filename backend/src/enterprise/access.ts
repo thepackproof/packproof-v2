@@ -72,6 +72,7 @@ export async function requireSource(db:Database,clock:Clock,a:EnterpriseActor,so
 }
 export async function addMapping(db:Database,clock:Clock,a:EnterpriseActor,sourceId:string,input:unknown){
  const s=await requireSource(db,clock,a,sourceId,['ADMIN']),b=strictBody(input,['mapping','approvalReference']),mapping=mappingInput(b.mapping),id=newId('mapping');
+ for(const namespace of [mapping.orderNamespaceSourceId,mapping.fulfillmentNamespaceSourceId])if(namespace&&!(await db.query('SELECT 1 FROM enterprise_sources WHERE id=$1 AND site_id=$2',[namespace,s.site_id])).rows[0])throw new DomainError('INVALID_SOURCE_NAMESPACE','Namespace mappings must reference an approved source in this same site',400);
  await db.query('INSERT INTO enterprise_mappings(id,source_id,version,dictionary,approved_by,approval_reference,created_at) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7)',[id,sourceId,mapping.version,JSON.stringify(mapping),a.userId,textField(b.approvalReference,'approvalReference',500),clock.now().toISOString()]);await audit(db,clock,a,s.site_id,'MAPPING_APPROVED',id,{version:mapping.version});return {id,mapping};
 }
 export async function grantSource(db:Database,clock:Clock,a:EnterpriseActor,sourceId:string,input:unknown){

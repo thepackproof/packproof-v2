@@ -3,18 +3,18 @@ import { record,textField } from '../platform/tenants.js';
 export const STAGES=['ORDERED','AMENDED','PICKED','STAGED','LOADED','ACKNOWLEDGED','REJECTED','RETURNED','CANCELLED','DISPATCHED','DELIVERY_ATTEMPT','HANDOFF'] as const;
 export type Stage=typeof STAGES[number];
 export interface Mapping {
- schemaVersion:'packproof.enterprise.mapping/v1';version:string;sourceTimezone:string|null;quantitySemantics:'STAGE_SNAPSHOT';
+ schemaVersion:'packproof.enterprise.mapping/v1';version:string;sourceTimezone:string|null;quantitySemantics:'STAGE_SNAPSHOT';orderNamespaceSourceId:string|null;fulfillmentNamespaceSourceId:string|null;
  fields:Record<string,string>;lineFields:Record<string,string>;stageValues:Record<string,Stage>;requiredFields:string[];
  dictionary:{concept:string;sourceField:string;scope:string;nullBehavior:string;example:string}[];
 }
 export interface Line {orderId:string|null;lineId:string;itemId:string|null;quantity:string|null;uom:string|null;}
 export interface NormalizedRecord {
- recordKey:string;revision:string;supersedesRevision:string|null;stage:Stage;fulfillmentId:string|null;customerPo:string|null;
+ recordKey:string;revision:string;supersedesRevision:string|null;stage:Stage;fulfillmentId:string|null;customerPo:string|null;orderNamespaceSourceId:string|null;fulfillmentNamespaceSourceId:string|null;
  occurredAtLocal:string|null;sourceTimezone:string|null;occurredAtUtc:string|null;timeConfidence:'EXPLICIT_OFFSET'|'SOURCE_ZONE'|'UNKNOWN'|'AMBIGUOUS';
  lines:Line[];documentKeys:string[];handlingUnitIds:string[];candidateOrderIds:string[];warnings:string[];
 }
 export const canonicalMapping:Mapping={
- schemaVersion:'packproof.enterprise.mapping/v1',version:'1',sourceTimezone:null,quantitySemantics:'STAGE_SNAPSHOT',
+ schemaVersion:'packproof.enterprise.mapping/v1',version:'1',sourceTimezone:null,quantitySemantics:'STAGE_SNAPSHOT',orderNamespaceSourceId:null,fulfillmentNamespaceSourceId:null,
  fields:{recordKey:'record_key',revision:'revision',supersedesRevision:'supersedes_revision',stage:'stage',orderId:'order_id',fulfillmentId:'fulfillment_id',customerPo:'customer_po',occurredAtLocal:'occurred_at_local',sourceTimezone:'source_timezone',lines:'lines',documentKeys:'document_keys',handlingUnitIds:'handling_unit_ids',candidateOrderIds:'candidate_order_ids'},
  lineFields:{orderId:'order_id',lineId:'line_id',itemId:'item_id',quantity:'quantity',uom:'uom'},
  stageValues:Object.fromEntries(STAGES.map(s=>[s,s])),requiredFields:['recordKey','revision','stage','lines'],
@@ -36,7 +36,7 @@ export function mappingInput(input:unknown):Mapping{
  if(!Array.isArray(b.dictionary)||!b.dictionary.length||b.dictionary.length>100)bad('A semantic mapping dictionary is required');
  const dictionary=b.dictionary.map(v=>{const r=record(v);return {concept:textField(r.concept,'concept'),sourceField:textField(r.sourceField,'sourceField'),scope:textField(r.scope,'scope'),nullBehavior:textField(r.nullBehavior,'nullBehavior'),example:textField(r.example,'example')};});
  const zone=b.sourceTimezone==null?null:textField(b.sourceTimezone,'sourceTimezone',80);if(zone)validateZone(zone);
- return {schemaVersion:'packproof.enterprise.mapping/v1',version:textField(b.version,'version',40),sourceTimezone:zone,quantitySemantics:'STAGE_SNAPSHOT',fields:fields as Record<string,string>,lineFields:lineFields as Record<string,string>,stageValues:values as Record<string,Stage>,requiredFields:b.requiredFields as string[],dictionary};
+ return {schemaVersion:'packproof.enterprise.mapping/v1',version:textField(b.version,'version',40),sourceTimezone:zone,quantitySemantics:'STAGE_SNAPSHOT',orderNamespaceSourceId:b.orderNamespaceSourceId==null?null:textField(b.orderNamespaceSourceId,'orderNamespaceSourceId'),fulfillmentNamespaceSourceId:b.fulfillmentNamespaceSourceId==null?null:textField(b.fulfillmentNamespaceSourceId,'fulfillmentNamespaceSourceId'),fields:fields as Record<string,string>,lineFields:lineFields as Record<string,string>,stageValues:values as Record<string,Stage>,requiredFields:b.requiredFields as string[],dictionary};
 }
 function get(row:Record<string,unknown>,p:string|undefined):unknown{if(!p)return undefined;let v:unknown=row;for(const k of p.split('.')){if(!v||typeof v!=='object'||!Object.hasOwn(v,k))return undefined;v=(v as Record<string,unknown>)[k];}return v;}
 function optional(v:unknown,name:string,max=200):string|null{return v===undefined||v===null||v===''?null:textField(v,name,max);}
@@ -70,7 +70,7 @@ export function normalize(input:unknown,map:Mapping):NormalizedRecord{
   const quantity=decimal(r('quantity')),uom=optional(r('uom'),'uom',30);if(quantity!==null&&!uom)bad('Every quantity requires a UOM');
   return {orderId,lineId,quantity,uom,itemId:optional(r('itemId'),'itemId')};});
  const occurredAtLocal=optional(read('occurredAtLocal'),'occurredAtLocal',80),sourceTimezone=optional(read('sourceTimezone'),'sourceTimezone',80)??map.sourceTimezone,time=sourceTime(occurredAtLocal,sourceTimezone);
- return {recordKey:textField(read('recordKey'),'recordKey'),revision:textField(read('revision'),'revision',80),supersedesRevision:optional(read('supersedesRevision'),'supersedesRevision',80),stage,fulfillmentId:optional(read('fulfillmentId'),'fulfillmentId'),customerPo:optional(read('customerPo'),'customerPo'),
+ return {recordKey:textField(read('recordKey'),'recordKey'),revision:textField(read('revision'),'revision',80),supersedesRevision:optional(read('supersedesRevision'),'supersedesRevision',80),stage,fulfillmentId:optional(read('fulfillmentId'),'fulfillmentId'),customerPo:optional(read('customerPo'),'customerPo'),orderNamespaceSourceId:map.orderNamespaceSourceId??null,fulfillmentNamespaceSourceId:map.fulfillmentNamespaceSourceId??null,
  occurredAtLocal,sourceTimezone,...time,lines:parsed,documentKeys:list(read('documentKeys'),'documentKeys'),handlingUnitIds:list(read('handlingUnitIds'),'handlingUnitIds'),candidateOrderIds:list(read('candidateOrderIds'),'candidateOrderIds'),
  warnings:[...(time.timeConfidence==='UNKNOWN'?['SOURCE_TIMESTAMP_MISSING_OR_ZONE_UNKNOWN']:[]),...(time.timeConfidence==='AMBIGUOUS'?['SOURCE_TIMESTAMP_AMBIGUOUS']:[])]};
 }

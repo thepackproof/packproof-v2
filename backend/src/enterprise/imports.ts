@@ -79,10 +79,10 @@ export async function activateRecord(db:Database,clock:Clock,siteId:string,sourc
  const head=(await db.query<{record_id:string;revision:string}>(`SELECT h.record_id,r.revision FROM enterprise_record_heads h JOIN enterprise_source_records r ON r.id=h.record_id WHERE h.source_id=$1 AND h.record_key=$2 FOR UPDATE OF h`,[sourceId,n.recordKey])).rows[0];
  if(head?.record_id===id)return null;
  if(n.supersedesRevision?(head?.revision!==n.supersedesRevision):!!head)return n.supersedesRevision?'REVISION_PREDECESSOR_NOT_CURRENT':'SOURCE_REVISION_REQUIRES_SUPERSESSION';
- let fulfillment:string|null=null;
- if(n.fulfillmentId){await db.query('INSERT INTO enterprise_fulfillments(id,site_id,source_id,external_id) VALUES($1,$2,$3,$4) ON CONFLICT(source_id,external_id) DO NOTHING',[newId('fulfill'),siteId,sourceId,n.fulfillmentId]);fulfillment=(await db.query<{id:string}>('SELECT id FROM enterprise_fulfillments WHERE source_id=$1 AND external_id=$2',[sourceId,n.fulfillmentId])).rows[0].id;}
+ let fulfillment:string|null=null;const fulfillmentSource=n.fulfillmentNamespaceSourceId??sourceId;
+ if(n.fulfillmentId){await db.query('INSERT INTO enterprise_fulfillments(id,site_id,source_id,external_id) VALUES($1,$2,$3,$4) ON CONFLICT(source_id,external_id) DO NOTHING',[newId('fulfill'),siteId,fulfillmentSource,n.fulfillmentId]);fulfillment=(await db.query<{id:string}>('SELECT id FROM enterprise_fulfillments WHERE source_id=$1 AND external_id=$2',[fulfillmentSource,n.fulfillmentId])).rows[0].id;}
  for(const l of n.lines){
-  const line=await orderLine(db,clock,siteId,l.orderId?sourceId:override!.source_id,l.orderId??override!.external_id,l.lineId);
+  const line=await orderLine(db,clock,siteId,l.orderId?(n.orderNamespaceSourceId??sourceId):override!.source_id,l.orderId??override!.external_id,l.lineId);
   await db.query('INSERT INTO enterprise_assertions(id,record_id,order_line_id,fulfillment_id,stage,quantity,uom,item_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[newId('assert'),id,line,fulfillment,n.stage,l.quantity,l.uom,l.itemId]);
   for(const key of n.handlingUnitIds){await db.query('INSERT INTO enterprise_handling_units(id,source_id,external_id) VALUES($1,$2,$3) ON CONFLICT(source_id,external_id) DO NOTHING',[newId('unit'),sourceId,key]);const unit=(await db.query<{id:string}>('SELECT id FROM enterprise_handling_units WHERE source_id=$1 AND external_id=$2',[sourceId,key])).rows[0];await db.query('INSERT INTO enterprise_handling_unit_lines(record_id,handling_unit_id,order_line_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[id,unit.id,line]);}
  }
@@ -109,12 +109,19 @@ export async function commitImport(db:Database,clock:Clock,store:ObjectStore,a:E
    const error=await activateRecord(db,clock,p.siteId,p.sourceId,item.r.id,item.n!);if(!error){item.r.errors=[];pending.splice(i,1);progress=true;}else item.r.errors=[error];}
   if(!progress)break;
  }
+ // Late-arriving originals acquire an association only when the native
+ // document key has one retained content version in this source namespace.
+ await db.query(`INSERT INTO enterprise_record_assets(record_id,asset_id)
+ SELECT r.id,e.id FROM enterprise_source_records r JOIN enterprise_assets e ON e.source_id=r.source_id
+ WHERE r.source_id=$1 AND r.normalized->'documentKeys' ? e.document_key
+ AND (SELECT count(*) FROM enterprise_assets v WHERE v.source_id=e.source_id AND v.document_key=e.document_key)=1
+ ON CONFLICT DO NOTHING`,[p.sourceId]);
  counts.quarantined=results.filter(r=>r.errors.length).length;await audit(db,clock,a,p.siteId,'IMPORT_COMMITTED',id,{...counts,manifestSha256:sha256Hex(canonicalize(manifest))});
  return {id,counts,records:results,manifest,manifestSha256:sha256Hex(canonicalize(manifest)),synthetic:p.synthetic};
 }
 export async function importStatus(db:Database,clock:Clock,a:EnterpriseActor,id:string){
  const b=(await db.query<{site_id:string;source_id:string;manifest:unknown;manifest_sha256:string;created_at:string}>('SELECT site_id,source_id,manifest,manifest_sha256,created_at FROM enterprise_imports WHERE id=$1',[id])).rows[0];if(!b)throw absent();await requireSource(db,clock,a,b.source_id);
- const records=(await db.query(`SELECT r.id,r.record_key,r.revision,r.errors,r.normalized IS NULL AS invalid,EXISTS(SELECT 1 FROM enterprise_assertions a WHERE a.record_id=r.id) AS associated,EXISTS(SELECT 1 FROM enterprise_record_heads h WHERE h.record_id=r.id) AS current FROM enterprise_source_records r WHERE r.import_id=$1 ORDER BY r.id`,[id])).rows;return {id,...b,records};
+ const records=(await db.query(`SELECT r.id,r.record_key,r.revision,r.errors,r.normalized IS NULL AS invalid,EXISTS(SELECT 1 FROM enterprise_assertions a WHERE a.record_id=r.id) AS associated,EXISTS(SELECT 1 FROM enterprise_record_heads h WHERE h.record_id=r.id) AS current FROM enterprise_source_records r WHERE r.import_id=$1 ORDER BY r.id`,[id])).rows;return {id,...b,records,counts:{received:records.length,associated:records.filter(r=>r.associated).length,quarantined:records.filter(r=>!r.associated).length}};
 }
 export async function resolveRecord(db:Database,clock:Clock,a:EnterpriseActor,siteId:string,id:string,input:unknown){
  await requireSite(db,clock,a,siteId,['ADMIN','REVIEWER']);const b=strictBody(input,['dossierId','reason']),target=(await db.query<{id:string;source_id:string;external_id:string}>('SELECT id,source_id,external_id FROM enterprise_orders WHERE id=$1 AND site_id=$2',[textField(b.dossierId,'dossierId'),siteId])).rows[0];if(!target)throw absent();
