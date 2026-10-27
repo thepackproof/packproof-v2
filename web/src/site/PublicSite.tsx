@@ -42,7 +42,7 @@ export function Website() {
     const title = publicPageTitles[path] ?? ({"/login":"Log in","/signup":"Create an account","/app":"Your workspace"} as Record<string,string>)[path] ?? "Your workspace";
     document.title = title + " — PackProof";
   },[path]);
-  if (!publicPaths.has(path) && /^\/(app|home|overview|orders|uploads|notifications|login|signup|sample-proof|proofs|new|scan|activity|account|capture|developer|admin|receipt|invitations|fulfillment|station|pack|stores|p)(\/|$)/.test(path)) {
+  if (!publicPaths.has(path) && /^\/(app|home|overview|orders|uploads|notifications|login|signup|sample-proof|proofs|new|scan|activity|account|capture|developer|enterprise|admin|receipt|invitations|fulfillment|station|pack|stores|p)(\/|$)/.test(path)) {
     return <Suspense fallback={<main className="app-loading" role="status"><Brand/><p>Opening PackProof…</p></main>}><App authInitialView={path === "/signup" ? "create-account" : "sign-in"}/></Suspense>;
   }
   return <CinematicShell path={path}>{path === "/" ? <CinematicHome/> :

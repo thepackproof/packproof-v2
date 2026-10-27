@@ -1,3 +1,4 @@
+import { enterpriseRouter } from './enterprise/router.js';
 import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
 import { rateLimit } from "express-rate-limit";
 import { ingressRateLimitOptions, ingressRatePolicies } from "./http/ingress-rate-limit.js";
@@ -488,6 +489,7 @@ export function createApp(deps: AppDependencies): Express {
     );
   }
 
+  app.use("/v1/enterprise", enterpriseRouter(deps));
   app.use("/v1", createPlatformRouter(deps));
   app.use("/rnd/derivative-grants/redeem",distributedRateLimit(deps.db,{scope:"rnd-derivative-redemption",limit:30,windowMs:60_000}));
   app.use(rndDerivativeGrantPublicRouter(deps));
