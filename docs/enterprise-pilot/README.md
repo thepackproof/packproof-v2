@@ -49,7 +49,7 @@ The dedicated `Enterprise pilot acceptance` workflow runs:
 4. Reviewer UI tests for discrepancy discovery, unknown quantities, original fields, annotations and disabled access.
 5. Backend and web builds.
 
-The initial candidate passed all these checks. The final branch workflow is the authority for later refinements; do not describe partner acceptance, production migration, live media security or actual Winsupply performance as verified. The local Windows runner could not use loopback sockets and later disconnected, so executable acceptance moved to GitHub Actions. See the workflow logs and JUnit artifact.
+The final runtime candidate passed all these checks: 12 enterprise API scenarios, 3 reviewer UI tests and the existing consumer capture/finalize regression. See [exact verification record](VERIFICATION.md). The final branch workflow is the authority for later refinements; do not describe partner acceptance, production migration, live media security or actual Winsupply performance as verified. The local Windows runner could not use loopback sockets and later disconnected, so executable acceptance moved to GitHub Actions. See the workflow logs and JUnit artifact.
 
 ## Known pilot constraints
 
