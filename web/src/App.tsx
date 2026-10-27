@@ -1,3 +1,4 @@
+import { EnterpriseScreen } from './enterprise/EnterpriseScreen';
 import { SIGNAL_ENABLED } from './signal/Signal';
 import { selectFirstProofStudy, recordStudyInteraction, pauseStudyAccount, retainStudyAuth, completeStudyAuth } from './analytics/study-capture';
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
@@ -109,6 +110,7 @@ type Route =
   | { name: "account" }
   | { name: "delete-account" }
   | { name: "developer" }
+  | { name: "enterprise" }
   | { name: "receipt"; proofId: string }
   | { name: "proof"; proofId: string }
   | { name: "invite"; proofId: string }
@@ -150,6 +152,7 @@ function parseHref(href: string): Route {
   }
   if (pathname === "/capture") return {name:"capture-launch"};
   if (/^\/app\/capture\/[A-Za-z0-9_-]{1,160}$/.test(pathname)) return { name: "intake-handoff" };
+  if (pathname === "/enterprise") return { name: "enterprise" };
   if (pathname === "/developer") return { name: "developer" };
   if (pathname === "/account") {
     return { name: "account" };
@@ -938,6 +941,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     onOpenInvitation: (invitationId: string) => go(`/invitations/${encodeURIComponent(invitationId)}`),
   };
 
+  if (route.name === "enterprise") return <EnterpriseScreen key={`${session.apiBaseUrl}:${session.userId}`} api={api} onBack={() => go("/account")} />;
   if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={() => void requestSignOut()} /></Suspense>;
 
   return (
@@ -987,6 +991,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
           : <div className="card"><p>Developer access is unavailable for this account or could not be confirmed.</p><button className="btn btn-secondary" onClick={() => goBack("/account")}>Back to account</button></div>
       ) : null}
 
+      {route.name === "account" && import.meta.env.VITE_PACKPROOF_ENTERPRISE === "1" && <button className="btn btn-secondary" onClick={() => go("/enterprise")}>Enterprise pilot workspace</button>}
       {route.name === "account" ? (
         <AccountScreen
           key={`account:${session.userId}`}

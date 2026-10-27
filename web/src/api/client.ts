@@ -63,6 +63,15 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async enterpriseRequest<T>(path:string,method='GET',body?:unknown,key?:string):Promise<T>{
+    if(!path.startsWith('/')||path.startsWith('//')||path.includes('..'))throw new Error('Invalid enterprise path');
+    return this.request('/v1/enterprise'+path,{method,body,headers:key?{'Idempotency-Key':key}:undefined});
+  }
+  async enterpriseOriginal(path:string):Promise<Blob>{
+    if(!path.startsWith('/')||path.startsWith('//')||path.includes('..'))throw new Error('Invalid enterprise path');
+    return this.download('/v1/enterprise'+path);
+  }
+
   private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{const request=buildRndRequest(operation,input);return this.request(request.path,request);}
   async rndCapabilities(): Promise<RndCapabilities> { return this.rndOperation('getCapabilities',{}); }
   async rndAnalyses(proofId:string):Promise<RndSnapshot> { return this.rndOperation('listAnalyses',{path:{id:proofId}}); }

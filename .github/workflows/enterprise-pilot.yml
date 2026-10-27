@@ -1,0 +1,64 @@
+name: Enterprise pilot acceptance
+on:
+  push:
+    branches: [codex/winsupply-enterprise-pilot]
+    paths:
+      - 'backend/src/enterprise/**'
+      - 'backend/migrations/096_enterprise_fulfillment.sql'
+      - 'backend/tests/enterprise-pilot.test.ts'
+      - 'backend/src/app.ts'
+      - 'backend/src/platform/organizations.ts'
+      - 'web/src/enterprise/**'
+      - 'web/src/App.tsx'
+      - 'web/src/site/PublicSite.tsx'
+      - 'web/src/api/client.ts'
+      - 'web/src/tests/enterprise-pilot.test.tsx'
+      - '.github/workflows/enterprise-pilot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: enterprise-pilot-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            web/package-lock.json
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix web
+      - name: Install the one shared mobile hash dependency
+        run: |
+          mkdir -p mobile/node_modules/@noble
+          npm pack @noble/hashes@1.8.0 --pack-destination "$RUNNER_TEMP"
+          mkdir -p mobile/node_modules/@noble/hashes
+          tar -xzf "$RUNNER_TEMP/noble-hashes-1.8.0.tgz" -C mobile/node_modules/@noble/hashes --strip-components=1
+      - name: Type-check API and web
+        run: |
+          npm run typecheck --prefix backend
+          npm run typecheck --prefix web
+      - name: Enterprise isolation, custody and normalization acceptance
+        run: npm test --prefix backend -- tests/enterprise-pilot.test.ts --maxWorkers=1 --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/enterprise-tests.xml"
+      - name: Existing consumer capture and finalize regression
+        run: |
+          bash scripts/ci-install-media-tools.sh
+          npm test --prefix backend -- tests/automatic-fulfillment.test.ts -t "lets a seller attest a merchant Proof" --maxWorkers=1
+      - name: Reviewer workspace acceptance
+        run: npm exec --prefix web -- vitest run src/tests/enterprise-pilot.test.tsx --root web --maxWorkers=1
+      - name: Build API and reviewer web client
+        run: |
+          npm run build --prefix backend
+          npm run build --prefix web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-pilot-verification-${{ github.sha }}
+          path: ${{ runner.temp }}/enterprise-tests.xml
