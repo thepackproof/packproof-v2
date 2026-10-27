@@ -49,7 +49,7 @@ export function enterpriseRouter(deps:AppDependencies){
  write('/sites/:siteId/records/:recordId/resolve',site(['ADMIN','REVIEWER']),(db,a,q)=>resolveRecord(db,deps.clock,a,q.params.siteId,q.params.recordId,q.body));
  write('/imports/:batchId/replay',batch,async(db,a,q)=>{
   const b=(await db.query<{site_id:string;source_id:string}>('SELECT site_id,source_id FROM enterprise_imports WHERE id=$1',[q.params.batchId])).rows[0];
-  const pending=(await db.query<{id:string;normalized:NormalizedRecord}>(`SELECT r.id,r.normalized FROM enterprise_source_records r WHERE r.import_id=$1 AND r.normalized IS NOT NULL AND NOT EXISTS(SELECT 1 FROM enterprise_assertions a WHERE a.record_id=r.id) ORDER BY r.id`,[q.params.batchId])).rows;
+  const pending=(await db.query<{id:string;normalized:NormalizedRecord}>(`SELECT r.id,r.normalized FROM enterprise_source_records r WHERE r.source_id=$2 AND EXISTS(SELECT 1 FROM enterprise_imports i, jsonb_array_elements(i.manifest->'records') m WHERE i.id=$1 AND m->>'recordKey'=r.record_key AND m->>'revision'=r.revision) AND r.normalized IS NOT NULL AND NOT EXISTS(SELECT 1 FROM enterprise_assertions a WHERE a.record_id=r.id) ORDER BY r.id`,[q.params.batchId,b.source_id])).rows;
   const results=[];for(const item of pending)results.push({id:item.id,error:await activateRecord(db,deps.clock,b.site_id,b.source_id,item.id,item.normalized)});
   await audit(db,deps.clock,a,b.site_id,'IMPORT_REPLAYED',q.params.batchId,{attempted:pending.length});return {results};
  },200);

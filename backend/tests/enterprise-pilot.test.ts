@@ -45,7 +45,7 @@ describe('enterprise pilot acceptance',()=>{
  });
  it('deduplicates reruns and retries and rejects changed idempotency payloads',async()=>{
   const before=(await h.db.query<{n:number}>('SELECT count(*)::int AS n FROM enterprise_assertions')).rows[0].n;
-  const r=await importRows(syntheticRecords());expect(r.counts.inserted).toBe(0);expect(r.counts.duplicates).toBe(15);expect((await h.db.query<{n:number}>('SELECT count(*)::int AS n FROM enterprise_assertions')).rows[0].n).toBe(before);
+  const r=await importRows(syntheticRecords());expect(r.counts.inserted).toBe(0);expect(r.counts.duplicates).toBe(15);const status=await request(h.app).get(root+'/imports/'+r.id).set(auth(owner));expect(status.status,JSON.stringify(status.body)).toBe(200);expect(status.body.records).toHaveLength(15);expect((await h.db.query<{n:number}>('SELECT count(*)::int AS n FROM enterprise_assertions')).rows[0].n).toBe(before);
   const body={name:'Extra source',freshnessHours:24},a=await post('/sites/'+siteId+'/sources',body,owner,'retry-source'),b=await post('/sites/'+siteId+'/sources',body,owner,'retry-source');expect(b.body.id).toBe(a.body.id);expect(b.headers['idempotency-replayed']).toBe('true');expect((await post('/sites/'+siteId+'/sources',{...body,name:'Changed'},owner,'retry-source')).status).toBe(409);
  });
  it('isolates distinct merchants and requires explicit site grants for humans',async()=>{
