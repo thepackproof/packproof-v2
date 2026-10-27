@@ -23,7 +23,7 @@ function document(input:unknown):AssetInput{
  if(!['application/pdf','image/png','image/jpeg'].includes(contentType))invalid('Evidence accepts PDF, PNG and JPEG originals');
  const valid=contentType==='application/pdf'?bytes.subarray(0,5).toString()==='%PDF-':contentType==='image/png'?bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
  if(!valid)invalid('Original bytes do not match declared media type');
- return {documentKey:textField(b.documentKey,'documentKey'),contentType,bytes,sha256:sha256Hex(bytes)};
+ textField(b.documentKey,'documentKey');return {documentKey:b.documentKey as string,contentType,bytes,sha256:sha256Hex(bytes)};
 }
 export async function prepareImport(db:Database,clock:Clock,a:EnterpriseActor,input:unknown):Promise<PreparedImport>{
  const b=strictBody(input,['schemaVersion','sourceId','mappingVersion','format','contentBase64','synthetic','files','previewDigest']);

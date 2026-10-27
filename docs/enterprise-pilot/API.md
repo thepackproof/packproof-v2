@@ -81,3 +81,15 @@ Numeric quantities use decimal strings, at most 18 integer and six fractional di
 ## Safe rerun and replay
 
 Retry a lost command response with the same path, body and idempotency key. A different body under the same key returns 409. A new batch with the same source revisions creates no duplicate logical assertions. Do not change an old mapping or source record to repair an import; approve a new mapping/source correction. Replay only retries unresolved valid records; invalid rows need corrected source revisions.
+
+## File import CLI
+
+`scripts/enterprise-import.mjs` is a generic manual/export-worker seam. It does not poll an upstream system or schedule itself. Provide the approved PackProof API URL, source ID, mapping version, original input path and explicit data mode. Set the credential in `PACKPROOF_ENTERPRISE_TOKEN`; no token is printed. Preview is the default. Add `--commit` only for authorized data after reviewing the mapping/diagnostics.
+
+```sh
+node scripts/enterprise-import.mjs --api http://127.0.0.1:3000 --source SOURCE_ID --mapping 1 --input approved-export.json --mode synthetic
+```
+
+Optional repeated `--document FILE` uploads exact PDF/PNG/JPEG originals. The tool uses filenames as document keys, bounds the batch before transfer, rejects insecure remote origins and redirects, and emits counts/manifest IDs rather than raw source contents. It uses a deterministic request-derived idempotency key; use `--idempotency-key` to identify a deliberately new logical attempt. After a lost response, retry with the same input and key. A prerequisite-dependent existing batch can be retried through the replay API.
+
+Native record/order/line/document identifiers retain significant leading and trailing spaces after nonempty/control-character validation. They are not joined by trimmed display strings. Unit labels are also compared exactly; source-specific aliases require explicit approved mapping/source preparation.

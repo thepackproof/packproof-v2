@@ -70,6 +70,7 @@ describe('enterprise pilot acceptance',()=>{
   expect((await post('/sources/'+w.body.id+'/mappings',{mapping,approvalReference:'SYNTHETIC_SME_VERIFIED_KEY_NAMESPACE'})).status).toBe(201);
   await importRows([{record_key:'wms-pick',revision:'1',stage:'PICKED',order_id:'SYNTH-NORMAL',fulfillment_id:'SYN-SHIP-N',source_timezone:'America/New_York',occurred_at_local:'2026-10-14T09:00:00',lines:[{line_id:'1',quantity:'10',uom:'EA'}]}],[],w.body.id);
   const d=await request(h.app).get(root+'/dossiers/'+normalId).set(auth(owner));expect(d.body.timeline.some((x:any)=>x.sourceName==='Synthetic WMS')).toBe(true);expect(d.body.reconciliation.lines[0].stages.PICKED.quantity).toBe('10');
+  await importRows([{record_key:'native-whitespace',revision:'1',stage:'ORDERED',order_id:'SYNTH-NORMAL ',lines:[{line_id:'1',quantity:'1',uom:'EA'}]}]);const separate=await request(h.app).get(root+'/dossiers').query({siteId,externalId:'SYNTH-NORMAL '}).set(auth(owner));expect(separate.body.items).toHaveLength(1);expect(separate.body.items[0].id).not.toBe(normalId);
   const alien=await post('/sites/'+otherSite+'/sources',{name:'Different merchant source',freshnessHours:8760},other);
   const denied=await post('/sources/'+w.body.id+'/mappings',{mapping:{...mapping,version:'2',orderNamespaceSourceId:alien.body.id},approvalReference:'INVALID_CROSS_SITE'});expect(denied.status).toBe(400);
  });
@@ -94,7 +95,7 @@ describe('enterprise pilot acceptance',()=>{
   const principal=await createServicePrincipal(h.db,clock,owner,'merchant-one',{name:'Synthetic ingester'},'seed-principal'),credential=await issuePartnerCredential(h.db,clock,owner,'merchant-one',principal.id,{scopes:['enterprise:ingest'],expiresAt:'2026-11-01T00:00:00Z'},'seed-credential'),envelope=syntheticEnvelope(sourceId);
   expect((await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope)).status).toBe(404);
   expect((await post('/sources/'+sourceId+'/service-grants',{principalId:principal.id,expiresAt:'2026-11-01T00:00:00Z'})).status).toBe(201);
-  const r=await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope);expect(r.status,JSON.stringify(r.body)).toBe(200);
+  const r=await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope);expect(r.status,JSON.stringify(r.body)).toBe(200);expect((await request(h.app).get(root+'/imports/'+firstBatch+'/original').set('Authorization','Bearer '+credential.token)).status).toBe(404);
   expect((await request(h.app).get(root+'/dossiers/'+normalId).set('Authorization','Bearer '+credential.token)).status).toBe(404);
   await post('/sources/'+sourceId+'/service-grants',{principalId:principal.id,expiresAt:'2026-11-01T00:00:00Z',revoked:true});expect((await request(h.app).post(root+'/imports/preview').set('Authorization','Bearer '+credential.token).send(envelope)).status).toBe(404);
  });

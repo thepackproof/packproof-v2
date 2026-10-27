@@ -14,6 +14,7 @@ on:
       - 'web/src/api/client.ts'
       - 'web/src/tests/enterprise-pilot.test.tsx'
       - '.github/workflows/enterprise-pilot.yml'
+      - 'scripts/enterprise-import.mjs'
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,6 +42,8 @@ jobs:
           npm pack @noble/hashes@1.8.0 --pack-destination "$RUNNER_TEMP"
           mkdir -p mobile/node_modules/@noble/hashes
           tar -xzf "$RUNNER_TEMP/noble-hashes-1.8.0.tgz" -C mobile/node_modules/@noble/hashes --strip-components=1
+      - name: Check generic import tool syntax
+        run: node --check scripts/enterprise-import.mjs
       - name: Type-check API and web
         run: |
           npm run typecheck --prefix backend

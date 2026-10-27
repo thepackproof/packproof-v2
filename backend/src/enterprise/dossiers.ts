@@ -46,7 +46,7 @@ export async function dossierView(db:Database,clock:Clock,a:EnterpriseActor,id:s
  notice:'Source assertions and PackProof ingest integrity are separate. Unknown is not zero. No fault or dispute outcome is assigned.'};
 }
 export async function searchDossiers(db:Database,clock:Clock,a:EnterpriseActor,q:Record<string,unknown>){
- const siteId=textField(q.siteId,'siteId');await requireSite(db,clock,a,siteId);const after=q.after?textField(q.after,'after'):null,external=q.externalId?textField(q.externalId,'externalId'):null;
+ const siteId=textField(q.siteId,'siteId');await requireSite(db,clock,a,siteId);const after=q.after?textField(q.after,'after'):null,external=q.externalId?(textField(q.externalId,'externalId'),q.externalId as string):null;
  const date=(v:unknown)=>{if(v==null||v==='')return null;if(typeof v!=='string'||!/^\d{4}-\d\d-\d\d$/.test(v)||!Number.isFinite(Date.parse(v+'T00:00:00Z'))||new Date(v+'T00:00:00Z').toISOString().slice(0,10)!==v)throw new DomainError('INVALID_REQUEST','Use valid YYYY-MM-DD filters',400);return v;};const from=date(q.from),to=date(q.to);
  const rows=(await db.query<OrderRow>(`SELECT o.* FROM enterprise_orders o WHERE o.site_id=$1 AND ($2::text IS NULL OR o.id>$2)
  AND ($3::text IS NULL OR o.external_id=$3 OR EXISTS(SELECT 1 FROM enterprise_assertions a JOIN enterprise_order_lines l ON l.id=a.order_line_id LEFT JOIN enterprise_fulfillments f ON f.id=a.fulfillment_id JOIN enterprise_source_records r ON r.id=a.record_id JOIN enterprise_record_heads h ON h.record_id=r.id WHERE l.order_id=o.id AND (f.external_id=$3 OR r.normalized->>'customerPo'=$3)))
@@ -75,6 +75,7 @@ export async function readSourceRecord(db:Database,clock:Clock,a:EnterpriseActor
  const row=(await db.query(`SELECT DISTINCT r.id,r.raw_payload,r.normalized,r.sha256,r.record_key,r.revision,r.created_at,i.original_asset_id,i.manifest,i.manifest_sha256 FROM enterprise_source_records r JOIN enterprise_imports i ON i.id=r.import_id JOIN enterprise_assertions a ON a.record_id=r.id JOIN enterprise_order_lines l ON l.id=a.order_line_id WHERE l.order_id=$1 AND r.id=$2`,[dossierId,recordId])).rows[0];if(!row)throw absent();await audit(db,clock,a,order.site_id,'SOURCE_RECORD_VIEWED',recordId);return row;
 }
 export async function readImportOriginal(db:Database,clock:Clock,store:ObjectStore,a:EnterpriseActor,batchId:string){
+ if(a.partner)throw absent();
  const b=(await db.query<{source_id:string;original_asset_id:string}>('SELECT source_id,original_asset_id FROM enterprise_imports WHERE id=$1',[batchId])).rows[0];if(!b)throw absent();const source=await requireSource(db,clock,a,b.source_id);
  const asset=(await db.query<{object_key:string;version_id:string|null;sha256:string;content_type:string}>('SELECT object_key,version_id,sha256,content_type FROM enterprise_assets WHERE id=$1',[b.original_asset_id])).rows[0],held=await store.get(asset.object_key,{versionId:asset.version_id});
  if(!held||sha256Hex(held.body)!==asset.sha256)throw new DomainError('ENTERPRISE_ORIGINAL_INTEGRITY_FAILURE','Original import failed validation',409);

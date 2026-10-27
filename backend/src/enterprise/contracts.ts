@@ -39,8 +39,9 @@ export function mappingInput(input:unknown):Mapping{
  return {schemaVersion:'packproof.enterprise.mapping/v1',version:textField(b.version,'version',40),sourceTimezone:zone,quantitySemantics:'STAGE_SNAPSHOT',orderNamespaceSourceId:b.orderNamespaceSourceId==null?null:textField(b.orderNamespaceSourceId,'orderNamespaceSourceId'),fulfillmentNamespaceSourceId:b.fulfillmentNamespaceSourceId==null?null:textField(b.fulfillmentNamespaceSourceId,'fulfillmentNamespaceSourceId'),fields:fields as Record<string,string>,lineFields:lineFields as Record<string,string>,stageValues:values as Record<string,Stage>,requiredFields:b.requiredFields as string[],dictionary};
 }
 function get(row:Record<string,unknown>,p:string|undefined):unknown{if(!p)return undefined;let v:unknown=row;for(const k of p.split('.')){if(!v||typeof v!=='object'||!Object.hasOwn(v,k))return undefined;v=(v as Record<string,unknown>)[k];}return v;}
-function optional(v:unknown,name:string,max=200):string|null{return v===undefined||v===null||v===''?null:textField(v,name,max);}
-function list(v:unknown,name:string):string[]{if(v===undefined||v===null||v==='')return [];if(typeof v==='string'){try{v=JSON.parse(v);}catch{bad(name+' must be a JSON array');}}if(!Array.isArray(v)||v.length>100)bad(name+' must have at most 100 items');return [...new Set(v.map(x=>textField(x,name,200)))];}
+function native(v:unknown,name:string,max=200):string{textField(v,name,max);return v as string;}
+function optional(v:unknown,name:string,max=200):string|null{return v===undefined||v===null||v===''?null:native(v,name,max);}
+function list(v:unknown,name:string):string[]{if(v===undefined||v===null||v==='')return [];if(typeof v==='string'){try{v=JSON.parse(v);}catch{bad(name+' must be a JSON array');}}if(!Array.isArray(v)||v.length>100)bad(name+' must have at most 100 items');return [...new Set(v.map(x=>native(x,name,200)))];}
 export function decimal(v:unknown):string|null{if(v===undefined||v===null||v==='')return null;if(typeof v!=='string'||!/^\d{1,18}(\.\d{1,6})?$/.test(v))bad('Quantities must be nonnegative decimal strings with at most six decimal places');return v.replace(/^0+(?=\d)/,'');}
 export function units(v:string):bigint{const [a,b='']=v.split('.');return BigInt(a)*1000000n+BigInt(b.padEnd(6,'0'));}
 export function decimalString(v:bigint):string{const negative=v<0n,n=negative?-v:v,tail=(n%1000000n).toString().padStart(6,'0').replace(/0+$/,'');return (negative?'-':'')+(n/1000000n).toString()+(tail?'.'+tail:'');}
@@ -66,11 +67,11 @@ export function normalize(input:unknown,map:Mapping):NormalizedRecord{
  if(!Array.isArray(lines)||!lines.length||lines.length>100)bad('Supply 1-100 source line assertions');
  const order=optional(read('orderId'),'orderId'),seen=new Set<string>();
  const parsed=lines.map(value=>{const l=record(value),r=(k:string)=>get(l,map.lineFields[k]),orderId=optional(r('orderId'),'line.orderId')??order;
-  const lineId=textField(r('lineId'),'lineId',100),identity=JSON.stringify([orderId,lineId]);if(seen.has(identity))bad('Duplicate line within source record');seen.add(identity);
+  const lineId=native(r('lineId'),'lineId',100),identity=JSON.stringify([orderId,lineId]);if(seen.has(identity))bad('Duplicate line within source record');seen.add(identity);
   const quantity=decimal(r('quantity')),uom=optional(r('uom'),'uom',30);if(quantity!==null&&!uom)bad('Every quantity requires a UOM');
   return {orderId,lineId,quantity,uom,itemId:optional(r('itemId'),'itemId')};});
  const occurredAtLocal=optional(read('occurredAtLocal'),'occurredAtLocal',80),sourceTimezone=optional(read('sourceTimezone'),'sourceTimezone',80)??map.sourceTimezone,time=sourceTime(occurredAtLocal,sourceTimezone);
- return {recordKey:textField(read('recordKey'),'recordKey'),revision:textField(read('revision'),'revision',80),supersedesRevision:optional(read('supersedesRevision'),'supersedesRevision',80),stage,fulfillmentId:optional(read('fulfillmentId'),'fulfillmentId'),customerPo:optional(read('customerPo'),'customerPo'),orderNamespaceSourceId:map.orderNamespaceSourceId??null,fulfillmentNamespaceSourceId:map.fulfillmentNamespaceSourceId??null,
+ return {recordKey:native(read('recordKey'),'recordKey'),revision:native(read('revision'),'revision',80),supersedesRevision:optional(read('supersedesRevision'),'supersedesRevision',80),stage,fulfillmentId:optional(read('fulfillmentId'),'fulfillmentId'),customerPo:optional(read('customerPo'),'customerPo'),orderNamespaceSourceId:map.orderNamespaceSourceId??null,fulfillmentNamespaceSourceId:map.fulfillmentNamespaceSourceId??null,
  occurredAtLocal,sourceTimezone,...time,lines:parsed,documentKeys:list(read('documentKeys'),'documentKeys'),handlingUnitIds:list(read('handlingUnitIds'),'handlingUnitIds'),candidateOrderIds:list(read('candidateOrderIds'),'candidateOrderIds'),
  warnings:[...(time.timeConfidence==='UNKNOWN'?['SOURCE_TIMESTAMP_MISSING_OR_ZONE_UNKNOWN']:[]),...(time.timeConfidence==='AMBIGUOUS'?['SOURCE_TIMESTAMP_AMBIGUOUS']:[])]};
 }
