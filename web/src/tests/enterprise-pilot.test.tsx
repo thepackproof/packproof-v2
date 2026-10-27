@@ -12,7 +12,10 @@ const dossier={id:'dossier-a',externalId:'SYNTH-VARIANCE',synthetic:true,site:{i
 function client(){
  const fn=vi.fn(async(path:string,method='GET',body?:unknown)=>{
   if(path==='/sites')return {sites:[site]};
+  if(path.startsWith('/dossiers?')&&path.includes('externalId=SYNTH-LATE'))return {items:[{id:'late-dossier',externalId:'SYNTH-LATE',exceptionCount:0,fulfillments:[],synthetic:true}],nextCursor:null};
   if(path.startsWith('/dossiers?'))return search;
+  if(path==='/sites/site-a/diagnostics')return {sources:[],mappings:[],imports:[],unassociatedEvidence:[],quarantine:[{id:'ambiguous-a',source_id:'source-a',record_key:'row-without-key',revision:'1',errors:['AMBIGUOUS_SHIPMENT_MATCH'],normalized:{candidateOrderIds:['SYNTH-LATE']}}]};
+  if(path==='/capabilities')return {canonicalMapping:{}};
   if(path==='/dossiers/dossier-a')return dossier;
   if(path==='/dossiers/dossier-a/records/record-a')return {raw_payload:{quantity:'8',uom:'EA'},normalized:{stage:'LOADED'}};
   if(path==='/dossiers/dossier-a/annotations'&&method==='POST')return {id:'note-a',body};
@@ -30,6 +33,12 @@ describe('enterprise reviewer workspace',()=>{
   expect(screen.getByText(/"quantity": "8"/)).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Reason'),{target:{value:'Confirmed partial delivery in source ticket.'}});fireEvent.click(screen.getByRole('button',{name:'Append reviewer note'}));
   await waitFor(()=>expect(fn).toHaveBeenCalledWith('/dossiers/dossier-a/annotations','POST',expect.objectContaining({reason:'Confirmed partial delivery in source ticket.'}),expect.any(String)));
+ });
+ it('lets a reviewer locate an association target beyond the first dossier page',async()=>{
+  const {api}=client();render(<EnterpriseScreen api={api} onBack={()=>{}}/>);await screen.findByText('SYNTHETIC · No Winsupply data');fireEvent.click(screen.getByRole('button',{name:'Sources & review queue'}));
+  await screen.findByLabelText('Confirmed order');
+  fireEvent.change(screen.getByLabelText('Find order for association'),{target:{value:'SYNTH-LATE'}});fireEvent.click(screen.getByRole('button',{name:'Find association target'}));
+  await screen.findByRole('option',{name:'SYNTH-LATE'});expect(screen.queryByRole('option',{name:'SYNTH-VARIANCE'})).toBeNull();
  });
  it('presents disabled access safely without showing a record',async()=>{
   const api={enterpriseRequest:vi.fn().mockRejectedValue(new Error('Enterprise pilot access has not been enabled'))} as unknown as PackProofApi;
