@@ -1,0 +1,29 @@
+{
+  "integrationAccountId": "replace-with-enrolled-account-id",
+  "externalId": "sandbox-order-1001",
+  "operatorMembershipId": "replace-with-active-operator-membership",
+  "transaction": {
+    "itemTitle": "Synthetic two-item parcel",
+    "quantity": 3,
+    "amount": {
+      "minorUnits": "1000",
+      "currency": "USD"
+    },
+    "items": [
+      {
+        "title": "Synthetic item A",
+        "externalItemId": "LINE-A",
+        "position": 1,
+        "quantity": 1,
+        "sku": "SYNTHETIC-A"
+      },
+      {
+        "title": "Synthetic item B",
+        "externalItemId": "LINE-B",
+        "position": 2,
+        "quantity": 2,
+        "sku": "SYNTHETIC-B"
+      }
+    ]
+  }
+}

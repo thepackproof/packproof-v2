@@ -1,0 +1,91 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+function generate(specs) {
+ const defs={},types=[];
+ const methods=new Set(["get","post","put","patch","delete","head","options"]);
+ const literal=v=>JSON.stringify(v);
+ function typeOf(schema,namespace) {
+  if(schema===true||schema==null)return "unknown";if(schema===false)return "never";
+  if(schema.$ref){const name=schema.$ref.split("/").at(-1);return namespace+"["+literal(name)+"]";}
+  if(Object.prototype.hasOwnProperty.call(schema,"const"))return literal(schema.const);
+  if(schema.enum)return schema.enum.map(literal).join(" | ")||"never";
+  if(schema.oneOf||schema.anyOf){ const union="("+(schema.oneOf??schema.anyOf).map(x=>typeOf(x,namespace)).join(" | ")+")"; const base={...schema};delete base.oneOf;delete base.anyOf;return schema.type||schema.properties?"("+typeOf(base,namespace)+" & "+union+")":union;}
+  if(schema.allOf){const parts=schema.allOf.map(x=>typeOf(x,namespace));const base={...schema};delete base.allOf;if(schema.type||schema.properties)parts.unshift(typeOf(base,namespace));return "("+parts.join(" & ")+")";}
+  if(Array.isArray(schema.type))return schema.type.map(t=>typeOf({...schema,type:t},namespace)).join(" | ");
+  if(schema.type==="null")return "null";
+  if(schema.type==="string")return schema.format==="binary"?"Uint8Array":"string";
+  if(schema.type==="boolean")return "boolean";
+  if(schema.type==="number"||schema.type==="integer")return "number";
+  if(schema.type==="array")return "Array<"+typeOf(schema.items,namespace)+">";
+  if(schema.type==="object"||schema.properties){
+   const props=Object.entries(schema.properties??{}).map(([k,v])=>literal(k)+(schema.required?.includes(k)?"":"?")+": "+typeOf(v,namespace)+";");
+   if(schema.additionalProperties!==false)props.push("[key: string]: "+(schema.additionalProperties&&typeof schema.additionalProperties==="object"?typeOf(schema.additionalProperties,namespace):"unknown")+";");
+   return "{ "+props.join(" ")+" }";
+  }
+  return "unknown";
+ }
+ for(const [profile,spec]of Object.entries(specs)){
+  const ns=profile==="legacy"?"LegacySchemas":"PartnerSchemas";
+  types.push("export interface "+ns+" {");
+  for(const [name,schema]of Object.entries(spec.components.schemas??{}).sort(([a],[b])=>a.localeCompare(b)))types.push("  "+literal(name)+": "+typeOf(schema,ns)+";");
+  types.push("}");
+  for(const [path,item]of Object.entries(spec.paths)){
+   for(const [method,op]of Object.entries(item)){
+    if(!methods.has(method)||!op.operationId)continue;
+    const security=op.security??spec.security??[];
+    if(!security.some(x=>Object.keys(x).some(k=>k==="ApiKey"||k==="PartnerCredential")))continue;
+    if(Object.keys(op.requestBody?.content??{}).some(media=>media!=="application/json"))continue;
+    const base=(op.servers??item.servers??spec.servers??[{url:"/"}])[0].url.replace(/\/$/,"");
+    if(!base.startsWith("/")&&base!=="")throw Error("Only relative server contracts are supported");
+    const params=[...(item.parameters??[]),...(op.parameters??[])].map(x=>x.$ref?spec.components.parameters[x.$ref.split("/").at(-1)]:x);
+    const key=profile+"."+op.operationId;
+    const ok=Object.entries(op.responses??{}).filter(([status])=>/^2\d\d$/.test(status));
+    const binary=ok.some(([,r])=>Object.keys(r.content??{}).some(m=>m!=="application/json"&&!m.endsWith("+json")));
+    defs[key]={method:method.toUpperCase(),path:base+path,idempotent:params.some(x=>x.in==="header"&&x.name.toLowerCase()==="idempotency-key"),query:params.filter(x=>x.in==="query").map(x=>x.name),binary};
+    const pathParams=params.filter(x=>x.in==="path");
+    const queryParams=params.filter(x=>x.in==="query");
+    const request=[];
+    const shape=xs=>"{ "+xs.map(x=>literal(x.name)+(x.required?"":"?")+": "+typeOf(x.schema,ns)+";").join(" ")+" }";
+    if(pathParams.length)request.push("path: "+shape(pathParams)+";");
+    if(queryParams.length)request.push("query"+(queryParams.some(x=>x.required)?"":"?")+": "+shape(queryParams)+";");
+    const body=op.requestBody?.content?.["application/json"]?.schema;
+    if(body)request.push("body"+(op.requestBody.required?"":"?")+": "+typeOf(body,ns)+";");
+    if(defs[key].idempotent&&method!=="get")request.push("key: string;");
+    else request.push("key?: string;");
+    request.push("signal?: AbortSignal; stream?: false;");
+    const responses=ok.map(([,r])=>r.content?.["application/json"]?.schema).filter(Boolean);
+    types.push("// operation:"+key+"\nexport interface "+key.replace(/[^a-zA-Z0-9_]/g,"_")+" { request: { "+request.join(" ")+" }; response: "+(binary?"Response":responses.length?[...new Set(responses.map(x=>typeOf(x,ns)))].join(" | "):"void")+"; }");
+   }
+  }
+ }
+ const operations=Object.keys(defs).sort();
+ types.push("export interface Operations {");
+ for(const key of operations)types.push("  "+literal(key)+": "+key.replace(/[^a-zA-Z0-9_]/g,"_")+";");
+ types.push("}");
+ const header="// Generated by generate.mjs from backend/{openapi,partner-openapi}.json. Do not edit.\n";
+ const declaration=header+types.join("\n")+"\n"+`export interface ClientOptions {
+ apiOrigin:string; credential:string; merchantId?:string; delegationId?:string; fetch?:typeof globalThis.fetch;
+ timeoutMs?:number; maxAttempts?:number; maxRetryDelayMs?:number; maxResponseBytes?:number;
+ sleep?:(ms:number)=>Promise<void>; random?:()=>number; now?:()=>number;
+}
+export class PackProofError extends Error {status?:number;code?:string;requestId?:string;retryAfterMs?:number|null;unknownOutcome?:boolean;constructor(message:string,fields?:Record<string,unknown>);}
+export function retryAfterMs(value:string|null,now?:number):number|null;
+export class PackProofClient {
+ constructor(options:ClientOptions);
+ request<K extends keyof Operations>(operationId:K,options:Omit<Operations[K]['request'],'stream'> & {stream:true}):Promise<Response>;
+ request<K extends keyof Operations>(operationId:K,...args:{} extends Operations[K]['request'] ? [options?:Operations[K]['request']] : [options:Operations[K]['request']]):Promise<Operations[K]['response']>;
+}
+`;
+ return {"examples/api-client/operations.mjs":header+"export const operations = Object.freeze("+JSON.stringify(Object.fromEntries(operations.map(k=>[k,defs[k]])),null,2)+");\n","examples/api-client/client.d.mts":declaration};
+}
+export {generate};
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+ const root=new URL('../../',import.meta.url);
+ const specs={legacy:JSON.parse(await readFile(new URL('backend/openapi.json',root),'utf8')),partner:JSON.parse(await readFile(new URL('backend/partner-openapi.json',root),'utf8'))};
+ const generated=generate(specs),check=process.argv.includes('--check');
+ for(const [path,content] of Object.entries(generated)){
+  if(check){if(await readFile(new URL(path,root),'utf8')!==content)throw new Error('Generated client is stale: '+path);}
+  else await writeFile(new URL(path,root),content);
+ }
+ console.log(check?'Generated client matches the API contracts':'Generated API client updated');
+}

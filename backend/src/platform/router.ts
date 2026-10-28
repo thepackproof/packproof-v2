@@ -1,3 +1,6 @@
+import { searchTenantProofs } from './proof-search.js';
+import { parsePartnerOrderItems } from './partner-order-items.js';
+import { insertTransactionItems } from '../domain/transaction-items.js';
 import { issueIntent, asDomainError } from "../capture/service.js";
 import { createLifecycleSnapshot, getLifecycleSnapshot } from "../domain/lifecycle-snapshots.js";
 import { issueCaptureCompletionReceipt, readCaptureCompletionReceipt } from "../capture/completion-receipt.js";
@@ -136,7 +139,17 @@ export function createPlatformRouter(deps: AppDependencies) {
       route(async (raw, res) => {
         const req = raw as ApiRequest;
         const principal = req.apiPrincipal!;
-        requireScope(principal, scope);
+        const requireCurrent = async (db: Database) => {
+          const current = await authenticateApiKey(db, req.header('authorization'));
+          if (current.keyId !== principal.keyId || current.tenantId !== principal.tenantId)
+            throw new DomainError('API_KEY_INVALID', 'API credential is no longer authorized', 401);
+          requireScope(current, scope);
+          if (path.endsWith('/rotate-secret')) {
+            const webhook = await db.query('SELECT id FROM api_webhooks WHERE id=$1 AND tenant_id=$2 AND revoked_at IS NULL', [req.params.webhookId, principal.tenantId]);
+            if (!webhook.rows[0]) throw new DomainError('WEBHOOK_NOT_FOUND', 'Active webhook not found', 404);
+          }
+        };
+        await requireCurrent(deps.db);
         if (req.params.id) await requireTenantProof(deps.db, principal, req.params.id);
         // Revocation/account checks must also precede cached responses. A prior
         // successful write never grants permanent access to its signed result.
@@ -164,7 +177,7 @@ export function createPlatformRouter(deps: AppDependencies) {
             `${method.toUpperCase()} ${req.path}${path.includes('/lifecycle-snapshots') || path.endsWith('/completion-receipt') ? ` credential:${principal.keyId}` : ''}`,
             req.header("Idempotency-Key"),
             req.body,
-            (tx) => fn(tx, principal, req),
+            async (tx) => { await requireCurrent(tx); return fn(tx, principal, req); },
             (path.startsWith("/webhooks") || createsAccessLink) && method === "post"
               ? protectWebhookResponse(
                   `${principal.tenantId}:${req.path}:${req.header("Idempotency-Key")}`,
@@ -176,6 +189,7 @@ export function createPlatformRouter(deps: AppDependencies) {
           res.setHeader("Idempotency-Replayed", String(result.replayed));
           value = result.value;
         }
+        await requireCurrent(deps.db);
         await auditRequest(deps.db, deps, req, `${method.toUpperCase()} ${path}`, status);
         res.status(status).json(value);
       }),
@@ -217,6 +231,10 @@ export function createPlatformRouter(deps: AppDependencies) {
       const externalId = textField(body.externalId, "externalId", 200);
       const transaction = record(body.transaction);
       textField(transaction.itemTitle, "transaction.itemTitle", 200);
+      const items = parsePartnerOrderItems(transaction.items);
+      const itemQuantity = items.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+      if (items.length && transaction.quantity !== undefined && transaction.quantity !== itemQuantity)
+        throw new DomainError('INVALID_TRANSACTION_ITEMS', 'transaction.quantity must equal the sum of line item quantities', 400);
       if (
         body.status !== undefined ||
         body.tenantId !== undefined ||
@@ -253,6 +271,7 @@ export function createPlatformRouter(deps: AppDependencies) {
       // external_reference namespace. The confirmed source is retained as metadata.
       const txn = await createTransaction(db, deps.clock, p.userId, {
         ...transaction,
+        ...(items.length ? {quantity: itemQuantity} : {}),
         externalReference: null,
         metadata: {
           source: "partner_api",
@@ -262,6 +281,7 @@ export function createPlatformRouter(deps: AppDependencies) {
           sourceMetadata: transaction.metadata ?? {},
         },
       });
+      if (items.length) await insertTransactionItems(db, txn.transactionId, items, deps.clock.now().toISOString());
       const proof = await createOrGetProof(db, deps.clock, p.userId, txn.transactionId, {
         participationPolicy: body.participationPolicy as
           | "COUNTERPARTY_OPTIONAL"
@@ -276,6 +296,7 @@ export function createPlatformRouter(deps: AppDependencies) {
     },
     201,
   );
+  endpoint("get", "/proofs/search", "proofs:read", (db, p, req) => searchTenantProofs(db, deps.clock, p, req.query, process.env.PACKPROOF_EVENT_CURSOR_KEY ?? ''));
   endpoint("get", "/proofs", "proofs:read", async (db, p, req) => {
     const after = req.query.after == null ? "" : textField(req.query.after, "after", 100);
     const found = await db.query<{ proof_id: string; external_id: string }>(

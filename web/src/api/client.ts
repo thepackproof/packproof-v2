@@ -1,3 +1,5 @@
+import type { ConnectionHealthView } from './connection-health';
+import type { ProofSearchQuery, ProofSearchResult } from '../../../packages/evidence-contracts/api-dashboard';
 import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '../../../packages/evidence-contracts/generated-client.mjs';
 import type {RndSnapshot,RndCapabilities,Feature,ReviewerAnnotation,DerivativeGrant} from "../rnd/types";
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
@@ -223,6 +225,12 @@ export class PackProofApi {
     });
   }
 
+  async searchProofs(input: ProofSearchQuery = {}): Promise<ProofSearchResult> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(input)) if (value !== undefined && value !== '') query.set(key, String(value));
+    return this.request(`/me/proofs/search?${query}`);
+  }
+
   async listMyProofs(): Promise<{ proofs: ProofCollectionItem[] }> {
     return this.request("/me/proofs");
   }
@@ -252,6 +260,10 @@ export class PackProofApi {
       method: "POST",
       body: { reference },
     });
+  }
+
+  async getCommerceConnectionHealth(connectionId: string): Promise<ConnectionHealthView> {
+    return this.request(`/me/commerce-connections/${encodeURIComponent(connectionId)}/health`);
   }
 
   async listCommerceConnections(): Promise<{

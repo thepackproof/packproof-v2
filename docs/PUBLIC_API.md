@@ -1,6 +1,16 @@
 # PackProof Public API v1
 
-The public contract translates a confirmed merchant order into the same authoritative Proof used by the mobile and web applications. It does not create a separate partner evidence system. Machine-readable contract: [`backend/openapi.json`](../backend/openapi.json), also served without authentication at `GET /v1/openapi.json`.
+The public contract translates a confirmed merchant order into the same authoritative Proof used by the mobile and web applications. Machine-readable legacy contract: [`backend/openapi.json`](../backend/openapi.json), also served without authentication at `GET /v1/openapi.json`.
+
+## Profiles, candidate scope and release evidence
+
+This document's unprefixed route examples are relative to **`/v1`** and describe the compatible owner-key profile unless explicitly labeled otherwise. That profile retains `POST /v1/proofs` and its `{apiVersion, externalId, proof, links}` envelope.
+
+The additive **organization/partner profile** uses `/v1/partner`, its own [contract](../backend/partner-openapi.json), and `/me/organizations` for authenticated human administration. It reuses the canonical transaction, Proof, capture, attestation, recovery and export services. Its merchant organization, service principal, membership and delegation records distinguish software from the recording person; its response meanings are not substitutes for the legacy envelope. Do not create a second grant or capture system from older roadmap descriptions.
+
+Organization source was already present at baseline `e4f69c9a690649c41b846468eb48829fb0542617`. Historical isolated-cloud results and a disabled production rollout are recorded in [the organization foundation](partner-foundation/README.md). They do not certify a new candidate, current production configuration, live provider access or physical-device recovery. Enrollment remains a controlled pilot; a feature flag alone never authorizes a merchant.
+
+The October 28 API/client candidate adds reconciliation, discovery, partner delivery operations and developer tooling. See the [capability ledger](api-client-release/CAPABILITY_LEDGER.md) and [release gates](api-client-release/RELEASE_GATES.md) for exact source/configuration/validation distinctions. New candidate checks are pending until recorded against the integrated commit; no full-plan completion or production expansion is implied.
 
 ## Start in the sandbox
 
@@ -19,7 +29,7 @@ Developer access is restricted to active accounts whose Cognito-verified email i
 
 Sign in with an approved verified account and open **Account → Developer access**. Create a sandbox tenant and issue only the scopes the integration needs. The raw key appears once; store it in your server's secret manager. Key rotation immediately revokes the old key. Browser apps and mobile bundles must never contain partner keys.
 
-`GET /me/developer-access` returns the authenticated account's current `{ allowed: boolean }` capability with `Cache-Control: private, no-store`. The apps refresh verified identity claims before requesting it and never persist the capability. All workspace/key management routes, existing API keys, and outbound developer webhooks independently enforce the same server-side allowlist. Losing eligibility blocks access without deleting workspaces, keys, or historical Proofs.
+`GET /me/developer-access` returns the authenticated account's current `{ allowed: boolean }` capability with `Cache-Control: private, no-store`. The apps refresh verified identity claims before requesting it and never persist the capability. All legacy workspace/key management routes, existing owner API keys, and outbound developer webhooks independently enforce the same server-side allowlist. Losing eligibility blocks access without deleting workspaces, keys, or historical Proofs.
 
 Sandbox/live keys have separate tenant bindings, external-ID namespaces, rate budgets, and key prefixes. Both use the same domain validators. An environment label is not a separate database or a simulated carrier; use a separate staging deployment and synthetic data for integration experiments. Do not connect sandbox tests to live provider side effects.
 
@@ -36,8 +46,8 @@ The reference adapter uses only `/v1`; replacing it cannot mutate or corrupt the
 - Send `Authorization: Bearer pp_sandbox_…` or `pp_live_…`. Keys never authenticate private first-party routes; first-party user tokens never authenticate `/v1`.
 - Every POST and DELETE requires `Idempotency-Key` (1–200 characters). Reuse the exact method, path, key, and JSON body after transport failures. The result and mutation commit atomically. Changed payloads return `409 IDEMPOTENCY_CONFLICT`; failed domain actions roll back and can be corrected.
 - Evidence-part PUTs are naturally idempotent by evidence ID, part number, and exact bytes; no extra idempotency header is required. Replacing a received part with different bytes returns 409.
-- Keys act as the tenant owner's recorded identity. They cannot supply another actor's identity or impersonate a receiver. Participant invitations require the recipient's own authenticated acceptance. The first release has one tenant owner, not delegated organization membership.
-- Each Proof is bound to exactly one API tenant. Even two tenants with the same owner cannot read each other's Proofs through their keys. Native user authorization remains participant based.
+- Keys act as the tenant owner's recorded identity. They cannot supply another actor's identity or impersonate a receiver. Participant invitations require the recipient's own authenticated acceptance. The owner-key profile has one tenant owner. Delegated organizations use the separately authorized partner profile; a partner service credential has no personal-attestation authority.
+- Each Proof is bound to exactly one API tenant. Even two tenants with the same owner cannot read each other's Proofs through their keys. Native user authorization retains participant rules and rechecks current organization authority for assigned organization operators.
 - The tenant-wide limit is 120 requests per minute, shared across its keys. Honor `429` and `Retry-After: 60`. Retry transport/5xx failures with backoff and jitter; inspect other 4xx responses. Do not retry a changed request under the original key.
 - Responses include `X-Request-Id`, `PackProof-API-Version: v1`, and `Cache-Control: no-store`. API request audit stores operation templates, actor/key/tenant, time, and status, never bearer values or raw request bodies. Key management has a separate audit trail. Unauthenticated abuse is handled by the deployment edge/access logs.
 
@@ -73,9 +83,31 @@ Content-Type: application/json
 }
 ```
 
-The response is `{apiVersion, externalId, proof, links}`. `proof.proofId`, `proof.transactionId`, and `proof.status` are server assigned. `links.capture` and `links.viewer` open the authenticated first-party application; they are not bearer capture grants. The owner signs in to capture. Create an explicitly scoped, expiring viewing link to give a guest read access. Repeating an external order ID with different transaction content returns `EXTERNAL_ID_CONFLICT`, even under a new idempotency key.
+The response is `{apiVersion, externalId, proof, links}`. `proof.proofId`, `proof.transactionId`, and `proof.status` are server assigned. `links.capture` and `links.viewer` open the authenticated first-party application; they are not bearer capture grants. The owner signs in to capture. Partner imports instead assign an actual authorized operator and issue a bound capture intent through `/v1/partner/proofs/{id}/capture-intents`; the person still signs in and personally confirms. A service principal cannot attest. Create an explicitly scoped, expiring viewing link to give a guest read access. Repeating an external order ID with different transaction content returns `EXTERNAL_ID_CONFLICT`, even under a new idempotency key.
 
-`GET /v1/proofs` returns up to 50 Proof envelopes, `nextCursor`, and `hasMore`. Pass `after` to continue. `GET /v1/proofs/{id}` reads a single tenant Proof. In this contract, the external merchant ID lives in the tenant binding and provenance metadata rather than the older globally unique `externalReference` field.
+`GET /v1/proofs` retains its compatible envelope listing, `nextCursor`, and `hasMore`; pass `after` to continue. Candidate discovery/filter additions are additive and must use the contract and query-bound pagination documented for their endpoint. `GET /v1/proofs/{id}` reads a single tenant Proof. In this contract, the external merchant ID lives in the tenant binding and provenance metadata rather than the older globally unique `externalReference` field.
+
+
+## Candidate discovery, items and reconciliation
+
+The additive search endpoints are `GET /v1/proofs/search` for owner keys, `GET /v1/partner/proofs/search` for current partner authority, and `GET /me/proofs/search` for an authenticated first-party user. They preserve existing list routes. Queries accept:
+
+| Query | Meaning |
+| --- | --- |
+| `q` | Authorized order reference, tracking number or Proof ID search |
+| `state` | Presentation filter: `AWAITING_CAPTURE`, `IN_PROGRESS`, `READY` or `NEEDS_ATTENTION` |
+| `from`, `through` | Inclusive UTC created dates, `YYYY-MM-DD` |
+| `connectionId`, `integrationAccountId` | Authorized connection/source filters; a supplied ID is not an access grant |
+| `limit`, `after` | 1–50 rows and opaque signed continuation cursor |
+
+Search cursors expire after one hour and bind actor/credential/delegation and filters. Ordinary search pages show current authorized state; they are **not** the materialized reconciliation snapshot. Start a new search after expiry or a filter change. The opt-in first-party client review UI uses `VITE_PACKPROOF_CLIENT_DASHBOARD=true`; its visible-page refresh pauses while hidden. Server cursor signing requires `PACKPROOF_EVENT_CURSOR_KEY`.
+
+The organization import candidate accepts an optional bounded `transaction.items` array (1–100 authoritative lines), stored through existing `transaction_items` before creating the root. Preserve every line in the immutable source snapshot. Existing single-item requests retain their replay meaning. Order `amount.minorUnits` is an integer decimal **string in currency minor units**. Item `unitValue` uses the existing **major-unit decimal** representation (database `NUMERIC(19,4)`); do not convert it as though it were minor units or silently reinterpret the legacy `transactionValue` contract. Read the exact schema for required fields, bounds and conflicts.
+
+A client with both `proofs:read` and `events:read` can create a fresh snapshot with `POST /v1/partner/proof-snapshots`, page it with `GET /v1/partner/proof-snapshots/{snapshotId}?after=...`, and release it with `DELETE /v1/partner/proof-snapshots/{snapshotId}`. Pages and the stream cutover boundary share one saved database snapshot; this is separate from mutable search. Current authority is checked on every use. The projection expires after one hour, permits at most four active snapshots per credential and at most 10,000 Proofs, and rejects excess rather than truncating. Materialization is additionally bounded to 16 MiB total and 256 KiB per row. Snapshot expiry or retained-feed expiry requires restarting reconciliation.
+
+
+Owner-authenticated `GET /me/commerce-connections/{connectionId}/health` projects the actual registered order capability, automation consent/pause, last successful source-read watermark, freshness, resumable page work, pending inbox work and a specific next action. Coverage is limited to discovered source records: excluded/unsupported work remains visible, and eligible rows distinguish missing Proof, awaiting capture, in progress, canonical finalized and other states. **Canonical finalized is not a durable Ready count.** This projection cannot count orders the provider has never exposed. See [order identity and coverage](api-client-release/ORDER_IDENTITY.md).
 
 ## Capture and finalization
 
@@ -116,7 +148,15 @@ Delivery headers include `PackProof-Event-Id` and `PackProof-Signature: t=<unix-
 
 The transactional outbox survives application restarts. Workers claim database leases, pin DNS to approved public addresses, use bounded DNS/TLS requests, refuse redirects, and retry with backoff/jitter up to ten attempts. Delivery is **at least once**; duplicates and out-of-order events are possible. Non-2xx responses retry. Revoke a subscription with DELETE `/webhooks/{webhookId}`. POST `…/rotate-secret` returns a replacement secret; coordinate rotation because in-flight attempts may still carry the old signature. GET `/webhook-deliveries` shows the latest 100 deliveries; POST `/webhook-deliveries/{deliveryId}/retry` requeues a dead delivery for an active subscription.
 
-GET `/events` or `/proofs/{id}/events` returns up to 100 events with a sequence cursor. Database sequence allocation precedes commit: under concurrent writers, a late commit can appear below a previously observed cursor. Use the durable webhook channel for reliable notification; periodically reconcile known Proofs or reread overlapping event pages and deduplicate IDs. There is no claim of exactly-once delivery or total commit ordering. New subscriptions receive subsequent events, not a backfill of historical events predating the subscription or this migration.
+GET `/events` or `/proofs/{id}/events` retains its legacy sequence cursor and concurrency caveat: a late commit can appear below an observed raw sequence. It is not a dependable high-water mark.
+
+Use the existing signed **`GET /v1/event-stream`** or authorized **`GET /v1/partner/event-stream`** for commit-safe catch-up. Migration 088 assigns publication positions through a per-tenant counter locked in the source transaction; deferred triggers cover outbox writes and initial tenant binding, and the migration backfills under a writer-blocking lock. This is already implemented; an additional broker or competing publisher is unnecessary. Publication order is not physical event chronology. Deduplicate logical event IDs and read current authorized Proof state.
+
+Event-stream cursors are tenant/environment/query bound and currently expire after **at most seven days**. That cursor lifetime is not a measured delivery guarantee or a promise of 30-day retained replay. The plan's 30-day replay/change-history objective remains a separately measured configuration/retention gate. Expired cursors or a history floor return an explicit resync requirement; never silently reset a stored cursor.
+
+The candidate adds `POST /v1/partner/proof-snapshots` and `GET /v1/partner/proof-snapshots/{snapshotId}` for bounded reconciliation. A fresh REPEATABLE READ transaction atomically saves authorized summary rows with committed boundary C. Pages remain stable for their documented one-hour lifetime and recheck current credential/delegation authority. Fetch current authorized details as needed, then consume the existing stream after the returned `eventCursor`, deduplicating events. Restart when the snapshot or retained boundary expires. These are candidate interfaces pending exact-commit validation; consult the machine contract and [release gates](api-client-release/RELEASE_GATES.md).
+
+Delivery remains at least once. New webhook subscriptions receive subsequent events, not an automatic historical backfill. Existing signature bytes, event IDs and five-minute verification tolerance remain unchanged. Partner delivery diagnostics, encrypted secret rotation and dead-delivery retry are documented in [webhook operations](api-client-release/WEBHOOKS.md). Ten attempts are not a promised 24-hour or 72-hour automatic retry horizon. Coordinate immediate secret rotation by temporarily accepting old and new secrets at the receiver for in-flight attempts; this is receiver overlap, not a claim of server-side retired-key history.
 
 ## Viewer, lifecycle, retention, and export
 
@@ -132,7 +172,7 @@ GET `…/review` returns the Proof, access history, manifest digest check, shipm
 python backend/scripts/verify-proof-package.py proof.pkpr --expected-manifest-sha256 <separately-obtained-digest>
 ```
 
-Without an independently obtained digest, verification establishes self-consistency, not origin. Manifest signatures and trusted timestamp authorities remain explicit future work. A hash proves neither the truth of a participant statement nor continuity outside the recorded observations.
+Without an independently obtained digest, verification establishes self-consistency, not origin. Manifest-signing and KMS runtime code, plus an additive detached JCS/ES256 integrity-envelope profile, now exist. Inspect the actual configured signer, key history, frozen manifest and verification result; source presence does not mean every deployment signs or that a timestamp authority is configured. See [the envelope profile and activation boundary](partner-foundation/ENVELOPE-PROFILE.md). The legacy verifier invocation above checks the package/digest contract; use the independent envelope verifier for that separate profile. A hash or valid signature proves neither the truth of a participant statement nor continuity outside the recorded observations.
 
 `/proofs/{id}/lifecycle` extends a finalized commerce Proof with RECEIPT → RETURN_PACKING → RETURN_RECEIPT. The original manifest remains unchanged. The targeted receiver accepts through their account; the receiver owns the first two stages, and the original seller owns returned delivery. Each stage commits its media and seals its own attestation/manifest linked to the original and previous stage. An unfinished stage upload can be discarded through `…/stages/{stageId}/evidence/{evidenceId}/discard`, leaving an audit record. It cannot discard committed evidence. Browser receipt uploads retry while the page remains open; after a refresh, discard the unfinished upload and select the original recording again. The API enforces the key owner's role, so a seller's key cannot capture or attest as the receiver.
 
@@ -145,3 +185,12 @@ Set `PACKPROOF_WEBHOOK_ENCRYPTION_KEY` to a base64-encoded 32-byte secret, injec
 Run migrations before opening the API listener. Migrations are additive and transactional per file. Never roll back by deleting evidence tables. Restore application compatibility while retaining new tables if deployment fails. The durable S3 template uses SSE-S3 managed encryption and a 90-day governance Object Lock floor; existing database encryption policies remain authoritative. See [release and pilot gates](PILOT_RUNBOOK.md) before production expansion.
 
 Use `GET /proofs/{id}/recovery` with `proofs:read` to poll authoritative preservation receipts after pending or lost commit/finalize responses. A cached idempotent finalize response does not itself establish that its recovery envelope has become durable.
+
+
+## Durable readiness and candidate acceptance
+
+Canonical lifecycle stays `READY_FOR_EVIDENCE → EVIDENCE_COMMITTED → FINALIZED` for the ordinary path. Capture, upload, preservation, export and notification health remain separate projections. A failed notification cannot unfinalize a Proof.
+
+For the controlled API/client workflow, **Ready requires authoritative finalization and the required durable preservation receipts**. An upload target, local success screen, cached finalize replay, missing declaration or `LEGACY_UNCONFIRMED` receipt cannot establish Ready. See [durable recovery](DURABLE_RECOVERY_AND_RETENTION.md). Existing compatibility finalization can expose logical completion without that stronger assurance, which must remain visible as unconfirmed. Media retention/access and signing status are separate disclosures.
+
+The candidate must run its standalone external HTTPS acceptance path without importing domain modules, plus the repository's real isolated PostgreSQL concurrency checks and current web/mobile regressions. Physical camera/device recovery, a real consenting merchant/provider loop, public-boundary load, fresh-target restore and independent security review remain explicit release gates. Read [RELEASE_GATES.md](api-client-release/RELEASE_GATES.md); a source merge or green mocked suite alone does not close those gates.

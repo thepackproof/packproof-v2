@@ -14,5 +14,9 @@ export function useMobileTaskExperience() {
     update();
     return () => media.removeEventListener("change", update);
   }, []);
-  return SIGNAL_ENABLED || compact && mobileTaskExperienceEnabled();
+  // Dashboard builds use the workstation composition on larger screens. Keep
+  // the existing narrow-screen capture/recovery composition for every flag
+  // combination; opting in must not force a desktop task flow onto a phone.
+  const desktopDashboard = import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD === 'true' && !compact;
+  return SIGNAL_ENABLED && !desktopDashboard || compact && mobileTaskExperienceEnabled();
 }

@@ -16,7 +16,11 @@ const binding={source:'a'.repeat(40),compatibleImage:'sha256:'+'b'.repeat(64),co
 const now=new Date('2026-10-22T12:00:00Z'),clock={now:()=>new Date(now)};
 let inventory:Awaited<ReturnType<typeof migrationInventory>>;
 const baseline=()=>inventory.filter(r=>!MIGRATIONS.some(m=>m.id===r.id));
-beforeAll(async()=>{inventory=await migrationInventory();});
+// The retired operator is pinned to the October 22 093-095 program. Rebuild
+// its historical 94-file candidate fixture, not the current API/client schema.
+beforeAll(async()=>{
+ inventory=(await migrationInventory()).filter(row=>row.id<='095_recipient_export_preservation');
+});
 
 describe('exact inactive M2 migration inventory',()=>{
  it('accepts only 91 baseline or 94 complete receipts, with exact reviewed bytes',()=>{
@@ -27,6 +31,15 @@ describe('exact inactive M2 migration inventory',()=>{
   expect(()=>inspectInventory(inventory.map((r,i)=>i?r:{...r,sql:r.sql+'\n'}),baseline())).toThrow('M2_MIGRATION_BYTES_MISMATCH');
   expect(()=>inspectInventory(inventory,baseline().map((r,i)=>i?r:{...r,checksum:'d'.repeat(64)}))).toThrow('M2_APPLIED_CHECKSUM_MISMATCH');
   expect(()=>inspectInventory([...inventory,{id:'future'}],inventory)).toThrow('M2_CANDIDATE_INVENTORY_MISMATCH');
+ });
+ it('keeps current later migrations outside the fixture and rejects them in the retired operator',async()=>{
+  const current=await migrationInventory();
+  expect(inventory).toHaveLength(94);
+  expect(baseline()).toHaveLength(91);
+  const later=current.filter(row=>row.id>'095_recipient_export_preservation');
+  expect(later.length).toBeGreaterThan(0);
+  expect(()=>inspectInventory(current,inventory)).toThrow('M2_CANDIDATE_INVENTORY_MISMATCH');
+  expect(()=>inspectInventory(inventory,[...inventory,...later].map(({id,checksum})=>({id,checksum})))).toThrow('M2_APPLIED_INVENTORY_MISMATCH');
  });
  it('binds a fresh inspection to exact state, source, bridge image and reviewed bridge evidence',()=>{
   const state=inspectInventory(inventory,baseline()),receipt=inspectionReceipt(state,binding,now);

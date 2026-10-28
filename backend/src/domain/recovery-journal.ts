@@ -1,3 +1,4 @@
+import { partnerReadAuthorization } from '../platform/proof-read-grant.js';
 import type { Clock } from "../clock.js";
 import { requireOrganizationProofAccess } from '../platform/organization-access.js';
 import type { Database } from "../db/database.js";
@@ -115,7 +116,7 @@ export async function getProofRecoveryStatus(db: Database, userId: string, proof
   await requireOrganizationProofAccess(db,proofId,userId);
   await assertPolicyAccessSafe(db);
   const participant = await db.query("SELECT 1 FROM proof_participants WHERE proof_id=$1 AND user_id=$2", [proofId, userId]);
-  if (!participant.rows[0] && !(await db.query("SELECT 1 FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 AND accepted_at IS NOT NULL", [proofId,userId])).rows[0]) throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "This record is unavailable to this account", 403);
+  if (!participant.rows[0] && !(await db.query("SELECT 1 FROM commerce_receivers WHERE proof_id=$1 AND user_id=$2 AND accepted_at IS NOT NULL", [proofId,userId])).rows[0] && !(await partnerReadAuthorization(db,userId,proofId))) throw new DomainError("PARTICIPANT_NOT_AUTHORIZED", "This record is unavailable to this account", 403);
   const evidence = (await db.query<{ id: string; capture_session_id: string | null }>("SELECT id,capture_session_id FROM evidence WHERE proof_id=$1 AND validation_status='COMMITTED' ORDER BY committed_at,id", [proofId])).rows;
   const declarations = (await db.query<{ id: string }>("SELECT id FROM attestations WHERE proof_id=$1 ORDER BY created_at,id", [proofId])).rows;
   const stageEvidence = (await db.query<{ id: string; stage_id: string; capture_session_id: string | null }>("SELECT e.id,e.stage_id,e.capture_session_id FROM commerce_stage_evidence e JOIN commerce_stages s ON s.id=e.stage_id WHERE s.proof_id=$1 AND e.committed_at IS NOT NULL", [proofId])).rows;

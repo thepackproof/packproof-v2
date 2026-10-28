@@ -11,8 +11,9 @@ import {commitAttestation} from '../src/domain/attestations.js';
 import {bindIntent} from '../src/capture/service.js';
 import {CORE_VERSION} from '../src/capture/core.js';
 import {createOrganization,setOrganizationEntitlement,addOrganizationMember,createServicePrincipal,issuePartnerCredential,
- createDelegation,createIntegrationAccount,revokeDelegation,revokeOrganizationMember,authenticatePartner,reauthorizePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
+ createDelegation,createIntegrationAccount,revokeDelegation,revokeOrganizationMember,revokePartnerCredential,authenticatePartner,reauthorizePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
 import {createPartnerRouter} from '../src/platform/partner-router.js';
+import {listPartnerBindings} from '../src/platform/partner-bindings.js';
 import {createOrganizationRouter} from '../src/platform/organization-router.js';
 import {DomainError} from '../src/domain/errors.js';
 import {BearerUserAdapter} from '../src/auth/adapter.js';
@@ -94,6 +95,35 @@ describe('organization foundation through shared backend services',()=>{
   const stream=await request(app).get('/v1/partner/event-stream').set(headers());expect(stream.status,stream.text).toBe(200);expect(stream.body.events.every((e:{data:{proofId:string}})=>e.data.proofId===proofA)).toBe(true);
   expect((await request(app).get('/v1/partner/event-stream').query({after:stream.body.nextCursor}).set(headers(merchantB,grantB))).status).toBe(400);
  });
+ it('preserves all partner item rows and binds every field to immutable order identity',async()=>{
+  const items=[
+   {externalItemId:'line-a',title:'Blue widget',description:'Blue finish',sku:'BLUE',quantity:2,unitValue:12.5,currency:'USD'},
+   {externalItemId:'line-b',title:'Green widget',sku:'GREEN',quantity:1,unitValue:3.25,currency:'USD'}
+  ];
+  const body={...importBody(),externalId:'MULTI-1001',transaction:{items,amount:{minorUnits:'2825',currency:'USD'}}};
+  const result=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','multi-first').send(body);
+  expect(result.status,result.text).toBe(201);
+  const id=result.body.proofId;
+  const view=await request(app).get(`/v1/partner/proofs/${id}`).set(headers());
+  expect(view.status,view.text).toBe(200);
+  expect(view.body.proof.transaction.quantity).toBe(3);
+  expect(view.body.proof.transaction.items).toHaveLength(2);
+  expect(view.body.proof.transaction.items.map(({itemId,...item}:any)=>item)).toEqual([
+   {externalItemId:'line-a',position:1,title:'Blue widget',description:'Blue finish',sku:'BLUE',quantity:2,unitValue:12.5,currency:'USD'},
+   {externalItemId:'line-b',position:2,title:'Green widget',description:null,sku:'GREEN',quantity:1,unitValue:3.25,currency:'USD'}
+  ]);
+  expect(view.body.proof.transaction.metadata.orderSnapshot).toEqual(body.transaction);
+  const replay=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','multi-other-key').send(body);
+  expect(replay.status,replay.text).toBe(201);expect(replay.body.proofId).toBe(id);expect(replay.body.created).toBe(false);
+  const changed=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','multi-changed').send({...body,transaction:{...body.transaction,items:[items[0],{...items[1],sku:'ALTERED'}]}});
+  expect(changed.status,changed.text).toBe(409);expect(changed.body.code).toBe('EXTERNAL_ID_CONFLICT');
+  const mismatched=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','multi-bad-summary').send({...body,externalId:'INVALID-SUMMARY',transaction:{...body.transaction,quantity:1}});
+  expect(mismatched.status,mismatched.text).toBe(400);
+  expect((await opened.db.query("SELECT proof_id FROM platform_external_bindings WHERE merchant_id=$1 AND external_id='INVALID-SUMMARY'",[merchantA])).rows).toHaveLength(0);
+  const counts=await opened.db.query<{roots:string;items:string}>(`SELECT (SELECT count(*) FROM proofs WHERE id=$1)::text AS roots,
+    (SELECT count(*) FROM transaction_items WHERE transaction_id=(SELECT transaction_id FROM proofs WHERE id=$1))::text AS items`,[id]);
+  expect(counts.rows[0]).toEqual({roots:'1',items:'2'});
+ });
  it('supports a third operator without granting partner authority to another merchant',async()=>{
   const third=await request(app).post('/v1/partner/proofs').set(headers()).set('Idempotency-Key','third').send({...importBody(accountA,memberP),externalId:'PARTNER-OPERATOR'});expect(third.status,third.text).toBe(201);
   await expect(authorizeProofAccess(opened.db,third.body.proofId,opP,'SELLER')).resolves.toMatchObject({user_id:opP});
@@ -120,6 +150,46 @@ describe('organization foundation through shared backend services',()=>{
   expect(zip.subarray(0,2).toString()).toBe('PK');
   expect((await finalizeProof(opened.db,clock,opA,id)).manifest.canonicalJson).toBe(final.manifest.canonicalJson);
   expect((await opened.db.query('SELECT DISTINCT attested_by FROM attestations WHERE proof_id=$1',[id])).rows).toEqual([{attested_by:opA}]);
+  const boundary=await request(app).get('/v1/partner/event-stream').set(headers());
+  expect(boundary.status,boundary.text).toBe(200);
+  const bindingBody={integrationAccountId:accountA,resourceType:'SHIPMENT',externalId:'SHIPMENT-AFTER-FINALIZATION'};
+  const binding=await request(app).post(`/v1/partner/proofs/${id}/external-bindings`).set(headers()).set('Idempotency-Key','binding-after-finalization').send(bindingBody);
+  expect(binding.status,binding.text).toBe(201);expect(binding.body.created).toBe(true);
+  const changed=await request(app).get('/v1/partner/event-stream').query({after:boundary.body.highWaterMark}).set(headers());
+  expect(changed.status,changed.text).toBe(200);
+  expect(changed.body.events).toHaveLength(1);
+  expect(changed.body.events[0]).toMatchObject({type:'proof.external_binding_added',data:{proofId:id}});
+  const eventId=changed.body.events[0].id;
+  const bindingReplay=await request(app).post(`/v1/partner/proofs/${id}/external-bindings`).set(headers()).set('Idempotency-Key','binding-other-key').send(bindingBody);
+  expect(bindingReplay.status,bindingReplay.text).toBe(201);expect(bindingReplay.body.created).toBe(false);
+  const unchanged=await request(app).get('/v1/partner/event-stream').query({after:changed.body.highWaterMark}).set(headers());
+  expect(unchanged.status,unchanged.text).toBe(200);expect(unchanged.body.events).toEqual([]);
+  expect((await opened.db.query('SELECT id FROM proof_outbox WHERE id=$1',[eventId])).rows).toHaveLength(1);
+  expect((await opened.db.query("SELECT event_data->>'provenance' AS provenance FROM audit_events WHERE proof_id=$1 AND event_type='EXTERNAL_BINDING_ADDED'",[id])).rows).toEqual([{provenance:'INTEGRATION_ASSERTION'}]);
+  expect((await finalizeProof(opened.db,clock,opA,id)).manifest.canonicalJson).toBe(final.manifest.canonicalJson);
+ });
+ it('lists current immutable bindings with signed actor-bound pages and live revocation checks',async()=>{
+  const id=String((await opened.db.query("SELECT id FROM proofs WHERE status='FINALIZED' ORDER BY id LIMIT 1")).rows[0].id);
+  const actor=await authenticatePartner(opened.db,clock,`Bearer ${credential}`,merchantA,grantA,'binding-pages');
+  const config={signingKey:randomBytes(32).toString('base64')};
+  const first=await listPartnerBindings(opened.db,clock,actor,id,config,{limit:1});
+  expect(first.bindings).toHaveLength(1);expect(first.hasMore).toBe(true);
+  const second=await listPartnerBindings(opened.db,clock,actor,id,config,{limit:1,after:first.nextCursor});
+  expect(second.bindings).toHaveLength(1);expect(second.hasMore).toBe(false);expect(second.nextCursor).toBeNull();
+  expect([...first.bindings,...second.bindings].map(row=>row.resourceType)).toEqual(['ORDER','SHIPMENT']);
+  await expect(listPartnerBindings(opened.db,clock,actor,id,config,{limit:1,after:first.nextCursor+'x'})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  await expect(listPartnerBindings(opened.db,clock,actor,id,config,{limit:101})).rejects.toMatchObject({code:'INVALID_LIMIT'});
+  const actorB=await authenticatePartner(opened.db,clock,`Bearer ${credential}`,merchantB,grantB,'binding-pages-cross');
+  await expect(listPartnerBindings(opened.db,clock,actorB,id,config,{})).rejects.toMatchObject({code:'PROOF_NOT_FOUND'});
+  await expect(listPartnerBindings(opened.db,clock,actorB,proofB,config,{after:first.nextCursor})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  const laterClock={now:()=>new Date(Date.now()+7200000)};
+  await expect(listPartnerBindings(opened.db,laterClock,actor,id,config,{after:first.nextCursor})).rejects.toMatchObject({code:'BINDING_CURSOR_EXPIRED'});
+  const extra=await issuePartnerCredential(opened.db,clock,admin,partner,principalId,{scopes:[...PARTNER_SCOPES],expiresAt:expires()},'binding-pages-credential');
+  const otherActor=await authenticatePartner(opened.db,clock,`Bearer ${extra.token}`,merchantA,grantA,'binding-pages-other-credential');
+  await expect(listPartnerBindings(opened.db,clock,otherActor,id,config,{after:first.nextCursor})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  const otherPage=await listPartnerBindings(opened.db,clock,otherActor,id,config,{limit:1});
+  await revokePartnerCredential(opened.db,clock,admin,partner,extra.id,'binding-pages-revoke');
+  await expect(listPartnerBindings(opened.db,clock,otherActor,id,config,{after:otherPage.nextCursor})).rejects.toMatchObject({code:'INSUFFICIENT_SCOPE'});
  });
  it('T03 binds capture to the authenticated assigned operator and revokes pending work and replays',async()=>{
   const intent=await request(app).post(`/v1/partner/proofs/${proofA}/capture-intents`).set(headers()).set('Idempotency-Key','capture').send({allowedSurfaces:['WEB']});expect(intent.status,intent.text).toBe(201);

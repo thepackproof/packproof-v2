@@ -35,6 +35,14 @@ function decode(value: unknown, scope: StreamScope, proofId: string | null, cloc
   return c;
 }
 
+/** Encode a committed boundary already read in the caller's database snapshot.
+ * Internal callers choose an expiry within their documented retention window. */
+export function createEventStreamCursor(scope: StreamScope, position: string, expiresAt: number,
+  config: EventStreamConfig, proofId: string | null = null): string {
+  if (!/^\d{1,19}$/.test(position) || BigInt(position) > MAX_POSITION || !Number.isSafeInteger(expiresAt)) return invalid();
+  return encode({tenantId: scope.tenantId, environment: scope.environment, v: 1, position, expiresAt, proofId}, config);
+}
+
 /** Primary database only. Positions are decimal strings; never parse as Number. */
 export async function listEventStream(db: Database, clock: Clock, scope: StreamScope, config: EventStreamConfig,
   input: {after?: unknown; limit?: unknown; proofId?: string}={}) {
@@ -58,7 +66,7 @@ export async function listEventStream(db: Database, clock: Clock, scope: StreamS
   const rows=found.rows.slice(0,limit),hasMore=found.rows.length>limit;
   const next=hasMore?rows[rows.length-1].stream_position:highWater;
   const expiresAt=clock.now().getTime()+Math.min(config.cursorLifetimeMs??604800000,604800000);
-  const cursor=(p:string)=>encode({tenantId:scope.tenantId,environment:scope.environment,v:1,position:p,proofId,expiresAt},config);
+  const cursor=(p:string)=>createEventStreamCursor(scope,p,expiresAt,config,proofId);
   return {schemaVersion:'packproof.event-stream/v1',environment:scope.environment,
     events:rows.map(r=>({...publicEvent(r,scope.tenantId),schemaVersion:'packproof.event/v1.1',environment:scope.environment,streamSequence:r.stream_position})),
     nextCursor:cursor(next),highWaterMark:cursor(highWater),hasMore,cursorExpiresAt:new Date(expiresAt).toISOString()};

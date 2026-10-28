@@ -1,0 +1,29 @@
+{
+  "externalId": "sandbox-order-1001",
+  "transaction": {
+    "itemTitle": "Synthetic two-item parcel",
+    "quantity": 3,
+    "transactionValue": 10,
+    "currency": "USD",
+    "items": [
+      {
+        "title": "Synthetic item A",
+        "externalItemId": "LINE-A",
+        "position": 1,
+        "quantity": 1,
+        "sku": "SYNTHETIC-A"
+      },
+      {
+        "title": "Synthetic item B",
+        "externalItemId": "LINE-B",
+        "position": 2,
+        "quantity": 2,
+        "sku": "SYNTHETIC-B"
+      }
+    ],
+    "metadata": {
+      "source": "packproof-external-acceptance",
+      "synthetic": true
+    }
+  }
+}

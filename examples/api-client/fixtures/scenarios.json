@@ -1,0 +1,37 @@
+{
+  "schema": "packproof.api-acceptance-fixtures/v1",
+  "synthetic": true,
+  "scenarios": [
+    {
+      "id": "ready",
+      "setup": "Use supported operator capture; supply resulting Proof ID, session ID and independently retained source/manifest digests."
+    },
+    {
+      "id": "incomplete-upload",
+      "expected": "Never Ready while upload or durable receipts are pending."
+    },
+    {
+      "id": "expired-authorization",
+      "expected": "Resume with current authorization and retained original; do not create duplicate evidence."
+    },
+    {
+      "id": "conflicting-identity",
+      "inputChange": "Change transaction.itemTitle with the same externalId and a new idempotency key.",
+      "expectedStatus": 409,
+      "expectedCode": "EXTERNAL_ID_CONFLICT"
+    },
+    {
+      "id": "revoked-grant",
+      "setup": "Use separately revoked staging credential.",
+      "expectedStatus": [
+        401,
+        403
+      ]
+    },
+    {
+      "id": "failed-delivery",
+      "setup": "Use a preapproved receiver responding 503, retain event ID, then restore receiver and retry exhausted delivery.",
+      "expected": "Reconcile current Proof without lifecycle regression."
+    }
+  ]
+}
