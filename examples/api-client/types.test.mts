@@ -8,6 +8,9 @@ const preserved:boolean=result.proofs[0].readiness.preserved;
 const snapshot:PartnerSchemas['ProofSnapshotMetadata']=await client.request('partner.createProofSnapshot',{body:{pageSize:10}});
 const page=await client.request('partner.getProofSnapshot',{path:{snapshotId:snapshot.snapshotId}});
 const after:string=snapshot.eventCursor;
+const bindingPage=await client.request('partner.listPartnerProofBindings',{path:{proofId},query:{limit:50}});
+const bindingKind:PartnerSchemas['CurrentExternalBinding']['resourceType']=bindingPage.bindings[0].resourceType;
+void bindingKind;
 const download:Response=await client.request('legacy.get_proofs_id_package',{path:{id:proofId}});
 void [status,preserved,page,after,download];
 // @ts-expect-error A create command must carry the original persisted idempotency key.

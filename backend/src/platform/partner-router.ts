@@ -1,3 +1,4 @@
+import { listPartnerBindings } from './partner-bindings.js';
 import { searchPartnerProofs } from './proof-search.js';
 import { createPartnerProofSnapshot, readPartnerProofSnapshot, releasePartnerProofSnapshot } from './proof-snapshots.js';
 import { getProofRecoveryStatus } from '../domain/recovery-journal.js';
@@ -72,6 +73,7 @@ export function createPartnerRouter(deps:AppDependencies){
  endpoint('post','/proofs','proofs:write',(db,a,r)=>importPartnerOrder(db,deps.clock,a,r.body),201);
  endpoint('get','/proofs/resolve','proofs:read',(db,a,r)=>resolvePartnerProof(db,deps.clock,a,r.query.integrationAccountId,r.query.externalId));
  endpoint('get','/proofs','proofs:read',(db,a,r)=>listPartnerProofs(db,deps.clock,a,r.query.after,process.env.PACKPROOF_EVENT_CURSOR_KEY??''));
+ endpoint('get','/proofs/:proofId/external-bindings','proofs:read',(db,a,r)=>listPartnerBindings(db,deps.clock,a,r.params.proofId,historyConfig,r.query));
  endpoint('get','/proofs/:proofId/recovery','proofs:read',(db,a,r)=>getProofRecoveryStatus(withPartnerReadGrant(db,deps.clock,a,r.params.proofId,'proofs:read'),a.actorUserId,r.params.proofId));
  endpoint('get','/proofs/:proofId','proofs:read',(db,a,r)=>readPartnerProof(db,deps.clock,a,r.params.proofId));
  endpoint('post','/proofs/:proofId/external-bindings','proofs:write',(db,a,r)=>addPartnerBinding(db,deps.clock,a,r.params.proofId,r.body),201);

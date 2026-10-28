@@ -69,6 +69,16 @@ export async function runAcceptance(env=process.env,{mode='intake',requireReleas
    assert.ok(receipts.evidence.length>0&&receipts.evidence.every(x=>x.status==='PRESERVED'&&x.receipt));assert.ok(receipts.declarations.length>0&&receipts.declarations.every(x=>x.status==='PRESERVED'&&x.receipt));check('authoritative evidence declaration and finalization receipts');
   }
   if(profile==='partner'){
+   const bindings=new Set();let bindingCursor;let bindingsComplete=false;let hasOrder=false;
+   for(let page=0;page<20;page++){
+    const current=await client.request('partner.listPartnerProofBindings',{path:{proofId},query:{limit:100,...(bindingCursor?{after:bindingCursor}:{})}});
+    assert.equal(current.schema,'packproof.external-bindings/v1');assert.equal(current.proofId,proofId);assert.equal(current.consistency,'LIVE_KEYSET_RESTART_ON_CHANGE');
+    for(const binding of current.bindings){const key=JSON.stringify([binding.integrationAccountId,binding.resourceType,binding.externalId]);assert.ok(!bindings.has(key),'Current binding listing repeated an identity');bindings.add(key);assert.ok(Number.isFinite(Date.parse(binding.createdAt)));if(binding.resourceType==='ORDER')hasOrder=true;}
+    if(!current.hasMore){assert.equal(current.nextCursor,null);bindingsComplete=true;break;}assert.ok(current.nextCursor);bindingCursor=current.nextCursor;
+   }
+   assert.ok(bindingsComplete&&hasOrder,'Current authorized binding listing did not finish within its explicit bound');check('current paginated order binding resolves same canonical Proof',{bindingCount:bindings.size});
+  }
+  if(profile==='partner'){
    const snapshot=await client.request('partner.createProofSnapshot',{body:{pageSize:100}});const seen=new Set();let cursor;let foundRoot=false;
    try{
     for(let page=0;page<100;page++){

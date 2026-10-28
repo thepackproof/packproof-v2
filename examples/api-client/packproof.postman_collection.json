@@ -224,6 +224,29 @@
           }
         },
         {
+          "name": "Read current paginated external bindings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proofs/{{proofId}}/external-bindings?limit=50"
+          }
+        },
+        {
           "name": "Search preserved Ready Proof",
           "request": {
             "method": "GET",

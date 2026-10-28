@@ -11,8 +11,9 @@ import {commitAttestation} from '../src/domain/attestations.js';
 import {bindIntent} from '../src/capture/service.js';
 import {CORE_VERSION} from '../src/capture/core.js';
 import {createOrganization,setOrganizationEntitlement,addOrganizationMember,createServicePrincipal,issuePartnerCredential,
- createDelegation,createIntegrationAccount,revokeDelegation,revokeOrganizationMember,authenticatePartner,reauthorizePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
+ createDelegation,createIntegrationAccount,revokeDelegation,revokeOrganizationMember,revokePartnerCredential,authenticatePartner,reauthorizePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
 import {createPartnerRouter} from '../src/platform/partner-router.js';
+import {listPartnerBindings} from '../src/platform/partner-bindings.js';
 import {createOrganizationRouter} from '../src/platform/organization-router.js';
 import {DomainError} from '../src/domain/errors.js';
 import {BearerUserAdapter} from '../src/auth/adapter.js';
@@ -166,6 +167,29 @@ describe('organization foundation through shared backend services',()=>{
   expect((await opened.db.query('SELECT id FROM proof_outbox WHERE id=$1',[eventId])).rows).toHaveLength(1);
   expect((await opened.db.query("SELECT event_data->>'provenance' AS provenance FROM audit_events WHERE proof_id=$1 AND event_type='EXTERNAL_BINDING_ADDED'",[id])).rows).toEqual([{provenance:'INTEGRATION_ASSERTION'}]);
   expect((await finalizeProof(opened.db,clock,opA,id)).manifest.canonicalJson).toBe(final.manifest.canonicalJson);
+ });
+ it('lists current immutable bindings with signed actor-bound pages and live revocation checks',async()=>{
+  const id=String((await opened.db.query("SELECT id FROM proofs WHERE status='FINALIZED' ORDER BY id LIMIT 1")).rows[0].id);
+  const actor=await authenticatePartner(opened.db,clock,`Bearer ${credential}`,merchantA,grantA,'binding-pages');
+  const config={signingKey:randomBytes(32).toString('base64')};
+  const first=await listPartnerBindings(opened.db,clock,actor,id,config,{limit:1});
+  expect(first.bindings).toHaveLength(1);expect(first.hasMore).toBe(true);
+  const second=await listPartnerBindings(opened.db,clock,actor,id,config,{limit:1,after:first.nextCursor});
+  expect(second.bindings).toHaveLength(1);expect(second.hasMore).toBe(false);expect(second.nextCursor).toBeNull();
+  expect([...first.bindings,...second.bindings].map(row=>row.resourceType)).toEqual(['ORDER','SHIPMENT']);
+  await expect(listPartnerBindings(opened.db,clock,actor,id,config,{limit:1,after:first.nextCursor+'x'})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  await expect(listPartnerBindings(opened.db,clock,actor,id,config,{limit:101})).rejects.toMatchObject({code:'INVALID_LIMIT'});
+  const actorB=await authenticatePartner(opened.db,clock,`Bearer ${credential}`,merchantB,grantB,'binding-pages-cross');
+  await expect(listPartnerBindings(opened.db,clock,actorB,id,config,{})).rejects.toMatchObject({code:'PROOF_NOT_FOUND'});
+  await expect(listPartnerBindings(opened.db,clock,actorB,proofB,config,{after:first.nextCursor})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  const laterClock={now:()=>new Date(Date.now()+7200000)};
+  await expect(listPartnerBindings(opened.db,laterClock,actor,id,config,{after:first.nextCursor})).rejects.toMatchObject({code:'BINDING_CURSOR_EXPIRED'});
+  const extra=await issuePartnerCredential(opened.db,clock,admin,partner,principalId,{scopes:[...PARTNER_SCOPES],expiresAt:expires()},'binding-pages-credential');
+  const otherActor=await authenticatePartner(opened.db,clock,`Bearer ${extra.token}`,merchantA,grantA,'binding-pages-other-credential');
+  await expect(listPartnerBindings(opened.db,clock,otherActor,id,config,{after:first.nextCursor})).rejects.toMatchObject({code:'INVALID_CURSOR'});
+  const otherPage=await listPartnerBindings(opened.db,clock,otherActor,id,config,{limit:1});
+  await revokePartnerCredential(opened.db,clock,admin,partner,extra.id,'binding-pages-revoke');
+  await expect(listPartnerBindings(opened.db,clock,otherActor,id,config,{after:otherPage.nextCursor})).rejects.toMatchObject({code:'INSUFFICIENT_SCOPE'});
  });
  it('T03 binds capture to the authenticated assigned operator and revokes pending work and replays',async()=>{
   const intent=await request(app).post(`/v1/partner/proofs/${proofA}/capture-intents`).set(headers()).set('Idempotency-Key','capture').send({allowedSurfaces:['WEB']});expect(intent.status,intent.text).toBe(201);

@@ -10,9 +10,15 @@ Two merchants or two registered stores may each have order `1001`. They produce 
 
 Direct API and official provider imports do not silently merge. Matching order labels or tracking numbers are insufficient authority to rebind evidence. Unsupported split or mixed fulfillment stays in the existing provider review path. Later source observations retain the existing append-only revision/supplement semantics.
 
-A new external binding appends an immutable `EXTERNAL_BINDING_ADDED` audit and a `proof.external_binding_added` outbox event in the same source transaction. The commit-safe feed therefore discovers bindings created after a reconciliation snapshot's publication boundary. Logical retries retain the original binding and emit no new event. The event refers to the canonical Proof; fetch its current authorized state to reconcile. Its source is explicitly an integration assertion. A binding added after finalization does not change the frozen manifest.
+A new external binding appends an immutable `EXTERNAL_BINDING_ADDED` audit and a `proof.external_binding_added` outbox event in the same source transaction. The commit-safe feed therefore discovers bindings created after a reconciliation snapshot's publication boundary. Logical retries retain the original binding and emit no new event. The event refers to the canonical Proof. Fetch every page of `GET /v1/partner/proofs/:proofId/external-bindings` from the beginning after each binding-change signal, then continue the feed and deduplicate logical event IDs. Its source is explicitly an integration assertion. A binding added after finalization does not change the frozen manifest.
 
 The integration service remains the machine actor. `operatorMembershipId` assigns an explicitly authorized, active person; it neither signs that person in nor confirms packing. Capture and attestation still require the authenticated operator. The immutable `orderSnapshot` and its hash record integration assertions, not PackProof-established packing facts.
+
+## Current binding pages
+
+`GET /v1/partner/proofs/:proofId/external-bindings` requires current `proofs:read` authority. It returns `schema: packproof.external-bindings/v1`, `proofId`, `bindings`, `hasMore`, `nextCursor`, `cursorExpiresAt`, and `consistency: LIVE_KEYSET_RESTART_ON_CHANGE`. Each binding includes `integrationAccountId`, `resourceType`, `externalId`, and `createdAt`. `limit` defaults to 50 and is bounded at 100; follow `nextCursor` using `after` until `hasMore` is false. Cursors are signed, expire within one hour (15 minutes by default), and bind merchant, environment, tenant, principal, credential, delegation and Proof. Every page rechecks live authorization.
+
+These are current identity pages, distinct from the materialized reconciliation snapshot. Immutable composite binding keys provide deterministic order, but a newly inserted lower-sorting key can appear before the current cursor. Restart the binding listing from the beginning after a binding-change event, then continue the event feed. Expired cursors return an explicit restart requirement. Historical binding counts do not block ordinary Proof reads; pages remain bounded without imposing a new core binding limit.
 
 ## Authoritative multi-item request
 

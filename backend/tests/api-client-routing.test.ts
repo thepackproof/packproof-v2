@@ -43,7 +43,9 @@ describe('API/client route composition and immutable intake', () => {
         END IF;
         RETURN NEW;
       END;
-      $$;
+      $;
+    `);
+    await h.db.query(`
       CREATE TRIGGER test_api_client_items_precede_root
         BEFORE INSERT ON proofs FOR EACH ROW
         EXECUTE FUNCTION test_api_client_items_precede_root();

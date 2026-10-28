@@ -472,6 +472,16 @@ export const operations = Object.freeze({
     ],
     "binary": false
   },
+  "partner.listPartnerProofBindings": {
+    "method": "GET",
+    "path": "/v1/partner/proofs/{proofId}/external-bindings",
+    "idempotent": false,
+    "query": [
+      "after",
+      "limit"
+    ],
+    "binary": false
+  },
   "partner.listPartnerWebhookDeliveries": {
     "method": "GET",
     "path": "/v1/partner/webhooks/{webhookId}/deliveries",

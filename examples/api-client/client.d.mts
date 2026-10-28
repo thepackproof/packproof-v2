@@ -204,6 +204,8 @@ export interface PartnerSchemas {
   "CreatedAccessLink": { "accessLinkId": string; "proofId": string; "scope": string; "recipientHint": string | null; "createdAt": string; "expiresAt": string | null; "revokedAt": string | null; "lastAccessedAt": string | null; "viewCount": number; "token": string; "url": string; [key: string]: unknown; };
   "Credential": { "scopes": Array<PartnerSchemas["Scope"]>; "expiresAt": string; };
   "CredentialIssued": { "id": string; "prefix": string; "token": string; "scopes": Array<PartnerSchemas["Scope"]>; "expiresAt": string; [key: string]: unknown; };
+  "CurrentExternalBinding": { "integrationAccountId": string; "resourceType": "ORDER" | "PAYMENT" | "SHIPMENT" | "RETURN" | "CLAIM"; "externalId": string; "createdAt": string; [key: string]: unknown; };
+  "CurrentExternalBindings": { "schema": "packproof.external-bindings/v1"; "proofId": string; "bindings": Array<PartnerSchemas["CurrentExternalBinding"]>; "hasMore": boolean; "nextCursor": string | null; "cursorExpiresAt": string | null; "consistency": "LIVE_KEYSET_RESTART_ON_CHANGE"; [key: string]: unknown; };
   "Delegation": { "partnerOrganizationId": string; "scopes": Array<PartnerSchemas["Scope"]>; "operatorUserIds": Array<string>; "expiresAt": string; };
   "DelegationCreated": { "id": string; "merchantId": string; "partnerOrganizationId": string; "scopes": Array<PartnerSchemas["Scope"]>; "operatorUserIds": Array<string>; "expiresAt": string; [key: string]: unknown; };
   "DeletionRequested": { "id": string; "state": string; "retention": PartnerSchemas["Retention"]; "message"?: string; [key: string]: unknown; };
@@ -299,6 +301,8 @@ export interface partner_get__v1_partner_proofs_resolve { request: { query: { "i
 export interface partner_get__v1_partner_proofs_proofId_ { request: { path: { "proofId": string; }; key?: string; signal?: AbortSignal; stream?: false; }; response: PartnerSchemas["PartnerProof"]; }
 // operation:partner.post__v1_partner_proofs_proofId_external_bindings
 export interface partner_post__v1_partner_proofs_proofId_external_bindings { request: { path: { "proofId": string; }; body: PartnerSchemas["ExternalBinding"]; key: string; signal?: AbortSignal; stream?: false; }; response: PartnerSchemas["Imported"]; }
+// operation:partner.listPartnerProofBindings
+export interface partner_listPartnerProofBindings { request: { path: { "proofId": string; }; query?: { "after"?: string; "limit"?: number; }; key?: string; signal?: AbortSignal; stream?: false; }; response: PartnerSchemas["CurrentExternalBindings"]; }
 // operation:partner.post__v1_partner_proofs_proofId_capture_intents
 export interface partner_post__v1_partner_proofs_proofId_capture_intents { request: { path: { "proofId": string; }; body: PartnerSchemas["CaptureIntentRequest"]; key: string; signal?: AbortSignal; stream?: false; }; response: PartnerSchemas["PartnerCaptureIntent"]; }
 // operation:partner.get__v1_partner_proofs_proofId_review
@@ -395,6 +399,7 @@ export interface Operations {
   "partner.get__v1_partner_proofs_proofId_review": partner_get__v1_partner_proofs_proofId_review;
   "partner.get__v1_partner_proofs_resolve": partner_get__v1_partner_proofs_resolve;
   "partner.get__v1_partner_webhooks": partner_get__v1_partner_webhooks;
+  "partner.listPartnerProofBindings": partner_listPartnerProofBindings;
   "partner.listPartnerWebhookDeliveries": partner_listPartnerWebhookDeliveries;
   "partner.post__v1_partner_proofs": partner_post__v1_partner_proofs;
   "partner.post__v1_partner_proofs_proofId_capture_intents": partner_post__v1_partner_proofs_proofId_capture_intents;

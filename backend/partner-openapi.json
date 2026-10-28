@@ -728,6 +728,160 @@
           }
         },
         "x-packproof-scope": "proofs:write"
+      },
+      "get": {
+        "operationId": "listPartnerProofBindings",
+        "summary": "Read current authorized external bindings",
+        "description": "Read current immutable binding identities with live keyset pagination. Reauthorize Proof and current merchant/credential/delegation on every page. Restart the complete listing after proof.external_binding_added or proof.updated events; a live keyset listing alone is not a frozen snapshot. Binding additions never mutate the finalized core manifest.",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "description": "Opaque signed cursor bound to the current actor and Proof. BINDING_CURSOR_EXPIRED requires restarting the current listing."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Capture capability and credential responses are sensitive and no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentExternalBindings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-packproof-scope": "proofs:read"
       }
     },
     "/v1/partner/proofs/{proofId}/capture-intents": {
@@ -9142,6 +9296,83 @@
         "required": [
           "events"
         ]
+      },
+      "CurrentExternalBinding": {
+        "type": "object",
+        "required": [
+          "integrationAccountId",
+          "resourceType",
+          "externalId",
+          "createdAt"
+        ],
+        "properties": {
+          "integrationAccountId": {
+            "type": "string"
+          },
+          "resourceType": {
+            "enum": [
+              "ORDER",
+              "PAYMENT",
+              "SHIPMENT",
+              "RETURN",
+              "CLAIM"
+            ]
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server binding creation time, not physical event or filming time."
+          }
+        }
+      },
+      "CurrentExternalBindings": {
+        "type": "object",
+        "required": [
+          "schema",
+          "proofId",
+          "bindings",
+          "hasMore",
+          "nextCursor",
+          "cursorExpiresAt",
+          "consistency"
+        ],
+        "properties": {
+          "schema": {
+            "const": "packproof.external-bindings/v1"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CurrentExternalBinding"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cursorExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Non-null only when another page exists. Default cursor lifetime fifteen minutes, configured maximum one hour."
+          },
+          "consistency": {
+            "const": "LIVE_KEYSET_RESTART_ON_CHANGE"
+          }
+        }
       }
     }
   }

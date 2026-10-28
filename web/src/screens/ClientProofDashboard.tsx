@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PackProofApi } from '../api/client';
 import type { CommerceConnectionView } from '../api/types';
-import type { ProofSearchItem, ProofSearchQuery, ProofSearchResult, ProofSearchState } from '../../../backend/src/platform/proof-search';
+import type { ProofSearchItem, ProofSearchQuery, ProofSearchResult, ProofSearchState } from '../../../packages/evidence-contracts/api-dashboard';
 
 const states: Array<[ProofSearchState | '',string]> = [['','All'],['READY','Ready'],['IN_PROGRESS','In progress'],['AWAITING_CAPTURE','Awaiting capture'],['NEEDS_ATTENTION','Needs attention']];
 const labels = Object.fromEntries(states) as Record<string,string>;

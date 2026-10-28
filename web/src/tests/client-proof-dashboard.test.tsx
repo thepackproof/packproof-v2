@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, expect, it, vi } from 'vitest';
 import { ClientProofDashboard } from '../screens/ClientProofDashboard';
 import type { PackProofApi } from '../api/client';
-import type { ProofSearchItem, ProofSearchResult } from '../../../backend/src/platform/proof-search';
+import type { ProofSearchItem, ProofSearchResult } from '../../../packages/evidence-contracts/api-dashboard';
 
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();});
 function row(id:string,state:ProofSearchItem['readiness']['state']='READY'):ProofSearchItem{
@@ -38,7 +38,7 @@ it('sends server filters and appends deduplicated cursor pages',async()=>{
  expect(screen.getAllByRole('button',{name:'ORDER-a'})).toHaveLength(1);
  expect(source.searchProofs).toHaveBeenNthCalledWith(2,expect.objectContaining({after:'signed-next',limit:50}));
  fireEvent.change(screen.getByLabelText('Order, tracking or Proof reference'),{target:{value:'  ORDER-b  '}});
- fireEvent.click(screen.getByRole('button',{name:'Search',exact:true}));
+ fireEvent.click(screen.getByRole('button',{name:/^Search$/}));
  await waitFor(()=>expect(source.searchProofs).toHaveBeenLastCalledWith(expect.objectContaining({q:'ORDER-b',after:undefined})));
  fireEvent.change(screen.getByLabelText('Status'),{target:{value:'NEEDS_ATTENTION'}});
  await waitFor(()=>expect(source.searchProofs).toHaveBeenLastCalledWith(expect.objectContaining({state:'NEEDS_ATTENTION',q:'ORDER-b'})));

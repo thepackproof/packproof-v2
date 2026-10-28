@@ -1,3 +1,5 @@
+import type { ProofSearchState, ProofSearchQuery, ProofSearchItem, ProofSearchResult } from '../../../packages/evidence-contracts/api-dashboard.js';
+export type { ProofSearchState, ProofSearchQuery, ProofSearchItem, ProofSearchResult } from '../../../packages/evidence-contracts/api-dashboard.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../db/database.js';
 import type { Clock } from '../clock.js';
@@ -11,23 +13,6 @@ import { requireScope, type ApiPrincipal } from './tenants.js';
 import { reauthorizePartner, authorizePartnerProof, type PartnerActor } from './organizations.js';
 
 export const PROOF_SEARCH_STATES = ['AWAITING_CAPTURE','IN_PROGRESS','READY','NEEDS_ATTENTION'] as const;
-export type ProofSearchState = typeof PROOF_SEARCH_STATES[number];
-export interface ProofSearchQuery {
-  q?: string; state?: ProofSearchState; from?: string; through?: string;
-  connectionId?: string; integrationAccountId?: string; limit?: number; after?: string;
-}
-export interface ProofSearchItem {
-  proofId: string; transactionId: string; status: string;
-  createdAt: string; updatedAt: string; finalizedAt: string | null;
-  externalId: string | null; itemTitle: string | null; itemCount: number;
-  trackingNumber: string | null; connectionId: string | null; provider: string | null;
-  recordedBy: string | null; serverReceivedAt: string | null;
-  readiness: { state: ProofSearchState; reason: string | null; preserved: boolean };
-}
-export interface ProofSearchResult {
-  apiVersion: 'v1'; schema: 'packproof.proof-search/v1'; proofs: ProofSearchItem[];
-  nextCursor: string | null; hasMore: boolean; refreshedAt: string; cursorExpiresAt: string;
-}
 interface Parsed {
   q: string; state: ProofSearchState | null; from: string | null; through: string | null;
   connectionId: string | null; integrationAccountId: string | null; limit: number; after: string | null;

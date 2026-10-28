@@ -1,5 +1,5 @@
 import type { ConnectionHealthView } from './connection-health';
-import type { ProofSearchQuery, ProofSearchResult } from '../../../backend/src/platform/proof-search';
+import type { ProofSearchQuery, ProofSearchResult } from '../../../packages/evidence-contracts/api-dashboard';
 import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '../../../packages/evidence-contracts/generated-client.mjs';
 import type {RndSnapshot,RndCapabilities,Feature,ReviewerAnnotation,DerivativeGrant} from "../rnd/types";
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
