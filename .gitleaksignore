@@ -50,3 +50,10 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # contains only fabricated IAM/database role names (m2_api_fixture), no password
 # or credential. Current test identifiers are shorter; all scanner rules remain.
 312431f4347490df2f87b321971697f6641a0365:backend/tests/envelope-runtime.test.ts:generic-api-key:15
+
+# Reviewed PR 133 / Source secrets job 122677215378.
+# This exact historical line contains only a mocked Idempotency-Key operation ID,
+# not an authorization credential. All transport in this unit test is injected.
+# The current fixture uses a short operation ID; retain this one commit/file/rule/line
+# exception so history remains scanned without suppressing any other finding.
+488a11bbd1c5fc9e81b4dafbcb104d407168c161:examples/api-client/client.test.mjs:generic-api-key:11

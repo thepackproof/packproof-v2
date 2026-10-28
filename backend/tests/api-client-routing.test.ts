@@ -33,7 +33,7 @@ describe('API/client route composition and immutable intake', () => {
     // invariant. It detects insertion after Proof creation even if the final
     // database contents happen to look correct.
     await h.db.query(`
-      CREATE FUNCTION test_api_client_items_precede_root() RETURNS trigger LANGUAGE plpgsql AS $$
+      CREATE FUNCTION test_api_client_items_precede_root() RETURNS trigger LANGUAGE plpgsql AS $api_client_fixture$
       BEGIN
         IF EXISTS(SELECT 1 FROM transactions t WHERE t.id=NEW.transaction_id
           AND t.item_title='Atomic multi-item routing fixture') THEN
@@ -43,7 +43,7 @@ describe('API/client route composition and immutable intake', () => {
         END IF;
         RETURN NEW;
       END;
-      $;
+      $api_client_fixture$;
     `);
     await h.db.query(`
       CREATE TRIGGER test_api_client_items_precede_root

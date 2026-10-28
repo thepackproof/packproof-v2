@@ -8,7 +8,7 @@ const options=extra=>({apiOrigin:'https://api.example.test',credential:'test-onl
 test('unknown outcomes replay the exact frozen key and bytes',async()=>{
  const attempts=[];const order={externalId:'synthetic-1001',transaction:{itemTitle:'Synthetic parcel'}};
  const client=new PackProofClient(options({fetch:async(url,init)=>{attempts.push({url:String(url),key:init.headers['Idempotency-Key'],body:init.body});if(attempts.length===1){order.transaction.itemTitle='Changed after send';throw new TypeError('Lost connection');}return json({proofId:'proof_one'});}}));
- assert.deepEqual(await client.request('legacy.post_proofs',{body:order,key:'persistent-operation-1001'}),{proofId:'proof_one'});
+ assert.deepEqual(await client.request('legacy.post_proofs',{body:order,key:'op-1'}),{proofId:'proof_one'});
  assert.equal(attempts.length,2);assert.deepEqual(attempts[1],attempts[0]);assert.equal(JSON.parse(attempts[1].body).transaction.itemTitle,'Synthetic parcel');
 });
 test('commands without persistent keys fail before transport',async()=>{
