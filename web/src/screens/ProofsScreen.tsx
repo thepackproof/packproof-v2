@@ -1,3 +1,4 @@
+import { ClientProofDashboard } from './ClientProofDashboard';
 import type { PackProofApi } from "../api/client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ProofCollectionItem } from "../api/types";
@@ -50,6 +51,8 @@ export function ProofsScreen(props: {
   const [query, setQuery] = useState(props.query);
   useEffect(() => setQuery(props.query), [props.query]);
   const rows = [...new Map(props.proofs.map(item => [item.proofId, item])).values()];
+  if (import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD === 'true' && !props.mobileTask && props.api)
+    return <ClientProofDashboard api={props.api} initialQuery={props.query} onOpenProof={props.onOpenProof} onCreate={props.onCreate} />;
   const empty = !props.loading && !props.error && !rows.length;
   return <main className="page library-page workstation-proof-page" aria-busy={props.loading}>
     <header className="workstation-page-heading"><div><span className="workstation-eyebrow">Your evidence, together.</span><h1 className="page-title">Your Proofs</h1><p>Shipment evidence, organized and ready to review.</p></div><button data-onboarding="create capture" className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></header>

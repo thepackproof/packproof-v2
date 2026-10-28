@@ -4,6 +4,10 @@ PackProof V2 is a **separate repository**. It is not a branch of PackProof.
 
 Legacy PackProof remains at `C:\src\PackProof\repo`. Do not restructure it from here. Reuse from legacy only isolated utilities (camera, branding, generic hashing) when a later phase needs them. Do not reuse legacy lifecycle logic.
 
+## Current source and historical descriptions
+
+This architecture describes the shared modular monolith. Older exclusions below are bounded by their original slice; they do not override implemented additive organization, recovery or integrity-envelope work. The API/client release [capability ledger](api-client-release/CAPABILITY_LEDGER.md) pins source baseline `e4f69c9a690649c41b846468eb48829fb0542617` and separates implementation from configured, observed and production status. New October 28 candidate checks remain pending until recorded for the integrated commit.
+
 ## Principle
 
 A PackProof is one immutable, transaction-bound evidence record whose history can only be appended to, whose state can only be changed through validated server-side transitions, and whose final contents can be independently integrity-verified.
@@ -64,8 +68,8 @@ No UI/capture/upload states. Buyer participation is optional on the ordinary pat
 - S3 for evidence objects
 - ECS/Fargate for this API
 - S3 + CloudFront for the staging web reference client (separate origin; CORS via `PACKPROOF_WEB_ORIGINS`)
-- KMS only if signing is introduced later
-- SQS only for genuine async jobs (none in this slice)
+- KMS signing/recovery runtime is implemented; activation and trusted key history depend on reviewed deployment configuration
+- PostgreSQL outbox/leases remain the default background mechanism; add a queue service only for measured workload requirements
 - Secrets Manager for trusted integration credentials. The ECS **task role** (application AWS SDK) may call `secretsmanager:GetSecretValue`, `CreateSecret`, `PutSecretValue`, and `DeleteSecret` on `packproof/staging/integrations/*`. The task execution role is only for image pull, logs, and injected RDS credentials.
 
 Do not use DynamoDB or Firebase as canonical Proof storage. Do not put Proof transitions on Lambda.
@@ -84,7 +88,7 @@ Packing Station Mode is a client workflow over those commands. Merchant finaliza
 
 ## Canonical Proof contract
 
-One evidence core, multiple surfaces. Mobile, future marketplaces, claims desks, and portals consume the same Proof through the API authorization boundary.
+One evidence core, multiple surfaces. Mobile, authorized partner integrations, claims desks, and portals consume the same Proof through the API authorization boundary.
 
 See [CANONICAL_PROOF_ARCHITECTURE.md](CANONICAL_PROOF_ARCHITECTURE.md). Account search and account-targeted invitations are described in [USER_SEARCH_AND_INVITATIONS.md](USER_SEARCH_AND_INVITATIONS.md). Custody assets, observations, transfers, `nextAction`, and guest viewing links are described in [CUSTODY_WORKFLOW.md](CUSTODY_WORKFLOW.md).
 
@@ -98,4 +102,17 @@ Migrations 023–026 are additive. API tenant bindings are immutable and externa
 
 Resumable evidence parts are bounded and hash-verified. Local client upload state never becomes Proof state. Receipt and return stages have their own frozen manifests and a targeted receiver grant; they reference the frozen root and previous stage instead of reopening it. Retention controls are supplementary audit records. Exported packages include the exact core manifest plus clearly separated shipping, access and lifecycle supplements.
 
-The pilot API allocates 1 GiB for bounded media processing. Whole-media commit/export assembly still needs capacity validation before high concurrency. Sandbox labels isolate partner namespaces but do not replace a separate staging deployment. See [PUBLIC_API.md](PUBLIC_API.md), [COMPREHENSIVE_PLAN_EXECUTION.md](COMPREHENSIVE_PLAN_EXECUTION.md), and [PILOT_RUNBOOK.md](PILOT_RUNBOOK.md) for the contract, limitations and launch gates.
+The pilot API allocates 1 GiB for bounded media processing. Bounded media/export paths still need exact-candidate capacity validation before high concurrency. Sandbox labels isolate partner namespaces but do not replace a separate staging deployment. See [PUBLIC_API.md](PUBLIC_API.md), [COMPREHENSIVE_PLAN_EXECUTION.md](COMPREHENSIVE_PLAN_EXECUTION.md), and [PILOT_RUNBOOK.md](PILOT_RUNBOOK.md) for the contract, limitations and launch gates.
+
+
+## Organization and API/client additions
+
+The owner-key `/v1` profile remains compatible. The implemented organization foundation adds `/v1/partner`, authenticated `/me/organizations` administration, service principals/credentials, actual human memberships, scoped expiring delegations and immutable source-account/order bindings (migrations 089–092). Service credentials cannot create personal attestations. Current membership, credential and delegation policy is checked on reads, capture, replay, queued external delivery and streaming access; immutable participant and manifest history is retained after revocation. Enrollment/activation is a controlled-cohort operation, not public self-service.
+
+Migration 088 already supplies a commit-safe event stream through a transactional per-tenant counter and deferred source-transaction triggers. Preserve the legacy sequence endpoint and use the signed stream for dependable catch-up. The API/client candidate's materialized reconciliation snapshot extends that feed, rather than introducing another event authority. Existing signed cursors expire in at most seven days; the proposed 30-day replay objective requires its own retention and recovery evidence.
+
+Existing root signing, integrity-envelope jobs (migration 093), key/trust checks and independent verifiers must be reused. A verified signature authenticates particular bytes under a particular key; it does not prove physical packing truth or an independently trusted capture time. Configured assurance and protected storage/restore claims require current environment evidence.
+
+The client dashboard remains a read surface over authoritative canonical Proofs. Its Ready projection must require the applicable durable evidence, declaration and finalization receipts, while export generation and webhook delivery remain independent operational facts. Preserve legacy logical completion semantics without presenting unconfirmed legacy records as durable preservation.
+
+Rollback is configuration-led and uses a new-schema-aware compatibility image. Stop new admission or the affected connection/cohort, retain readable records, keep current grant/revocation enforcement, and let explicitly authorized preservation work reconcile already accepted evidence. Never drop additive tables, undo grants/revocations, delete pending journals, rewrite manifests or replace original object-version identities to obtain compatibility. See [release gates](api-client-release/RELEASE_GATES.md).

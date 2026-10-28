@@ -1250,6 +1250,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
 
       {route.name === "stores" ? (
         <ConnectedStoresScreen
+          api={api}
           onCreate={libraryProps.onCreate}
           intakeSettings={<IntakeSettingsPanel api={api} userId={session.userId} connections={connections} />}
           connectionPanel={<ConnectedAccountsPanel accounts={connectedAccounts} providers={connectedProviders} notice={connectedNotice} busy={busy}

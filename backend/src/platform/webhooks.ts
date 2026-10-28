@@ -18,6 +18,8 @@ import { requireBackgroundCredential } from './organization-access.js';
 
 export const EVENT_TYPES = [
   "proof.created",
+  "proof.updated",
+  "proof.external_binding_added",
   "participant.joined",
   "evidence.uploaded",
   "evidence.committed",
@@ -383,6 +385,8 @@ export async function dispatchWebhooks(
       status = await transport(url, body, {
         "Content-Type": "application/json",
         "PackProof-Event-Id": row.id,
+        "PackProof-Delivery-Id": row.delivery_id,
+        "PackProof-Attempt-Id": lease,
         "PackProof-Signature": signWebhook(
           decrypt(row.secret_ciphertext, row.webhook_id, config),
           timestamp,

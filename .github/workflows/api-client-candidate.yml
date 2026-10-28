@@ -1,0 +1,69 @@
+name: API client candidate gates
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'web/**'
+      - 'examples/api-client/**'
+      - '.github/workflows/api-client-candidate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: api-client-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  postgres-and-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: packproof_test
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: packproof_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - name: Install exact backend and shared dependencies
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix mobile
+      - name: Install bounded media validation tools
+        run: bash scripts/ci-install-media-tools.sh
+      - name: Typecheck backend and generated SDK
+        run: |
+          npm run typecheck --prefix backend
+          node backend/node_modules/typescript/bin/tsc -p examples/api-client/tsconfig.json
+      - name: Check generated contract drift and standalone client tests
+        run: |
+          node examples/api-client/generate.mjs --check
+          node --test examples/api-client/*.test.mjs
+      - name: PostgreSQL resync and HTTP authorization acceptance
+        working-directory: backend
+        env:
+          PACKPROOF_TEST_DATABASE_URL: postgres://packproof_test:synthetic_ci_only@localhost:5432/packproof_test
+        run: >-
+          npm test -- --run tests/proof-snapshots.test.ts tests/proof-search.test.ts
+          tests/partner-order-items.test.ts tests/commerce-connection-health.test.ts
+          tests/partner-webhook-operations.test.ts tests/api-client-routing.test.ts
+          tests/organization-foundation.test.ts tests/commit-safe-event-stream.test.ts
+          tests/partner-postgres-gate.test.ts
+          --pool=threads --reporter=default --reporter=junit
+          --outputFile=api-client-candidate.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-client-candidate-${{ github.sha }}
+          path: backend/api-client-candidate.xml

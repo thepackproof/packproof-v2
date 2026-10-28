@@ -347,7 +347,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ResolveProof"
                 }
               }
             }
@@ -484,7 +484,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PartnerProof"
                 }
               }
             }
@@ -631,7 +631,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Imported"
                 }
               }
             }
@@ -788,7 +788,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PartnerCaptureIntent"
                 }
               }
             }
@@ -935,7 +935,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Review"
                 }
               }
             }
@@ -1355,7 +1355,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookCreated"
                 }
               }
             }
@@ -1464,6 +1464,25 @@
         ],
         "parameters": [
           {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Signed 24-hour cursor bound to current principal/delegation and endpoint."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
             "name": "PackProof-Merchant-Id",
             "in": "header",
             "schema": {
@@ -1490,7 +1509,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PartnerWebhookPage"
                 }
               }
             }
@@ -1637,7 +1656,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookRevoked"
                 }
               }
             }
@@ -1743,7 +1762,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/OrganizationList"
                 }
               }
             }
@@ -1857,7 +1876,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/OrganizationCreated"
                 }
               }
             }
@@ -1993,7 +2012,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/EntitlementChanged"
                 }
               }
             }
@@ -2129,7 +2148,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MembershipCreated"
                 }
               }
             }
@@ -2265,7 +2284,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PrincipalCreated"
                 }
               }
             }
@@ -2411,7 +2430,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/CredentialIssued"
                 }
               }
             }
@@ -2547,7 +2566,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/DelegationCreated"
                 }
               }
             }
@@ -2683,7 +2702,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/IntegrationAccountCreated"
                 }
               }
             }
@@ -2829,7 +2848,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookRevoked"
                 }
               }
             }
@@ -2965,7 +2984,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookRevoked"
                 }
               }
             }
@@ -3101,7 +3120,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookRevoked"
                 }
               }
             }
@@ -3237,7 +3256,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookRevoked"
                 }
               }
             }
@@ -3353,7 +3372,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/OrganizationAdministration"
                 }
               }
             }
@@ -3469,7 +3488,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/OrganizationAudit"
                 }
               }
             }
@@ -3556,6 +3575,1416 @@
           }
         }
       }
+    },
+    "/v1/partner/proofs/search": {
+      "get": {
+        "operationId": "searchPartnerProofs",
+        "summary": "GET searchPartnerProofs",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Literal substring of Proof ID, order reference, item title or tracking number."
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "AWAITING_CAPTURE",
+                "IN_PROGRESS",
+                "READY",
+                "NEEDS_ATTENTION"
+              ]
+            },
+            "description": "Operational readiness projection; canonical ProofStatus is unchanged."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive UTC Proof creation date."
+          },
+          {
+            "name": "through",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive UTC Proof creation date, at or after from."
+          },
+          {
+            "name": "connectionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Existing source connection selector, never authorization."
+          },
+          {
+            "name": "integrationAccountId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Stable integration-account selector, never authorization."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Opaque signed cursor. Expiry requires a fresh search."
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofSearchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/proof-snapshots": {
+      "post": {
+        "operationId": "createProofSnapshot",
+        "summary": "POST createProofSnapshot",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pageSize": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 50
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofSnapshotMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a bounded one-hour REPEATABLE READ materialized reconciliation snapshot and matching committed feed boundary. Both proofs:read and events:read are required. At most four active snapshots per credential and 10,000 rows. No Idempotency-Key replay or automatic retry; a repeated successful request allocates a new snapshot.",
+        "x-packproof-required-scopes": [
+          "proofs:read",
+          "events:read"
+        ]
+      }
+    },
+    "/v1/partner/proof-snapshots/{snapshotId}": {
+      "get": {
+        "operationId": "getProofSnapshot",
+        "summary": "GET getProofSnapshot",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Opaque signed page cursor bound to the snapshot and current actor."
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofSnapshotPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Frozen rows do not grant ongoing access. Recheck current merchant, principal, credential, delegation and Proof policy. SNAPSHOT_EXPIRED requires restarting snapshot/resync. After stable pages, consume eventCursor and deduplicate logical event IDs.",
+        "x-packproof-required-scopes": [
+          "proofs:read",
+          "events:read"
+        ]
+      },
+      "delete": {
+        "operationId": "releaseProofSnapshot",
+        "summary": "DELETE releaseProofSnapshot",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "proofs:read",
+        "parameters": [
+          {
+            "name": "snapshotId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofSnapshotReleased"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Frozen rows do not grant ongoing access. Recheck current merchant, principal, credential, delegation and Proof policy. SNAPSHOT_EXPIRED requires restarting snapshot/resync. After stable pages, consume eventCursor and deduplicate logical event IDs.",
+        "x-packproof-required-scopes": [
+          "proofs:read",
+          "events:read"
+        ]
+      }
+    },
+    "/v1/partner/webhooks/{webhookId}/deliveries": {
+      "get": {
+        "operationId": "listPartnerWebhookDeliveries",
+        "summary": "GET listPartnerWebhookDeliveries",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Signed 24-hour cursor bound to current principal/delegation and endpoint."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerDeliveryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/webhooks/{webhookId}/deliveries/{deliveryId}": {
+      "get": {
+        "operationId": "getPartnerWebhookDelivery",
+        "summary": "GET getPartnerWebhookDelivery",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerDeliveryDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/webhooks/{webhookId}/rotate-secret": {
+      "post": {
+        "operationId": "rotatePartnerWebhookSecret",
+        "summary": "POST rotatePartnerWebhookSecret",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookRotation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Only current authorized origin principal/delegation may act on an active subscription. Secret-bearing replay is encrypted. Dead delivery replay preserves logical event and delivery IDs; retry signatures/attempt IDs are fresh."
+      }
+    },
+    "/v1/partner/webhooks/{webhookId}/deliveries/{deliveryId}/retry": {
+      "post": {
+        "operationId": "retryPartnerWebhookDelivery",
+        "summary": "POST retryPartnerWebhookDelivery",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "x-packproof-scope": "webhooks:manage",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "deliveryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success. Current merchant, credential and resource rights are rechecked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryRetry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "description": "Only current authorized origin principal/delegation may act on an active subscription. Secret-bearing replay is encrypted. Dead delivery replay preserves logical event and delivery IDs; retry signatures/attempt IDs are fresh."
+      }
+    },
+    "/v1/partner/proofs/{proofId}/recovery": {
+      "get": {
+        "operationId": "getPartnerProofRecovery",
+        "summary": "Read authorized durable preservation receipts",
+        "description": "Current partner Proof read authority is checked before access. Service credentials gain no human attestation authority. Lost commit/finalize responses are reconciled against these authoritative receipts.",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; selects an explicitly delegated merchant."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Required for partner credentials; exact active grant ID."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Capture capability and credential responses are sensitive and no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recovery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "x-packproof-scope": "proofs:read"
+      }
     }
   },
   "components": {
@@ -3630,10 +5059,12 @@
               "itemTitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 200
+                "maxLength": 200,
+                "description": "Required without items; otherwise derived from the first line by position."
               },
               "itemDescription": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 4000
               },
               "quantity": {
                 "type": "integer",
@@ -3677,10 +5108,29 @@
                   "minorUnits",
                   "currency"
                 ]
+              },
+              "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/PartnerOrderItem"
+                },
+                "description": "Authoritative lines; externalItemId and position must each be unique when supplied. If quantity is supplied at order level it must equal the line quantity sum."
               }
             },
-            "required": [
-              "itemTitle"
+            "required": [],
+            "anyOf": [
+              {
+                "required": [
+                  "itemTitle"
+                ]
+              },
+              {
+                "required": [
+                  "items"
+                ]
+              }
             ]
           }
         },
@@ -3945,7 +5395,19 @@
             "type": "array",
             "minItems": 1,
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "proof.created",
+                "participant.joined",
+                "evidence.uploaded",
+                "evidence.committed",
+                "capture.completed",
+                "shipment.updated",
+                "proof.finalized",
+                "proof.accessed",
+                "proof.external_binding_added",
+                "proof.updated"
+              ]
             }
           }
         },
@@ -4067,6 +5529,3619 @@
             "format": "date-time"
           }
         }
+      },
+      "Digest": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "const": "SHA-256"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "algorithm",
+          "sha256"
+        ]
+      },
+      "ProofStatus": {
+        "type": "string",
+        "enum": [
+          "OPEN",
+          "AWAITING_PARTICIPANT",
+          "READY_FOR_EVIDENCE",
+          "EVIDENCE_COMMITTED",
+          "FINALIZED"
+        ]
+      },
+      "Shipping": {
+        "type": "object",
+        "properties": {
+          "carrier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trackingNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shipmentDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "carrier",
+          "service",
+          "trackingNumber",
+          "shipmentDate"
+        ]
+      },
+      "TransactionItem": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "externalItemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": "integer"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sku": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unitValue": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "itemId",
+          "externalItemId",
+          "position",
+          "title",
+          "description",
+          "sku",
+          "quantity",
+          "unitValue",
+          "currency"
+        ]
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string"
+          },
+          "externalReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transactionDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "itemTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "itemDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "transactionValue": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "shipping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Shipping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proofId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proofStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sellerUserId": {
+            "type": "string"
+          },
+          "buyerUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provenance": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransactionItem"
+            }
+          },
+          "correctionPolicy": {
+            "type": "object",
+            "properties": {
+              "canCorrectOrderDetails": {
+                "type": "boolean"
+              },
+              "canCorrectShipping": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "canCorrectOrderDetails",
+              "canCorrectShipping",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "transactionId",
+          "externalReference",
+          "transactionDate",
+          "itemTitle",
+          "itemDescription",
+          "quantity",
+          "transactionValue",
+          "currency",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "metadata",
+          "shipping",
+          "proofId",
+          "proofStatus",
+          "sellerUserId",
+          "buyerUserId",
+          "provenance",
+          "items"
+        ]
+      },
+      "Participant": {
+        "type": "object",
+        "properties": {
+          "participantId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "const": "JOINED"
+          },
+          "invitationState": {
+            "const": "ACCEPTED"
+          },
+          "authorization": {
+            "const": "PARTICIPANT"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "participantId",
+          "userId",
+          "role",
+          "status",
+          "invitationState",
+          "authorization",
+          "joinedAt"
+        ]
+      },
+      "Evidence": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "evidenceType": {
+            "type": "string"
+          },
+          "clientReportedCapture": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "captureRegistrationTiming": {
+            "type": "string"
+          },
+          "capturedDurationMs": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "captureOrigin": {
+            "type": "string"
+          },
+          "captureSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureClient": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captureAssurance": {
+            "type": "string"
+          },
+          "validationStatus": {
+            "enum": [
+              "PENDING",
+              "COMMITTED",
+              "REJECTED"
+            ]
+          },
+          "submittedBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "committedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "objectKey": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "byteSize": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "digest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Digest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "evidenceId",
+          "evidenceType",
+          "clientReportedCapture",
+          "captureRegistrationTiming",
+          "capturedDurationMs",
+          "captureOrigin",
+          "captureSessionId",
+          "captureClient",
+          "captureAssurance",
+          "validationStatus",
+          "submittedBy",
+          "createdAt",
+          "receivedAt",
+          "committedAt",
+          "objectKey",
+          "contentType",
+          "sha256",
+          "byteSize",
+          "digest"
+        ]
+      },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string"
+          },
+          "inviteeIdentifier": {
+            "type": "string"
+          },
+          "inviteeUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "invitationId",
+          "inviteeIdentifier",
+          "inviteeUserId",
+          "status",
+          "createdAt",
+          "acceptedAt",
+          "expiresAt"
+        ]
+      },
+      "Attestation": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "ATTESTATION"
+          },
+          "attestationId": {
+            "type": "string"
+          },
+          "participantId": {
+            "type": "string"
+          },
+          "attestedBy": {
+            "type": "string"
+          },
+          "statement": {
+            "type": "string"
+          },
+          "relatedEvidenceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relatedEventId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/Digest"
+          },
+          "authorization": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          }
+        },
+        "required": [
+          "kind",
+          "attestationId",
+          "participantId",
+          "attestedBy",
+          "statement",
+          "relatedEvidenceId",
+          "relatedEventId",
+          "createdAt",
+          "digest"
+        ]
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "eventVersion": {
+            "type": "integer"
+          },
+          "actorUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "eventId",
+          "eventType",
+          "eventVersion",
+          "actorUserId",
+          "at",
+          "data"
+        ]
+      },
+      "ManifestSignature": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "signatureBase64": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "algorithm",
+          "keyId",
+          "signatureBase64",
+          "signedAt"
+        ]
+      },
+      "CanonicalProof": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "const": "packproof.proof.canonical/v1"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProofStatus"
+          },
+          "participationPolicy": {
+            "enum": [
+              "COUNTERPARTY_OPTIONAL",
+              "COUNTERPARTY_REQUIRED"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "manifestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identity": {
+            "type": "object",
+            "properties": {
+              "proofId": {
+                "type": "string"
+              },
+              "transactionId": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ProofStatus"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "finalizedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "proofId",
+              "transactionId",
+              "status",
+              "version",
+              "createdAt",
+              "updatedAt",
+              "finalizedAt"
+            ]
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/Transaction"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Participant"
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Invitation"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          },
+          "attestations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attestation"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "integrity": {
+            "type": "object",
+            "properties": {
+              "algorithm": {
+                "const": "SHA-256"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "evidenceId": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "byteSize": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "objectKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "evidenceId",
+                    "sha256",
+                    "byteSize",
+                    "objectKey"
+                  ]
+                }
+              },
+              "manifestId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "manifestSha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "algorithm",
+              "evidence",
+              "manifestId",
+              "manifestSha256"
+            ]
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "FACT"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "kind",
+                "name",
+                "at",
+                "data"
+              ]
+            }
+          },
+          "external": {
+            "type": "object",
+            "properties": {
+              "records": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "EXTERNAL"
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+                    },
+                    "source": {
+                      "enum": [
+                        "PARTICIPANT_SUPPLIED",
+                        "INTEGRATION"
+                      ]
+                    },
+                    "verifiedByPackProof": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "field",
+                    "value",
+                    "source",
+                    "verifiedByPackProof"
+                  ]
+                }
+              },
+              "references": {
+                "type": "array",
+                "items": {
+                  "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+                }
+              }
+            },
+            "required": [
+              "records",
+              "references"
+            ]
+          },
+          "shipmentObservations": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "shipmentSync": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "captureShipping": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "chronology": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "workflowType": {
+            "type": "string"
+          },
+          "workflowStage": {
+            "type": "string"
+          },
+          "custodyOutcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAction": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "transfers": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "continuityObservations": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "transactionContext": {
+            "$ref": "#/components/schemas/Transaction"
+          },
+          "shippingContext": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Shipping"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "externalBindings": {
+            "type": "array",
+            "items": {
+              "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+            }
+          },
+          "auditEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "commerceStages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommerceStage"
+            }
+          },
+          "orderContext": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "presentation": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "identifiers": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          }
+        },
+        "required": [
+          "schema",
+          "proofId",
+          "transactionId",
+          "status",
+          "participationPolicy",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "finalizedAt",
+          "manifestId",
+          "identity",
+          "transaction",
+          "participants",
+          "invitations",
+          "evidence",
+          "attestations",
+          "events",
+          "integrity",
+          "facts",
+          "external",
+          "shipmentObservations",
+          "shipmentSync",
+          "captureShipping",
+          "chronology",
+          "workflowType",
+          "workflowStage",
+          "custodyOutcome",
+          "nextAction",
+          "assets",
+          "observations",
+          "transfers",
+          "continuityObservations",
+          "transactionContext",
+          "shippingContext",
+          "externalBindings",
+          "auditEvents"
+        ]
+      },
+      "ProofEnvelope": {
+        "type": "object",
+        "properties": {
+          "apiVersion": {
+            "const": "v1"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "self": {
+                "type": "string"
+              },
+              "capture": {
+                "type": "string"
+              },
+              "viewer": {
+                "type": "string"
+              },
+              "manifest": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "self",
+              "capture",
+              "viewer",
+              "manifest"
+            ]
+          }
+        },
+        "required": [
+          "apiVersion",
+          "externalId",
+          "proof",
+          "links"
+        ]
+      },
+      "ProofPage": {
+        "type": "object",
+        "properties": {
+          "proofs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProofEnvelope"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "proofs",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "Manifest": {
+        "type": "object",
+        "properties": {
+          "manifestId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "manifest": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "canonicalJson": {
+            "type": "string"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/ManifestSignature"
+          }
+        },
+        "required": [
+          "manifestId",
+          "proofId",
+          "sha256",
+          "manifest",
+          "canonicalJson"
+        ]
+      },
+      "LegacyError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "LegacyEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "apiVersion": {
+            "const": "v1"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "proofId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "proofId"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "apiVersion",
+          "tenantId",
+          "createdAt",
+          "data"
+        ]
+      },
+      "LegacyEventPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LegacyEvent"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "WebhookCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "eventTypes",
+          "secret"
+        ]
+      },
+      "WebhookView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "eventTypes",
+          "createdAt",
+          "revokedAt"
+        ]
+      },
+      "WebhookPage": {
+        "type": "object",
+        "properties": {
+          "webhooks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookView"
+            }
+          }
+        },
+        "required": [
+          "webhooks"
+        ]
+      },
+      "WebhookRotation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "secret"
+        ]
+      },
+      "WebhookRevoked": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revoked": {
+            "const": true
+          }
+        },
+        "required": [
+          "id",
+          "revoked"
+        ]
+      },
+      "Delivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "webhookId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "sending",
+              "dead",
+              "delivered"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "lastStatus": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "webhookId",
+          "state",
+          "attempts",
+          "lastStatus",
+          "nextAttemptAt"
+        ]
+      },
+      "DeliveryPage": {
+        "type": "object",
+        "properties": {
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Delivery"
+            }
+          }
+        },
+        "required": [
+          "deliveries"
+        ]
+      },
+      "DeliveryRetry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "const": "pending"
+          }
+        },
+        "required": [
+          "id",
+          "state"
+        ]
+      },
+      "CaptureIntent": {
+        "type": "object",
+        "properties": {
+          "intentId": {
+            "type": "string"
+          },
+          "launchToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schema": {
+            "type": "string"
+          },
+          "allowedSurfaces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "launchPath": {
+            "type": "string"
+          },
+          "nativePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intentId",
+          "launchToken",
+          "expiresAt",
+          "schema",
+          "allowedSurfaces",
+          "launchPath",
+          "nativePath"
+        ]
+      },
+      "PreservationReceipt": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "const": 1
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "eventSha256": {
+            "type": "string"
+          },
+          "envelopeSha256": {
+            "type": "string"
+          },
+          "objectKey": {
+            "type": "string"
+          },
+          "objectVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preservedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/ManifestSignature"
+          }
+        },
+        "required": [
+          "version",
+          "operationId",
+          "eventSha256",
+          "envelopeSha256",
+          "objectKey",
+          "objectVersionId",
+          "preservedAt",
+          "signature"
+        ]
+      },
+      "RecoveryStatus": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "COMMITTED_PENDING_DURABILITY",
+              "PRESERVED",
+              "FAILED",
+              "LEGACY_UNCONFIRMED"
+            ]
+          },
+          "receipt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreservationReceipt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId",
+          "status",
+          "receipt"
+        ]
+      },
+      "Recovery": {
+        "type": "object",
+        "properties": {
+          "proofId": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/RecoveryStatus"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "evidenceId": {
+                      "type": "string"
+                    },
+                    "captureSessionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "stageId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "evidenceId",
+                    "captureSessionId"
+                  ]
+                }
+              ]
+            }
+          },
+          "declarations": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/RecoveryStatus"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "attestationId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "attestationId"
+                  ]
+                }
+              ]
+            }
+          },
+          "finalization": {
+            "$ref": "#/components/schemas/RecoveryStatus"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/RecoveryStatus"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "stageId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "stageId"
+                  ]
+                }
+              ]
+            }
+          },
+          "assurance": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proofId",
+          "evidence",
+          "declarations",
+          "finalization",
+          "stages",
+          "assurance"
+        ]
+      },
+      "Finalize": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/Manifest"
+          },
+          "recovery": {
+            "$ref": "#/components/schemas/RecoveryStatus"
+          }
+        },
+        "required": [
+          "proof",
+          "manifest"
+        ]
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          },
+          "integrity": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "manifestSha256": {
+                    "type": "string"
+                  },
+                  "manifestDigestValid": {
+                    "type": "boolean"
+                  },
+                  "signatureVerified": {
+                    "const": false
+                  },
+                  "signaturePresent": {
+                    "type": "boolean"
+                  },
+                  "signingKeyId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "manifestSha256",
+                  "manifestDigestValid",
+                  "signatureVerified",
+                  "signaturePresent",
+                  "signingKeyId"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shipmentIntegrity": {
+            "description": "JSON extension value; retain provenance. Client-supplied metadata is not a verified fact."
+          },
+          "accessHistory": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "retention": {
+            "$ref": "#/components/schemas/Retention"
+          },
+          "exportAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "proof",
+          "integrity",
+          "shipmentIntegrity",
+          "accessHistory",
+          "retention",
+          "exportAvailable"
+        ]
+      },
+      "CreatedAccessLink": {
+        "type": "object",
+        "properties": {
+          "accessLinkId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "recipientHint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastAccessedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "viewCount": {
+            "type": "integer"
+          },
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessLinkId",
+          "proofId",
+          "scope",
+          "recipientHint",
+          "createdAt",
+          "expiresAt",
+          "revokedAt",
+          "lastAccessedAt",
+          "viewCount",
+          "token",
+          "url"
+        ]
+      },
+      "EvidenceCommit": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer"
+          },
+          "validationStatus": {
+            "const": "COMMITTED"
+          },
+          "committedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          }
+        },
+        "required": [
+          "evidenceId",
+          "proofId",
+          "sha256",
+          "byteSize",
+          "validationStatus",
+          "committedAt",
+          "proof"
+        ]
+      },
+      "Discarded": {
+        "type": "object",
+        "properties": {
+          "discarded": {
+            "const": true
+          }
+        },
+        "required": [
+          "discarded"
+        ]
+      },
+      "AttestationCommit": {
+        "type": "object",
+        "properties": {
+          "attestation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Attestation"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "proofId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "proofId"
+                ]
+              }
+            ]
+          },
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          }
+        },
+        "required": [
+          "attestation",
+          "proof"
+        ]
+      },
+      "InvitationCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Invitation"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "proofId": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "proofId",
+              "token"
+            ]
+          }
+        ]
+      },
+      "PartnerProof": {
+        "type": "object",
+        "properties": {
+          "apiVersion": {
+            "const": "v1"
+          },
+          "profile": {
+            "const": "packproof.partner/v1"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "profile",
+          "merchantId",
+          "environment",
+          "proof"
+        ]
+      },
+      "ResolveProof": {
+        "type": "object",
+        "properties": {
+          "proofId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proofId"
+        ]
+      },
+      "PartnerCaptureIntent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CaptureIntent"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "proofId": {
+                "type": "string"
+              },
+              "merchantId": {
+                "type": "string"
+              },
+              "environment": {
+                "enum": [
+                  "sandbox",
+                  "live"
+                ]
+              },
+              "requiresAuthenticatedAttestation": {
+                "const": true
+              }
+            },
+            "required": [
+              "proofId",
+              "merchantId",
+              "environment",
+              "requiresAuthenticatedAttestation"
+            ]
+          }
+        ]
+      },
+      "PartnerOrderItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "externalItemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 1
+          },
+          "unitValue": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 900719925474.0991,
+            "multipleOf": 0.0001,
+            "description": "Optional declared line unit value in major currency units, at most four decimal places; requires currency. Not converted from order.amount.minorUnits."
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "unitValue"
+              ],
+              "properties": {
+                "unitValue": {
+                  "type": "number"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "currency"
+              ],
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "pattern": "^[A-Z]{3}$"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "enum": [
+              "AWAITING_CAPTURE",
+              "IN_PROGRESS",
+              "READY",
+              "NEEDS_ATTENTION"
+            ]
+          },
+          "reason": {
+            "enum": [
+              null,
+              "PRESERVATION_FAILED",
+              "LEGACY_UNCONFIRMED",
+              "FINALIZATION_INCOMPLETE",
+              "PRESERVATION_PENDING",
+              "CONFIRMATION_REQUIRED",
+              "CAPTURE_REQUIRED"
+            ]
+          },
+          "preserved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "reason",
+          "preserved"
+        ]
+      },
+      "ProofSearchItem": {
+        "type": "object",
+        "properties": {
+          "proofId": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProofStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "externalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "itemTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trackingNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "connectionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recordedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/Readiness"
+          },
+          "serverReceivedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Server receipt/commit time; never physical capture time."
+          }
+        },
+        "required": [
+          "proofId",
+          "transactionId",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "finalizedAt",
+          "externalId",
+          "itemTitle",
+          "trackingNumber",
+          "connectionId",
+          "provider",
+          "recordedBy",
+          "itemCount",
+          "serverReceivedAt",
+          "readiness"
+        ]
+      },
+      "ProofSearchResult": {
+        "type": "object",
+        "properties": {
+          "apiVersion": {
+            "const": "v1"
+          },
+          "schema": {
+            "const": "packproof.proof-search/v1"
+          },
+          "proofs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProofSearchItem"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "refreshedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cursorExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "schema",
+          "proofs",
+          "nextCursor",
+          "hasMore",
+          "refreshedAt",
+          "cursorExpiresAt"
+        ]
+      },
+      "ProofStateSnapshotRow": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.proof-state-summary/v1"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProofStatus"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "manifestSha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "externalBindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "integrationAccountId": {
+                  "type": "string"
+                },
+                "resourceType": {
+                  "type": "string"
+                },
+                "externalId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "integrationAccountId",
+                "resourceType",
+                "externalId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "proofId",
+          "transactionId",
+          "status",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "finalizedAt",
+          "manifestSha256",
+          "externalBindings"
+        ]
+      },
+      "ProofSnapshotMetadata": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.proof-snapshot/v1"
+          },
+          "rowSchema": {
+            "const": "packproof.proof-state-summary/v1"
+          },
+          "snapshotId": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "rowCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "eventCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "rowSchema",
+          "snapshotId",
+          "merchantId",
+          "environment",
+          "rowCount",
+          "pageSize",
+          "createdAt",
+          "expiresAt",
+          "eventCursor"
+        ]
+      },
+      "ProofSnapshotPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProofSnapshotMetadata"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "proofs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProofStateSnapshotRow"
+                }
+              },
+              "hasMore": {
+                "type": "boolean"
+              },
+              "nextCursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "proofs",
+              "hasMore",
+              "nextCursor"
+            ]
+          }
+        ]
+      },
+      "ProofSnapshotReleased": {
+        "type": "object",
+        "properties": {
+          "snapshotId": {
+            "type": "string"
+          },
+          "released": {
+            "const": true
+          }
+        },
+        "required": [
+          "snapshotId",
+          "released"
+        ]
+      },
+      "PartnerDelivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "eventCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "sending",
+              "delivered",
+              "dead"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastStatus": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "eventId",
+          "eventType",
+          "proofId",
+          "eventCreatedAt",
+          "state",
+          "attempts",
+          "lastStatus",
+          "nextAttemptAt",
+          "deliveredAt",
+          "retryable"
+        ]
+      },
+      "PartnerWebhookPage": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.webhook-subscriptions/v1"
+          },
+          "webhooks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookView"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "webhooks",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "PartnerDeliveryPage": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.webhook-deliveries/v1"
+          },
+          "webhookId": {
+            "type": "string"
+          },
+          "deliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerDelivery"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "webhookId",
+          "deliveries",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "PartnerDeliveryDetail": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "const": "packproof.webhook-delivery/v1"
+          },
+          "webhookId": {
+            "type": "string"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/PartnerDelivery"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "webhookId",
+          "delivery"
+        ]
+      },
+      "UploadTarget": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "boolean"
+          },
+          "method": {
+            "const": "PUT"
+          },
+          "url": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "method",
+          "url",
+          "headers"
+        ]
+      },
+      "EvidenceUpload": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "objectKey": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "evidenceType": {
+            "type": "string"
+          },
+          "validationStatus": {
+            "type": "string"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/UploadTarget"
+          }
+        },
+        "required": [
+          "evidenceId",
+          "proofId",
+          "objectKey",
+          "contentType",
+          "evidenceType",
+          "validationStatus",
+          "upload"
+        ]
+      },
+      "UploadParts": {
+        "type": "object",
+        "properties": {
+          "partSize": {
+            "const": 5242880
+          },
+          "maxParts": {
+            "type": "integer",
+            "maximum": 48
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "partNumber": {
+                  "type": "integer"
+                },
+                "byteSize": {
+                  "type": "integer"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "partNumber",
+                "byteSize",
+                "sha256"
+              ]
+            }
+          }
+        },
+        "required": [
+          "partSize",
+          "maxParts",
+          "parts"
+        ]
+      },
+      "CompletedUpload": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "readyToCommit": {
+            "const": true
+          }
+        },
+        "required": [
+          "evidenceId",
+          "byteSize",
+          "sha256",
+          "readyToCommit"
+        ]
+      },
+      "CaptureSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "proofId": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registrationTiming": {
+            "type": "string"
+          },
+          "client": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "workflowStep": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "ISSUED",
+              "RECORDED",
+              "UPLOADING",
+              "COMMITTED",
+              "CANCELLED"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recoverUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "byteSize": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "contentType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidenceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assurance": {
+            "type": "string"
+          },
+          "maxRecordingBytes": {
+            "type": "integer"
+          },
+          "maxRecordingSeconds": {
+            "type": "number"
+          },
+          "orderSnapshotId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orderSnapshotVersion": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "orderSnapshotSha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientReportedCapture": {},
+          "identifierPolicy": {}
+        },
+        "required": [
+          "id",
+          "proofId",
+          "stageId",
+          "registrationTiming",
+          "client",
+          "policyVersion",
+          "workflowStep",
+          "state",
+          "expiresAt",
+          "recoverUntil",
+          "recordedAt",
+          "sha256",
+          "byteSize",
+          "contentType",
+          "evidenceId",
+          "assurance",
+          "maxRecordingBytes",
+          "maxRecordingSeconds",
+          "orderSnapshotId",
+          "orderSnapshotVersion",
+          "orderSnapshotSha256",
+          "clientReportedCapture"
+        ]
+      },
+      "Cancelled": {
+        "type": "object",
+        "properties": {
+          "cancelled": {
+            "const": true
+          }
+        },
+        "required": [
+          "cancelled"
+        ]
+      },
+      "RetentionHold": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "reviewAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "releaseProtectUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "releasedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "createdBy",
+          "reason",
+          "scope",
+          "reviewAt",
+          "releaseProtectUntil",
+          "createdAt",
+          "releasedAt"
+        ]
+      },
+      "Retention": {
+        "type": "object",
+        "properties": {
+          "policyVersion": {
+            "const": 2
+          },
+          "standardWindowDays": {
+            "const": 90
+          },
+          "automaticDeletion": {
+            "const": false
+          },
+          "protectedUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "holds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RetentionHold"
+            }
+          },
+          "deletionRequests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "requestedBy": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "state",
+                "requestedBy",
+                "createdAt"
+              ]
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "eligibleForDeletionReview": {
+            "type": "boolean"
+          },
+          "eligibleForDisposition": {
+            "type": "boolean"
+          },
+          "dispositionState": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "policyVersion",
+          "standardWindowDays",
+          "automaticDeletion",
+          "protectedUntil",
+          "holds",
+          "deletionRequests",
+          "blockers",
+          "eligibleForDeletionReview",
+          "eligibleForDisposition",
+          "dispositionState"
+        ]
+      },
+      "HoldCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "HoldReleased": {
+        "type": "object",
+        "properties": {
+          "released": {
+            "const": true
+          }
+        },
+        "required": [
+          "released"
+        ]
+      },
+      "DeletionRequested": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "retention": {
+            "$ref": "#/components/schemas/Retention"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "retention"
+        ]
+      },
+      "ReceiverInvited": {
+        "type": "object",
+        "properties": {
+          "proofId": {
+            "type": "string"
+          },
+          "receiverUserId": {
+            "type": "string"
+          },
+          "invitationPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proofId",
+          "receiverUserId",
+          "invitationPath"
+        ]
+      },
+      "ReceiverAccepted": {
+        "type": "object",
+        "properties": {
+          "proofId": {
+            "type": "string"
+          },
+          "accepted": {
+            "const": true
+          }
+        },
+        "required": [
+          "proofId",
+          "accepted"
+        ]
+      },
+      "StageCreated": {
+        "type": "object",
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "RECEIPT",
+              "RETURN_PACKING",
+              "RETURN_RECEIPT"
+            ]
+          },
+          "attestation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stageId",
+          "type",
+          "attestation"
+        ]
+      },
+      "StageEvidence": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "PostgreSQL drivers may serialize bigint source sizes as decimal strings."
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "committedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "captureOrigin": {
+            "type": "string"
+          },
+          "captureSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capturedDurationMs": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ]
+          },
+          "captureRegistrationTiming": {
+            "type": "string"
+          },
+          "clientReportedCapture": {}
+        },
+        "required": [
+          "evidenceId",
+          "contentType",
+          "byteSize",
+          "sha256",
+          "committedAt",
+          "captureOrigin",
+          "captureSessionId",
+          "capturedDurationMs",
+          "captureRegistrationTiming",
+          "clientReportedCapture"
+        ]
+      },
+      "CommerceStage": {
+        "type": "object",
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manifest": {},
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StageEvidence"
+            }
+          }
+        },
+        "required": [
+          "stageId",
+          "type",
+          "actorUserId",
+          "createdAt",
+          "finalizedAt",
+          "sha256",
+          "manifest",
+          "evidence"
+        ]
+      },
+      "CommerceLifecycle": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "enum": [
+              "SELLER",
+              "BUYER"
+            ]
+          },
+          "proof": {
+            "$ref": "#/components/schemas/CanonicalProof"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommerceStage"
+            }
+          }
+        },
+        "required": [
+          "role",
+          "proof",
+          "stages"
+        ]
+      },
+      "StageUpload": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/UploadTarget"
+          }
+        },
+        "required": [
+          "evidenceId",
+          "upload"
+        ]
+      },
+      "StageCommitted": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidenceId",
+          "sha256"
+        ]
+      },
+      "StageFinalized": {
+        "type": "object",
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manifest": {},
+          "recovery": {
+            "$ref": "#/components/schemas/RecoveryStatus"
+          }
+        },
+        "required": [
+          "stageId",
+          "sha256",
+          "manifest",
+          "recovery"
+        ]
+      },
+      "OrganizationCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "MERCHANT",
+              "PARTNER"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "enabled": {
+            "const": false
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "environment",
+          "enabled"
+        ]
+      },
+      "OrganizationList": {
+        "type": "object",
+        "properties": {
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "MERCHANT",
+                    "PARTNER"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "environment": {
+                  "enum": [
+                    "sandbox",
+                    "live"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "role": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "name",
+                "environment",
+                "enabled",
+                "role"
+              ]
+            }
+          }
+        },
+        "required": [
+          "organizations"
+        ]
+      },
+      "EntitlementChanged": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "enabled"
+        ]
+      },
+      "MembershipCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "ADMIN",
+              "OPERATOR",
+              "REVIEWER"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "role"
+        ]
+      },
+      "PrincipalCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "principalType": {
+            "const": "SERVICE"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "principalType"
+        ]
+      },
+      "CredentialIssued": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "prefix",
+          "token",
+          "scopes",
+          "expiresAt"
+        ]
+      },
+      "DelegationCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "partnerOrganizationId": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "operatorUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "merchantId",
+          "partnerOrganizationId",
+          "scopes",
+          "operatorUserIds",
+          "expiresAt"
+        ]
+      },
+      "IntegrationAccountCreated": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "connectionStatus": {
+            "const": "NAMESPACE_ONLY"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "environment",
+          "connectionStatus"
+        ]
+      },
+      "OrganizationAdministration": {
+        "type": "object",
+        "properties": {
+          "memberships": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "userId",
+                "role",
+                "revokedAt"
+              ]
+            }
+          },
+          "principals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "revokedAt"
+              ]
+            }
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "principalId": {
+                  "type": "string"
+                },
+                "prefix": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Scope"
+                  }
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "principalId",
+                "prefix",
+                "scopes",
+                "expiresAt",
+                "lastUsedAt",
+                "revokedAt"
+              ]
+            }
+          },
+          "delegations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "partnerId": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Scope"
+                  }
+                },
+                "operatorUserIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "partnerId",
+                "scopes",
+                "operatorUserIds",
+                "expiresAt",
+                "revokedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "memberships",
+          "principals",
+          "credentials",
+          "delegations"
+        ]
+      },
+      "OrganizationAudit": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "merchant_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "actor_user_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "principal_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "credential_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "delegation_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                },
+                "resource_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "policy_version": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "merchant_id",
+                "actor_user_id",
+                "principal_id",
+                "credential_id",
+                "delegation_id",
+                "request_id",
+                "operation",
+                "resource_id",
+                "policy_version",
+                "created_at"
+              ]
+            }
+          }
+        },
+        "required": [
+          "events"
+        ]
       }
     }
   }

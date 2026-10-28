@@ -1,0 +1,357 @@
+{
+  "info": {
+    "name": "PackProof canonical API pilot",
+    "description": "Synthetic staging only. Store credentials in local secret variables, never export current secret values. Capture and deliberate confirmation occur in the authenticated host. This collection does not create human attestations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "apiOrigin",
+      "value": "https://api.example.test"
+    },
+    {
+      "key": "credential",
+      "value": "",
+      "type": "string",
+      "description": "Populate from a local secret or Vault; do not export credential values."
+    },
+    {
+      "key": "proofId",
+      "value": ""
+    },
+    {
+      "key": "merchantId",
+      "value": ""
+    },
+    {
+      "key": "delegationId",
+      "value": ""
+    },
+    {
+      "key": "operationKey",
+      "value": "synthetic-persisted-operation-1001"
+    },
+    {
+      "key": "eventCursor",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{credential}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Public candidate identity",
+      "request": {
+        "method": "GET",
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{apiOrigin}}/meta"
+      }
+    },
+    {
+      "name": "Legacy owner profile",
+      "item": [
+        {
+          "name": "Create/find canonical synthetic Proof",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{operationKey}}"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/proofs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalId\": \"sandbox-order-1001\",\n  \"transaction\": {\n    \"itemTitle\": \"Synthetic two-item parcel\",\n    \"quantity\": 3,\n    \"transactionValue\": 10,\n    \"currency\": \"USD\",\n    \"items\": [\n      {\n        \"title\": \"Synthetic item A\",\n        \"externalItemId\": \"LINE-A\",\n        \"position\": 1,\n        \"quantity\": 1,\n        \"sku\": \"SYNTHETIC-A\"\n      },\n      {\n        \"title\": \"Synthetic item B\",\n        \"externalItemId\": \"LINE-B\",\n        \"position\": 2,\n        \"quantity\": 2,\n        \"sku\": \"SYNTHETIC-B\"\n      }\n    ],\n    \"metadata\": {\n      \"source\": \"packproof-external-acceptance\",\n      \"synthetic\": true\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Read same Proof",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/proofs/{{proofId}}"
+          }
+        },
+        {
+          "name": "Search order/tracking/Proof",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/proofs/search?q={{proofId}}&state=READY&limit=20"
+          }
+        },
+        {
+          "name": "Read authoritative preservation receipts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/proofs/{{proofId}}/recovery"
+          }
+        },
+        {
+          "name": "Commit-safe catch-up",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/event-stream"
+          }
+        },
+        {
+          "name": "Download portable package",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/proofs/{{proofId}}/package"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organization partner profile",
+      "item": [
+        {
+          "name": "Import confirmed synthetic order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{operationKey}}"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proofs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"integrationAccountId\": \"replace-with-enrolled-account-id\",\n  \"externalId\": \"sandbox-order-1001\",\n  \"operatorMembershipId\": \"replace-with-active-operator-membership\",\n  \"transaction\": {\n    \"itemTitle\": \"Synthetic two-item parcel\",\n    \"quantity\": 3,\n    \"amount\": {\n      \"minorUnits\": \"1000\",\n      \"currency\": \"USD\"\n    },\n    \"items\": [\n      {\n        \"title\": \"Synthetic item A\",\n        \"externalItemId\": \"LINE-A\",\n        \"position\": 1,\n        \"quantity\": 1,\n        \"sku\": \"SYNTHETIC-A\"\n      },\n      {\n        \"title\": \"Synthetic item B\",\n        \"externalItemId\": \"LINE-B\",\n        \"position\": 2,\n        \"quantity\": 2,\n        \"sku\": \"SYNTHETIC-B\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Read canonical Proof with current grant",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proofs/{{proofId}}"
+          }
+        },
+        {
+          "name": "Search preserved Ready Proof",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proofs/search?q={{proofId}}&state=READY"
+          }
+        },
+        {
+          "name": "Read preservation receipts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proofs/{{proofId}}/recovery"
+          }
+        },
+        {
+          "name": "Create bounded reconciliation snapshot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/proof-snapshots",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pageSize\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Commit-safe catch-up",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/event-stream"
+          }
+        },
+        {
+          "name": "Webhook subscription diagnostics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "PackProof-Merchant-Id",
+                "value": "{{merchantId}}",
+                "disabled": false
+              },
+              {
+                "key": "PackProof-Delegation-Id",
+                "value": "{{delegationId}}",
+                "disabled": true
+              }
+            ],
+            "url": "{{apiOrigin}}/v1/partner/webhooks?limit=50"
+          }
+        }
+      ]
+    }
+  ]
+}

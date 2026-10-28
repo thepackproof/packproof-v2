@@ -1,3 +1,5 @@
+import { searchUserProofs } from './platform/proof-search.js';
+import { getCommerceConnectionHealth } from './domain/commerce-connection-health.js';
 import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
 import { rateLimit } from "express-rate-limit";
 import { ingressRateLimitOptions, ingressRatePolicies } from "./http/ingress-rate-limit.js";
@@ -1640,6 +1642,10 @@ export function createApp(deps: AppDependencies): Express {
     }),
   );
 
+  app.get("/me/proofs/search", asyncRoute(async (req, res) => {
+    res.json(await searchUserProofs(deps.db, deps.clock, bearerUser(req), req.query, process.env.PACKPROOF_EVENT_CURSOR_KEY ?? ''));
+  }));
+
   app.get(
     "/me/proofs",
     asyncRoute(async (req, res) => {
@@ -1702,6 +1708,10 @@ export function createApp(deps: AppDependencies): Express {
       res.json({ connections });
     }),
   );
+
+  app.get("/me/commerce-connections/:connectionId/health", asyncRoute(async (req, res) => {
+    res.json(await getCommerceConnectionHealth(deps.db, deps.clock, bearerUser(req), req.params.connectionId, integrations, deps.devAuth ? undefined : commerceAutomationProvidersFromEnv()));
+  }));
 
   app.post("/me/commerce-connections/:connectionId/automation", asyncRoute(async (req, res) => {
     res.json(await setCommerceAutomation(deps.db, deps.clock, bearerUser(req), req.params.connectionId, req.body?.enabled, integrations, deps.devAuth ? undefined : commerceAutomationProvidersFromEnv()));

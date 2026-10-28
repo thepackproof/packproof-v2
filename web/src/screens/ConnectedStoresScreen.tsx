@@ -1,3 +1,5 @@
+import type { PackProofApi } from '../api/client';
+import { ConnectionHealthPanel } from './ConnectionHealthPanel';
 import { cloneElement, isValidElement, type ReactNode } from "react";
 import type { CommerceConnectionView, CommerceSyncView, EbayMarketplaceView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
@@ -5,6 +7,7 @@ import { Glyph } from "../site/Brand";
 import { ConnectedAccountsPanel, type ConnectedAccountsPanelProps } from "./ConnectedAccountsPanel";
 
 export function ConnectedStoresScreen(props: {
+  api?: PackProofApi;
   intakeSettings?: ReactNode;
   connectionPanel?: ReactNode;
   connections: CommerceConnectionView[];
@@ -30,6 +33,7 @@ export function ConnectedStoresScreen(props: {
     {props.error && <div className="banner banner-error" role="alert">{props.error}</div>}
     {props.lastSync && <p className="banner banner-info" role="status">Order check finished: {props.lastSync.eligibleCount} ready to pack, {props.lastSync.createdProofCount} new Proofs prepared.</p>}
     {props.loading ? <p role="status">Loading Connections…</p> : panel}
+    {import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD === 'true' && props.api && <ConnectionHealthPanel api={props.api} connections={props.connections} busy={props.busy} onSync={props.onSync} onAutomation={props.onAutomation} />}
     {props.intakeSettings}
   </main>;
 }
