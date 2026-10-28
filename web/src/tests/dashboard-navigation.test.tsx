@@ -35,6 +35,10 @@ it('passes bounded URL filters and account context without loading every legacy 
   vi.stubGlobal('fetch', fetcher);
   render(<App />);
   await screen.findByRole('region', { name: 'Dashboard integration fixture' });
+  // Signal's mobile shell overrides sidebar padding with !important. A desktop
+  // dashboard must use the workstation shell as well as desktop navigation.
+  expect(document.querySelector('.workspace-shell')).not.toHaveClass('signal-shell');
+  expect(document.querySelector('.workspace-shell')).not.toHaveClass('mobile-task-shell');
   expect(JSON.parse(screen.getByTestId('dashboard-filters').textContent!)).toMatchObject({
     q: 'ORDER-1', state: 'READY', from: '2026-10-01', through: '2026-10-28', connectionId: 'connection_a', limit: 50,
   });

@@ -946,7 +946,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={() => void requestSignOut()} /></Suspense>;
 
   return (
-    <div className={`app-shell workspace-shell${SIGNAL_ENABLED ? " signal-shell" : ""}${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
+    <div className={`app-shell workspace-shell${SIGNAL_ENABLED && mobileTask ? " signal-shell" : ""}${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
       <Onboarding key={`${session.apiBaseUrl}:${session.userId}`} api={api} firstExperience={firstExperience} onState={setExperienceState} accountKey={`${session.apiBaseUrl}:${session.userId}`} dashboard={route.name==='proofs'} ready={!busy} onDashboard={()=>go('/proofs')} onCreate={()=>go('/new')} onViewProof={id=>go(`/proofs/${encodeURIComponent(id)}`)} capture={route.name==='station'} />
         {(route.name==='proofs'||route.name==='create')&&<CompanionBridge api={api} userId={session.userId} connections={connections}/>}
         {route.name==='proof'&&proof?.status==='READY_FOR_EVIDENCE'&&proof.workflowType==='COMMERCE_SALE'&&proof.participationPolicy==='COUNTERPARTY_OPTIONAL'&&<SelectedOrderHandoff key={proof.proofId} api={api} userId={session.userId} transactionId={proof.transaction.transactionId}/>}
