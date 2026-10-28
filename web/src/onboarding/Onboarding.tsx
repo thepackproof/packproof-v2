@@ -3,17 +3,29 @@ import { createPortal } from 'react-dom';
 import { OnboardingController, STEPS, type OnboardingState, type Transport } from '../../../packages/onboarding/model';
 import './onboarding.css';
 export const replayTutorial=()=>window.dispatchEvent(new Event('packproof:replay-tutorial'));
+const dashboardTourIsOpen=()=>Boolean(document.querySelector('[data-dashboard-tour-layer] [aria-modal="true"]'));
+function useDashboardTourIsOpen() {
+ const [active,setActive]=useState(dashboardTourIsOpen);
+ useEffect(()=>{const update=()=>setActive(dashboardTourIsOpen());const observer=new MutationObserver(update);observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-modal']});update();return()=>observer.disconnect();},[]);
+ return active;
+}
 export function Onboarding({api,accountKey,dashboard,ready=true,onDashboard,onCreate,onViewProof,capture=false,secured=false,firstExperience=false,onState}:{api:Transport;accountKey:string;dashboard:boolean;ready?:boolean;onDashboard:()=>void;onCreate:()=>void;onViewProof:(id:string)=>void;capture?:boolean;secured?:boolean;firstExperience?:boolean;onState?:(state:OnboardingState|null)=>void}) {
  const [controller]=useState(()=>new OnboardingController(api,{read:async()=>localStorage.getItem(`packproof:onboarding:${accountKey}`),write:async value=>{localStorage.setItem(`packproof:onboarding:${accountKey}`,value);}},{autoTourEnabled:!firstExperience}));
  const [,render]=useState(0);const [captureSecured,setCaptureSecured]=useState(false);const [cameraDismissed,setCameraDismissed]=useState(false);const [securedDismissed,setSecuredDismissed]=useState(false);
  const callbacks=useRef({onDashboard,onCreate,onViewProof});callbacks.current={onDashboard,onCreate,onViewProof};
  useEffect(()=>{const off=controller.subscribe(()=>render(n=>n+1));void controller.load();const refresh=()=>void controller.refresh();const saved=()=>{setCaptureSecured(true);setCameraDismissed(true);refresh();};window.addEventListener('packproof:capture-secured',saved);const replay=()=>{callbacks.current.onDashboard();controller.start(true);};window.addEventListener('online',refresh);window.addEventListener('focus',refresh);window.addEventListener('packproof:replay-tutorial',replay);const timer=setInterval(refresh,15000);return()=>{off();controller.stop();clearInterval(timer);window.removeEventListener('packproof:capture-secured',saved);window.removeEventListener('online',refresh);window.removeEventListener('focus',refresh);window.removeEventListener('packproof:replay-tutorial',replay);};},[controller]);
  const {state,step,open,replay,error}=controller.snapshot;
+ const dashboardTourActive=useDashboardTourIsOpen();
+ const [overlayPermitted,setOverlayPermitted]=useState(false);
+ // A delayed onboarding response can arrive while the user starts the dashboard
+ // tour. Defer the generic overlay until that portal has committed so the two
+ // focus/inert owners never mount together, even in the same React batch.
+ useEffect(()=>{setOverlayPermitted(false);if(!open||!dashboard||!ready||dashboardTourActive)return;const timer=window.setTimeout(()=>{if(!dashboardTourIsOpen())setOverlayPermitted(true);},0);return()=>window.clearTimeout(timer);},[open,dashboard,ready,dashboardTourActive]);
  const stateCallback=useRef(onState);stateCallback.current=onState;
  useEffect(()=>{stateCallback.current?.(error?null:state);},[state,error]);
  useEffect(()=>{if(dashboard&&ready&&!open)controller.start();},[controller,dashboard,ready,state?.onboarding_completed,state?.current_version,open]);
  const coaching=!firstExperience&&state?.onboarding_enrolled&&!state.first_proof_coaching_completed&&!open;
- return <>{open&&dashboard&&ready&&<OnboardingOverlay step={step} replay={replay} onViewed={()=>controller.viewed()} onBack={()=>controller.move(-1)} onNext={()=>{if(step===STEPS.length-1){controller.finish();callbacks.current.onCreate();}else controller.move(1);}} onSkip={()=>{if(firstExperience)window.dispatchEvent(new Event('packproof:guidance-dismissed'));controller.finish(true);}}/>}
+ return <>{open&&dashboard&&ready&&overlayPermitted&&!dashboardTourActive&&!dashboardTourIsOpen()&&<OnboardingOverlay step={step} replay={replay} onViewed={()=>controller.viewed()} onBack={()=>controller.move(-1)} onNext={()=>{if(step===STEPS.length-1){controller.finish();callbacks.current.onCreate();}else controller.move(1);}} onSkip={()=>{if(firstExperience)window.dispatchEvent(new Event('packproof:guidance-dismissed'));controller.finish(true);}}/>}
  {coaching&&state.first_proof_completed&&state.first_proof_id?<aside className="onboarding-coach" role="status"><strong>Your first Proof is complete.</strong><div><button onClick={()=>{controller.dismissCoaching();callbacks.current.onViewProof(state.first_proof_id!);}}>View Proof</button><button aria-label="Dismiss guidance" onClick={()=>controller.dismissCoaching()}>Dismiss</button></div></aside>:coaching&&capture&&!cameraDismissed?<aside className="onboarding-coach" role="status"><span>Keep recording while you pack. One continuous capture preserves the sequence.</span><button onClick={()=>setCameraDismissed(true)}>Got it</button><button onClick={()=>controller.dismissCoaching()}>Dismiss guidance</button></aside>:coaching&&(secured||captureSecured)&&!securedDismissed?<aside className="onboarding-coach" role="status"><strong>Capture secured locally</strong><p>Keep this tab open while your recording uploads. Reopen this browser on this device to check recovery if the tab closes.</p><button onClick={()=>setSecuredDismissed(true)}>Got it</button><button onClick={()=>controller.dismissCoaching()}>Dismiss guidance</button></aside>:null}</>;
 }
 export function OnboardingOverlay({step,replay,onViewed,onBack,onNext,onSkip}:{step:number;replay:boolean;onViewed:()=>void;onBack:()=>void;onNext:()=>void;onSkip:()=>void}) {

@@ -3,6 +3,7 @@ import type { PackProofApi } from "../api/client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ProofCollectionItem } from "../api/types";
 import type { ProofListView } from "../proof-list-state";
+import type { ProofSearchQuery } from '../../../packages/evidence-contracts/api-dashboard';
 import { IconSearch } from "../components/Icons";
 import { Notice } from "../components/Notice";
 import { WorkstationProofTable } from "../components/WorkstationProofTable";
@@ -15,6 +16,14 @@ export function ProofsScreen(props: {
   taskBusy?: boolean;
   onNextTask?: (proof: ProofCollectionItem) => void;
   api?: PackProofApi;
+  accountKey?: string;
+  initialFilters?: ProofSearchQuery;
+  onFiltersChange?: (filters: ProofSearchQuery) => void;
+  refreshVersion?: number;
+  onOpenConnections?: () => void;
+  onOpenOrders?: () => void;
+  onOpenUploads?: () => void;
+  onOpenActivity?: () => void;
   proofs: ProofCollectionItem[];
   readyOrders?: ReactNode;
   view: ProofListView;
@@ -52,7 +61,12 @@ export function ProofsScreen(props: {
   useEffect(() => setQuery(props.query), [props.query]);
   const rows = [...new Map(props.proofs.map(item => [item.proofId, item])).values()];
   if (import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD === 'true' && !props.mobileTask && props.api)
-    return <ClientProofDashboard api={props.api} initialQuery={props.query} onOpenProof={props.onOpenProof} onCreate={props.onCreate} />;
+    return <ClientProofDashboard api={props.api} accountKey={props.accountKey}
+      initialQuery={props.query} initialView={props.view} initialFilters={props.initialFilters}
+      onFiltersChange={props.onFiltersChange} refreshVersion={props.refreshVersion} readyOrders={props.readyOrders}
+      onOpenProof={props.onOpenProof} onCreate={props.onCreate}
+      onOpenConnections={props.onOpenConnections} onOpenOrders={props.onOpenOrders}
+      onOpenUploads={props.onOpenUploads} onOpenActivity={props.onOpenActivity} />;
   const empty = !props.loading && !props.error && !rows.length;
   return <main className="page library-page workstation-proof-page" aria-busy={props.loading}>
     <header className="workstation-page-heading"><div><span className="workstation-eyebrow">Your evidence, together.</span><h1 className="page-title">Your Proofs</h1><p>Shipment evidence, organized and ready to review.</p></div><button data-onboarding="create capture" className="btn" onClick={props.onCreate}><Glyph name="plus" size={16} />New Proof</button></header>

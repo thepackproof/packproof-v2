@@ -29,6 +29,7 @@ export default defineConfig({
   ...productionConfig,
   define: {
     ...productionConfig.define,
+    "import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD": JSON.stringify("true"),
     "import.meta.env.VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE": JSON.stringify("true"),
     "import.meta.env.VITE_PACKPROOF_API_BASE_URL": JSON.stringify("http://127.0.0.1:5180/__review-api"),
     "import.meta.env.VITE_PACKPROOF_AUTH_MODE": JSON.stringify("dev"),

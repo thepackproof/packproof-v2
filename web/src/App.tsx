@@ -31,6 +31,7 @@ import { clearViewState, saveNavigationContext, setNavigationScope } from "./nav
 import { ConnectedAccountsPanel } from "./screens/ConnectedAccountsPanel";
 import { preserveCapture, recoverCapture, captureQueueKey } from "./capture-queue";
 import { ProofsScreen } from "./screens/ProofsScreen";
+import { dashboardHref, readDashboardFilters } from './screens/dashboard-state';
 import { HomeScreen } from "./screens/HomeScreen";
 import { OrdersScreen } from "./screens/OrdersScreen";
 import { UploadsScreen } from "./screens/UploadsScreen";
@@ -735,7 +736,11 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       setLoading(true);
       setError(null);
       rememberProofListState(`${session.apiBaseUrl}.${session.userId}`, { view: route.view, query: route.query });
-      void Promise.all([api.listProofs({ view: "all", q: route.query }), listRecoverableRecordings(session.userId, api).catch(() => [])])
+      if (import.meta.env.VITE_PACKPROOF_CLIENT_DASHBOARD === 'true' && !mobileTask) {
+        // The dashboard owns its bounded, authorized search. Avoid fetching every
+        // legacy list page or duplicating local recovery reads in this view.
+        finished();
+      } else void Promise.all([api.listProofs({ view: "all", q: route.query }), listRecoverableRecordings(session.userId, api).catch(() => [])])
         .then(([listed, local]) => {
           if (cancelled) return;
           const rows = listed.proofs.map(item => applyLocalWork(item, local.find(recording => recording.proofId === item.proofId)));
@@ -971,7 +976,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {!mobileTask && route.name === "activity" && <NotificationsScreen invitations={invitations} loading={loading} error={error} onRetry={libraryProps.onRetry} onOpenInvitation={libraryProps.onOpenInvitation} />}
       <LocalRecordingRecovery visible={route.name === "account" || route.name === "uploads"} key={session.userId} api={api} userId={session.userId} onRecordingsChange={onRecordingsChange} onOpen={id => go(`/proofs/${encodeURIComponent(id)}`)} />
 
-      {route.name === "proofs" ? <ProofsScreen api={api} {...libraryProps} mobileTask={mobileTask} taskBusy={taskBusy} onNextTask={item => void openMobileTask(item)} readyOrders={!mobileTask && <ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />} /> : null}
+      {route.name === "proofs" ? <ProofsScreen key={`proofs:${session.apiBaseUrl}:${session.userId}`} api={api} {...libraryProps}
+        accountKey={`${session.apiBaseUrl}:${session.userId}`}
+        initialFilters={readDashboardFilters(window.location.search, { view: route.view, query: route.query })}
+        onFiltersChange={filters => go(dashboardHref(filters))} refreshVersion={listRetry}
+        onOpenConnections={() => go('/stores')} onOpenOrders={() => go('/fulfillment')}
+        onOpenUploads={() => go('/uploads')} onOpenActivity={() => go('/activity')}
+        mobileTask={mobileTask} taskBusy={taskBusy} onNextTask={item => void openMobileTask(item)} readyOrders={!mobileTask && <ReadyIntakeOrders api={api} userId={session.userId} onRecord={snapshot=>{setAcceptedIntakeSnapshot(snapshot);go(`/proofs/${encodeURIComponent(snapshot.proofId)}/capture`);}} />} /> : null}
 
       {route.name === "receipt" ? (
         <ReceiptScreen
