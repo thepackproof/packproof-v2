@@ -1,0 +1,82 @@
+{
+  "schema": "packproof.m2-envelope-engineering-checkpoint.v1",
+  "recordedDate": "2026-10-22",
+  "api": {
+    "pullRequest": 125,
+    "head": "a06337872b23c7ae5255b3139b52fa446217528a",
+    "merge": "36c6951a948c4ede3a103760f82dbd71ae693d94",
+    "identicalMergeTree": "64b5db628587c6fd445f7a1c77757209852a87a5",
+    "ci": {
+      "run": 39846932277,
+      "backendJob": 120062961073,
+      "backendPassed": 1513,
+      "backendSkipped": 17,
+      "conformanceRun": 39846932412,
+      "conformanceJob": 120062566693,
+      "typescriptPassed": 89,
+      "legacyPythonPassed": 32,
+      "foundationRun": 39846932215,
+      "codeqlRun": 39846932169,
+      "status": "PASSED"
+    },
+    "image": {
+      "source": "99e5283be1b117f4cf5a393d1850ccfab5992b58",
+      "digest": "sha256:7c11381d50533186a077af3ed3d95b21b00e290c0eec52a5fc62635af4e9bc4b",
+      "buildProject": "packproof-v2-staging-api",
+      "buildUuid": "ff20a732-0cc1-4ab3-898e-47ea6960cd2c",
+      "packaging": "PASSED",
+      "migrationCount": 94,
+      "migrationSha256": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9",
+      "scanStatus": "COMPLETE",
+      "scanFindings": {},
+      "scanCompletedAt": "2026-10-22T20:06:05Z",
+      "sourceToMergedHeadChanges": "Only tests, documentation and CI setup; no application, Docker or migration changes."
+    }
+  },
+  "timestamp": {
+    "pullRequest": 126,
+    "state": "DRAFT",
+    "source": "d792384a5173408ca01087f1d6168e3361ce90c6",
+    "tree": "c482a6125a8a8f3e22daf87c20699b581806bf30",
+    "ciRun": 39848195239,
+    "backendJob": 120067306600,
+    "conformanceRun": 39848195071,
+    "conformanceJob": 120067019267,
+    "conformancePassed": 22,
+    "scope": [
+      "RFC 3161 request and response validation",
+      "Explicit bounded HTTPS TSA transport",
+      "OpenSSL signature, ESS, EKU and path verification",
+      "Independent Python verification",
+      "Exact timestamp material in package exports",
+      "Revocation or trust changes abort exports"
+    ],
+    "remaining": [
+      "Durable request/result persistence and worker scheduling",
+      "Runtime and HTTP integration",
+      "Container packaging and deployed acceptance",
+      "Explicit validated provider configuration"
+    ],
+    "backendPassed": 1535,
+    "backendSkipped": 17
+  },
+  "production": {
+    "changedByTheseCandidates": false,
+    "taskDefinitionRevision": 49,
+    "source": "399f306a2fdac37511c8659c73d5a059dd759b7a",
+    "image": "sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54",
+    "organizationAndEnvelopeActivation": false
+  },
+  "fullPlanComplete": false,
+  "limitations": [
+    "Synthetic fixtures do not establish actual browser/Android capture acceptance or merchant adoption.",
+    "No production TSA is configured.",
+    "Hosted authorization and separate production authority/protection still require acceptance.",
+    "Remaining merchant usage accounting and demand/pilot-dependent milestones are not claimed complete."
+  ],
+  "environment": {
+    "localExecution": "Blocked after environment refresh by invalid Windows sandbox URI file:///workspace.",
+    "browserInspection": "Unavailable without originating connected browser context.",
+    "oauthErrorRootCause": "Not determined; GitHub connector operations succeeded after the pause."
+  }
+}

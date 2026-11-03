@@ -2,6 +2,27 @@
 
 The owner authorized completion of the full release. This supersedes earlier authorization limits; it does not turn incomplete acceptance evidence into a pass. The completed production foundation release is recorded below. Earlier checkpoints describe their state at the time.
 
+## Merged envelope API and timestamp continuation - 22 October 2026
+
+PR #125 merged as `36c6951a948c4ede3a103760f82dbd71ae693d94`; its tree is identical
+to final candidate `a06337872b23c7ae5255b3139b52fa446217528a`. Full CI passed 1,513
+backend checks (17 skipped), web/mobile, PostgreSQL invariants, security and
+deployment gates. Envelope conformance passed 89 TypeScript checks and 32 legacy
+Python checks. The container scan completed with no findings. The final changes
+following the image source affect only tests, docs and CI setup.
+
+Draft PR #126 continues C03-03. Source `d792384a5173408ca01087f1d6168e3361ce90c6`
+passed 22 real Linux timestamp checks and full CI with 1,535 backend checks (17
+skipped). It includes independent Python verification and package timestamp
+material. Durable timestamp persistence, worker/runtime/HTTP integration and
+hosted acceptance remain open. The [checkpoint](m2-envelope-engineering-checkpoint-2026-10-22.json)
+records exact source, image and job identities and the remaining release gates.
+
+Production remains the inactive bridge at task revision 49. No organization,
+envelope or timestamp feature was activated by these engineering changes. Actual
+device and consenting-merchant acceptance, protected production authority and
+merchant usage accounting remain unresolved parts of the full plan.
+
 ## Gated envelope HTTP and worker implementation - 22 October 2026
 
 The current development candidate adds first-party human admission, status and

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PackProof independent offline ZIP verifier v1.4.0 (Python 3.10+, OpenSSL for legacy signatures).
+"""PackProof independent offline ZIP verifier v1.5.0 (Python 3.10+, OpenSSL for signatures and RFC 3161).
 Never extracts archive entries, executes package content, or opens network connections.
 Trust lists must be obtained and authenticated separately from the package.
 """
@@ -20,7 +20,7 @@ import sys
 import tempfile
 import zipfile
 
-VERSION = '1.4.0'
+VERSION = '1.5.0'
 MAX_BYTES = 220 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
 MAX_ENTRIES = 4096
@@ -451,7 +451,7 @@ def verify_lifecycle_snapshot(package, metadata, name_set, hashes, read_json, st
 
 def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
            authority_key_path=None, authority_key_id=None, expected_snapshot=None,
-           expected_proof=None, expected_tenant=None, envelope_trust_path=None):
+           expected_proof=None, expected_tenant=None, envelope_trust_path=None, timestamp_trust_path=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     if trust_path and registry_path:
         fail('INVALID_TRUST_REGISTRY', 'Choose a legacy trust list or a signed registry, not both')
@@ -499,14 +499,14 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
                 fail('UNSUPPORTED_CONTEXT', 'This profile requires its separately authenticated envelope trust file and does not assert a tenant or current lifecycle head')
             try:
                 from envelope import verify_package
-                result = verify_package(package, name_set, read, envelope_trust_path, now, expected_proof, expected)
+                result = verify_package(package, name_set, read, envelope_trust_path, now, expected_proof, expected, timestamp_trust_path)
                 result['verifierVersion'] = VERSION
                 return result
             except ImportError:
                 fail('SIGNATURE_UNCHECKED', 'Install verifier/requirements-envelope.txt to verify the additive envelope profile')
             except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
                 fail('INVALID_INTEGRITY_PROFILE', 'Malformed, substituted or unsupported integrity profile')
-        if envelope_trust_path:
+        if envelope_trust_path or timestamp_trust_path:
             fail('UNSUPPORTED_CONTEXT', 'Envelope trust cannot authenticate a legacy package')
         if not isinstance(package, dict) or package.get('schema') not in ('packproof.proof-package.v1', 'packproof.disclosure-package.v1'):
             fail('UNSUPPORTED_VERSION', 'Unsupported Proof package version')
@@ -693,6 +693,9 @@ def render_html_report(result):
         ('Original files verified', result.get('evidenceVerified', 0)),
         ('Later-stage files checked', result.get('lifecycleEvidenceVerified', 0)),
         ('Signature verified', 'Yes' if result.get('signatureVerified') else 'No'),
+        ('RFC 3161 timestamp', result.get('timestamp', 'NOT_PRESENT')),
+        ('TSA time', result.get('timestampValidation', {}).get('generatedAt', 'Not established')),
+        ('Timestamp revocation knowledge', result.get('timestampValidation', {}).get('revocationKnowledge', 'Not established')),
         ('Trust freshness', result.get('trust', {}).get('status', 'Not checked')),
         ('Trust snapshot expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
         ('Signed supplement chain', result.get('supplements', {}).get('status', 'Not checked')),
@@ -745,6 +748,7 @@ def main(argv=None):
     parser.add_argument('--expected-tenant-id', help='Required authenticated tenant identity; unsupported human-only profiles fail closed')
     parser.add_argument('--trust-list', help='Separately obtained authenticated trust-list JSON; never use a package-included key')
     parser.add_argument('--envelope-trust', help='Separately authenticated issuer/key history for the additive JCS/ES256 profile')
+    parser.add_argument('--timestamp-trust', help='Separately authenticated RFC 3161 root/signer pins and current review snapshot')
     parser.add_argument('--trust-registry', help='Signed, dated registry JSON authenticated with an independently pinned authority')
     parser.add_argument('--trust-authority-key', help='Independently pinned registry-authority public PEM file, outside the archive')
     parser.add_argument('--trust-authority-key-id', help='Independently obtained identity of the pinned registry authority')
@@ -763,7 +767,7 @@ def main(argv=None):
                         registry_path=args.trust_registry, authority_key_path=args.trust_authority_key,
                         authority_key_id=args.trust_authority_key_id, expected_snapshot=args.expected_lifecycle_snapshot_sha256,
                         expected_proof=args.expected_proof_id, expected_tenant=args.expected_tenant_id,
-                        envelope_trust_path=args.envelope_trust)
+                        envelope_trust_path=args.envelope_trust, timestamp_trust_path=args.timestamp_trust)
         exit_code = 0 if result['status'] in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') else 2
     except VerificationError as error:
         result = {'verifierVersion': VERSION, 'status': error.status, 'message': str(error)}

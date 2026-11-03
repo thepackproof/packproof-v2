@@ -53,7 +53,7 @@ def json_value(data):
         raise ValueError('Non-finite JSON value')
     return json.loads(data.decode('utf-8'), object_pairs_hook=pairs, parse_constant=invalid)
 
-def verify_package(package, names, read, trust_path, now, expected_proof=None, expected_digest=None):
+def verify_package(package, names, read, trust_path, now, expected_proof=None, expected_digest=None, timestamp_trust_path=None):
     import rfc8785
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import hashes, serialization
@@ -61,8 +61,10 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
 
     exact(package, 'schema proofId envelopePath coveragePath timestamp')
     check(package['schema'] == PACKAGE and identifier(package['proofId']) and package['envelopePath'] == 'integrity/envelope.jws.json' and package['coveragePath'] == 'integrity/coverage.json', 'Invalid package profile')
-    exact(package['timestamp'], 'state')
-    check(package['timestamp']['state'] in ('NOT_PRESENT', 'PENDING'), 'Unvalidated timestamp assertion')
+    timestamp_present = package['timestamp'].get('state') == 'PRESENT'
+    exact(package['timestamp'], 'state materialPath' if timestamp_present else 'state')
+    check(package['timestamp']['state'] in ('NOT_PRESENT', 'PENDING', 'PRESENT'), 'Unvalidated timestamp assertion')
+    check(not timestamp_present or package['timestamp']['materialPath'] == 'integrity/timestamp.json', 'Invalid timestamp path')
     jws_bytes = read(package['envelopePath'])
     check(len(jws_bytes) <= 40000, 'JWS size limit exceeded')
     jws = json_value(jws_bytes)
@@ -90,10 +92,12 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
     check(isinstance(coverage['artifacts'], list) and 0 < len(coverage['artifacts']) <= 4000 and isinstance(coverage['stages'], list) and len(coverage['stages']) <= 1000 and isinstance(coverage['omissions'], list) and len(coverage['omissions']) <= 4000, 'Invalid coverage size')
     artifacts, files, missing, modified = {}, [], [], []
     reserved = {'package.json', package['envelopePath'], package['coveragePath']}
+    if timestamp_present:
+        reserved.add('integrity/timestamp.json')
     for item in coverage['artifacts']:
         exact(item, 'path kind sha256 byteSize required storage sourcePath')
         path = item['path']
-        check(safe_path(path) and path not in artifacts and path not in reserved, 'Duplicate or unsafe artifact path')
+        check(safe_path(path) and path not in artifacts and path not in reserved and path != 'integrity/timestamp.json', 'Duplicate or unsafe artifact path')
         check(item['kind'] in ('MANIFEST', 'ORIGINAL', 'DERIVATIVE') and sha(item['sha256']) and type(item['byteSize']) is int and 0 <= item['byteSize'] <= 9007199254740991 and type(item['required']) is bool, 'Invalid artifact')
         exact(item['storage'], 'bucket key versionId')
         check(all(isinstance(item['storage'][k], str) and 0 < len(item['storage'][k]) <= maximum and not re.search(r'[\x00-\x1f\ud800-\udfff]', item['storage'][k]) for k, maximum in [('bucket', 63), ('key', 1024), ('versionId', 1024)]) and item['storage']['versionId'] != 'null', 'Exact object version required')
@@ -166,10 +170,22 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
     partial = bool(missing or coverage['omissions'])
     hash_integrity = 'FAIL' if modified else 'INCOMPLETE' if missing else 'PASS'
     coverage_state = 'UNKNOWN' if issuer_signature != 'VALID' else 'PARTIAL' if partial or modified else 'COMPLETE_FOR_DECLARED_SCOPE'
-    verified = hash_integrity == 'PASS' and issuer_signature == 'VALID' and coverage_state == 'COMPLETE_FOR_DECLARED_SCOPE' and current and trusted_at_issue
+    timestamp = {'state': package['timestamp']['state']}
+    if timestamp_present:
+        from timestamp import verify_timestamp
+        timestamp = {'state': 'INVALID', 'reason': 'Timestamp material is missing or untrusted', 'networkUsed': False}
+        if 'integrity/timestamp.json' in names:
+            timestamp_bytes = read('integrity/timestamp.json')
+            check(len(timestamp_bytes) <= 1024 * 1024, 'Timestamp material exceeds limit')
+            timestamp_trust = None
+            if timestamp_trust_path:
+                check(Path(timestamp_trust_path).stat().st_size <= 512 * 1024, 'Timestamp trust exceeds limit')
+                timestamp_trust = json_value(Path(timestamp_trust_path).read_bytes())
+            timestamp = verify_timestamp(json_value(timestamp_bytes), jws, timestamp_trust, now)
+    verified = hash_integrity == 'PASS' and issuer_signature == 'VALID' and coverage_state == 'COMPLETE_FOR_DECLARED_SCOPE' and current and trusted_at_issue and timestamp['state'] != 'INVALID'
     return {'status': 'VERIFIED' if verified else 'INTEGRITY_INCOMPLETE', 'proofId': envelope['proofId'], 'manifestSha256': envelope['manifestSha256'], 'profile': PROFILE,
-            'hashIntegrity': hash_integrity, 'issuerSignature': issuer_signature, 'timestamp': package['timestamp']['state'], 'coverage': coverage_state,
+            'hashIntegrity': hash_integrity, 'issuerSignature': issuer_signature, 'timestamp': timestamp['state'], 'timestampValidation': timestamp, 'coverage': coverage_state,
             'keyStatus': key[0]['status'] if key else 'UNKNOWN', 'truthOfRecordedScene': 'NOT_ASSESSED', 'signatureVerified': issuer_signature == 'VALID',
             'keyTrustedAtIssue': trusted_at_issue, 'trust': trust, 'files': files, 'missing': missing, 'modified': modified, 'omissions': coverage['omissions'],
             'evidenceVerified': sum(a['kind'] == 'ORIGINAL' and p not in missing and p not in modified for p, a in artifacts.items()),
-            'limitations': ['Coverage is limited to the signed declaration; unseen later stages are not ruled out.', 'Storage identities are signed commitments, not a live storage-retention audit.', 'Issuer time is not capture time or an RFC 3161 timestamp.', 'Archive keys never establish trust; offline revocation freshness is unavailable.', 'Integrity does not establish the truth of the recorded scene.']}
+            'limitations': ['Coverage is limited to the signed declaration; unseen later stages are not ruled out.', 'Storage identities are signed commitments, not a live storage-retention audit.', 'Issuer time is not capture time. A valid RFC 3161 token establishes existence of the signature data by the TSA time, not when the scene was recorded.', 'Archive keys never establish trust; offline revocation freshness is unavailable.', 'Integrity does not establish the truth of the recorded scene.']}
