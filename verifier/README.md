@@ -48,6 +48,17 @@ This compares the frozen record and every included original against that record.
 | `UNSUPPORTED_VERSION` / `UNSUPPORTED_ALGORITHM` | This release cannot interpret that format or signature algorithm. |
 | `UNSAFE_ARCHIVE` | Duplicate/unsafe names, entry types, compression, counts, or size exceed the parser contract. |
 
+For the additive envelope profile, the HTML summary shows file integrity, issuer
+signature mathematics, declared coverage, key status and trust freshness,
+independent timestamp presence, and `truthOfRecordedScene=NOT_ASSESSED` separately.
+It identifies the signed record and issuer-reported time and lists expected and
+received byte counts for each artifact. Changed files, missing included files,
+and intentional omissions have separate sections. A valid signature alongside a
+compromised key or a missing original must never appear as an overall verified
+package. The report is a separate local file; no unsigned report member is added
+to the v2 signed package. See the [recipient workflow and compatibility
+contract](../docs/api-portal-v1/VERIFICATION.md).
+
 ## Trust-list contract and rotation
 
 The signed-registry envelope is `{registry,signature}`. `registry` has exactly `version:1`, `domain:"PACKPROOF_SIGNING_TRUST_REGISTRY"`, `publishedAt`, `nextReviewAt`, and `keys`. Every registry key has exactly `keyId`, `algorithm`, `publicKeyPem`, `validFrom`, `validUntil`, `status`, `statusEffectiveAt`, and `reason`. Timestamps include a timezone; `validUntil`, `statusEffectiveAt`, and `reason` can be null where applicable. `status` is `ACTIVE`, `RETIRED`, `REVOKED`, or `COMPROMISED`; unknown statuses and duplicate identities fail closed. Non-active keys require `statusEffectiveAt`, and effective status cannot postdate registry publication. `signature` has `algorithm`, the independently pinned authority `keyId`, `signatureBase64`, and `signedAt`, and covers the UTF-8 `packproof.sorted-json.v1` canonical registry object. Key algorithms are `ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`.

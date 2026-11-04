@@ -101,13 +101,15 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
         artifacts[path] = item
         if path not in names:
             missing.append(path)
-            files.append({'path': path, 'status': 'MISSING', 'sha256': item['sha256']})
+            files.append({'path': path, 'kind': item['kind'], 'status': 'MISSING', 'sha256': item['sha256'],
+                          'expectedByteSize': item['byteSize'], 'actualByteSize': None})
             continue
         data = read(path)
         matched = len(data) == item['byteSize'] and hashlib.sha256(data).hexdigest() == item['sha256']
         if not matched:
             modified.append(path)
-        files.append({'path': path, 'status': 'HASH_MATCHED' if matched else 'HASH_MISMATCH', 'sha256': item['sha256']})
+        files.append({'path': path, 'kind': item['kind'], 'status': 'HASH_MATCHED' if matched else 'HASH_MISMATCH',
+                      'sha256': item['sha256'], 'expectedByteSize': item['byteSize'], 'actualByteSize': len(data)})
     check(not (set(names) - reserved - set(artifacts)), 'Uncovered archive entries')
     for item in artifacts.values():
         if item['kind'] == 'DERIVATIVE':
@@ -168,8 +170,9 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
     coverage_state = 'UNKNOWN' if issuer_signature != 'VALID' else 'PARTIAL' if partial or modified else 'COMPLETE_FOR_DECLARED_SCOPE'
     verified = hash_integrity == 'PASS' and issuer_signature == 'VALID' and coverage_state == 'COMPLETE_FOR_DECLARED_SCOPE' and current and trusted_at_issue
     return {'status': 'VERIFIED' if verified else 'INTEGRITY_INCOMPLETE', 'proofId': envelope['proofId'], 'manifestSha256': envelope['manifestSha256'], 'profile': PROFILE,
+            'recordType': envelope['recordType'], 'recordId': envelope['recordId'], 'issuer': envelope['issuer'], 'issuedAt': envelope['issuedAt'],
             'hashIntegrity': hash_integrity, 'issuerSignature': issuer_signature, 'timestamp': package['timestamp']['state'], 'coverage': coverage_state,
             'keyStatus': key[0]['status'] if key else 'UNKNOWN', 'truthOfRecordedScene': 'NOT_ASSESSED', 'signatureVerified': issuer_signature == 'VALID',
             'keyTrustedAtIssue': trusted_at_issue, 'trust': trust, 'files': files, 'missing': missing, 'modified': modified, 'omissions': coverage['omissions'],
             'evidenceVerified': sum(a['kind'] == 'ORIGINAL' and p not in missing and p not in modified for p, a in artifacts.items()),
-            'limitations': ['Coverage is limited to the signed declaration; unseen later stages are not ruled out.', 'Storage identities are signed commitments, not a live storage-retention audit.', 'Issuer time is not capture time or an RFC 3161 timestamp.', 'Archive keys never establish trust; offline revocation freshness is unavailable.', 'Integrity does not establish the truth of the recorded scene.']}
+            'limitations': ['Coverage is limited to the signed declaration; unseen later stages are not ruled out.', 'Operational dashboard status, evidence requirements, issue resolutions, relationships and operational amendments are outside this core/envelope profile unless a separately verified signed extension explicitly covers them.', 'Storage identities are signed commitments, not a live storage-retention audit.', 'Issuer time is not capture time or an RFC 3161 timestamp.', 'Archive keys never establish trust; offline revocation freshness is unavailable.', 'Integrity does not establish the truth of the recorded scene.']}

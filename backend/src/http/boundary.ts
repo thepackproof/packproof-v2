@@ -18,9 +18,9 @@ export function httpBoundary(corsOrigins: readonly string[]): RequestHandler {
     const origin = req.header("Origin");
     if (origin && corsOrigins.includes(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-PackProof-Station-Token, X-Intake-Device-Token, X-PackProof-Intake-Version, Range");
+      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-Match, If-None-Match, PackProof-Merchant-Id, PackProof-Delegation-Id, X-PackProof-Station-Token, X-Intake-Device-Token, X-PackProof-Intake-Version, Range");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-      res.setHeader('Access-Control-Expose-Headers','X-PackProof-Operation-Id, X-Request-Id');
+      res.setHeader('Access-Control-Expose-Headers','X-PackProof-Operation-Id, X-Request-Id, ETag, Idempotency-Replayed, Location, Retry-After, Content-Range, Accept-Ranges, Content-Disposition, X-Artifact-Sha256, PackProof-Package-Scope');
     }
     if (req.method === "OPTIONS") {
       res.status(204).end();

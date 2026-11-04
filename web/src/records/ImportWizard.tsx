@@ -1,0 +1,75 @@
+import { useEffect, useRef, useState } from 'react';
+import type { PackProofApi } from '../api/client';
+import { randomId } from '../random-id';
+import { Glyph } from '../site/Brand';
+import { displayState } from './model';
+
+interface ImportRow { rowNumber: number; status: string; values: Record<string, unknown>; normalized?: { shipmentReference?: string } | null; errors: string[]; proofId?: string }
+interface ImportView {
+  id: string; previewVersion: string; state: string; organizationId: string; environment: string; sourceName: string;
+  timeZone: string; mapping: Record<string, string>; headers: string[]; delimiter: string; encoding: string; receivedAt: string;
+  original: { sha256: string; byteSize: number }; counts: { valid: number; invalid: number; duplicate: number; ambiguous: number; imported: number; failed: number };
+  rows: ImportRow[]; correctionsCsv: string; recordIds: string[];
+}
+const FIELDS = [['shipmentReference', 'Shipment reference (required)'], ['itemTitle', 'Item or shipment description'], ['quantity', 'Quantity'], ['trackingNumber', 'Tracking number'], ['carrier', 'Carrier'], ['shippedAt', 'Reported shipping time'], ['locationId', 'Location identifier']] as const;
+const TERMINAL = new Set(['succeeded', 'completed', 'complete', 'partially_succeeded', 'failed', 'cancelled', 'action_needed']);
+function download(text: string, name: string) { const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : 'The import could not be completed. Your accepted rows are preserved.'; }
+
+export function ImportWizard({ api, organizationId, environment, storageScope, onViewRecords, onOpenRecord }: { api: PackProofApi; organizationId: string; environment: string; storageScope: string; onViewRecords: () => void; onOpenRecord: (id: string) => void }) {
+  const storageKey = `packproof.records.import.${storageScope}.${organizationId}.${environment}`;
+  const [csv, setCsv] = useState(''), [sourceName, setSourceName] = useState('Shipment spreadsheet'), [timeZone, setTimeZone] = useState('UTC');
+  const [mapping, setMapping] = useState<Record<string, string>>({}), [preview, setPreview] = useState<ImportView | null>(null), [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [partial, setPartial] = useState(false), [page, setPage] = useState(0), [resumeId, setResumeId] = useState<string | null>(null);
+  const previewKey = useRef(randomId()), commitPending = useRef(false), fileInput = useRef<HTMLInputElement>(null);
+  const scope = new URLSearchParams({ organizationId, environment }).toString();
+  useEffect(() => {
+    try { const saved = JSON.parse(localStorage.getItem(storageKey) || 'null'); if (saved) { if (typeof saved.timeZone === 'string') setTimeZone(saved.timeZone); if (typeof saved.sourceName === 'string') setSourceName(saved.sourceName); if (saved.mapping && typeof saved.mapping === 'object') setMapping(saved.mapping); if (typeof saved.importId === 'string') setResumeId(saved.importId); } } catch { /* Setup remains usable without browser storage. */ }
+  }, [storageKey]);
+  useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify({ timeZone, sourceName, mapping, importId: preview?.id ?? resumeId })); } catch { /* Source bytes are intentionally never persisted in browser storage. */ } }, [storageKey, timeZone, sourceName, mapping, preview?.id, resumeId]);
+  useEffect(() => {
+    if (!resumeId || preview) return; let active = true;
+    void api.recordsRequest<ImportView>(`/imports/${encodeURIComponent(resumeId)}?${scope}`).then(value => { if (active) { setPreview(value); setMapping(value.mapping); setTimeZone(value.timeZone); setSourceName(value.sourceName); } }).catch(caught => { if (active) setError(errorMessage(caught)); });
+    return () => { active = false; };
+  }, [api, resumeId, scope, preview]);
+  useEffect(() => {
+    if (!preview || !['queued', 'running', 'processing'].includes(preview.state.toLowerCase())) return;
+    let active = true; const timer = window.setTimeout(() => { void api.recordsRequest<ImportView>(`/imports/${encodeURIComponent(preview.id)}?${scope}`).then(value => { if (active) { setPreview(value); setError(null); } }).catch(caught => { if (active) setError(errorMessage(caught)); }); }, 2000);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [api, preview, scope]);
+  const changeInput = () => { setDirty(true); previewKey.current = randomId(); };
+  async function runPreview() {
+    if (busy || !csv.trim()) return; setBusy(true); setError(null); setPartial(false);
+    try { const value = await api.recordsRequest<ImportView>('/imports/preview', 'POST', { organizationId, environment, csv, timeZone, sourceName, ...(Object.keys(mapping).length ? { mapping } : {}) }, { 'Idempotency-Key': previewKey.current }); setPreview(value); setMapping(value.mapping); setDirty(false); setPage(0); }
+    catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
+  }
+  async function commit(retryFailed = false) {
+    if (!preview || busy || dirty || commitPending.current) return; commitPending.current = true; setBusy(true); setError(null);
+    try { const value = await api.recordsRequest<ImportView>(`/imports/${encodeURIComponent(preview.id)}/commit?${scope}`, 'POST', { previewVersion: preview.previewVersion, importValidRows: retryFailed || partial }, { 'Idempotency-Key': `import-${preview.id}-${preview.previewVersion}` }); setPreview(value); setCsv(''); }
+    catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); commitPending.current = false; }
+  }
+  const state = preview?.state.toLowerCase() ?? '', finished = TERMINAL.has(state), running = ['queued', 'running', 'processing'].includes(state);
+  const problems = preview ? preview.counts.invalid + preview.counts.ambiguous + preview.counts.failed : 0;
+  return <section className="records-panel records-import" aria-labelledby="import-heading" aria-busy={busy || running}>
+    <header className="records-panel-heading"><div><span className="records-eyebrow">UPLOAD A SPREADSHEET</span><h2 id="import-heading">Your first record, in a few steps.</h2><p>Choose a file, confirm its columns, and review every row before importing.</p></div><button type="button" className="records-button secondary" onClick={() => download('Shipment reference,Item description,Quantity,Tracking number,Carrier,Shipped at\nSHIP-1042,Box of fittings,1,001234567890,Example carrier,2026-11-04T14:00:00Z\n', 'PackProof_shipment_template.csv')}><Glyph name="download" size={17}/>CSV template</button></header>
+    <ol className="records-steps" aria-label="Import progress"><li aria-current={!preview ? 'step' : undefined}><span>1</span>Choose your file</li><li aria-current={preview && !finished && !running ? 'step' : undefined}><span>2</span>Review &amp; map</li><li aria-current={finished || running ? 'step' : undefined}><span>3</span>Import &amp; view</li></ol>
+    {error && <div className="records-notice error" role="alert"><Glyph name="alert"/><div><strong>Import needs attention</strong><p>{error}</p>{preview && running && <button className="records-text-button" onClick={() => { setResumeId(preview.id); setPreview(null); }}>Check import status again</button>}</div></div>}
+    {!running && !finished && <>
+      <div className="records-import-fields"><label className="records-file-field"><Glyph name="file" size={28}/><strong>{csv ? `${new Blob([csv]).size.toLocaleString()} bytes selected` : 'Choose a CSV file'}</strong><span>UTF-8 · up to 2 MB · 1,000 rows · 50 columns</span><input ref={fileInput} type="file" accept=".csv,text/csv" onChange={event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) { setError('This file is larger than 2 MB. Split it into smaller files and try again.'); return; } void file.arrayBuffer().then(bytes => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)).then(text => { setCsv(text); setMapping({}); setPreview(null); setResumeId(null); changeInput(); setError(null); }).catch(() => setError('Save the spreadsheet as UTF-8 CSV, then choose the file again.')); }}/></label>
+      <div className="records-field-stack"><label>Source name (reuse for corrected files)<input value={sourceName} disabled={!!preview && !csv} maxLength={80} onChange={event => { setSourceName(event.target.value); changeInput(); }}/></label><label>Source time zone<input value={timeZone} disabled={!!preview && !csv} maxLength={80} list="records-timezones" onChange={event => { setTimeZone(event.target.value); changeInput(); }}/><datalist id="records-timezones"><option value="UTC"/><option value="America/New_York"/><option value="America/Chicago"/><option value="America/Denver"/><option value="America/Los_Angeles"/></datalist><small>Confirm the source location’s IANA time zone. Dates with an explicit offset retain that offset.</small></label></div></div>
+      {!preview && <button className="records-button" disabled={busy || !csv.trim() || !timeZone.trim()} onClick={() => void runPreview()}>{busy ? 'Reviewing file…' : 'Review file'}<Glyph size={16}/></button>}
+    </>}
+    {preview && <>
+      <div className="records-import-receipt"><span>Original received {new Date(preview.receivedAt).toLocaleString()}</span><span>{preview.encoding} · {preview.delimiter === '\t' ? 'Tab-separated' : preview.delimiter === ';' ? 'Semicolon-separated' : 'Comma-separated'}</span><span>{preview.original.byteSize.toLocaleString()} bytes</span><details><summary>Original file digest</summary><code>{preview.original.sha256}</code></details></div>
+      {!running && !finished && !csv && <p className="records-list-notice" role="status">This preview was restored from its receipt. Choose the original file again before changing columns or source settings. You can import the reviewed preview without uploading it again.</p>}
+      {!running && !finished && <div className="records-mapping">{FIELDS.map(([key, label]) => <label key={key}>{label}<select value={mapping[key] || ''} disabled={!csv} onChange={event => { setMapping(previous => { const next = { ...previous }; if (event.target.value) next[key] = event.target.value; else delete next[key]; return next; }); changeInput(); }}><option value="">{key === 'shipmentReference' ? 'Choose the shipment identifier' : 'Not included'}</option>{preview.headers.map((header, index) => <option key={`${index}:${header}`} value={header}>{header || `(empty column ${index + 1})`}</option>)}</select></label>)}</div>}
+      <div className="records-import-counts">{(['valid', 'invalid', 'duplicate', 'ambiguous', 'imported', 'failed'] as const).map(key => <div key={key}><strong>{preview.counts[key].toLocaleString()}</strong><span>{displayState(key)}</span></div>)}</div>
+      <div className="records-table-wrap"><table><caption className="visually-hidden">Import row results, page {page + 1}</caption><thead><tr><th scope="col">Row</th><th scope="col">Shipment reference</th><th scope="col">Result</th><th scope="col">What to do</th></tr></thead><tbody>{preview.rows.slice(page * 20, page * 20 + 20).map(row => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td>{String(row.normalized?.shipmentReference ?? row.values[mapping.shipmentReference] ?? '—')}</td><td><span className={`records-status ${['invalid', 'failed'].includes(row.status) ? 'error' : row.status === 'ambiguous' ? 'warning' : 'neutral'}`}>{displayState(row.status)}</span></td><td>{row.errors.join(' ') || (row.proofId ? <button className="records-text-button" onClick={() => onOpenRecord(row.proofId!)}>Open record</button> : 'Ready for import')}</td></tr>)}</tbody></table></div>
+      {preview.rows.length > 20 && <div className="records-pagination"><button className="records-button secondary" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><span>Rows {page * 20 + 1}–{Math.min(preview.rows.length, (page + 1) * 20)} of {preview.rows.length}</span><button className="records-button secondary" disabled={(page + 1) * 20 >= preview.rows.length} onClick={() => setPage(value => value + 1)}>Next</button></div>}
+      {preview.correctionsCsv && <button className="records-text-button" onClick={() => download(preview.correctionsCsv, 'PackProof_import_corrections.csv')}><Glyph name="download" size={16}/>Download rows to correct</button>}
+      {!running && !finished && <div className="records-import-actions">{dirty ? <><p>Your mapping changed. Review the file again before importing.</p><button className="records-button" disabled={busy || !csv} onClick={() => void runPreview()}>Update preview</button></> : <>{problems > 0 && <label className="records-checkbox"><input type="checkbox" checked={partial} onChange={event => setPartial(event.target.checked)}/>Import valid rows and leave the highlighted rows unresolved.</label>}<button className="records-button" disabled={busy || (problems > 0 && !partial) || preview.counts.valid + preview.counts.failed === 0} onClick={() => void commit()}>{busy ? 'Submitting import…' : `Import ${preview.counts.valid.toLocaleString()} valid rows`}</button><p>Duplicate rows reuse their existing record. This is a one-time import; continuous sync does not apply.</p></>}</div>}
+      {running && <div className="records-notice neutral" role="status"><Glyph name="clock"/><div><strong>{state === 'queued' ? 'Import accepted — waiting to process' : 'Import in progress'}</strong><p>Your job receipt is {preview.id}. Accepted rows remain safe if you leave this page.</p></div></div>}
+      {finished && <div className={`records-notice ${preview.counts.failed || state === 'action_needed' ? 'warning' : 'success'}`} role="status"><Glyph name="check"/><div><strong>{state === 'action_needed' ? 'Import needs action' : state === 'failed' ? 'Import finished with errors' : state === 'partially_succeeded' ? 'Import complete — some rows need attention' : 'Import complete — view records'}</strong><p>{preview.counts.imported.toLocaleString()} imported · {preview.counts.duplicate.toLocaleString()} duplicates · {preview.counts.failed.toLocaleString()} failed. Continuous sync does not apply to this file.</p><div className="records-actions"><button className="records-button" onClick={onViewRecords}>View records</button>{preview.counts.failed > 0 && <button className="records-button secondary" disabled={busy} onClick={() => void commit(true)}>Retry failed rows</button>}<button className="records-button secondary" onClick={() => { setPreview(null); setResumeId(null); setCsv(''); setMapping({}); setDirty(false); previewKey.current = randomId(); if (fileInput.current) fileInput.current.value = ''; }}>Upload another file or corrected rows</button></div></div></div>}
+    </>}
+  </section>;
+}

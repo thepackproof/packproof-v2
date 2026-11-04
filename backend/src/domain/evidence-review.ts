@@ -66,7 +66,9 @@ interface PreservedRow { object_key: string; object_version_id: string | null; s
 
 /** Exact frozen manifests and sources, emitted with bounded memory and complete end-of-stream checks. */
 export async function exportEvidencePackageStream(db: Database, clock: Clock, store: ObjectStore, userId: string, proofId: string,
-  options: { maximumMediaBytes?: number; lifecycleSnapshotId?: string } = {}): Promise<Readable> {
+  options: { maximumMediaBytes?: number; lifecycleSnapshotId?: string;
+    /** Server-resolved read authority, never copied from an HTTP request. */
+    organizationDisclosure?:{organizationId:string;environment:'sandbox'|'live';membershipId:string} } = {}): Promise<Readable> {
   const proof = await getProofForUser(db, userId, proofId), manifest = await getManifest(db, userId, proofId);
   const lifecycle = options.lifecycleSnapshotId
     ? await getLifecycleSnapshot(db, userId, proofId, options.lifecycleSnapshotId) : null;
@@ -199,15 +201,18 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     yield json("archive.json", {
       schema: "packproof.proof-archive.v1", canonicalization: "packproof.sorted-json.v1",
       snapshot: { proofId, manifestId: manifest.manifestId, manifestSha256: manifest.sha256 }, exportedAt: clock.now().toISOString(),
-      disclosure: { kind: "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId }, omissions, derivatives: [],
+      disclosure: { kind: options.organizationDisclosure ? "ORGANIZATION_CANONICAL_PROOF" : "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId,
+        ...(options.organizationDisclosure??{}) }, omissions, derivatives: [],
       sources: { canonicalRecord: "manifest.json", evidenceInventory: "integrity/evidence.json", lifecycleManifests: "lifecycle/stages.json", supplements: ["shipping.json", "events.json"], signedSupplements: supplementSource,
         ...(lifecycle ? { lifecycleSnapshot: { path: "lifecycle/snapshot.json", sha256: lifecycle.sha256, snapshotId: lifecycle.snapshotId } } : {}) },
       supplementIntegrity: { signedSupplements: "SEPARATELY_SIGNED_RECEIVED_CHAIN_REQUIRES_INDEPENDENT_TRUST",
         otherSupplementalFiles: "SELF_CONSISTENCY_ONLY_NOT_COVERED_BY_ROOT_SIGNATURE" },
       limitations: ["Signing time is not filming time", "Integrity is not a physical truth verdict", "Offline trust cannot discover later revocations", "Unavailable media has not been verified",
+        ...(options.organizationDisclosure ? ["Later operational revisions, requirements, issues, relationships, amendments and review notes are excluded from the signed canonical manifest inventory; any supplemental history is unsigned and is not a complete operational snapshot."] : []),
         ...(lifecycle ? ["Only original and sealed records selected by the signed index are included; unsealed timeline projections are excluded."] : [])],
     });
-    yield bytesEntry("README.txt", Buffer.from("PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nproof-supplements.json contains the separately signed received supplement chain, bound to that core record.\nEach supplement requires independent signing-key trust; its dated head cannot establish that no later supplements exist.\nLegacy shipping.json and events.json remain self-consistency-only files outside the root signature.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nFile self-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list or signed registry with an independently pinned authority; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n"));
+    yield bytesEntry("README.txt", Buffer.from("PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nproof-supplements.json contains the separately signed received supplement chain, bound to that core record.\nEach supplement requires independent signing-key trust; its dated head cannot establish that no later supplements exist.\nLegacy shipping.json and events.json remain self-consistency-only files outside the root signature.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nFile self-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list or signed registry with an independently pinned authority; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n"+
+      (options.organizationDisclosure?"This organization export covers the canonical Proof, not a signed operational snapshot. Later operational revisions, requirements, issues, relationships, amendments and review notes are outside its signed manifest inventory.\n":"")));
     yield zipBytes("integrity/hashes.json", Buffer.from(canonicalize(hashes)));
     // The ZIP directory and its authorization checks have not completed here.
     // Preparing content establishes neither a complete archive nor delivery.

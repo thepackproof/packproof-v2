@@ -14,7 +14,8 @@ import { DomainError } from "../domain/errors.js";
 import { newId } from "../ids.js";
 import { canonicalize } from "../canonical.js";
 import { record, textField } from "./tenants.js";
-import { requireBackgroundCredential } from './organization-access.js';
+import { authorizePartnerProof,reauthorizePartner,type PartnerActor,type PartnerScope } from './organizations.js';
+import { appendAudit } from '../domain/audit.js';
 
 export const EVENT_TYPES = [
   "proof.created",
@@ -25,6 +26,8 @@ export const EVENT_TYPES = [
   "shipment.updated",
   "proof.finalized",
   "proof.accessed",
+  "record.updated",
+  "issue.updated",
 ] as const;
 export interface WebhookConfig {
   encryptionKey: string;
@@ -263,6 +266,10 @@ export async function retryWebhookDelivery(
   tenantId: string,
   deliveryId: string,
 ) {
+  const original=(await db.query<{webhook_id:string;proof_id:string}>(`SELECT d.webhook_id,o.proof_id FROM api_webhook_deliveries d
+    JOIN api_webhooks w ON w.id=d.webhook_id JOIN proof_outbox o ON o.id=d.event_id
+    WHERE d.id=$1 AND w.tenant_id=$2`,[deliveryId,tenantId])).rows[0];
+  if(original)await authorizeOrganizationWebhookEvent(db,clock,original.webhook_id,original.proof_id);
   const result = await db.query(
     `UPDATE api_webhook_deliveries d SET state='pending',attempts=0,next_attempt_at=$3,lease_token=NULL
     FROM api_webhooks w WHERE d.id=$1 AND w.id=d.webhook_id AND w.tenant_id=$2 AND w.revoked_at IS NULL AND d.state='dead' RETURNING d.id`,
@@ -312,6 +319,43 @@ export const sendWebhook: WebhookTransport = async (url, body, headers) => {
   });
 };
 
+/** Stored webhook selectors are not themselves a current authorization grant.
+ * Reconstruct only nonsecret principal context and reuse the common current
+ * credential/delegation/Proof policy. Legacy developer webhooks return false. */
+async function authorizeOrganizationWebhookEvent(db:Database,clock:Clock,webhookId:string,proofId:string):Promise<boolean> {
+  const row=(await db.query<{credential_id:string;principal_id:string;actor_user_id:string;principal_organization_id:string;merchant_id:string;delegation_id:string|null;tenant_id:string;environment:'sandbox'|'live';scopes:PartnerScope[]}>(`
+    SELECT a.credential_id,c.principal_id,p.actor_user_id,p.organization_id AS principal_organization_id,a.merchant_id,a.delegation_id,
+      m.tenant_id,m.environment,c.scopes
+    FROM platform_webhook_authorizations a JOIN platform_credentials c ON c.id=a.credential_id
+    JOIN platform_principals p ON p.id=c.principal_id JOIN platform_organizations m ON m.id=a.merchant_id
+    WHERE a.webhook_id=$1 AND m.kind='MERCHANT'`,[webhookId])).rows[0];
+  if(!row){
+    if((await db.query('SELECT 1 FROM platform_webhook_authorizations WHERE webhook_id=$1',[webhookId])).rows[0])
+      throw new DomainError('WEBHOOK_AUTHORIZATION_UNAVAILABLE','The webhook organization authorization is unavailable',403);
+    return false;
+  }
+  const actor:PartnerActor={credentialId:row.credential_id,principalId:row.principal_id,actorUserId:row.actor_user_id,
+    principalOrganizationId:row.principal_organization_id,merchantId:row.merchant_id,
+    partnerOrganizationId:row.delegation_id?row.principal_organization_id:null,delegationGrantId:row.delegation_id,
+    tenantId:row.tenant_id,environment:row.environment,scopes:row.scopes,requestId:`webhook:${webhookId}`};
+  await reauthorizePartner(db,clock,actor,'webhooks:manage');
+  const proof=(await db.query<{location_id:string|null}>(`SELECT rs.location_id FROM platform_proof_ownership p
+    LEFT JOIN record_state rs ON rs.proof_id=p.proof_id WHERE p.proof_id=$1 AND p.merchant_id=$2 AND p.environment=$3`,[proofId,actor.merchantId,actor.environment])).rows[0];
+  if(!proof)throw new DomainError('WEBHOOK_RECORD_NOT_AUTHORIZED','The webhook does not have current authority for this record',403);
+  if(actor.delegationGrantId&&proof.location_id)
+    throw new DomainError('LOCATION_GRANT_REQUIRED','This delegated webhook cannot deliver a location-scoped record without an explicit supported location grant',403);
+  await authorizePartnerProof(db,clock,actor,proofId,'webhooks:manage');
+  return true;
+}
+
+async function recordLocationBlockedDelivery(db:Database,clock:Clock,input:{proofId:string;deliveryId:string;webhookId:string;eventId:string}) {
+  await appendAudit(db,{proofId:input.proofId,actorUserId:null,eventType:'WEBHOOK_DELIVERY_BLOCKED',eventData:{
+    ...input,errorCode:'LOCATION_GRANT_REQUIRED',retryable:false,
+    nextAction:'This delegated webhook has no supported location grant. Review the connection scope before replaying this delivery.',
+    transmitted:false,
+  },at:clock.now()});
+}
+
 export async function dispatchWebhooks(
   db: Database,
   clock: Clock,
@@ -322,17 +366,26 @@ export async function dispatchWebhooks(
   const now = clock.now().toISOString();
   // Backfill only missing deliveries; no global high-water mark can lose an
   // event whose generating transaction committed out of sequence.
-  await db.query(
+  const blockedAtEnqueue=await db.transaction(async tx=>{
+   const inserted=await tx.query<{id:string;webhook_id:string;event_id:string;state:string}>(
     `INSERT INTO api_webhook_deliveries(id,webhook_id,event_id,state,next_attempt_at)
-    SELECT w.id || ':' || o.id,w.id,o.id,'pending',$1 FROM proof_outbox o
+    SELECT w.id || ':' || o.id,w.id,o.id,CASE WHEN wa.delegation_id IS NOT NULL AND rs.location_id IS NOT NULL THEN 'dead' ELSE 'pending' END,$1 FROM proof_outbox o
     JOIN api_tenant_proofs p ON p.proof_id=o.proof_id JOIN api_webhooks w ON w.tenant_id=p.tenant_id
+    LEFT JOIN platform_webhook_authorizations wa ON wa.webhook_id=w.id LEFT JOIN record_state rs ON rs.proof_id=o.proof_id
     WHERE w.revoked_at IS NULL AND o.created_at>=w.created_at AND w.event_types ? o.event_type
     AND NOT EXISTS(SELECT 1 FROM api_webhook_deliveries d WHERE d.webhook_id=w.id AND d.event_id=o.id)
-    ORDER BY o.sequence LIMIT 500 ON CONFLICT DO NOTHING`,
+    ORDER BY o.sequence LIMIT 500 ON CONFLICT DO NOTHING RETURNING id,webhook_id,event_id,state`,
     [now],
-  );
+   );
+   const blocked=inserted.rows.filter(row=>row.state==='dead');
+   for(const row of blocked){
+    const event=(await tx.query<{proof_id:string}>('SELECT proof_id FROM proof_outbox WHERE id=$1',[row.event_id])).rows[0];
+    await recordLocationBlockedDelivery(tx,clock,{proofId:event.proof_id,deliveryId:row.id,webhookId:row.webhook_id,eventId:row.event_id});
+   }
+   return blocked.length;
+  });
   let delivered = 0,
-    failed = 0;
+    failed = blockedAtEnqueue;
   for (let n = 0; n < Math.min(100, batchSize); n++) {
     const lease = newId("lease");
     const row = await db.transaction(async (tx) => {
@@ -366,20 +419,20 @@ export async function dispatchWebhooks(
       return data.rows[0];
     });
     if (!row) break;
-    let status = 0;
+    let status = 0,locationBlocked=false;
     try {
       const currentWebhook=await db.query('SELECT 1 FROM api_webhooks WHERE id=$1 AND revoked_at IS NULL',[row.webhook_id]);
       if(!currentWebhook.rows[0])throw new Error('Webhook revoked');
-      const organizationAuthorization=(await db.query<{credential_id:string;delegation_id:string|null}>(
-        'SELECT credential_id,delegation_id FROM platform_webhook_authorizations WHERE webhook_id=$1',[row.webhook_id])).rows[0];
-      if(organizationAuthorization)await requireBackgroundCredential(db,organizationAuthorization.credential_id,organizationAuthorization.delegation_id,'webhooks:manage');
-      else {
+      if(!await authorizeOrganizationWebhookEvent(db,clock,row.webhook_id,row.proof_id)){
         if((await db.query('SELECT 1 FROM platform_organizations WHERE tenant_id=$1',[row.tenant_id])).rows[0])throw new Error('Organization webhook authorization unavailable');
         await requireDeveloperAccess(db, row.owner_user_id);
       }
       const url = validateWebhookUrl(row.url, config);
       const body = canonicalize(publicEvent(row, row.tenant_id));
       const timestamp = Math.floor(clock.now().getTime() / 1000);
+      // The record may have moved into a restricted site since enqueue/claim.
+      // Do not emit its identifier or construct a transport call under that grant.
+      await authorizeOrganizationWebhookEvent(db,clock,row.webhook_id,row.proof_id);
       status = await transport(url, body, {
         "Content-Type": "application/json",
         "PackProof-Event-Id": row.id,
@@ -390,12 +443,14 @@ export async function dispatchWebhooks(
         ),
         "User-Agent": "PackProof-Webhooks/1",
       });
-    } catch {
+    } catch(error) {
+      locationBlocked=error instanceof DomainError&&error.code==='LOCATION_GRANT_REQUIRED';
       /* Persist only a status code; endpoints and secrets never enter logs. */
     }
     const ok = status >= 200 && status < 300;
-    const state = ok ? "delivered" : row.attempts >= 10 ? "dead" : "pending";
-    await db.query(
+    const state = ok ? "delivered" : locationBlocked||row.attempts >= 10 ? "dead" : "pending";
+    await db.transaction(async tx=>{
+     const updated=await tx.query(
       `UPDATE api_webhook_deliveries SET state=$3,last_status=$4,delivered_at=$5,next_attempt_at=$6,lease_token=NULL WHERE id=$1 AND lease_token=$2`,
       [
         row.delivery_id,
@@ -409,7 +464,9 @@ export async function dispatchWebhooks(
             Math.floor(Math.random() * 1000),
         ).toISOString(),
       ],
-    );
+     );
+     if(updated.rowCount&&locationBlocked)await recordLocationBlockedDelivery(tx,clock,{proofId:row.proof_id,deliveryId:row.delivery_id,webhookId:row.webhook_id,eventId:row.id});
+    });
     if (ok) delivered++;
     else failed++;
   }

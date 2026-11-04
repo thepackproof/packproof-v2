@@ -185,6 +185,11 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { SHOPIFY_COMMERCE_WEBHOOK_TOPICS, SHOPIFY_PRIVACY_WEBHOOK_TOPICS } from "./integrations/shopify/webhooks.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import { createOrganizationRouter } from './platform/organization-router.js';
+import { createRecordsRouter } from './records/router.js';
+import { createRecordImportsRouter } from './records/imports-router.js';
+import { createRecordConnectionsRouter } from './records/connections-router.js';
+import { createWorkspaceRequestsRouter } from './records/workspace-requests.js';
+import { createRecordMediaRouter } from './records/media-router.js';
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
 import { intakeRouter } from "./http/intake-router.js";
@@ -372,7 +377,7 @@ export function createApp(deps: AppDependencies): Express {
     if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
       next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
     }
-    express.json({limit:submissionPath?'64kb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
+    express.json({limit:submissionPath?'64kb':/^\/me\/records\/imports(?:\/|$)/.test(req.path)?'6mb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
       if(submissionPath&&error?.type==='entity.too.large')return next(new DomainError('INPUT_TOO_LARGE','Share at most 20,000 characters and 64 KiB.',413));
       next(error);
     });
@@ -573,6 +578,13 @@ export function createApp(deps: AppDependencies): Express {
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use('/me/organizations',createOrganizationRouter(deps));
+  // Fixed resource names must precede the canonical record-id routes. All
+  // adapters retain the existing authenticated human and organization boundary.
+  app.use('/me/records/workspace-requests',createWorkspaceRequestsRouter(deps));
+  app.use('/me/records/imports',createRecordImportsRouter(deps));
+  app.use('/me/records/connections',createRecordConnectionsRouter(deps));
+  app.use('/me/records',createRecordMediaRouter(deps));
+  app.use('/me/records',createRecordsRouter(deps));
   app.get("/me/developer-access", asyncRoute(async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ allowed: await hasDeveloperAccess(deps.db, bearerUser(req)) });

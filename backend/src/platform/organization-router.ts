@@ -65,7 +65,9 @@ export function createOrganizationRouter(deps:AppDependencies){
  router.get('/:organizationId/administration',run(async(r,s)=>{
   const user=await identity(r,false);await organizationAdmin(deps.db,user,r.params.organizationId);
   const id=r.params.organizationId;
-  const memberships=(await deps.db.query('SELECT id,user_id AS "userId",role,revoked_at AS "revokedAt" FROM platform_memberships WHERE organization_id=$1 ORDER BY id',[id])).rows;
+  const memberships=(await deps.db.query(`SELECT m.id,m.user_id AS "userId",m.role,m.revoked_at AS "revokedAt",
+    u.username,u.display_name AS "displayName" FROM platform_memberships m JOIN users u ON u.id=m.user_id
+    WHERE m.organization_id=$1 ORDER BY m.id`,[id])).rows;
   const principals=(await deps.db.query('SELECT id,name,revoked_at AS "revokedAt" FROM platform_principals WHERE organization_id=$1 ORDER BY id',[id])).rows;
   const credentials=(await deps.db.query('SELECT c.id,c.principal_id AS "principalId",c.prefix,c.scopes,c.expires_at AS "expiresAt",c.last_used_at AS "lastUsedAt",c.revoked_at AS "revokedAt" FROM platform_credentials c JOIN platform_principals p ON p.id=c.principal_id WHERE p.organization_id=$1 ORDER BY c.id',[id])).rows;
   const delegations=(await deps.db.query('SELECT id,partner_id AS "partnerId",scopes,operator_ids AS "operatorUserIds",expires_at AS "expiresAt",revoked_at AS "revokedAt" FROM platform_delegations WHERE merchant_id=$1 ORDER BY id',[id])).rows;

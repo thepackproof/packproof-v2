@@ -22,12 +22,14 @@ export async function requireOrganizationProofAccess(db:Database,proofId:string,
   }
 }
 export async function requireCaptureOrganizationAuthorization(db:Database,intentId:string) {
-  const row=(await db.query<{credential_id:string;delegation_id:string|null}>(`SELECT credential_id,delegation_id FROM platform_capture_authorizations WHERE intent_id=$1`,[intentId])).rows[0];
+  const row=(await db.query<{credential_id:string;delegation_id:string|null;proof_id:string}>(`SELECT credential_id,delegation_id,proof_id FROM platform_capture_authorizations WHERE intent_id=$1`,[intentId])).rows[0];
   if(!row){
     if((await db.query('SELECT 1 FROM capture_intents i JOIN platform_proof_ownership p ON p.proof_id=i.proof_id WHERE i.id=$1',[intentId])).rows[0])throw denied();
     return;
   }
   await requireBackgroundCredential(db,row.credential_id,row.delegation_id,'capture:request');
+  if(row.delegation_id&&(await db.query('SELECT 1 FROM record_state WHERE proof_id=$1 AND location_id IS NOT NULL',[row.proof_id])).rows[0])
+    throw new DomainError('LOCATION_GRANT_REQUIRED','This delegated capture launch does not include an explicit location grant',403);
 }
 export async function requireBackgroundCredential(db:Database,credentialId:string,delegationId:string|null,scope:string) {
   await assertPolicyAccessSafe(db);

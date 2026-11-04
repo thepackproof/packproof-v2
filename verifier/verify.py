@@ -690,7 +690,7 @@ def render_html_report(result):
         ('Result', status),
         ('Proof', result.get('proofId', 'Not established')),
         ('Frozen manifest SHA-256', result.get('manifestSha256', 'Not independently checked')),
-        ('Original files verified', result.get('evidenceVerified', 0)),
+        ('Original file digests matched', result.get('evidenceVerified', 0)),
         ('Later-stage files checked', result.get('lifecycleEvidenceVerified', 0)),
         ('Signature verified', 'Yes' if result.get('signatureVerified') else 'No'),
         ('Trust freshness', result.get('trust', {}).get('status', 'Not checked')),
@@ -700,10 +700,31 @@ def render_html_report(result):
         ('Received supplement head', result.get('supplements', {}).get('headSha256', 'Not established')),
         ('Supplement completeness', result.get('supplements', {}).get('completeness', 'Not established')),
     ]
+    if result.get('profile') == 'packproof.integrity-envelope.v1':
+        # These are independent findings. A valid signature can coexist with missing
+        # originals, a compromised key, stale trust, or no independent timestamp.
+        summary = summary[:4] + [
+            ('Envelope record type', result.get('recordType', 'Not established')),
+            ('Envelope record identity', result.get('recordId', 'Not established')),
+            ('Attributed issuer', result.get('issuer', 'Not established')),
+            ('Issuer-reported signing time', result.get('issuedAt', 'Not established')),
+            ('File integrity', result.get('hashIntegrity', 'Not checked')),
+            ('Issuer signature mathematics', result.get('issuerSignature', 'Not checked')),
+            ('Declared coverage', result.get('coverage', 'Not checked')),
+            ('Signing key status', result.get('keyStatus', 'UNKNOWN')),
+            ('Key trusted at reported issue time', 'Yes' if result.get('keyTrustedAtIssue') else 'No'),
+            ('Independent timestamp', result.get('timestamp', 'Not checked')),
+            ('Truth of recorded scene', result.get('truthOfRecordedScene', 'NOT_ASSESSED')),
+            ('Trust freshness', result.get('trust', {}).get('status', 'Not checked')),
+            ('Trust snapshot expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
+            ('Current revocation knowledge', result.get('trust', {}).get('currentRevocationKnowledge', 'UNAVAILABLE_OFFLINE')),
+        ]
     rows = ''.join('<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>' for label, value in summary)
-    inventory = ''.join('<tr><td>' + escape(item.get('path', '')) + '</td><td><code>' + escape(item.get('sha256', '')) + '</code></td><td>' + escape(item.get('status', '')) + '</td></tr>' for item in result.get('files', []))
+    def size(value):
+        return str(value) if type(value) is int and value >= 0 else 'Not established'
+    inventory = ''.join('<tr><td>' + escape(item.get('path', '')) + '</td><td><code>' + escape(item.get('sha256', '')) + '</code></td><td>' + escape(item.get('status', '')) + '</td><td>' + size(item.get('expectedByteSize')) + '</td><td>' + size(item.get('actualByteSize')) + '</td></tr>' for item in result.get('files', []))
     if not inventory:
-        inventory = '<tr><td colspan="3">No complete file inventory was established.</td></tr>'
+        inventory = '<tr><td colspan="5">No complete file inventory was established.</td></tr>'
     limitations = result.get('limitations', []) + [
         'This report is a static view of a local check. Its own contents are not cryptographically signed.',
         'Export file hashes alone establish self-consistency. Declared signed supplement entries are authenticated separately and reported above.',
@@ -711,8 +732,12 @@ def render_html_report(result):
         'The archive was not extracted. No archive media, scripts, or links are embedded or executed.',
         'Integrity does not establish physical truth, authenticity, or liability.',
     ]
+    if result.get('profile') == 'packproof.integrity-envelope.v1':
+        limitations.append('Envelope identity and issuer fields are attributed claims until signature and key-trust checks pass.')
     notes = ''.join('<li>' + escape(note) + '</li>' for note in limitations)
     message = '<p>' + escape(result['message']) + '</p>' if result.get('message') else ''
+    changes = escape(json.dumps(result.get('modified', []), indent=2, ensure_ascii=True))
+    missing = escape(json.dumps(result.get('missing', []), indent=2, ensure_ascii=True))
     omissions = escape(json.dumps(result.get('omissions', []), indent=2, ensure_ascii=True))
     details = escape(json.dumps(result, indent=2, ensure_ascii=True))
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
@@ -731,8 +756,9 @@ def render_html_report(result):
             '<h1>Verification report</h1><p class="status">' + escape(status.replace('_', ' ')) + '</p>' + message +
             '<table aria-label="Verification summary"><tbody>' + rows + '</tbody></table>'
             '<h2>Files checked</h2><p class="muted">Source filenames are plain text. No archive content is opened by this report.</p>'
-            '<table><thead><tr><th>Source file</th><th>SHA-256</th><th>Inventory check</th></tr></thead><tbody>' + inventory + '</tbody></table>'
-            '<h2>Explicit omissions</h2><pre>' + omissions + '</pre><h2>What this check means</h2><ul>' + notes + '</ul>'
+            '<table><thead><tr><th scope="col">Source file</th><th scope="col">Expected SHA-256</th><th scope="col">Inventory check</th><th scope="col">Expected bytes</th><th scope="col">Received bytes</th></tr></thead><tbody>' + inventory + '</tbody></table>'
+            '<h2>Changed files</h2><pre>' + changes + '</pre><h2>Missing included files</h2><pre>' + missing + '</pre>'
+            '<h2>Explicit omissions</h2><p class="muted">An intentional exclusion differs from an included file that is missing or changed.</p><pre>' + omissions + '</pre><h2>What this check means</h2><ul>' + notes + '</ul>'
             '<details><summary>Complete verification result</summary><pre>' + details + '</pre></details>'
             '</main></body></html>')
 

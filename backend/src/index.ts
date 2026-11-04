@@ -15,6 +15,9 @@ import { initializeRecoveryPublisher } from "./operations/recovery-runtime.js";
 import { initializeEnvelopeTrustPublication } from "./integrity/envelope-publication.js";
 import { initializeEnvelopeRuntime } from "./integrity/envelope-runtime.js";
 import { processEnvelopeJob } from "./integrity/envelope-jobs.js";
+import { processPendingRecordImports } from './records/imports.js';
+import { processRecordConnectionOperations } from './records/connections.js';
+import { processSourceIngestions } from './records/ingestions.js';
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
 import { assertRealDataRuntime } from './operations/integration-readiness.js';
@@ -172,6 +175,11 @@ const server = app.listen(config.port, config.release.environment==='research'?"
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+if(process.env.PACKPROOF_ORGANIZATIONS_ENABLED==='true'){
+  jobs.push({name:'record-imports',intervalMs:5000,run:()=>processPendingRecordImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
+  jobs.push({name:'record-connections',intervalMs:5000,run:()=>processRecordConnectionOperations(opened.db,systemClock)});
+  jobs.push({name:'source-ingestions',intervalMs:5000,run:()=>processSourceIngestions(opened.db,systemClock)});
+}
 if(envelopes?.worker){const worker=envelopes.worker;jobs.push({name:'integrity-envelopes',intervalMs:5000,run:()=>processEnvelopeJob(opened.db,systemClock,worker)});}
 if(rnd.enabled&&Object.values(rnd.features).some(feature=>feature.processing))jobs.push({name:'experimental-rnd',intervalMs:5000,run:()=>runRndWorkerOnce({db:opened.db,clock:systemClock,objectStore,manifestSigning,rnd:rndConfigFromEnv()})});
 jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});

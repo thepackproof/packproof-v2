@@ -1,0 +1,41 @@
+name: Records contract and SDKs
+
+on:
+  pull_request:
+    branches-ignore: ['rnd/**']
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  records-contract:
+    name: Records API contract and SDKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --prefix backend
+      - name: Match the published contract to mounted source routes
+        run: node scripts/check-records-api-readiness.mjs
+      - name: Validate TypeScript SDK behavior and declarations
+        run: |
+          node --test packages/partner-sdk-typescript/test/client.test.mjs
+          node backend/node_modules/typescript/bin/tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --lib es2022,dom packages/partner-sdk-typescript/test/types.ts
+      - name: Validate Python SDK behavior
+        run: python -m unittest discover -s packages/partner-sdk-python/tests -v
+        env:
+          PYTHONPATH: packages/partner-sdk-python
+      - name: Validate independent verification reports
+        run: |
+          python -m pip install -r verifier/requirements-envelope.txt
+          python -m unittest discover -s verifier -p 'test_envelope_report.py' -v

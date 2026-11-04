@@ -16,7 +16,7 @@ const ready = { ...canonicalProof, status: 'READY_FOR_EVIDENCE', evidence: [] };
 beforeEach(() => {
   sessionStorage.clear(); localStorage.clear(); queue.list.mockReset().mockResolvedValue([]);
   vi.stubEnv('VITE_PACKPROOF_FIRST_PROOF_EXPERIENCE', 'true');
-  window.history.replaceState({}, '', '/app');
+  window.history.replaceState({}, '', '/capture/home');
   Object.defineProperties(HTMLDialogElement.prototype, { close: { configurable: true, value() { this.removeAttribute('open'); } }, showModal: { configurable: true, value() { this.setAttribute('open', ''); } } });
   vi.spyOn(window, 'matchMedia').mockImplementation(query => ({ matches: false, media: query, onchange: null, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: () => true }));
   saveSession({ apiBaseUrl: '', authMode: 'dev', userId: 'user_seller', username: 'seller', displayName: 'Seller', token: 'fixture', refreshToken: null, accessExpiresAt: null, subject: 'seller' });
@@ -82,7 +82,7 @@ it('does not open a late camera task while sign-out checks saved local work', as
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   finishDetail(json(ready));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Record packing' })).toBeEnabled());
-  expect(window.location.pathname).toBe('/app');
+  expect(window.location.pathname).toBe('/capture/home');
   finishLocalCheck([]);
   await waitFor(() => expect(window.location.pathname).toBe('/'));
 });
@@ -95,9 +95,9 @@ it('wide-screen Home and browser Back cannot abandon a live take; finishing unlo
   fireEvent.click(screen.getByRole('link',{name:'Home'}));
   expect(window.location.pathname).toBe(path);
   expect(screen.getByRole('status')).toHaveTextContent(/Finish recording/);
-  window.history.replaceState({},'', '/app');fireEvent.popState(window);
+  window.history.replaceState({},'', '/capture/home');fireEvent.popState(window);
   expect(window.location.pathname).toBe(path);
   fireEvent.click(screen.getByRole('button',{name:'Finish test take'}));
   fireEvent.click(screen.getByRole('link',{name:'Home'}));
-  await waitFor(()=>expect(window.location.pathname).toBe('/app'));
+  await waitFor(()=>expect(window.location.pathname).toBe('/capture/home'));
 });

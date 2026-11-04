@@ -5,6 +5,7 @@ import { assertPolicyAccessSafe } from "./policy-recovery.js";
 import { requireActiveAccount } from "./account-access.js";
 import { requireOrganizationProofAccess } from '../platform/organization-access.js';
 import { partnerReadAuthorization } from '../platform/proof-read-grant.js';
+import { recordReadAuthorization } from '../records/read-grant.js';
 
 export async function loadProof(
   db: Database,
@@ -49,7 +50,14 @@ export async function authorizeProofAccess(
     if(role)throw new DomainError('READ_ONLY_AUTHORIZATION','Delegated export authorization cannot perform a role-bound action',403);
     return readGrant;
   }
+  const organizationRead=await recordReadAuthorization(db,userId,proofId);
+  if(organizationRead){
+    if(role)throw new DomainError('READ_ONLY_AUTHORIZATION','Organization viewing authority cannot perform a participant action',403);
+    return organizationRead;
+  }
   await requireOrganizationProofAccess(db, proofId, userId);
+  const organizationVisible=(await db.query<{allowed:boolean}>('SELECT platform_operator_access_active($1,$2) AS allowed',[proofId,userId])).rows[0];
+  if(!organizationVisible?.allowed)throw new DomainError('ORGANIZATION_ACCESS_REVOKED','Current organization or location authority no longer permits this Proof',403);
   const result = await db.query<ParticipantRow>(
     role
       ? `SELECT * FROM proof_participants WHERE proof_id = $1 AND user_id = $2 AND role = $3`

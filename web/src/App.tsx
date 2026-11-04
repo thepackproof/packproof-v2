@@ -19,6 +19,7 @@ import {CaptureLaunchScreen,retainCaptureLaunch} from "./screens/CaptureLaunchSc
 import { lazy, Suspense } from "react";
 import { useAdminAccess } from "./admin/useAdminAccess";
 const AdminWorkspace = lazy(() => import("./admin/AdminWorkspace"));
+const RecordsPortal = lazy(() => import("./records/RecordsPortal"));
 import { SubmissionIntakePanel } from "./components/SubmissionIntakePanel";
 import { IntakeLinkFallback, IntakeSignInContext } from "./screens/IntakeLinkFallback";
 import type {EngineSession} from "./capture/engine";
@@ -94,7 +95,8 @@ import { SignInScreen } from "./screens/SignInScreen";
 import { AuthFrame } from "./site/PublicSite";
 
 type Route =
-  | { name: "home" }
+  | { name: "home"; capture?: boolean }
+  | { name: "records"; href: string }
   | { name: "sample" }
   | { name: "pack" }
   | { name: "fulfillment" }
@@ -125,7 +127,9 @@ function parseHref(href: string): Route {
   const url = new URL(canonicalWorkspacePath(href), "http://packproof.local");
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   if (pathname === "/sample-proof") return { name: "sample" };
+  if (/^\/app\/(?:records(?:\/[A-Za-z0-9_-]{1,160})?|needs-attention|connections|exports|settings|setup)$/.test(pathname)) return { name: "records", href: `${pathname}${url.search}` };
   if (pathname === "/app") return { name: "home" };
+  if (pathname === "/capture/home") return { name: "home", capture: true };
   if (pathname === "/pack") return { name: "pack" };
   if (pathname === "/fulfillment") return { name: "fulfillment" };
   if (pathname === "/uploads") return { name: "uploads" };
@@ -333,8 +337,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   const taskPending = useRef(false);
   const [taskSelection, setTaskSelection] = useState<string | undefined>();
   const [taskInteractions, setTaskInteractions] = useState<Record<string, number>>({});
-  const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/"));
-  const adminLanding = useRef(window.location.pathname === "/login");
+  const [enteredFromIntakeLink] = useState(() => window.location.pathname.startsWith("/app/capture/"));
   const [session, setSession] = useState<WebSession | null>(() => loadSession());
   const [route, setRoute] = useState<Route>(() =>
     parseHref(`${window.location.pathname}${window.location.search}`),
@@ -454,11 +457,6 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     const timer = window.setInterval(report, 30 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [api, session?.userId]);
-  useEffect(() => {
-    if (!session || adminAccess.loading || !adminLanding.current) return;
-    adminLanding.current = false;
-    if (adminAccess.allowed) go("/admin");
-  }, [adminAccess.allowed, adminAccess.loading, session?.userId]);
 
   const loadProofEvidence = useCallback(
     async (evidenceId: string) => {
@@ -892,7 +890,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             clearReauthenticationTask();
             if (authReturn === "/new/delete-account") go(authReturn);
             else if (expiredTask) go(reauthenticationDestination(expiredTask, next));
-            else if (["/login", "/signup", "/"].includes(window.location.pathname)) go("/app");
+            else if (["/login", "/signup", "/"].includes(window.location.pathname)) go(mobileTask ? "/app" : "/app/records");
             // Keep the requested Proof or receiver invitation through sign-in.
             // The current route is already guarded until the session/profile is ready.
             setError(null);
@@ -939,6 +937,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
   };
 
   if (route.name === "admin") return <Suspense fallback={<main className="app-loading" role="status">Opening administration…</main>}><AdminWorkspace api={api} access={adminAccess} accountName={session.displayName || session.username || "Administrator"} onGo={go} onSignOut={() => void requestSignOut()} /></Suspense>;
+
+  if (route.name === "records" || route.name === "home" && !mobileTask && !route.capture) return <Suspense fallback={<main className="app-loading" role="status">Opening records workspace…</main>}><RecordsPortal api={api} session={session} href={route.name === "records" ? route.href : "/app/records"} onGo={go} onSignOut={() => void requestSignOut()} adminAllowed={adminAccess.allowed} developerAllowed={developerAllowed} /></Suspense>;
 
   return (
     <div className={`app-shell workspace-shell${SIGNAL_ENABLED ? " signal-shell" : ""}${mobileTask ? " mobile-task-shell" : ""}${captureActive ? " capture-active" : ""}`}>
@@ -1224,7 +1224,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
       {route.name === "intake-handoff" ? <IntakeLinkFallback onQueue={() => go("/proofs?filter=attention")} /> : null}
       {route.name === "station" && !(mobileTask && !route.proofId && !route.reference && !route.tools && !recordings.some(row => row.kind === "station" && !row.finalized)) ? (
         <PackingStationScreen
-          onHome={()=>go("/app")}
+          onHome={()=>go(mobileTask ? "/app" : "/capture/home")}
           onView={proofId=>go(`/proofs/${encodeURIComponent(proofId)}`)}
           onCaptureActive={setCaptureActive}
           authorizedEngineSession={captureEngineSession?.context.proofId===route.proofId?captureEngineSession:null}

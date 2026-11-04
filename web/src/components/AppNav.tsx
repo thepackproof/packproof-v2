@@ -30,7 +30,7 @@ export function AppNav(props: {
     else props.onOpenAccount();
   };
   const links = [
-    { label: "Home", href: "/app", icon: "home", active: ["home"] },
+    { label: "Home", href: "/capture/home", icon: "home", active: ["home"] },
     { label: "Proofs", href: "/proofs", icon: "file", active: ["proofs", "proof", "receipt", "event", "invite", "finalize", "complete", "create", "scan"] },
     { label: "Packing Station", href: "/station", icon: "camera", active: ["station"] },
     { label: "Orders", href: "/fulfillment", icon: "box", active: ["fulfillment", "fulfillment-detail"] },

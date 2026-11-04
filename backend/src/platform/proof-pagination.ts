@@ -3,12 +3,14 @@ import type {Database} from '../db/database.js';
 import type {Clock} from '../clock.js';
 import {DomainError} from '../domain/errors.js';
 import type {PartnerActor} from './organizations.js';
+import {requirePartnerAggregateVisibility} from './organizations.js';
 
 interface Cursor {v:1;query:'proofs';merchant:string;environment:string;after:string;highWater:string;expires:number}
 const invalid=()=>new DomainError('INVALID_CURSOR','Use a cursor from this merchant Proof listing',400);
 /** Membership is frozen at the committed stream watermark. New Proofs appear on
  * the next fresh listing. Authorizations are always evaluated at request time. */
 export async function listPartnerProofs(db:Database,clock:Clock,actor:PartnerActor,after:unknown,signingKey:string){
+ await requirePartnerAggregateVisibility(db,actor);
  const key=Buffer.from(signingKey,'base64');if(key.length!==32)throw new DomainError('CURSOR_SIGNING_UNAVAILABLE','Cursor signing is not configured',503);
  const mac=(body:string)=>createHmac('sha256',key).update(`proof-list/v1:${body}`).digest();
  let cursor:Cursor;
@@ -31,6 +33,7 @@ export async function listPartnerProofs(db:Database,clock:Clock,actor:PartnerAct
   ) SELECT proof_id,position::text FROM first_event WHERE position>$5::bigint ORDER BY position LIMIT 51`,
   [actor.tenantId,actor.merchantId,actor.environment,cursor.highWater,cursor.after])).rows;
  const page=rows.slice(0,50);cursor.after=page.at(-1)?.position??cursor.after;
+ await requirePartnerAggregateVisibility(db,actor);
  const body=Buffer.from(JSON.stringify(cursor)).toString('base64url');
  return {proofIds:page.map(r=>r.proof_id),nextCursor:`${body}.${mac(body).toString('base64url')}`,hasMore:rows.length>50,cursorExpiresAt:new Date(cursor.expires).toISOString()};
 }

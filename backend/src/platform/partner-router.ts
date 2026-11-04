@@ -15,6 +15,9 @@ import { exportEvidencePackageStream,getEvidenceReview } from '../domain/evidenc
 import { withPartnerReadGrant } from './proof-read-grant.js';
 import { guardAuthorizedStream } from '../domain/authorized-stream.js';
 import { getProofEnvelope, exportProofEnvelope } from '../integrity/envelope-access.js';
+import { createPartnerRecordsRouter } from '../records/router.js';
+import { createPartnerOperationsRouter } from '../records/partner-operations-router.js';
+import { createPartnerIngestionsRouter } from '../records/ingestions-router.js';
 
 type PartnerRequest=Request & {partnerActor:PartnerActor};
 const route=(fn:(req:PartnerRequest,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req as PartnerRequest,res).catch(next);};
@@ -28,6 +31,9 @@ export function createPartnerRouter(deps:AppDependencies){
   void authenticatePartner(deps.db,deps.clock,raw.header('authorization'),raw.header('PackProof-Merchant-Id'),raw.header('PackProof-Delegation-Id'),requestId)
    .then(async actor=>{await consumeApiRate(deps.db,deps.clock,actor.tenantId);(raw as PartnerRequest).partnerActor=actor;next();}).catch(next);
  });
+ router.use(createPartnerRecordsRouter(deps));
+ router.use(createPartnerOperationsRouter(deps));
+ router.use(createPartnerIngestionsRouter(deps));
  function endpoint(method:'get'|'post'|'delete',path:string,scope:PartnerScope,fn:(db:Database,a:PartnerActor,req:PartnerRequest)=>Promise<unknown>,status=200,sensitive=false){
   router[method](path,route(async(req,res)=>{
    const actor=req.partnerActor;
