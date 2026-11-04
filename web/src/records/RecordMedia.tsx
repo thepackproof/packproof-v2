@@ -60,9 +60,9 @@ function useDownload(scope: string) {
   return { ...(state.scope === scope ? state : { busy: false, error: '', progress: null }), run, save, cancel };
 }
 
-export function RecordMedia({ api, proofId, organizationId, environment, evidence, canDownload }: ScopeProps & { evidence: RecordEvidence; canDownload: boolean }) {
+export function RecordMedia({ api, proofId, organizationId, environment, evidence, canDownload, sourceArtifactId }: ScopeProps & { evidence: RecordEvidence; canDownload: boolean; sourceArtifactId?: string }) {
   const evidenceId = evidence.id || evidence.evidenceId || '';
-  const scope = JSON.stringify([proofId, organizationId, environment, evidenceId, canDownload]);
+  const scope = JSON.stringify([proofId, organizationId, environment, evidenceId, canDownload, sourceArtifactId]);
   const download = useDownload(scope);
   const [viewer, setViewer] = useState<{ scope: string; url: string; kind: 'image' | 'video' | 'audio' } | null>(null);
   const activeUrl = useRef<string | null>(null);
@@ -79,7 +79,7 @@ export function RecordMedia({ api, proofId, organizationId, environment, evidenc
   const kind = mediaKind(evidence.contentType || evidence.mimeType || '');
   const currentViewer = viewer?.scope === scope ? viewer : null;
   if (!canDownload || !evidenceId) return <p className="records-muted">Original download is unavailable with your current access.</p>;
-  const load = (options: RecordDownloadOptions) => api.recordsOriginal(proofId, evidenceId, organizationId, environment, options);
+  const load = (options: RecordDownloadOptions) => sourceArtifactId ? api.recordsSourceOriginal(proofId, sourceArtifactId, organizationId, environment, options) : api.recordsOriginal(proofId, evidenceId, organizationId, environment, options);
   function preview() {
     void download.run(load, blob => {
       const actualKind = mediaKind(blob.type);
@@ -95,7 +95,7 @@ export function RecordMedia({ api, proofId, organizationId, environment, evidenc
       <button type="button" className="records-button" disabled={download.busy} onClick={() => { void download.run(load, blob => download.save(blob, mediaKind(blob.type) ? name : `${safeName(name)}.bin`)); }}>Download original</button>
       {(currentViewer || download.busy) && <button type="button" className="records-text-button" onClick={close}>{download.busy ? 'Cancel download' : 'Close viewer'}</button>}
     </div>
-    {download.busy && <p role="status" className="records-muted">{progressText(download.progress)} Files are limited to 220 MiB in this browser.</p>}
+    {download.busy && <p role="status" className="records-muted">{progressText(download.progress)} {sourceArtifactId ? 'Source files are limited to 250 MB.' : 'Files are limited to 220 MiB in this browser.'}</p>}
     {download.error && <p role="alert" className="records-error-text">{download.error}</p>}
     {currentViewer && <div aria-label={`Original media: ${name}`} style={{ marginTop: 12 }}>
       {currentViewer.kind === 'image' ? <img src={currentViewer.url} alt={name} style={{ width: '100%', maxHeight: '65vh', objectFit: 'contain' }}/> : currentViewer.kind === 'video' ? <video src={currentViewer.url} controls playsInline preload="metadata" aria-label={name} style={{ width: '100%', maxHeight: '65vh' }}/> : <audio src={currentViewer.url} controls preload="metadata" aria-label={name} style={{ width: '100%' }}/>}
@@ -115,4 +115,9 @@ export function RecordPackageDownload({ api, proofId, organizationId, environmen
     {download.error && <p role="alert" className="records-error-text">{download.error}</p>}
     <p className="records-muted">Includes the frozen capture inventory and its verification files. Later operational notes, relationships and evidence checks are not included. This package does not establish physical condition independently.</p>
   </div>;
+}
+
+export function RecordDownloadButton({ scope, filename, label, load, disabled = false }: { scope: string; filename: string; label: string; load: (options: RecordDownloadOptions) => Promise<Blob>; disabled?: boolean }) {
+  const download = useDownload(scope);
+  return <div><button type="button" className="records-button secondary" disabled={disabled || download.busy} onClick={() => void download.run(load, blob => download.save(blob, filename))}>{label}</button>{download.busy && <><p className="records-muted" role="status">{progressText(download.progress)}</p><button className="records-text-button" onClick={download.cancel}>Cancel download</button></>}{download.error && <p role="alert" className="records-error-text">{download.error}</p>}</div>;
 }

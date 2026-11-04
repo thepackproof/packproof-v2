@@ -1,10 +1,24 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import test from 'node:test';
 import { PackProofClient, PackProofError, verifyWebhook } from '../index.mjs';
 
 const settings = { baseUrl: 'https://api.example.test', token: 'test_secret', merchantId: 'merchant_1', delegationId: 'grant_1', sleep: async () => {} };
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers });
+test('resumes accepted byte-identical parts, retries a lost part response and reports durable byte progress',async()=>{
+ const bytes=Uint8Array.from([1,2,3]),input={proofId:'proof',connectionId:'source',filename:'source.png',contentType:'image/png',byteSize:3,reportedAt:'2026-11-04T12:00:00Z'},digest=b=>createHash('sha256').update(b).digest('hex'),calls=[],progress=[];let writes=0;
+ const client=new PackProofClient({...settings,fetch:async(url,o)=>{calls.push([url,o]);if(url.endsWith('/upload-sessions/session'))return json({...input,sessionId:'session',artifactId:'artifact',state:'open',partSize:2,expectedSha256:digest(bytes),receivedParts:[{partNumber:1,byteSize:2,sha256:digest(bytes.subarray(0,2))}],blockedReason:null});if(url.endsWith('/parts/2')){writes++;assert.deepEqual(o.body,bytes.subarray(2));assert.equal(o.headers.get('Content-Type'),'image/png');assert.equal(o.headers.get('Content-Length'),'1');if(writes===1)throw new TypeError('lost acknowledgement');return json({partNumber:2});}if(url.endsWith('/parts/complete'))return json({state:'received'});return json({operationId:'source_completion_1',state:'queued'},202);}});
+ const r=await client.uploadArtifact(input,bytes,{resumeSessionId:'session',idempotencyKey:'one',onProgress:p=>progress.push(p)});assert.equal(r.data.state,'queued');assert.equal(writes,2);assert.equal(calls.filter(([url])=>url.endsWith('/parts/1')).length,0);assert.deepEqual(progress.map(p=>p.acceptedBytes),[2,3]);assert.equal(calls.every(([url,o])=>url.startsWith(settings.baseUrl+'/v1/partner/')&&o.redirect==='error'),true);
+});
+test('rejects conflicting resume bytes and metadata before writing another part',async()=>{
+ const input={proofId:'proof',connectionId:'source',filename:'a.png',contentType:'image/png',byteSize:1,reportedAt:'2026-11-04T12:00:00Z'};let calls=0;
+ const client=new PackProofClient({...settings,fetch:async()=>{calls++;return json({...input,sessionId:'session',artifactId:'artifact',state:'open',partSize:2,receivedParts:[{partNumber:1,byteSize:1,sha256:'a'.repeat(64)}]});}});
+ await assert.rejects(client.uploadArtifact(input,Uint8Array.of(7),{resumeSessionId:'session',idempotencyKey:'one'}),/accepted part belongs to different bytes/);assert.equal(calls,1);
+});
+test('returns binary package bytes and stops polling when a canonical export is ready',async()=>{
+ const bytes=Uint8Array.of(80,75,3,4,0,255);const client=new PackProofClient({...settings,fetch:async(url)=>url.endsWith('/package')?new Response(bytes,{headers:{'X-Request-Id':'binary'}}):json({state:'ready',id:'canonical_export_one'})});
+ const result=await client.downloadExport('canonical_export_one');assert.deepEqual(result.data,bytes);assert.deepEqual(result.rawBody,bytes);assert.equal(result.requestId,'binary');assert.equal((await client.waitForOperation('canonical_export_one')).data.state,'ready');
+});
 
 test('a lost create response retries identical bytes and key with current selectors', async () => {
   const calls = [];

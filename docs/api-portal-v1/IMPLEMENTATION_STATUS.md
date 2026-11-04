@@ -1,5 +1,13 @@
 # API and records portal implementation status
 
+**Current source update:** [November 4 continuation](CONTINUATION_2026-11-04.md).
+It supersedes the initial missing-interface inventory below: service imports,
+source uploads/downloads, canonical export jobs, protected operational snapshot
+source, fixed snapshot shares and governed deletion reviews are now integrated.
+Physical deletion, automatic connector qualification and the complete domain/
+template product remain incomplete. Historical observations below are retained
+as a baseline, not current source-absence claims.
+
 This is the implementation and release ledger for the November 3, 2026 API and
 Portal Development Plan. Update this ledger with observed evidence, not estimates.
 A source implementation, local passing test, deployed feature, and accepted

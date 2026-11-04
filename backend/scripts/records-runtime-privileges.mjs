@@ -29,6 +29,21 @@ const policy={
  record_ingestion_operations:{api:{...select,insert:['id','organization_id','environment','connection_id','connection_revision','principal_id','credential_id','delegation_id','actor_context','request_id','received_at','state','next_attempt_at','updated_at'],update:['state']},worker:{...select,update:['state','lease_token','lease_expires_at','updated_at','next_attempt_at','attempts']}},
  record_source_receipts:{api:{...select,insert:['id','operation_id','item_index','organization_id','environment','connection_id','source_event_id','proof_id','reported_at','received_at','payload_canonical','payload_sha256','normalized','state','duplicate_of','error_code']},worker:{...select,update:['state','canonical_event_id','error_code','attempts']}},
  record_source_identities:{api:{...select,insert:'*'},worker:select},
+ partner_import_jobs:{api:{...select,insert:'*',update:['state','import_valid_rows','updated_at']},worker:{...select,update:['state','lease_token','lease_expires_at','updated_at','last_error_code']}},
+ partner_import_rows:{api:{...select,insert:'*'},worker:{...select,update:['status','errors','proof_id','attempts']}},
+ record_canonical_export_jobs:{api:{...select,insert:'*'},worker:{...select,update:['state','updated_at','ready_at','object_key','object_version_id','artifact_sha256','artifact_byte_size','lease_token','lease_expires_at','attempts','last_error_code']}},
+ record_source_artifacts:{api:{...select,insert:'*'},worker:select},
+ record_source_upload_sessions:{api:{...select,insert:'*',update:['state','staging_version_id','received_byte_size','received_sha256','ingress_bytes','updated_at','lease_token','lease_expires_at','error_code']},worker:select},
+ record_source_upload_parts:{api:{...select,insert:'*'},worker:select},
+ record_source_artifact_operations:{api:{...select,insert:'*'},worker:{...select,update:['state','attempts','next_attempt_at','updated_at','lease_token','lease_expires_at','error_code']}},
+ record_source_artifact_results:{api:select,worker:{...select,insert:'*'}},
+ record_source_upload_budgets:{api:{...select,insert:'*',update:['reserved_bytes']},worker:select},
+ operational_snapshot_candidates:{api:{...select,insert:'*'},worker:select},
+ operational_snapshot_delivery:{api:{...select,insert:['snapshot_id','next_attempt_at']},worker:{...select,update:['state','attempts','next_attempt_at','lease_token','lease_until','error_code']}},
+ operational_snapshot_results:{api:select,worker:{...select,insert:'*'}},
+ record_snapshot_shares:{api:{...select,insert:['id','proof_id','organization_id','environment','owner_kind','owner_context','target_kind','target_id','selection_sha256','token_sha256','recipient_hint','created_by','created_at','expires_at'],update:['revoked_at','revoked_by','revoke_reason']},worker:select},
+ record_deletion_contexts:{api:{...select,insert:'*'},worker:select},
+ record_deletion_reviews:{api:{...select,insert:'*'},worker:select},
 };
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -60,8 +75,8 @@ function sourceColumns(sql){
 
 export async function recordsMigrationInventory(){
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(096|097|098|099|100)_[a-z0-9_]+\.sql$/.test(name)).sort();
- if(files.length!==5||new Set(files.map(f=>f.slice(0,3))).size!==5)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-5])_[a-z0-9_]+\.sql$/.test(name)).sort();
+ if(files.length!==10||new Set(files.map(f=>f.slice(0,3))).size!==10)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={},tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);Object.assign(tableColumns,sourceColumns(sql));}
  if(Object.keys(policy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!policy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
  return {migrations,migrationSha256:sha(migrations),tableColumns};

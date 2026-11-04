@@ -1,11 +1,21 @@
-export interface RequestOptions { method?: string; body?: unknown; idempotencyKey?: string; ifMatch?: string; signal?: AbortSignal }
+export interface RequestOptions { method?: string; body?: unknown; idempotencyKey?: string; ifMatch?: string; signal?: AbortSignal; rawBody?: Uint8Array; contentType?: string; binary?: boolean }
 export interface MutationOptions extends RequestOptions { idempotencyKey: string }
 export interface RevisionOptions extends MutationOptions { revision: number }
 export interface RecordChildPageOptions { cursor?: string; limit?: number; signal?: AbortSignal }
 export interface RecordChildIterationOptions extends RecordChildPageOptions { maxPages?: number }
 /** Responses can add enum values without a client upgrade; do not exhaustively adjudicate unknown states. */
 export type OpenEnum<T extends string> = T | (string & {});
-export interface ApiResponse<T = unknown> { data: T; rawBody: string; status: number; headers: Headers; requestId: string | null; replayed: boolean }
+export interface ApiResponse<T = unknown> { data: T; rawBody: T extends Uint8Array ? Uint8Array : string; status: number; headers: Headers; requestId: string | null; replayed: boolean }
+export interface SourceArtifactInput {proofId:string;connectionId:string;sourceArtifactId?:string;filename:string;contentType:string;byteSize:number;sha256?:string;reportedAt:string;subjectId?:string}
+export interface SourceUploadSession {sessionId:string;artifactId:string;proofId:string;connectionId:string;sourceArtifactId:string;filename:string;contentType:string;byteSize:number;expectedSha256:string|null;state:OpenEnum<'open'|'receiving'|'received'|'complete'|'expired'|'rejected'>;partSize:number;receivedParts:{partNumber:number;byteSize:number;sha256:string}[];blockedReason:string|null;operation:{operationId:string}|null;[key:string]:unknown}
+export interface SourceArtifactOperation {operationId:string;artifactId:string;state:OpenEnum<'queued'|'running'|'succeeded'|'failed'>;[key:string]:unknown}
+export interface UploadArtifactOptions extends MutationOptions {resumeSessionId?:string;onProgress?:(progress:{sessionId:string;artifactId:string;acceptedBytes:number;totalBytes:number})=>void}
+export interface PartnerCsvInput {integrationAccountId:string;operatorMembershipId:string;sourceName?:string;csv:string;timeZone:string;mapping?:Record<string,string>}
+export interface ImportJob {id:string;state:string;previewVersion:string;rows:unknown[];[key:string]:unknown}
+export interface ExportInput {proofId:string;kind:'CORE'|'LIFECYCLE'|'ENVELOPE';snapshotId:string;expiresAt?:string}
+export interface ExportJob {id:string;operationId:string;state:OpenEnum<'queued'|'running'|'ready'|'action_needed'|'expired'>;[key:string]:unknown}
+export interface ShareInput {proofId:string;target:{kind:'CANONICAL_EXPORT';id:string};expiresAt:string;recipientHint?:string;downloadedCopiesAcknowledged:true}
+export interface SnapshotShare {id:string;token?:string;reviewPath?:string;expiresAt:string;revokedAt:string|null;[key:string]:unknown}
 export interface Problem { code?: string; title?: string; detail?: string; status?: number; [key: string]: unknown }
 export interface ProofPage { proofIds: string[]; nextCursor: string; hasMore: boolean; cursorExpiresAt: string; [key: string]: unknown }
 export interface Event { id: string; type: string; apiVersion: string; tenantId: string; createdAt: string; data: { proofId: string; [key: string]: unknown }; streamSequence?: string; [key: string]: unknown }
@@ -75,6 +85,29 @@ export declare class PackProofClient {
   createIngestion(input: SourceIngestionInput, options: MutationOptions): Promise<ApiResponse<SourceIngestionReceipt>>;
   getOperation(operationId: string, options?: RequestOptions): Promise<ApiResponse<SourceOperation>>;
   waitForOperation(operationId: string, options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal }): Promise<ApiResponse<SourceOperation>>;
+  previewImport(input:PartnerCsvInput,options:MutationOptions):Promise<ApiResponse<ImportJob>>;
+  getImport(id:string,options?:RequestOptions):Promise<ApiResponse<ImportJob>>;
+  commitImport(id:string,input:{previewVersion:string;importValidRows:boolean},options:MutationOptions):Promise<ApiResponse<ImportJob>>;
+  createUploadSession(input:SourceArtifactInput,options:MutationOptions):Promise<ApiResponse<SourceUploadSession>>;
+  getUploadSession(id:string,options?:RequestOptions):Promise<ApiResponse<SourceUploadSession>>;
+  uploadPart(id:string,partNumber:number,bytes:Uint8Array,contentType:string,options?:RequestOptions):Promise<ApiResponse<unknown>>;
+  assembleUpload(id:string,options?:RequestOptions):Promise<ApiResponse<SourceUploadSession>>;
+  completeUpload(id:string,options?:RequestOptions):Promise<ApiResponse<SourceArtifactOperation>>;
+  getArtifactOperation(id:string,options?:RequestOptions):Promise<ApiResponse<SourceArtifactOperation>>;
+  uploadArtifact(input:SourceArtifactInput,bytes:Uint8Array,options:UploadArtifactOptions):Promise<ApiResponse<SourceArtifactOperation>>;
+  downloadEvidence(id:string,options?:RequestOptions):Promise<ApiResponse<Uint8Array>>;
+  listSnapshots(proofId:string,options?:RequestOptions):Promise<ApiResponse<unknown>>;
+  listOperationalSnapshots(proofId:string,options?:RequestOptions):Promise<ApiResponse<unknown>>;
+  downloadOperationalSnapshot(proofId:string,id:string,options?:RequestOptions):Promise<ApiResponse<Uint8Array>>;
+  createExport(input:ExportInput,options:MutationOptions):Promise<ApiResponse<ExportJob>>;
+  getExport(id:string,options?:RequestOptions):Promise<ApiResponse<ExportJob>>;
+  downloadExport(id:string,options?:RequestOptions):Promise<ApiResponse<Uint8Array>>;
+  createShare(input:ShareInput,options:MutationOptions):Promise<ApiResponse<SnapshotShare>>;
+  listShares(proofId:string,options?:RequestOptions):Promise<ApiResponse<{shares:SnapshotShare[]}>>;
+  revokeShare(id:string,reason:string,options?:RequestOptions):Promise<ApiResponse<{id:string;revoked:true}>>;
+  previewDeletion(proofId:string,options?:RequestOptions):Promise<ApiResponse<{impactSha256:string;executionAvailable:false;[key:string]:unknown}>>;
+  requestDeletion(input:{proofId:string;reason:string;impactSha256:string},options:MutationOptions):Promise<ApiResponse<{id:string;originalsDeleted:false;[key:string]:unknown}>>;
+  getDeletionRequest(id:string,options?:RequestOptions):Promise<ApiResponse<unknown>>;
   proofIds(options?: { after?: string; maxPages?: number; signal?: AbortSignal }): AsyncGenerator<string>;
   eventPages(options?: { after?: string; limit?: number; maxPages?: number; signal?: AbortSignal }): AsyncGenerator<ApiResponse<EventPage>>;
   timelinePages(proofId: string, options?: RecordChildIterationOptions): AsyncGenerator<ApiResponse<RecordTimelinePage>>;

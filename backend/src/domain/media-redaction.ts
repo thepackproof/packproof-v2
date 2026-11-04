@@ -15,7 +15,7 @@ import { spoolCommittedEvidence } from './media-files.js';
 import { DomainError } from './errors.js';
 import { appendAudit } from './audit.js';
 const exec = promisify(execFile);
-const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=120','--fsize=104857600','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C'}});
+const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=120','--fsize=104857600','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C',OPENBLAS_NUM_THREADS:'1',OMP_NUM_THREADS:'1'}});
 const VERSION='opaque-mask-silent/v1';
 export interface RedactionMask { x:number;y:number;width:number;height:number }
 export interface RedactionTransform { masks:RedactionMask[]; removeAudio:true; stripMetadata:true; withheldIntervals:never[] }
@@ -61,7 +61,7 @@ async function performRedaction(db:Database,clock:Clock,store:ObjectStore,userId
     // Fully opaque masks on EVERY frame. No original audio, metadata, attachments,
     // subtitles, hidden tracks or original thumbnails enter this representation.
     const filters=transform.masks.map(m=>`drawbox=x=floor(iw*${m.x}):y=floor(ih*${m.y}):w=ceil(iw*${m.x+m.width})-floor(iw*${m.x}):h=ceil(ih*${m.y+m.height})-floor(ih*${m.y}):color=black:t=fill`).join(',');
-    await boundedExec('ffmpeg',['-nostdin','-v','error','-threads','1','-filter_threads','1','-y','-protocol_whitelist','file,pipe','-i',path.join(dir,'input'),'-map','0:v:0','-vf',filters,'-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',...(video?['-c:v','libx264','-threads','1','-preset','fast','-pix_fmt','yuv420p','-movflags','+faststart']:['-frames:v','1']),out],{timeout:120000,maxBuffer:1024*1024});
+    await boundedExec('ffmpeg',['-nostdin','-v','error','-threads','1','-filter_threads','1','-y','-protocol_whitelist','file,pipe','-i',path.join(dir,'input'),'-map','0:v:0','-vf',filters,'-an','-sn','-dn','-map_metadata','-1','-map_chapters','-1',...(video?['-c:v','libx264','-threads','1','-preset','fast','-pix_fmt','yuv420p','-movflags','+faststart']:['-threads','1','-frames:v','1']),out],{timeout:120000,maxBuffer:1024*1024});
     const byteSize=(await stat(out)).size;
     if(!byteSize||byteSize>100*1024*1024) throw new Error('Output limit');
     const hash=(await sha256HexFromStream(createReadStream(out))).sha256,key=`derivatives/${proofId}/${id}/${hash}`,contentType=video?'video/mp4':'image/png';

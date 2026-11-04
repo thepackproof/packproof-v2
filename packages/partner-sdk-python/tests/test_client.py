@@ -15,6 +15,50 @@ def response(value, status=200, **headers):
 
 
 class ClientTests(unittest.TestCase):
+    def test_resume_skips_accepted_parts_and_retries_identical_bytes(self):
+        data = b'\x01\x02\x03'
+        value = {'proofId':'proof','connectionId':'source','filename':'a.png','contentType':'image/png','byteSize':3,'reportedAt':'2026-11-04T12:00:00Z'}
+        calls, progress = [], []
+        writes = 0
+        def transport(url, method, headers, body, timeout):
+            nonlocal writes
+            calls.append((url, method, headers, body))
+            if url.endswith('/upload-sessions/session'):
+                return response({**value,'sessionId':'session','artifactId':'artifact','state':'open','partSize':2,'expectedSha256':hashlib.sha256(data).hexdigest(),'receivedParts':[{'partNumber':1,'byteSize':2,'sha256':hashlib.sha256(data[:2]).hexdigest()}]})
+            if url.endswith('/parts/2'):
+                writes += 1
+                self.assertEqual(body, data[2:])
+                self.assertEqual(headers['Content-Length'], '1')
+                self.assertEqual(headers['Content-Type'], 'image/png')
+                if writes == 1:
+                    raise URLError('lost acknowledgement')
+                return response({'partNumber':2})
+            if url.endswith('/parts/complete'):
+                return response({'state':'received'})
+            return response({'operationId':'source_completion_1','state':'queued'}, 202)
+        result = self.client(transport).upload_artifact(value, data, idempotency_key='one', resume_session_id='session', on_progress=progress.append)
+        self.assertEqual(result.data['state'], 'queued')
+        self.assertEqual(writes, 2)
+        self.assertFalse(any(url.endswith('/parts/1') for url, *_ in calls))
+        self.assertEqual([p['acceptedBytes'] for p in progress], [2, 3])
+
+    def test_resume_rejects_changed_accepted_parts_without_writing(self):
+        value = {'proofId':'proof','connectionId':'source','filename':'a.png','contentType':'image/png','byteSize':1,'reportedAt':'2026-11-04T12:00:00Z'}
+        calls = []
+        def transport(*args):
+            calls.append(args)
+            return response({**value,'sessionId':'session','artifactId':'artifact','state':'open','partSize':2,'receivedParts':[{'partNumber':1,'byteSize':1,'sha256':'a'*64}]})
+        with self.assertRaisesRegex(PackProofError, 'accepted part belongs to different bytes'):
+            self.client(transport).upload_artifact(value, b'\x07', idempotency_key='one', resume_session_id='session')
+        self.assertEqual(len(calls), 1)
+
+    def test_binary_package_bytes_remain_exact(self):
+        data = b'PK\x03\x04\x00\xff'
+        result = self.client(lambda *args: (200, {'X-Request-Id':'binary'}, data)).download_export('one')
+        self.assertEqual(result.data, data)
+        self.assertEqual(result.raw_body, data)
+        self.assertEqual(result.request_id, 'binary')
+
     def client(self, transport, **options):
         return PackProofClient("https://api.example.test", "test_secret", merchant_id="merchant_1", delegation_id="grant_1", transport=transport, sleep=lambda _: None, **options)
 

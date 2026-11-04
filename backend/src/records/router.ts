@@ -53,7 +53,7 @@ export function createRecordsRouter(deps:AppDependencies) {
   router.get('/:proofId/timeline',run(async(r,s)=>{const w=await workspace(r);s.json(await pageRecordTimeline(deps.db,deps.clock,w,r.params.proofId,r.query));}));
   router.get('/:proofId/evidence',run(async(r,s)=>{const w=await workspace(r);s.json(await pageRecordEvidence(deps.db,deps.clock,w,r.params.proofId,r.query));}));
   router.get('/:proofId/requirements',run(async(r,s)=>{const w=await workspace(r);await requireRecordAccess(deps.db,w,r.params.proofId);s.json({requirements:await readRecordRequirements(deps.db,deps.clock,r.params.proofId)});}));
-  router.get('/:proofId',run(async(r,s)=>{const w=await workspace(r),result=await getRecord(deps.db,deps.clock,w,r.params.proofId);s.setHeader('ETag',`"${result.record.revision}"`);s.json(result);}));
+  router.get('/:proofId',run(async(r,s)=>{const w=await workspace(r),result=await getRecord(deps.db,deps.clock,w,r.params.proofId);const runtime=deps.operationalSnapshots;try{runtime?.assertReady();result.capabilities.operationalSnapshots=!!runtime&&['OWNER','ADMIN'].includes(w.role)&&runtime.binding.environment===w.environment&&runtime.binding.organizationIds.includes(w.organizationId);}catch{result.capabilities.operationalSnapshots=false;}s.setHeader('ETag',`"${result.record.revision}"`);s.json(result);}));
   function command(method:'post'|'patch',path:string,fn:(r:Request,w:RecordWorkspace,tx:AppDependencies['db'],proofId:string)=>Promise<unknown>,issue=false) {
     router[method](path,run(async(r,s)=>{
       const w=await workspace(r,true);

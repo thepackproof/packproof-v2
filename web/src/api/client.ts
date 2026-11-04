@@ -69,6 +69,34 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async recordsCanonicalExport(exportId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/canonical-exports/${encodeURIComponent(exportId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsOperationalSnapshotPackage(proofId: string, snapshotId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/snapshots/${encodeURIComponent(snapshotId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsSourceOriginal(proofId: string, artifactId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/source-artifacts/${encodeURIComponent(artifactId)}/blob?${scope}`, true, { ...options, maxBytes: 250_000_000 });
+  }
+  async recordsUploadPart(sessionId: string, partNumber: number, organizationId: string, environment: string, bytes: Blob, signal?: AbortSignal): Promise<unknown> {
+    if (!sessionId || !Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > 1000 || bytes.size > 5 * 1024 * 1024) throw new Error('Invalid source upload part.');
+    const token = await this.options.getToken();
+    if (!token) throw new ApiError('UNAUTHENTICATED', 'Missing bearer token', 401);
+    const scope = new URLSearchParams({ organizationId, environment });
+    return withRequestTimeout(async timeoutSignal => {
+      const combined = new AbortController(), cancel = () => combined.abort();
+      timeoutSignal.addEventListener('abort', cancel, { once: true }); signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted || timeoutSignal.aborted) combined.abort();
+      try {
+        const response = await fetch(joinUrl(this.options.baseUrl, `/me/records/source-upload-sessions/${encodeURIComponent(sessionId)}/parts/${partNumber}?${scope}`), { method: 'PUT', body: bytes, signal: combined.signal, headers: { Authorization: `Bearer ${token}`, 'Content-Type': bytes.type || 'application/octet-stream' }, referrerPolicy: 'no-referrer' });
+        if (!response.ok) throw await errorFromResponse(response);
+        const text = await response.text(); return text.trim() ? JSON.parse(text) : undefined;
+      } finally { timeoutSignal.removeEventListener('abort', cancel); signal?.removeEventListener('abort', cancel); }
+    }, 120000);
+  }
   async recordsOriginal(proofId: string, evidenceId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
     const scope = new URLSearchParams({ organizationId, environment });
     return this.download(`/me/records/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/blob?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });

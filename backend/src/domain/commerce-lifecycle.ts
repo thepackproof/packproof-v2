@@ -18,6 +18,7 @@ import { loadProof, requireParticipant } from "./proof-access.js";
 import { appendAudit } from "./audit.js";
 import { requireOrganizationProofAccess, requireHumanActor } from '../platform/organization-access.js';
 import { partnerReadAuthorization } from '../platform/proof-read-grant.js';
+import { recordReadAuthorization } from '../records/read-grant.js';
 
 export const COMMERCE_STAGES = ["RECEIPT", "RETURN_PACKING", "RETURN_RECEIPT"] as const;
 export type CommerceStageType = (typeof COMMERCE_STAGES)[number];
@@ -54,7 +55,7 @@ export async function requireCommerceAccess(
   await requireActiveAccount(db, userId);
   await requireOrganizationProofAccess(db, proofId, userId);
   await commerceProof(db, proofId);
-  if(await partnerReadAuthorization(db,userId,proofId))return 'SELLER';
+  if(await partnerReadAuthorization(db,userId,proofId)||await recordReadAuthorization(db,userId,proofId))return 'SELLER';
   const member = await db.query<{ role: "SELLER" | "BUYER" }>(
     "SELECT role FROM proof_participants WHERE proof_id=$1 AND user_id=$2",
     [proofId, userId],

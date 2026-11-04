@@ -37,6 +37,20 @@ const modules = [
   ['backend/src/records/connections-router.ts', 'createRecordConnectionsRouter', '/me/records/connections', app, 'app', '/me/records/connections'],
   ['backend/src/records/media-router.ts', 'createRecordMediaRouter', '/me/records', app, 'app', '/me/records'],
   ['backend/src/records/workspace-requests.ts', 'createWorkspaceRequestsRouter', '/me/records/workspace-requests', app, 'app', '/me/records/workspace-requests'],
+  ['backend/src/records/partner-imports.ts','createPartnerImportsRouter','/v1/partner',partner,'router',null],
+  ['backend/src/records/partner-exports.ts','createPartnerExportsRouter','/v1/partner',partner,'router',null],
+  ['backend/src/records/partner-exports.ts','createRecordCanonicalExportsRouter','/me/records',app,'app','/me/records'],
+  ['backend/src/records/partner-snapshots.ts','createPartnerSnapshotsRouter','/v1/partner',partner,'router',null],
+  ['backend/src/records/partner-snapshots.ts','createRecordSnapshotsRouter','/me/records',app,'app','/me/records'],
+  ['backend/src/records/partner-artifacts-router.ts','createPartnerArtifactsRouter','/v1/partner',partner,'router',null,{human:false}],
+  ['backend/src/records/partner-artifacts-router.ts','createSourceArtifactsRouter','/me/records',app,'app','/me/records',{human:true}],
+  ['backend/src/records/operational-snapshots-router.ts','createOperationalSnapshotsRouter','/me/records',app,'app','/me/records'],
+  ['backend/src/records/operational-snapshots-router.ts','createPartnerOperationalSnapshotsRouter','/v1/partner',partner,'router',null],
+  ['backend/src/records/snapshot-shares.ts','createSnapshotSharesRouter','/v1/partner',partner,'router',null,{human:false}],
+  ['backend/src/records/snapshot-shares.ts','createSnapshotSharesRouter','/me/records',app,'app','/me/records',{human:true}],
+  ['backend/src/records/snapshot-shares.ts','createPublicSnapshotSharesRouter','/public/record-shares',app,'app','/public/record-shares'],
+  ['backend/src/records/deletion-requests.ts','createRecordDeletionRouter','/v1/partner',partner,'router',null,{human:false}],
+  ['backend/src/records/deletion-requests.ts','createRecordDeletionRouter','/me/records',app,'app','/me/records',{human:true}],
 ];
 const optionalOperations = 'backend/src/records/partner-operations-router.ts';
 if (fs.existsSync(path.join(root, optionalOperations))) modules.push([optionalOperations, 'createPartnerOperationsRouter', '/v1/partner', partner, 'router', null]);
@@ -45,23 +59,39 @@ if (fs.existsSync(path.join(root, sourceIngestions))) modules.push([sourceIngest
 if (!mounted(app, 'app', 'createPlatformRouter', '/v1') || !mounted(platform, 'router', 'createPartnerRouter', '/partner')) failures.push('Partner parent route is not mounted at /v1/partner');
 
 const actual = new Set();
-for (const [relative, factory, prefix, parent, receiver, mount] of modules) {
+for (const [relative, factory, prefix, parent, receiver, mount,context={}] of modules) {
   if (!mounted(parent, receiver, factory, mount)) failures.push(`${factory} is not mounted at its expected parent`);
   const source = parse(relative);
-  const declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === factory);
+  let declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === factory);
+  if(['createPartnerArtifactsRouter','createSourceArtifactsRouter'].includes(factory))declaration=source.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='routes');
   if (!declaration?.body) { failures.push(`${factory} function not found in ${relative}`); continue; }
+  const values={...context};
+  function value(node){
+    if(!node)return null;
+    if(ts.isStringLiteral(node)||ts.isNoSubstitutionTemplateLiteral(node))return node.text;
+    if(node.kind===ts.SyntaxKind.TrueKeyword)return true;if(node.kind===ts.SyntaxKind.FalseKeyword)return false;
+    if(ts.isIdentifier(node))return values[node.text]??null;
+    if(ts.isConditionalExpression(node)){const test=value(node.condition);return typeof test==='boolean'?value(test?node.whenTrue:node.whenFalse):null;}
+    if(ts.isTemplateExpression(node)){let result=node.head.text;for(const span of node.templateSpans){const part=value(span.expression);if(typeof part!=='string')return null;result+=part+span.literal.text;}return result;}
+    return null;
+  }
   walk(declaration.body, node => {
+    if(ts.isVariableDeclaration(node)&&ts.isIdentifier(node.name)){const resolved=value(node.initializer);if(resolved!==null)values[node.name.text]=resolved;}
     if (!ts.isCallExpression(node)) return;
     let method = null, route = null;
-    if (ts.isPropertyAccessExpression(node.expression) && node.expression.expression.getText(source) === 'router') {
+    if (ts.isPropertyAccessExpression(node.expression) && ['router','r'].includes(node.expression.expression.getText(source))) {
       method = node.expression.name.text;
-      route = literal(node.arguments[0]);
+      route = value(node.arguments[0]);
     } else if (ts.isIdentifier(node.expression) && ['command', 'endpoint'].includes(node.expression.text)) {
       method = literal(node.arguments[0]);
       route = literal(node.arguments[1]);
     } else if (ts.isIdentifier(node.expression) && node.expression.text === 'read') {
       method = 'get'; route = literal(node.arguments[0]);
     }
+    // The review action is mounted only on the human factory branch.
+    if(factory==='createRecordDeletionRouter'&&context.human===false&&route==='/deletion-requests/:requestId/review')return;
+    if(['createPartnerArtifactsRouter','createSourceArtifactsRouter'].includes(factory)&&
+      (context.human?route==='/evidence/:artifactId/download':route==='/:proofId/source-artifacts/:artifactId/blob'))return;
     if (!['get', 'post', 'patch', 'put', 'delete'].includes(method) || route === null) return;
     const fullPath = (prefix + (route === '/' ? '' : route)).replace(/:([a-zA-Z][a-zA-Z0-9_]*)/g, '{$1}');
     actual.add(`${method.toUpperCase()} ${fullPath}`);

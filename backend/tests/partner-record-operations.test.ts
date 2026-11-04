@@ -85,7 +85,7 @@ afterAll(async()=>{await opened?.close();vi.unstubAllEnvs();});
 
 it('reports current effective scopes and tested limits without granting privileged actions',async()=>{
   const fullResult=await request(app).get('/v1/partner/limits').set(headers());expect(fullResult.status,fullResult.text).toBe(200);
-  expect(fullResult.body).toMatchObject({merchantId:org,environment:'sandbox',limits:{recordPageSize:100,activeWebhookEndpoints:10,csv:{rows:1000,access:'human_session_only'}},capabilities:{auditRead:true,connectionAdministration:false}});
+  expect(fullResult.body).toMatchObject({merchantId:org,environment:'sandbox',limits:{recordPageSize:100,activeWebhookEndpoints:10,csv:{rows:1000,access:'organization_credential'}},capabilities:{auditRead:true,connectionAdministration:false}});
   const read=await request(app).get('/v1/partner/limits').set(headers(readOnly));expect(read.body.effectiveScopes).toEqual(['proofs:read']);expect(read.body.capabilities.auditRead).toBe(false);
   expect(JSON.stringify(fullResult.body)).not.toContain(full);
   expect((await request(app).get('/v1/partner/limits')).status).toBe(401);

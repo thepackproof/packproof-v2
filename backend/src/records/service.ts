@@ -70,10 +70,13 @@ function decodeCursor(value:unknown,scope:string,clock:Clock) {
 }
 export async function readRecordRequirements(db:Database,clock:Clock,proofId:string):Promise<RecordRequirement[]> {
   const rows=(await db.query<any>(`SELECT r.*,w.id AS waiver_id,w.reason AS waiver_reason,w.actor_user_id AS waiver_actor,w.created_at AS waiver_created,
-    ARRAY(SELECT e.id FROM evidence e WHERE e.proof_id=r.proof_id AND e.validation_status='COMMITTED' AND r.accepted_evidence_types ? e.evidence_type
-      AND (r.due_at IS NULL OR e.created_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))
+    ARRAY(SELECT matching.id FROM (SELECT e.id,e.committed_at AS accepted_at FROM evidence e WHERE e.proof_id=r.proof_id AND e.validation_status='COMMITTED' AND r.accepted_evidence_types ? e.evidence_type
+      AND (r.due_at IS NULL OR e.committed_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))
       AND (r.subject_id=r.proof_id OR EXISTS(SELECT 1 FROM record_evidence_links el WHERE el.evidence_id=e.id AND el.proof_id=r.proof_id AND el.subject_id=r.subject_id))
-      ORDER BY e.created_at,e.id LIMIT 100) AS matching_evidence
+      UNION ALL SELECT a.id,ar.accepted_at FROM record_source_artifacts a JOIN record_source_artifact_results ar ON ar.artifact_id=a.id
+      WHERE a.proof_id=r.proof_id AND a.subject_id=r.subject_id AND r.accepted_evidence_types ? 'SOURCE_ARTIFACT'
+        AND (r.due_at IS NULL OR ar.accepted_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))) matching
+      ORDER BY matching.accepted_at,matching.id LIMIT 100) AS matching_evidence
     FROM record_requirements r LEFT JOIN record_requirement_waivers w ON w.requirement_id=r.id WHERE r.proof_id=$1 ORDER BY r.stage,r.id`,[proofId])).rows;
   return rows.map(r=>{
     const accepted=json(r.accepted_evidence_types) as string[];
@@ -161,12 +164,18 @@ export async function listRecords(db:Database,clock:Clock,w:RecordWorkspace,inpu
     (SELECT count(*)::integer FROM record_requirements r WHERE r.proof_id=p.id AND r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000)<=$10::timestamptz
       AND NOT EXISTS(SELECT 1 FROM record_requirement_waivers rw WHERE rw.requirement_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM evidence e WHERE e.proof_id=p.id AND e.validation_status='COMMITTED' AND r.accepted_evidence_types ? e.evidence_type
-        AND e.created_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000)
-        AND (r.subject_id=p.id OR EXISTS(SELECT 1 FROM record_evidence_links el WHERE el.evidence_id=e.id AND el.proof_id=p.id AND el.subject_id=r.subject_id)))) AS missing_count,
+        AND e.committed_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000)
+        AND (r.subject_id=p.id OR EXISTS(SELECT 1 FROM record_evidence_links el WHERE el.evidence_id=e.id AND el.proof_id=p.id AND el.subject_id=r.subject_id)))
+      AND NOT EXISTS(SELECT 1 FROM record_source_artifacts a JOIN record_source_artifact_results ar ON ar.artifact_id=a.id
+        WHERE a.proof_id=p.id AND a.subject_id=r.subject_id AND r.accepted_evidence_types ? 'SOURCE_ARTIFACT'
+        AND ar.accepted_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))) AS missing_count,
     (SELECT count(*)::integer FROM record_requirements r WHERE r.proof_id=p.id AND NOT EXISTS(SELECT 1 FROM record_requirement_waivers rw WHERE rw.requirement_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM evidence e WHERE e.proof_id=p.id AND e.validation_status='COMMITTED' AND r.accepted_evidence_types ? e.evidence_type
-        AND (r.due_at IS NULL OR e.created_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))
-        AND (r.subject_id=p.id OR EXISTS(SELECT 1 FROM record_evidence_links el WHERE el.evidence_id=e.id AND el.proof_id=p.id AND el.subject_id=r.subject_id)))) AS unsatisfied_count,
+        AND (r.due_at IS NULL OR e.committed_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000))
+        AND (r.subject_id=p.id OR EXISTS(SELECT 1 FROM record_evidence_links el WHERE el.evidence_id=e.id AND el.proof_id=p.id AND el.subject_id=r.subject_id)))
+      AND NOT EXISTS(SELECT 1 FROM record_source_artifacts a JOIN record_source_artifact_results ar ON ar.artifact_id=a.id
+        WHERE a.proof_id=p.id AND a.subject_id=r.subject_id AND r.accepted_evidence_types ? 'SOURCE_ARTIFACT'
+        AND (r.due_at IS NULL OR ar.accepted_at<=r.due_at+make_interval(secs=>r.grace_period_ms::double precision/1000)))) AS unsatisfied_count,
     (SELECT count(*)::integer FROM record_issues i WHERE i.proof_id=p.id AND COALESCE((SELECT a.action FROM record_issue_actions a WHERE a.issue_id=i.id AND a.action<>'note' ORDER BY a.sequence DESC LIMIT 1),'reopen')<>'resolve') AS issue_count,
     EXISTS(SELECT 1 FROM evidence e WHERE e.proof_id=p.id AND e.validation_status='PENDING') AS processing
     ${FROM} WHERE ${VISIBLE} AND ($6='' OR position(lower($6) in lower(concat_ws(' ',p.id,COALESCE(s.reference,t.external_reference),COALESCE(s.title,t.item_title),sh.tracking_number,sh.carrier)))>0)

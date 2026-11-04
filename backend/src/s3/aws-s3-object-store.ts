@@ -77,13 +77,17 @@ export class AwsS3ObjectStore implements ObjectStore {
   }
   async digest(key: string, reference: ObjectReference={}): Promise<ObjectDigest|null> {
     const meta=await this.head(key,reference);if(!meta)return null;
+    if(reference.versionId&&meta.versionId!==reference.versionId)throw new DomainError('EVIDENCE_VERSION_MISMATCH','Storage returned a different exact object version',409);
     const data=await this.getStream(key,{versionId:reference.versionId??meta.versionId});if(!data)return null;
+    if(meta.versionId&&data.versionId!==meta.versionId){data.body.destroy();throw new DomainError('EVIDENCE_VERSION_MISMATCH','Storage streamed a different exact object version',409);}
+    if(data.contentType!==meta.contentType){data.body.destroy();throw new DomainError('EVIDENCE_METADATA_MISMATCH','Stored object media metadata changed',409);}
     const hashed=await sha256HexFromStream(data.body);
     if(hashed.byteSize!==meta.byteSize)throw new DomainError("EVIDENCE_OBJECT_INCOMPLETE","Object size does not match its stored metadata",409);
     assertCommittedDigestValue(key,hashed.sha256);return {...hashed,contentType:meta.contentType,versionId:meta.versionId};
   }
   async commitUpload(key: string, expected:CommitExpectations={}): Promise<CommittedObject|null> {
-    const sourceKey=assertSafeObjectKey(key),candidate=await this.head(sourceKey);if(!candidate)return null;
+    const sourceKey=assertSafeObjectKey(key),candidate=await this.head(sourceKey,{versionId:expected.expectedVersionId});if(!candidate)return null;
+    if(expected.expectedVersionId&&candidate.versionId!==expected.expectedVersionId)throw new DomainError('EVIDENCE_VERSION_MISMATCH','The accepted staging version is unavailable',409);
     // An ETag is neither a full-file digest nor an immutable version identity.
     if(!candidate.versionId||candidate.versionId==="null")throw new DomainError("EVIDENCE_VERSIONING_REQUIRED","Evidence storage versioning is required before preservation",503);
     const digest=await this.digest(sourceKey,{versionId:candidate.versionId});if(!digest)return null;

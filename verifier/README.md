@@ -59,7 +59,59 @@ package. The report is a separate local file; no unsigned report member is added
 to the v2 signed package. See the [recipient workflow and compatibility
 contract](../docs/api-portal-v1/VERIFICATION.md).
 
-## Trust-list contract and rotation
+## Operational snapshot profile (protected activation required)
+
+The distinct `packproof.operational-snapshot-package.v1` transport uses
+`operational/manifest.json`, `operational/envelope.jws.json`, exact historical
+`core/manifest.json`, an obligatory `operational/prior-manifest.json` when a
+predecessor is declared, and exactly the signed `originals/<artifactId>` members.
+The flattened JWS has type `application/packproof-operational-snapshot+jws`,
+algorithm `ES256` and payload profile `packproof.operational-snapshot.v1`.
+Its RFC 8785 manifest profile is `packproof.operational-record-manifest.v1`.
+Historical core bytes and existing v1/v2 packages retain their original meaning.
+
+```bash
+python3 verifier/verify.py received-operational.zip \
+  --envelope-trust independently-authenticated-key-history.json \
+  --expected-proof-id proof_known --expected-organization-id org_known \
+  --expected-environment live --expected-operational-revision 7 \
+  --expected-manifest-sha256 INDEPENDENT_SNAPSHOT_SHA256 \
+  --expected-core-manifest-sha256 INDEPENDENT_CORE_SHA256 \
+  --expected-prior-snapshot-sha256 INDEPENDENT_PRIOR_SHA256 \
+  --html-report new-local-report.html
+```
+
+The optional expected values must come from an independently authenticated
+channel. A valid historical received revision does not establish that no later
+snapshot exists. `--expected-organization-id` is the operational organization
+binding; it does not relabel the separate legacy `--expected-tenant-id` contract.
+Use the existing separately authenticated `packproof.envelope-trust.v1` history
+through `--envelope-trust`; this file is trusted operator input, never an
+archive-provided authority. Pinned dependencies are in `requirements-envelope.txt`.
+
+This verifier checks the closed manifest/row schemas, JCS bytes, ES256 signature
+mathematics, independent key policy/freshness, organization/environment/Proof and
+revision bindings, prior/core digests, exact artifact sizes/digests and declared
+omissions. It recomputes requirement matches from signed types, acceptance times,
+subject links, deadlines and waiver history at the frozen evaluation time.
+Deadline evaluation uses server acceptance time, never the reported or reserved
+receipt time. Organization source artifacts require an explicit subject link,
+actor identity and accepted receipt commitment; these remain source attribution.
+Missing, quarantined, withheld, unavailable and pending evidence remain explicit
+omissions and never satisfy a requirement. Extra archive members fail closed.
+Reports separate those findings from issuer time, offline revocation limits and
+physical truth, which remains `NOT_ASSESSED`. Organization-submitted quantities,
+source observations and review decisions remain attributed assertions.
+
+The public `operational-snapshot-fixture.json` contains only synthetic bytes and
+a test public key. `generate_operational_fixture.mjs` can create a new synthetic
+fixture; it never uses or emits a production/private key. Run
+`python3 -m unittest discover -s verifier -p test_operational_snapshot.py -v`.
+This supported source format does not qualify a deployment: snapshot creation
+must remain disabled until the current profile's independent protection,
+workload-identity, key-history, recovery and authorization gates pass.
+
+## Trust-list contract and rotation (legacy and envelope profiles)
 
 The signed-registry envelope is `{registry,signature}`. `registry` has exactly `version:1`, `domain:"PACKPROOF_SIGNING_TRUST_REGISTRY"`, `publishedAt`, `nextReviewAt`, and `keys`. Every registry key has exactly `keyId`, `algorithm`, `publicKeyPem`, `validFrom`, `validUntil`, `status`, `statusEffectiveAt`, and `reason`. Timestamps include a timezone; `validUntil`, `statusEffectiveAt`, and `reason` can be null where applicable. `status` is `ACTIVE`, `RETIRED`, `REVOKED`, or `COMPROMISED`; unknown statuses and duplicate identities fail closed. Non-active keys require `statusEffectiveAt`, and effective status cannot postdate registry publication. `signature` has `algorithm`, the independently pinned authority `keyId`, `signatureBase64`, and `signedAt`, and covers the UTF-8 `packproof.sorted-json.v1` canonical registry object. Key algorithms are `ECDSA_SHA_256` or `RSASSA_PSS_SHA_256`.
 

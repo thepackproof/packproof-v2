@@ -57,7 +57,7 @@ describe('records source-bound API and worker privileges',()=>{
  });
  it('pins source SQL receipts, plans only scoped grants, and verifies under both actual callers',async()=>{
   const plan=await planRecordsRuntimePrivileges(opened.db,options);
-  expect(Object.keys(plan.migrations)).toHaveLength(5);
+  expect(Object.keys(plan.migrations)).toHaveLength(10);
   expect(plan.statements.every(sql=>/^(GRANT|REVOKE) /.test(sql)&&!sql.includes('CREATE ROLE')&&!sql.includes('GRANT ALL'))).toBe(true);
   const before=await asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options));
   expect(before.caller).toBe(runtimeRole);

@@ -15,9 +15,16 @@ import {verifyRecipientArtifact} from '../export/recipient-artifact.js';
 import {recipientRequestOperation,recipientResultOperation,recipientApprovalOperation,type RecipientArtifactReader} from '../export/recipient-preservation.js';
 import type {ExportRequest,Job} from './recipient-exports.js';
 import type {SignatureCasePreview} from './signature.js';
+import {verifyRestoredSourceArtifacts} from '../records/source-artifacts.js';
+import {verifyRestoredOperationalSnapshots} from '../records/operational-snapshots.js';
+import type {OperationalSnapshotRuntime} from '../records/operational-snapshot-runtime.js';
 
 type Row = Record<string, unknown>;
 const CORE_KEYS: Record<string, string[]> = {
+  record_entities:['id'],record_evidence_links:['id'],record_requirements:['id'],record_requirement_waivers:['id'],record_issues:['id'],record_issue_actions:['id'],record_amendments:['id'],
+  record_source_artifacts:['id'],record_source_upload_sessions:['id'],record_source_upload_parts:['session_id','part_number'],record_source_artifact_operations:['id'],record_source_artifact_results:['artifact_id'],
+  operational_snapshot_candidates:['snapshot_id'],operational_snapshot_results:['snapshot_id'],
+  record_deletion_contexts:['request_id'],record_deletion_reviews:['id'],
   recipient_export_jobs:['id'],recipient_export_preservations:['job_id'],recipient_export_approvals:['job_id'],
   signature_snapshots:['id'],signature_cases:['id'],signature_case_approvals:['case_id'],
   claim_cases:['id'], claim_case_revisions:['id'],
@@ -44,6 +51,11 @@ const ORDER = [
   "proof_access_links","proof_disclosure_grants","proof_notification_subscriptions","proof_receipt_preferences","user_verified_contacts","proof_media_derivatives","support_access_grants","support_access_revocations",
   "proof_retention_holds","proof_retention_assignments","proof_deletion_requests","proof_disposition_state","final_manifests","proof_supplements",
   "platform_proof_ownership","platform_external_bindings","platform_capture_authorizations",
+  "record_locations","record_membership_locations","record_state","record_entities","record_evidence_links","record_requirements","record_requirement_waivers","record_issues","record_issue_actions","record_amendments",
+  "record_source_artifacts","record_source_upload_sessions","record_source_upload_parts","record_source_artifact_operations","record_source_artifact_results",
+  "operational_snapshot_candidates","operational_snapshot_results",
+  "record_snapshot_shares",
+  "record_deletion_contexts","record_deletion_reviews",
   "integrity_envelope_jobs","integrity_envelope_results",
   "claim_cases","claim_case_revisions",
   "signature_snapshots","signature_cases","signature_case_approvals","recipient_export_jobs","recipient_export_preservations","recipient_export_approvals",
@@ -68,10 +80,14 @@ export interface FreshRecoveryRestoreInput {
   policy: {envelopes:Buffer[]; expectedWatermark:Buffer};
   trustedPublicKey: RecoveryPublisher["trustedPublicKey"];
   sourceStore: Pick<ObjectStore,"get"|"head"|"getStream">;
+  /** Exact-version pending staging and accepted source-original verification. */
+  sourceArtifacts?:ObjectStore;
   /** Required when the admitted journal includes additive envelope records. */
   envelopes?: Pick<EnvelopeWorker, 'store' | 'trustedPublicKey'>;
   /** Required when protected recipient artifact results exist in the journal. */
   recipients?: RecipientArtifactReader;
+  /** New profile requires independent issuer trust and exact protected versions. */
+  operationalSnapshots?:Pick<OperationalSnapshotRuntime,'trustedPublicKey'|'reader'|'sourceProtection'> & {binding:Pick<OperationalSnapshotRuntime['binding'],'journalBucket'>};
 }
 
 /**
@@ -167,6 +183,12 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
   await verifyFrozenRecords(rows,input.trustedPublicKey);
   await verifyEnvelopeRecords(rows, core.map(row=>row.event), input);
   await verifyRecipientRecords(rows,core.map(row=>row.event),input);
+  const restoredTables=Object.fromEntries([...rows].map(([table,entries])=>[table,[...entries.values()]]));
+  if(rows.get('record_source_artifacts')?.size){if(!input.sourceArtifacts)throw failure('RECOVERY_SOURCE_ARTIFACT_VERIFIER_REQUIRED','Source artifact reconstruction requires exact-version source and staging verification');await verifyRestoredSourceArtifacts(input.sourceArtifacts,restoredTables);}
+  if(rows.get('operational_snapshot_candidates')?.size||rows.get('operational_snapshot_results')?.size){
+    if(!input.operationalSnapshots)throw failure('RECOVERY_OPERATIONAL_SNAPSHOT_VERIFIER_REQUIRED','Operational snapshots require the supported independent profile verifier');
+    await verifyRestoredOperationalSnapshots(restoredTables,core.map(row=>row.event),{...input.operationalSnapshots,sourceJournal:{store:input.sourceStore as RecoveryPublisher['store'],trustedPublicKey:input.trustedPublicKey}});
+  }
   const journalVersions=new Map<string,string>();
   for(const {event,bytes} of core){const key=`recovery/v1/${sha256Hex(String(event.operationId))}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
   for(const bytes of input.policy.envelopes){const {event}=await verifyPolicyEnvelope(bytes,input.trustedPublicKey);const key=`recovery/policy/v1/${event.sequence.padStart(20,'0')}.json`;journalVersions.set(key,await verifyJournalObject(input.sourceStore,key,bytes));}
@@ -195,6 +217,7 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
     for(const table of ORDER){
       let entries=[...(rows.get(table)?.values()??[])];
       if(table==='custody_observations')entries=orderObservationDependencies(entries);
+      if(table==='record_entities')entries=orderRecordEntityDependencies(entries);
       for(const original of entries){
         const row={...original};
         // The transaction remains inaccessible throughout; normal lifecycle guards
@@ -202,6 +225,8 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
         if(table==='proofs'&&row.status==='FINALIZED'){row.status='EVIDENCE_COMMITTED';row.finalized_at=null;row.manifest_id=null;}
         if(table==='commerce_stages'&&row.finalized_at!=null){row.finalized_at=null;row.canonical_json=null;row.sha256=null;}
         if(table==='recipient_export_jobs'&&['QUEUED','RENDERING'].includes(String(row.state))){row.state='QUEUED';row.attempts=0;row.lease_token=null;row.lease_until=null;row.failure_code=null;row.completed_at=null;}
+        if(table==='record_source_upload_sessions'&&row.state==='receiving'){row.state='open';row.lease_token=null;row.lease_expires_at=null;}
+        if(table==='record_source_artifact_operations'&&row.state==='running'){row.state='queued';row.lease_token=null;row.lease_expires_at=null;row.next_attempt_at=row.updated_at;}
         await insert(table,row);
       }
     }
@@ -214,6 +239,10 @@ export async function restoreFreshRecoveryDatabase(db:Database,input:FreshRecove
       operation_id:row.operation_id, state:rows.get('integrity_envelope_results')?.has(identity('integrity_envelope_results',row))?'ACCEPTED':'PENDING',
       attempts:0,next_attempt_at:row.created_at,lease_token:null,lease_until:null,error_code:null,
     });
+    for(const row of rows.get('operational_snapshot_candidates')?.values()??[])await insert('operational_snapshot_delivery',{snapshot_id:row.snapshot_id,state:[...(rows.get('operational_snapshot_results')?.values()??[])].some(r=>r.snapshot_id===row.snapshot_id)?'ACCEPTED':'PENDING',attempts:0,next_attempt_at:row.created_at,lease_token:null,lease_until:null,error_code:null});
+    const sourceBudgets=new Map<string,Row>();
+    for(const row of rows.get('record_source_artifacts')?.values()??[]){const day=new Date(String(row.received_at)).toISOString().slice(0,10),key=`${row.organization_id}:${row.environment}:${day}`,prior=sourceBudgets.get(key);if(prior)prior.reserved_bytes=String(BigInt(String(prior.reserved_bytes))+BigInt(String(row.declared_byte_size)));else sourceBudgets.set(key,{organization_id:row.organization_id,environment:row.environment,reservation_day:day,reserved_bytes:String(row.declared_byte_size)});}
+    for(const row of sourceBudgets.values())await insert('record_source_upload_budgets',row);
     const seen=new Set<string>();
     for(const {event,envelope,bytes} of core){
       const operationId=String(event.operationId);if(seen.has(operationId))continue;seen.add(operationId);
@@ -333,6 +362,7 @@ async function assertFreshTarget(db:Database){
   for(const {table_name} of tables){await db.query(`LOCK TABLE ${safeIdentifier(table_name)} IN ACCESS EXCLUSIVE MODE`);if(!await isPristineMigrationSeed(db,table_name)&&(await db.query(`SELECT 1 FROM ${safeIdentifier(table_name)} LIMIT 1`)).rows[0])throw failure('RECOVERY_RESTORE_TARGET_NOT_EMPTY','Reconstruction requires a new migrated database; an older backup must remain a separate comparison source');}
 }
 function orderObservationDependencies(rows:Row[]){const result:Row[]=[],pending=new Map(rows.map(row=>[row.id,row])),seen=new Set<unknown>();while(pending.size){let changed=false;for(const [id,row] of pending){if(row.previous_observation_id!=null&&!seen.has(row.previous_observation_id))continue;result.push(row);seen.add(id);pending.delete(id);changed=true;}if(!changed)throw failure('RECOVERY_RESTORE_DEPENDENCY_GAP','Observation ancestry is missing or cyclic');}return result;}
+function orderRecordEntityDependencies(rows:Row[]){const result:Row[]=[],pending=new Map(rows.map(row=>[row.id,row])),seen=new Set<unknown>();while(pending.size){let changed=false;for(const [id,row] of pending){if([row.parent_id,row.supersedes_id].some(parent=>parent!=null&&!seen.has(parent)))continue;result.push(row);seen.add(id);pending.delete(id);changed=true;}if(!changed)throw failure('RECOVERY_RESTORE_DEPENDENCY_GAP','Operational entity ancestry is missing or cyclic');}return result;}
 async function verifyJournalObject(store:FreshRecoveryRestoreInput['sourceStore'],key:string,bytes:Buffer){
   const head=await store.head?.(key);
   if(!head?.versionId||head.versionId==='null')throw failure('RECOVERY_RESTORE_VERSION_REQUIRED','Protected journal must expose an exact retained object version');

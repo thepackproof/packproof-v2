@@ -15,7 +15,7 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 RETRYABLE = {408, 429, 500, 502, 503, 504}
-TERMINAL = {"succeeded", "partially_succeeded", "failed", "cancelled", "action_needed"}
+TERMINAL = {"succeeded", "partially_succeeded", "failed", "cancelled", "action_needed", "ready", "expired"}
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,10 @@ def _transport(url: str, method: str, headers: dict[str, str], body: bytes | Non
     except HTTPError as error:
         response = error
     with response:
-        return response.status, dict(response.headers.items()), response.read()
+        raw = response.read(250_000_001)
+        if len(raw) > 250_000_000:
+            raise PackProofError("The response exceeds the supported download limit")
+        return response.status, dict(response.headers.items()), raw
 
 
 def _delay(retry_after: str | None, attempt: int) -> float:
@@ -105,14 +108,21 @@ class PackProofClient:
 
     def request(self, path: str, *, method: str = "GET", body: Any = None,
                 idempotency_key: str | None = None, if_match: str | None = None,
-                _deadline: float | None = None) -> ApiResponse:
+                _deadline: float | None = None, _raw_body: bytes | None = None,
+                _content_type: str | None = None, _binary: bool = False) -> ApiResponse:
         if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") or any(c in path for c in "\\\r\n#"):
             raise ValueError("Use an API-relative path beginning with one slash")
         method = method.upper()
-        payload = None if body is None else json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if _raw_body is not None and (not isinstance(_raw_body, bytes) or not 1 <= len(_raw_body) <= 5*1024*1024 or body is not None or method != 'PUT'):
+            raise ValueError("Upload a nonempty bytes part of at most 5 MiB with PUT")
+        payload = _raw_body if _raw_body is not None else None if body is None else json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         headers = {"Accept": "application/json", "Authorization": f"Bearer {self.token}"}
         if payload is not None:
-            headers["Content-Type"] = "application/json"
+            headers["Content-Type"] = "application/json" if _raw_body is None else _text(_content_type, 'content_type')
+        if _raw_body is not None:
+            headers['Content-Length'] = str(len(_raw_body))
+        if _binary:
+            headers['Accept'] = 'application/octet-stream'
         if self.merchant_id:
             headers["PackProof-Merchant-Id"] = self.merchant_id
         if self.delegation_id:
@@ -121,7 +131,8 @@ class PackProofClient:
             headers["Idempotency-Key"] = _text(idempotency_key, "idempotency_key")
         if if_match is not None:
             headers["If-Match"] = _text(if_match, "if_match")
-        attempts = self.max_attempts if method in {"GET", "HEAD"} or idempotency_key is not None else 1
+        safe_part = _raw_body is not None and re.fullmatch(r'/v1/partner/upload-sessions/[^/]+/parts/[1-9][0-9]*', path)
+        attempts = self.max_attempts if method in {"GET", "HEAD"} or idempotency_key is not None or safe_part else 1
         for attempt in range(attempts):
             remaining = self.timeout if _deadline is None else min(self.timeout, _deadline - time.monotonic())
             if remaining <= 0:
@@ -134,8 +145,10 @@ class PackProofClient:
                     continue
                 raise PackProofError("PackProof request did not receive a response; retry with the same idempotency key") from cause
             response_headers = {key.lower(): value for key, value in received.items()}
+            if len(raw) > 250_000_000:
+                raise PackProofError('The response exceeds the supported download limit')
             try:
-                data = json.loads(raw) if raw else None
+                data = raw if _binary and 200 <= status < 300 else json.loads(raw) if raw else None
             except (ValueError, UnicodeDecodeError):
                 data = raw
             nested = data.get("error") if isinstance(data, dict) else None
@@ -254,6 +267,109 @@ class PackProofClient:
 
     def wait_for_operation(self, operation_id: str, *, interval: float = 1, timeout: float = 60) -> ApiResponse:
         return self.poll_operation(f'/v1/partner/operations/{_segment(operation_id)}', interval=interval, timeout=timeout)
+
+    def preview_import(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/imports', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def get_import(self, import_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/imports/{_segment(import_id)}')
+
+    def commit_import(self, import_id: str, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request(f'/v1/partner/imports/{_segment(import_id)}/commit', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def create_upload_session(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/upload-sessions', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def get_upload_session(self, session_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/upload-sessions/{_segment(session_id)}')
+
+    def upload_part(self, session_id: str, part_number: int, value: bytes, content_type: str) -> ApiResponse:
+        if isinstance(part_number, bool) or not isinstance(part_number, int) or not 1 <= part_number <= 48:
+            raise ValueError('part_number must be an integer from 1 to 48')
+        return self.request(f'/v1/partner/upload-sessions/{_segment(session_id)}/parts/{part_number}', method='PUT', _raw_body=value, _content_type=content_type)
+
+    def assemble_upload(self, session_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/upload-sessions/{_segment(session_id)}/parts/complete', method='POST', body={})
+
+    def complete_upload(self, session_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/upload-sessions/{_segment(session_id)}/complete', method='POST', body={})
+
+    def get_artifact_operation(self, operation_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/artifact-operations/{_segment(operation_id)}')
+
+    def download_evidence(self, artifact_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/evidence/{_segment(artifact_id)}/download', method='POST', body={}, _binary=True)
+
+    def list_snapshots(self, proof_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/proofs/{_segment(proof_id)}/snapshots')
+
+    def list_operational_snapshots(self, proof_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/proofs/{_segment(proof_id)}/operational-snapshots')
+
+    def download_operational_snapshot(self, proof_id: str, snapshot_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/proofs/{_segment(proof_id)}/operational-snapshots/{_segment(snapshot_id)}/package', _binary=True)
+
+    def create_export(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/exports', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def get_export(self, export_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/exports/{_segment(export_id)}')
+
+    def download_export(self, export_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/exports/{_segment(export_id)}/package', _binary=True)
+
+    def create_share(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/shares', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def list_shares(self, proof_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/proofs/{_segment(proof_id)}/shares')
+
+    def revoke_share(self, share_id: str, reason: str) -> ApiResponse:
+        return self.request(f'/v1/partner/shares/{_segment(share_id)}/revoke', method='POST', body={'reason': reason})
+
+    def preview_deletion(self, proof_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/proofs/{_segment(proof_id)}/deletion-impact')
+
+    def request_deletion(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/deletion-requests', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def get_deletion_request(self, request_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/deletion-requests/{_segment(request_id)}')
+
+    def upload_artifact(self, value: dict, data: bytes, *, idempotency_key: str,
+                        resume_session_id: str | None = None, on_progress: Callable | None = None) -> ApiResponse:
+        if not isinstance(data, bytes) or not 1 <= len(data) <= 250_000_000 or len(data) != value.get('byteSize'):
+            raise ValueError('Artifact bytes must exactly match the declared supported size')
+        digest = hashlib.sha256(data).hexdigest()
+        if value.get('sha256') and value['sha256'].lower() != digest:
+            raise ValueError('Artifact bytes do not match the declared SHA-256')
+        initialized = self.get_upload_session(resume_session_id) if resume_session_id else self.create_upload_session({**value, 'sha256': digest}, idempotency_key=idempotency_key)
+        session = initialized.data
+        if not isinstance(session, dict) or any(session.get(key) != value.get(key) for key in ('proofId', 'contentType', 'filename', 'connectionId')) or session.get('byteSize') != len(data) or session.get('expectedSha256') not in (None, digest) or value.get('sourceArtifactId') and session.get('sourceArtifactId') != value['sourceArtifactId']:
+            raise PackProofError('The resume receipt belongs to different source bytes or metadata', body=session)
+        if session.get('state') == 'complete' and session.get('operation', {}).get('operationId'):
+            return self.get_artifact_operation(session['operation']['operationId'])
+        if session.get('blockedReason') or session.get('state') in ('expired', 'rejected'):
+            raise PackProofError('This source upload cannot resume; retain its receipt and review source settings', body=session)
+        if session.get('state') == 'received':
+            return self.complete_upload(session['sessionId'])
+        size = session.get('partSize')
+        if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= 5*1024*1024:
+            raise PackProofError('The source upload receipt has an invalid part size', body=session)
+        parts = {p['partNumber']: p for p in session.get('receivedParts', [])}
+        accepted = 0
+        for number, offset in enumerate(range(0, len(data), size), start=1):
+            chunk = data[offset:offset+size]
+            old = parts.get(number)
+            if old and (old.get('byteSize') != len(chunk) or old.get('sha256') != hashlib.sha256(chunk).hexdigest()):
+                raise PackProofError('An accepted part belongs to different bytes; the original receipt cannot be overwritten', body=old)
+            if not old:
+                self.upload_part(session['sessionId'], number, chunk, value['contentType'])
+            accepted += len(chunk)
+            if on_progress:
+                on_progress({'sessionId': session['sessionId'], 'artifactId': session['artifactId'], 'acceptedBytes': accepted, 'totalBytes': len(data)})
+        self.assemble_upload(session['sessionId'])
+        return self.complete_upload(session['sessionId'])
 
     def proof_ids(self, *, after: str | None = None, max_pages: int = 10000) -> Iterator[str]:
         _page_limit(max_pages)

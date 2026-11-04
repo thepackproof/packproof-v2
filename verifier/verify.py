@@ -451,7 +451,9 @@ def verify_lifecycle_snapshot(package, metadata, name_set, hashes, read_json, st
 
 def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
            authority_key_path=None, authority_key_id=None, expected_snapshot=None,
-           expected_proof=None, expected_tenant=None, envelope_trust_path=None):
+           expected_proof=None, expected_tenant=None, envelope_trust_path=None,
+           expected_environment=None, expected_revision=None, expected_core=None,
+           expected_prior=None, expected_organization=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     if trust_path and registry_path:
         fail('INVALID_TRUST_REGISTRY', 'Choose a legacy trust list or a signed registry, not both')
@@ -494,6 +496,23 @@ def verify(path, expected=None, trust_path=None, now=None, registry_path=None,
                 fail('UNSAFE_ARCHIVE', 'JSON entry exceeds size limit')
             return json_bytes(read(name))
         package = read_json('package.json')
+        if isinstance(package, dict) and package.get('schema') == 'packproof.operational-snapshot-package.v1':
+            if expected_snapshot or expected_tenant or trust_path or registry_path:
+                fail('UNSUPPORTED_CONTEXT', 'Operational snapshots require separately authenticated envelope trust and their own expected revision/linkage context')
+            try:
+                from operational_snapshot import verify_package
+                result = verify_package(package, name_set, read, envelope_trust_path, now,
+                                        expected_proof, expected, expected_organization,
+                                        expected_environment, expected_revision, expected_core,
+                                        expected_prior)
+                result['verifierVersion'] = VERSION
+                return result
+            except ImportError:
+                fail('SIGNATURE_UNCHECKED', 'Install verifier/requirements-envelope.txt to verify operational snapshots')
+            except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+                fail('INVALID_OPERATIONAL_SNAPSHOT', 'Malformed, substituted or unsupported operational snapshot profile')
+        if any(value is not None for value in (expected_environment, expected_revision, expected_core, expected_prior, expected_organization)):
+            fail('UNSUPPORTED_CONTEXT', 'Operational revision and linkage constraints require an operational snapshot package')
         if isinstance(package, dict) and package.get('schema') == 'packproof.signed-proof-package.v2':
             if expected_snapshot or expected_tenant or trust_path or registry_path:
                 fail('UNSUPPORTED_CONTEXT', 'This profile requires its separately authenticated envelope trust file and does not assert a tenant or current lifecycle head')
@@ -700,7 +719,7 @@ def render_html_report(result):
         ('Received supplement head', result.get('supplements', {}).get('headSha256', 'Not established')),
         ('Supplement completeness', result.get('supplements', {}).get('completeness', 'Not established')),
     ]
-    if result.get('profile') == 'packproof.integrity-envelope.v1':
+    if result.get('profile') in ('packproof.integrity-envelope.v1', 'packproof.operational-snapshot.v1'):
         # These are independent findings. A valid signature can coexist with missing
         # originals, a compromised key, stale trust, or no independent timestamp.
         summary = summary[:4] + [
@@ -719,6 +738,15 @@ def render_html_report(result):
             ('Trust snapshot expires', result.get('trust', {}).get('expiresAt', 'Not provided')),
             ('Current revocation knowledge', result.get('trust', {}).get('currentRevocationKnowledge', 'UNAVAILABLE_OFFLINE')),
         ]
+        if result.get('profile') == 'packproof.operational-snapshot.v1':
+            summary += [('Organization', result.get('organizationId', 'Not established')),
+                        ('Environment', result.get('environment', 'Not established')),
+                        ('Frozen operational revision', result.get('revision', 'Not established')),
+                        ('Operational assertion semantics', result.get('assertion', 'Not established')),
+                        ('Operational coverage', result.get('operationalCoverage', 'Not established')),
+                        ('Frozen evaluation', result.get('evaluation', {}).get('at', 'Not established')),
+                        ('Core manifest SHA-256', result.get('coreManifestSha256', 'Not established')),
+                        ('Prior snapshot', result.get('priorSnapshot') or 'No prior snapshot declared')]
     rows = ''.join('<tr><th scope="row">' + escape(label) + '</th><td>' + escape(value) + '</td></tr>' for label, value in summary)
     def size(value):
         return str(value) if type(value) is int and value >= 0 else 'Not established'
@@ -732,7 +760,7 @@ def render_html_report(result):
         'The archive was not extracted. No archive media, scripts, or links are embedded or executed.',
         'Integrity does not establish physical truth, authenticity, or liability.',
     ]
-    if result.get('profile') == 'packproof.integrity-envelope.v1':
+    if result.get('profile') in ('packproof.integrity-envelope.v1', 'packproof.operational-snapshot.v1'):
         limitations.append('Envelope identity and issuer fields are attributed claims until signature and key-trust checks pass.')
     notes = ''.join('<li>' + escape(note) + '</li>' for note in limitations)
     message = '<p>' + escape(result['message']) + '</p>' if result.get('message') else ''
@@ -769,6 +797,11 @@ def main(argv=None):
     parser.add_argument('--expected-lifecycle-snapshot-sha256', help='Independently obtained required lifecycle digest; rejects older or absent snapshots')
     parser.add_argument('--expected-proof-id', help='Independently known Proof identity')
     parser.add_argument('--expected-tenant-id', help='Required authenticated tenant identity; unsupported human-only profiles fail closed')
+    parser.add_argument('--expected-organization-id', help='Independently required operational snapshot organization identity')
+    parser.add_argument('--expected-environment', choices=('live', 'sandbox'), help='Independently required operational snapshot environment')
+    parser.add_argument('--expected-operational-revision', type=int, help='Independently required operational snapshot revision')
+    parser.add_argument('--expected-core-manifest-sha256', help='Independently required operational core manifest digest')
+    parser.add_argument('--expected-prior-snapshot-sha256', help='Independently required prior operational snapshot digest')
     parser.add_argument('--trust-list', help='Separately obtained authenticated trust-list JSON; never use a package-included key')
     parser.add_argument('--envelope-trust', help='Separately authenticated issuer/key history for the additive JCS/ES256 profile')
     parser.add_argument('--trust-registry', help='Signed, dated registry JSON authenticated with an independently pinned authority')
@@ -783,13 +816,21 @@ def main(argv=None):
         parser.error('expected manifest SHA-256 must contain exactly 64 hexadecimal characters')
     if args.expected_lifecycle_snapshot_sha256 and not re.fullmatch('[a-fA-F0-9]{64}', args.expected_lifecycle_snapshot_sha256):
         parser.error('expected lifecycle SHA-256 must contain exactly 64 hexadecimal characters')
+    for value in (args.expected_core_manifest_sha256, args.expected_prior_snapshot_sha256):
+        if value and not re.fullmatch('[a-fA-F0-9]{64}', value):
+            parser.error('expected linkage SHA-256 must contain exactly 64 hexadecimal characters')
+    if args.expected_operational_revision is not None and args.expected_operational_revision < 1:
+        parser.error('expected operational revision must be positive')
     exit_code = 1
     try:
         result = verify(args.package, args.expected_manifest_sha256, args.trust_list,
                         registry_path=args.trust_registry, authority_key_path=args.trust_authority_key,
                         authority_key_id=args.trust_authority_key_id, expected_snapshot=args.expected_lifecycle_snapshot_sha256,
                         expected_proof=args.expected_proof_id, expected_tenant=args.expected_tenant_id,
-                        envelope_trust_path=args.envelope_trust)
+                        envelope_trust_path=args.envelope_trust,
+                        expected_environment=args.expected_environment, expected_revision=args.expected_operational_revision,
+                        expected_core=args.expected_core_manifest_sha256, expected_prior=args.expected_prior_snapshot_sha256,
+                        expected_organization=args.expected_organization_id)
         exit_code = 0 if result['status'] in ('VERIFIED', 'VERIFIED_INDEPENDENT_DIGEST') else 2
     except VerificationError as error:
         result = {'verifierVersion': VERSION, 'status': error.status, 'message': str(error)}

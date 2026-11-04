@@ -1,9 +1,13 @@
 # Operational snapshots: required signed extension
 
-**Implementation status: not implemented and not available.** The new operational
-record view is not a signed snapshot. This is a remaining version 1 requirement
-from the November 3 development plan and blocks a claim that that complete plan
-or its general-availability gates have passed.
+**Implementation status: additive source profile implemented; deployment remains
+disabled and unqualified.** The live operational record view is not a signed
+snapshot. Migration 103, the separate operational-snapshot manifest/signing/
+preservation worker, exact-scope package and standalone verifier now implement
+the source profile described in [OPERATIONAL_SNAPSHOT_PROFILE.md](OPERATIONAL_SNAPSHOT_PROFILE.md).
+Its capability stays unavailable without independently authenticated qualification
+for the exact current source, profile, workloads, storage, keys and recovery
+boundary. Source fixtures do not establish general availability.
 
 The existing canonical evidence package and additive integrity envelope remain
 available only under their existing eligibility and activation rules. They cover
@@ -22,12 +26,14 @@ recovery event. It validates the known manifest domain and derives exact origina
 object versions from that event. It does not accept client-supplied membership,
 artifact digests, storage identities, or arbitrary signing bytes.
 
-`domain/recovery-journal.ts` does not currently reconstruct the new
-`record_entities`, `record_evidence_links`, `record_requirements`,
-`record_requirement_waivers`, `record_issues`, `record_issue_actions` and
-`record_amendments` tables as a complete operational snapshot. `record_state`
-has policy-recovery support, which does not by itself freeze and preserve the
-whole operational revision.
+The new profile extends `domain/recovery-journal.ts` with frozen operational
+tables, source-artifact state and immutable operational candidates/results.
+Fresh restoration verifies the original signed result and exact protected
+versions before reconstruction; it never resigns a historical result or opens
+restored traffic. `record_state` and current authorization/deletion controls still
+require independent policy-journal replay. Legacy envelope jobs continue to admit
+only their original source kinds; new operational JSON is never sent to that
+legacy signer.
 
 The source-bound envelope deployment evidence, separate workload identities,
 exact database privilege policy, writer fencing, protected versioned objects,
@@ -62,7 +68,8 @@ unchanged historical signature bytes.
 
 The operational dashboard may show its current API data, history, evidence and
 review actions, with explicit assurance that it is a live operational view. It
-must keep operational snapshot creation unavailable. The separately authorized
+must keep operational snapshot creation unavailable unless the new profile's
+current qualification, human admission and protection gates pass. The separately authorized
 canonical package download must identify the narrower captured-evidence scope.
 No unsigned operational download or HTML report is a substitute for the required
 versioned signed operational snapshot.

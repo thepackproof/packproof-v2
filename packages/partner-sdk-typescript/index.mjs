@@ -1,7 +1,7 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
-const TERMINAL = new Set(['succeeded', 'partially_succeeded', 'failed', 'cancelled', 'action_needed']);
+const TERMINAL = new Set(['succeeded', 'partially_succeeded', 'failed', 'cancelled', 'action_needed', 'ready', 'expired']);
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   if (signal?.aborted) { reject(signal.reason ?? new DOMException('Aborted', 'AbortError')); return; }
   const finish = () => { signal?.removeEventListener('abort', abort); resolve(); };
@@ -61,17 +61,20 @@ export class PackProofClient {
     this.sleeper = sleeper;
   }
 
-  async request(path, { method = 'GET', body, idempotencyKey, ifMatch, signal } = {}) {
+  async request(path, { method = 'GET', body, idempotencyKey, ifMatch, signal, rawBody, contentType, binary = false } = {}) {
     if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\') || /[\r\n#]/.test(path)) throw new TypeError('Use an API-relative path beginning with one slash');
     const methodName = method.toUpperCase();
-    const payload = body === undefined ? undefined : JSON.stringify(body);
+    if(rawBody!==undefined&&(!(rawBody instanceof Uint8Array)||rawBody.byteLength<1||rawBody.byteLength>5242880||body!==undefined||methodName!=='PUT'))throw new TypeError('Upload a nonempty Uint8Array part of at most 5 MiB with PUT');
+    const payload = rawBody ?? (body === undefined ? undefined : JSON.stringify(body));
     const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${this.token}` });
-    if (payload !== undefined) headers.set('Content-Type', 'application/json');
+    if (payload !== undefined) headers.set('Content-Type', rawBody===undefined?'application/json':nonempty(contentType,'contentType'));
+    if(rawBody!==undefined)headers.set('Content-Length',String(rawBody.byteLength));
+    if(binary)headers.set('Accept','application/octet-stream');
     if (this.merchantId) headers.set('PackProof-Merchant-Id', this.merchantId);
     if (this.delegationId) headers.set('PackProof-Delegation-Id', this.delegationId);
     if (idempotencyKey !== undefined) headers.set('Idempotency-Key', nonempty(idempotencyKey, 'idempotencyKey'));
     if (ifMatch !== undefined) headers.set('If-Match', nonempty(ifMatch, 'ifMatch'));
-    const safeRetry = methodName === 'GET' || methodName === 'HEAD' || idempotencyKey !== undefined;
+    const safeRetry = methodName === 'GET' || methodName === 'HEAD' || idempotencyKey !== undefined || rawBody!==undefined&&/^\/v1\/partner\/upload-sessions\/[^/]+\/parts\/[1-9][0-9]*$/.test(path);
     const attempts = safeRetry ? this.maxAttempts : 1;
     const url = `${this.baseUrl.href.replace(/\/$/, '')}${path}`;
     for (let attempt = 0; attempt < attempts; attempt++) {
@@ -86,6 +89,14 @@ export class PackProofClient {
         throw new PackProofError('PackProof request did not receive a response; retry with the same idempotency key', { cause });
       }
       let raw;
+      if(binary&&response.ok){
+        const reader=response.body?.getReader();if(!reader)throw new PackProofError('The download response has no readable body',{status:response.status});
+        const chunks=[];let bytes=0;
+        try{for(;;){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>220*1024*1024)throw new PackProofError('The download exceeded the supported 220 MiB limit');chunks.push(next.value);}}
+        finally{await reader.cancel();reader.releaseLock();}
+        const data=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.byteLength;}
+        return {data,rawBody:data,status:response.status,headers:response.headers,requestId:response.headers.get('X-Request-Id'),replayed:false};
+      }
       try { raw = await response.text(); }
       catch (cause) {
         if (signal?.aborted) throw signal.reason ?? cause;
@@ -132,6 +143,44 @@ export class PackProofClient {
   createIngestion(input, options) { requireKey(options); return this.request('/v1/partner/ingestions', { ...options, method: 'POST', body: input }); }
   getOperation(operationId, options) { return this.request(`/v1/partner/operations/${segment(operationId)}`, options); }
   waitForOperation(operationId, options) { return this.pollOperation(`/v1/partner/operations/${segment(operationId)}`, options); }
+  previewImport(input,options){requireKey(options);return this.request('/v1/partner/imports',{...options,method:'POST',body:input});}
+  getImport(id,options){return this.request(`/v1/partner/imports/${segment(id)}`,options);}
+  commitImport(id,input,options){requireKey(options);return this.request(`/v1/partner/imports/${segment(id)}/commit`,{...options,method:'POST',body:input});}
+  createUploadSession(input,options){requireKey(options);return this.request('/v1/partner/upload-sessions',{...options,method:'POST',body:input});}
+  getUploadSession(id,options){return this.request(`/v1/partner/upload-sessions/${segment(id)}`,options);}
+  uploadPart(id,partNumber,bytes,contentType,options={}){bounded(partNumber,'partNumber',1,48);return this.request(`/v1/partner/upload-sessions/${segment(id)}/parts/${partNumber}`,{...options,method:'PUT',rawBody:bytes,contentType});}
+  assembleUpload(id,options){return this.request(`/v1/partner/upload-sessions/${segment(id)}/parts/complete`,{...options,method:'POST',body:{}});}
+  completeUpload(id,options){return this.request(`/v1/partner/upload-sessions/${segment(id)}/complete`,{...options,method:'POST',body:{}});}
+  getArtifactOperation(id,options){return this.request(`/v1/partner/artifact-operations/${segment(id)}`,options);}
+  downloadEvidence(id,options){return this.request(`/v1/partner/evidence/${segment(id)}/download`,{...options,method:'POST',body:{},binary:true});}
+  listSnapshots(proofId,options){return this.request(`/v1/partner/proofs/${segment(proofId)}/snapshots`,options);}
+  listOperationalSnapshots(proofId,options){return this.request(`/v1/partner/proofs/${segment(proofId)}/operational-snapshots`,options);}
+  downloadOperationalSnapshot(proofId,id,options){return this.request(`/v1/partner/proofs/${segment(proofId)}/operational-snapshots/${segment(id)}/package`,{...options,binary:true});}
+  createExport(input,options){requireKey(options);return this.request('/v1/partner/exports',{...options,method:'POST',body:input});}
+  getExport(id,options){return this.request(`/v1/partner/exports/${segment(id)}`,options);}
+  downloadExport(id,options){return this.request(`/v1/partner/exports/${segment(id)}/package`,{...options,binary:true});}
+  createShare(input,options){requireKey(options);return this.request('/v1/partner/shares',{...options,method:'POST',body:input});}
+  listShares(proofId,options){return this.request(`/v1/partner/proofs/${segment(proofId)}/shares`,options);}
+  revokeShare(id,reason,options){return this.request(`/v1/partner/shares/${segment(id)}/revoke`,{...options,method:'POST',body:{reason}});}
+  previewDeletion(proofId,options){return this.request(`/v1/partner/proofs/${segment(proofId)}/deletion-impact`,options);}
+  requestDeletion(input,options){requireKey(options);return this.request('/v1/partner/deletion-requests',{...options,method:'POST',body:input});}
+  getDeletionRequest(id,options){return this.request(`/v1/partner/deletion-requests/${segment(id)}`,options);}
+  async uploadArtifact(input,bytes,{resumeSessionId,onProgress,...options}={}){
+    requireKey(options);if(!(bytes instanceof Uint8Array)||bytes.byteLength!==input.byteSize||bytes.byteLength<1||bytes.byteLength>250000000)throw new TypeError('Artifact bytes must exactly match the declared supported size');
+    const digest=createHash('sha256').update(bytes).digest('hex');if(input.sha256&&input.sha256.toLowerCase()!==digest)throw new TypeError('Artifact bytes do not match the declared SHA-256');
+    const initialized=resumeSessionId?await this.getUploadSession(resumeSessionId,options):await this.createUploadSession({...input,sha256:digest},options),s=initialized.data;
+    if(!s||s.proofId!==input.proofId||s.contentType!==input.contentType||s.byteSize!==bytes.byteLength||s.filename!==input.filename||s.connectionId!==input.connectionId||(s.expectedSha256&&s.expectedSha256!==digest)||(input.sourceArtifactId&&s.sourceArtifactId!==input.sourceArtifactId))throw new PackProofError('The resume receipt belongs to different source bytes or metadata',{body:s});
+    if(s.state==='complete'&&s.operation?.operationId)return this.getArtifactOperation(s.operation.operationId,options);
+    if(s.blockedReason||['expired','rejected'].includes(s.state))throw new PackProofError('This source upload cannot resume; retain its receipt and review the source settings',{body:s});
+    if(s.state==='received')return this.completeUpload(s.sessionId,options);
+    const partSize=bounded(s.partSize,'partSize',1,5242880),parts=new Map((s.receivedParts??[]).map(p=>[p.partNumber,p]));let accepted=0;
+    for(let offset=0,n=1;offset<bytes.byteLength;offset+=partSize,n++){
+      options.signal?.throwIfAborted();const chunk=bytes.subarray(offset,Math.min(offset+partSize,bytes.byteLength)),old=parts.get(n),hash=createHash('sha256').update(chunk).digest('hex');
+      if(old&&(old.byteSize!==chunk.byteLength||old.sha256!==hash))throw new PackProofError('An accepted part belongs to different bytes; the original receipt cannot be overwritten',{body:old});
+      if(!old)await this.uploadPart(s.sessionId,n,chunk,input.contentType,options);accepted+=chunk.byteLength;onProgress?.({sessionId:s.sessionId,artifactId:s.artifactId,acceptedBytes:accepted,totalBytes:bytes.byteLength});
+    }
+    await this.assembleUpload(s.sessionId,options);return this.completeUpload(s.sessionId,options);
+  }
 
   async *proofIds({ after, maxPages = 10000, signal } = {}) {
     bounded(maxPages, 'maxPages', 1, 100000);

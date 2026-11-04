@@ -18,6 +18,13 @@ import { getProofEnvelope, exportProofEnvelope } from '../integrity/envelope-acc
 import { createPartnerRecordsRouter } from '../records/router.js';
 import { createPartnerOperationsRouter } from '../records/partner-operations-router.js';
 import { createPartnerIngestionsRouter } from '../records/ingestions-router.js';
+import { createPartnerImportsRouter } from '../records/partner-imports.js';
+import { createPartnerExportsRouter } from '../records/partner-exports.js';
+import { createPartnerSnapshotsRouter } from '../records/partner-snapshots.js';
+import { createPartnerArtifactsRouter } from '../records/partner-artifacts-router.js';
+import { createSnapshotSharesRouter } from '../records/snapshot-shares.js';
+import { createRecordDeletionRouter } from '../records/deletion-requests.js';
+import { createPartnerOperationalSnapshotsRouter } from '../records/operational-snapshots-router.js';
 
 type PartnerRequest=Request & {partnerActor:PartnerActor};
 const route=(fn:(req:PartnerRequest,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req as PartnerRequest,res).catch(next);};
@@ -34,6 +41,13 @@ export function createPartnerRouter(deps:AppDependencies){
  router.use(createPartnerRecordsRouter(deps));
  router.use(createPartnerOperationsRouter(deps));
  router.use(createPartnerIngestionsRouter(deps));
+ router.use(createPartnerImportsRouter(deps));
+ router.use(createPartnerExportsRouter(deps));
+ router.use(createPartnerSnapshotsRouter(deps));
+ router.use(createPartnerArtifactsRouter(deps));
+ router.use(createSnapshotSharesRouter(deps,false));
+ router.use(createRecordDeletionRouter(deps,false));
+ router.use(createPartnerOperationalSnapshotsRouter(deps));
  function endpoint(method:'get'|'post'|'delete',path:string,scope:PartnerScope,fn:(db:Database,a:PartnerActor,req:PartnerRequest)=>Promise<unknown>,status=200,sensitive=false){
   router[method](path,route(async(req,res)=>{
    const actor=req.partnerActor;

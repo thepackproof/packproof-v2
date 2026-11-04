@@ -1,5 +1,8 @@
 # November 4 implementation receipt
 
+Historical first-increment receipt. See [the current continuation](CONTINUATION_2026-11-04.md)
+for subsequent source implementation, validation and remaining acceptance work.
+
 The records workspace, durable CSV and normalized-source ingestion, organization-safe evidence viewing, core-package download, operational review, diagnostics, candidate SDKs and accompanying contracts are implemented in this change. The complete November 3, 49-page development plan is **not finished**. This is a source candidate for review, not a general-availability or production-release receipt.
 
 ## Delivered source

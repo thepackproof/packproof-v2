@@ -18,6 +18,11 @@ import { processEnvelopeJob } from "./integrity/envelope-jobs.js";
 import { processPendingRecordImports } from './records/imports.js';
 import { processRecordConnectionOperations } from './records/connections.js';
 import { processSourceIngestions } from './records/ingestions.js';
+import { processPendingPartnerImports } from './records/partner-imports.js';
+import { processPendingCanonicalExports } from './records/partner-exports.js';
+import { processSourceArtifactCompletions } from './records/source-artifacts.js';
+import { initializeOperationalSnapshotEnvironment } from './records/operational-snapshot-runtime.js';
+import { processOperationalSnapshotJob } from './records/operational-snapshots.js';
 import express from "express";
 import { liveness,createReadiness } from "./operations/readiness.js";
 import { assertRealDataRuntime } from './operations/integration-readiness.js';
@@ -89,6 +94,7 @@ const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
 const recipientPreservation=initializeRecipientPreservation(config,systemClock);
 const envelopes=await initializeEnvelopeRuntime(config,systemClock,opened.db);
+const operationalSnapshots=await initializeOperationalSnapshotEnvironment(config,systemClock,opened.db);
 const durabilityPolicy=(await opened.db.query<{durability_required:boolean}>('SELECT durability_required FROM policy_recovery_fence WHERE singleton=1')).rows[0];
 if(!durabilityPolicy||durabilityPolicy.durability_required!==(config.requireDurableReceipts===true))
   throw new Error('Runtime durability mode does not match the migration-controlled policy');
@@ -115,6 +121,7 @@ if(etsyRuntime.enabled&&etsyRuntime.client) integrations.registerCommerce(create
     webReturnUrl:config.webOrigins[0]?`${config.webOrigins[0].replace(/\/$/,"")}/account`:"/account",
   })));
 const readinessProbes=[
+  {name:'operational-snapshots',required:Boolean(operationalSnapshots),check:async()=>{operationalSnapshots?.assertReady();}},
   {name:'integrity-envelopes',required:Boolean(envelopes),check:async()=>{envelopes?.assertReady();await envelopes?.checkDatabase();}},
   {name:'envelope-trust-publication',required:Boolean(envelopeTrustPublication),check:async()=>{envelopeTrustPublication?.snapshot();}},
   {name:'recipient-preservation',required:Boolean(recipientPreservation),check:async()=>{if(recipientPreservation)validateRecipientDeployment(config,systemClock);}},
@@ -152,6 +159,7 @@ const app = config.processRole==='worker'?express():createServerApp({
   manifestSigning,
   envelopeTrustPublication,
   envelopes:envelopes?.access,
+  operationalSnapshots,
   futurePlatform: futurePlatformFromEnv(process.env),
   releaseIdentity: config.release,
   credentialNamespace: config.credentialNamespace,
@@ -179,7 +187,11 @@ if(process.env.PACKPROOF_ORGANIZATIONS_ENABLED==='true'){
   jobs.push({name:'record-imports',intervalMs:5000,run:()=>processPendingRecordImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-connections',intervalMs:5000,run:()=>processRecordConnectionOperations(opened.db,systemClock)});
   jobs.push({name:'source-ingestions',intervalMs:5000,run:()=>processSourceIngestions(opened.db,systemClock)});
+  jobs.push({name:'partner-record-imports',intervalMs:5000,run:()=>processPendingPartnerImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
+  jobs.push({name:'record-canonical-exports',intervalMs:5000,run:()=>processPendingCanonicalExports({db:opened.db,clock:systemClock,objectStore,envelopes:envelopes?.access,devAuth:isDevLoginEnabled(config)})});
+  jobs.push({name:'record-source-artifacts',intervalMs:5000,run:()=>processSourceArtifactCompletions(opened.db,systemClock,objectStore)});
 }
+if(operationalSnapshots?.worker)jobs.push({name:'operational-snapshots',intervalMs:5000,run:()=>processOperationalSnapshotJob(opened.db,systemClock,operationalSnapshots)});
 if(envelopes?.worker){const worker=envelopes.worker;jobs.push({name:'integrity-envelopes',intervalMs:5000,run:()=>processEnvelopeJob(opened.db,systemClock,worker)});}
 if(rnd.enabled&&Object.values(rnd.features).some(feature=>feature.processing))jobs.push({name:'experimental-rnd',intervalMs:5000,run:()=>runRndWorkerOnce({db:opened.db,clock:systemClock,objectStore,manifestSigning,rnd:rndConfigFromEnv()})});
 jobs.push({name:'mobile-intake',intervalMs:30000,run:()=>reconcileIntakeSubmissions(opened.db,systemClock,{integrations,credentials:credentialStore},intakeConfig)});

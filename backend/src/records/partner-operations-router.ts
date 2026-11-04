@@ -41,6 +41,8 @@ const AUDIT_RESOURCE_PROOFS=`
  UNION ALL SELECT i.proof_id FROM record_issue_actions a JOIN record_issues i ON i.id=a.issue_id WHERE a.id=x.resource_id
  UNION ALL SELECT c.proof_id FROM capture_intents c WHERE c.id=x.resource_id
  UNION ALL SELECT j.proof_id FROM integrity_envelope_jobs j WHERE j.operation_id=x.resource_id
+ UNION ALL SELECT a.proof_id FROM record_source_artifacts a WHERE a.id=x.resource_id
+ UNION ALL SELECT a.proof_id FROM record_source_artifact_operations op JOIN record_source_artifacts a ON a.id=op.artifact_id WHERE op.id=x.resource_id
  UNION ALL SELECT o.proof_id FROM api_webhook_deliveries d JOIN proof_outbox o ON o.id=d.event_id WHERE d.id=x.resource_id
  UNION ALL SELECT r.proof_id FROM record_source_receipts r WHERE r.id=x.resource_id OR r.operation_id=x.resource_id OR r.operation_id=x.request_id`;
 function cursorKey(){const key=Buffer.from(process.env.PACKPROOF_EVENT_CURSOR_KEY??'','base64');if(key.length!==32)throw new DomainError('CURSOR_SIGNING_UNAVAILABLE','Cursor signing is not configured',503);return key;}
@@ -81,7 +83,7 @@ export function createPartnerOperationsRouter(deps:AppDependencies) {
     s.json({schema:'packproof.partner-limits/v1',profile:'packproof.partner/v1',merchantId:a.merchantId,environment:a.environment,effectiveScopes,
       limits:{recordPageSize:100,timelinePageSize:100,evidencePageSize:100,eventPageSize:100,activeWebhookEndpoints:10,webhookAutomaticAttempts:10,webhookTimeoutMs:10000,
         canonicalPackage:{maximumMediaBytes:200*1024*1024,maximumArchiveBytes:220*1024*1024},
-        csv:{...CSV_LIMITS,access:'human_session_only',automaticSynchronization:false}},
+        csv:{...CSV_LIMITS,access:'organization_credential',requiredScopes:['imports:read','imports:write','proofs:read','proofs:write'],automaticSynchronization:false}},
       capabilities:{humanAttestationRequired:true,automaticConnectorCatalog:'pilot_validation_required',auditRead:effectiveScopes.includes('audit:read'),connectionAdministration:false}});
   }));
 

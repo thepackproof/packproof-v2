@@ -10,7 +10,7 @@ import { verifyManifestIntegrity } from "./manifest-signing.js";
 import { assertPolicyAccessSafe, currentPolicySequence, requireDurablePolicySequence } from "./policy-recovery.js";
 import { verifyPreservedJournalVersion } from "./recovery-journal-object.js";
 
-export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED" | "CLAIM_CASE_RECORDED" | "RECIPIENT_EXPORT_REQUESTED" | "RECIPIENT_EXPORT_PRESERVED" | "RECIPIENT_EXPORT_APPROVED" | "RECIPIENT_EXPORT_FAILED";
+export type RecoveryKind = "EVIDENCE_COMMITTED" | "DECLARATION_COMMITTED" | "PROOF_FINALIZED" | "STAGE_FINALIZED" | "SUPPLEMENT_COMMITTED" | "RETENTION_CHANGED" | "SOURCE_OBSERVED" | "ENVELOPE_REQUESTED" | "ENVELOPE_SIGNED" | "CLAIM_CASE_RECORDED" | "RECIPIENT_EXPORT_REQUESTED" | "RECIPIENT_EXPORT_PRESERVED" | "RECIPIENT_EXPORT_APPROVED" | "RECIPIENT_EXPORT_FAILED" | "SOURCE_ARTIFACT_RESERVED" | "SOURCE_ARTIFACT_COMPLETION_REQUESTED" | "SOURCE_ARTIFACT_COMMITTED" | "SOURCE_ARTIFACT_FAILED" | "OPERATIONAL_SNAPSHOT_REQUESTED" | "OPERATIONAL_SNAPSHOT_SIGNED";
 interface RecoveryRow {
   operation_id: string; sequence: number | string; proof_id: string; kind: RecoveryKind;
   request_sha256: string; canonical_json: string; sha256: string; previous_sha256: string | null;
@@ -88,6 +88,14 @@ export async function buildProofRecoverySnapshot(db: Database, proofId: string) 
   rows.platform_capture_authorizations = (await db.query('SELECT * FROM platform_capture_authorizations WHERE proof_id=$1',[proofId])).rows;
   // Immutable requests/results are reconstructed; transient leases are not.
   for (const table of ['integrity_envelope_jobs', 'integrity_envelope_results']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
+  for (const table of ['record_entities','record_evidence_links','record_requirements','record_issues','record_amendments','operational_snapshot_candidates','operational_snapshot_results','record_source_artifacts']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
+  rows.record_requirement_waivers = (await db.query('SELECT w.* FROM record_requirement_waivers w JOIN record_requirements r ON r.id=w.requirement_id WHERE r.proof_id=$1',[proofId])).rows;
+  rows.record_issue_actions = (await db.query('SELECT a.* FROM record_issue_actions a JOIN record_issues i ON i.id=a.issue_id WHERE i.proof_id=$1',[proofId])).rows;
+  rows.record_source_upload_sessions = (await db.query('SELECT s.* FROM record_source_upload_sessions s JOIN record_source_artifacts a ON a.id=s.artifact_id WHERE a.proof_id=$1',[proofId])).rows;
+  rows.record_source_upload_parts = (await db.query('SELECT p.* FROM record_source_upload_parts p JOIN record_source_upload_sessions s ON s.id=p.session_id JOIN record_source_artifacts a ON a.id=s.artifact_id WHERE a.proof_id=$1',[proofId])).rows;
+  rows.record_deletion_contexts = (await db.query('SELECT * FROM record_deletion_contexts WHERE proof_id=$1',[proofId])).rows;
+  rows.record_deletion_reviews = (await db.query('SELECT r.* FROM record_deletion_reviews r JOIN record_deletion_contexts c ON c.request_id=r.request_id WHERE c.proof_id=$1',[proofId])).rows;
+  for (const table of ['record_source_artifact_operations','record_source_artifact_results']) rows[table] = (await db.query(`SELECT r.* FROM ${table} r JOIN record_source_artifacts a ON a.id=r.artifact_id WHERE a.proof_id=$1`,[proofId])).rows;
   for (const table of ['claim_cases', 'claim_case_revisions']) rows[table] = (await db.query(`SELECT * FROM ${table} WHERE proof_id=$1`, [proofId])).rows;
   // Only the new protected path promises export reconstruction. Legacy artifacts
   // are never silently upgraded or copied under replacement object identities.
