@@ -20,6 +20,7 @@ The records workspace, durable CSV and normalized-source ingestion, organization
 | Web production build | Passed TypeScript and Vite. Existing chunk-size/mixed-import warnings remain. |
 | Backend regression | 113 focused cases passed across records, imports, source ingestion, media, roles/location compatibility, webhooks, cursors, full-server mounts, privileges and CORS. This is not the entire backend suite. |
 | Backend compilation | TypeScript checks and build passed. |
+| Release tooling | 73 deployment-constructor/bridge tests passed. A historical pre-M2 test fixture now selects only migrations through 092; the pinned production guard remains unchanged and still rejects later records migrations. |
 | SDKs | 9 Node and 9 Python cases passed; TypeScript declarations/import usage compile. |
 | API contract | Static readiness passed: 50 mounted records-increment operations; 76 total described operations. Runtime routes, mounts, parameters, security declarations and generated description match. |
 | Independent verifier | 32 existing legacy/OpenSSL checks and 5 new report checks passed. Four new cryptography-dependent checks were explicitly skipped because the pinned dependencies were unavailable locally. CI installs the pinned verifier dependencies separately. |
