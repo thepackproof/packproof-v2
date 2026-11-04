@@ -39,3 +39,6 @@ jobs:
           path: codeql-results/*.sarif
           retention-days: 1
           if-no-files-found: error
+      - name: Summarize security finding locations
+        if: always()
+        run: node scripts/summarize-codeql.mjs codeql-results

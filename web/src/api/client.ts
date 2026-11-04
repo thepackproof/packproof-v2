@@ -854,9 +854,14 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
   try {
     const payload = (await response.json()) as {
       error?: { code?: string; message?: string };
+      code?: string;
+      title?: string;
+      detail?: string;
     };
-    code = payload.error?.code ?? code;
-    message = payload.error?.message ?? message;
+    const suppliedCode = payload.error?.code ?? payload.code ?? payload.title;
+    const suppliedMessage = payload.error?.message ?? payload.detail;
+    if (typeof suppliedCode === 'string' && suppliedCode) code = suppliedCode;
+    if (typeof suppliedMessage === 'string' && suppliedMessage) message = suppliedMessage;
   } catch {
     // Keep the HTTP fallback.
   }

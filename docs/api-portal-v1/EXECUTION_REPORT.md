@@ -16,7 +16,7 @@ The records workspace, durable CSV and normalized-source ingestion, organization
 
 | Check | Result and limit |
 | --- | --- |
-| Web tests | 405 tests and 12 app-link/Worker checks passed after the media/package components were mounted. |
+| Web tests | 406 tests and 12 app-link/Worker checks passed after the media/package components were mounted and both API error formats were handled. |
 | Web production build | Passed TypeScript and Vite. Existing chunk-size/mixed-import warnings remain. |
 | Backend regression | 113 focused cases passed across records, imports, source ingestion, media, roles/location compatibility, webhooks, cursors, full-server mounts, privileges and CORS. This is not the entire backend suite. |
 | Backend compilation | TypeScript checks and build passed. |
