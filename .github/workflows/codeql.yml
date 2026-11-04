@@ -29,3 +29,13 @@ jobs:
           languages: javascript-typescript
           build-mode: none
       - uses: github/codeql-action/analyze@v3
+        with:
+          output: codeql-results
+      - name: Preserve exact security findings for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-findings-${{ github.sha }}
+          path: codeql-results/*.sarif
+          retention-days: 1
+          if-no-files-found: error
