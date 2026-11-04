@@ -1,5 +1,6 @@
 import {beforeAll,afterAll,it,expect,vi} from 'vitest';
 import express from 'express';
+import {rateLimit} from 'express-rate-limit';
 import {randomBytes} from 'node:crypto';
 import request from './in-process-http.js';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
@@ -73,6 +74,8 @@ beforeAll(async()=>{
   await auditOrganization(opened.db,clock,{actor:await actor(partnerToken,org,grantA),requestId:'delegated',operation:'DELEGATED_OPERATION_A',resourceId:proof});
   const deps={db:opened.db,clock,webhookConfig:config} as AppDependencies;
   app=express();app.use(express.json());
+  // Keep the fixture's credential boundary bounded just like the production adapter.
+  app.use(rateLimit({windowMs:60_000,limit:1000,keyGenerator:()=> 'operations-fixture'}));
   app.use('/v1/partner',(r,s,n)=>{try{requirePartnerFeature();}catch(e){n(e);return;}
     void authenticatePartner(opened.db,clock,r.header('Authorization'),r.header('PackProof-Merchant-Id'),r.header('PackProof-Delegation-Id'),'request-test').then(a=>{(r as any).partnerActor=a;n();}).catch(n);});
   app.use('/v1/partner',createPartnerOperationsRouter(deps));

@@ -1,5 +1,6 @@
 import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
 import express from 'express';
+import {rateLimit} from 'express-rate-limit';
 import request from './in-process-http.js';
 import {randomBytes} from 'node:crypto';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
@@ -121,6 +122,8 @@ describe('organization records preserve canonical Proofs and current access',()=
     const principal=(await createServicePrincipal(opened.db,clock,owner,org,{name:'Operational test connector'},'test')).id;
     const issued=await issuePartnerCredential(opened.db,clock,owner,org,principal,{scopes:['proofs:read','proofs:write'],expiresAt:new Date(Date.now()+86400000).toISOString()},'test');
     const partnerApp=express();partnerApp.use(express.json());
+    // This isolated HTTP adapter also bounds its synthetic authentication path.
+    partnerApp.use(rateLimit({windowMs:60_000,limit:1000,keyGenerator:()=> 'records-fixture'}));
     partnerApp.use(async(r,s,n)=>{try{(r as any).partnerActor=await authenticatePartner(opened.db,clock,r.header('Authorization'),r.header('PackProof-Merchant-Id'),undefined,'test');n();}catch(e){n(e);}});
     partnerApp.use('/v1/partner',createPartnerRecordsRouter({db:opened.db,clock} as AppDependencies));
     partnerApp.use((e:unknown,_r:express.Request,s:express.Response,_n:express.NextFunction)=>{if(e instanceof DomainError)s.status(e.httpStatus).json({code:e.code});else s.status(500).json({error:String(e)});});
