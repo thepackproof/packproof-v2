@@ -21,7 +21,7 @@ export interface OperationalArtifact {
 export interface OperationalManifest {
   profile:typeof OPERATIONAL_MANIFEST_PROFILE; assertion:'ORGANIZATION_SUBMITTED';
   snapshotId:string; organizationId:string; environment:'live'|'sandbox'; proofId:string; revision:number;
-  priorSnapshot:null|{snapshotId:string;manifestSha256:string}; core:{manifestSha256:string};
+  priorSnapshot:null|{snapshotId:string;manifestSha256:string}; core:{manifestSha256:string|null};
   evaluation:{at:string;version:typeof OPERATIONAL_EVALUATION_PROFILE};
   actor:{userId:string;membershipId:string;role:'OWNER'|'ADMIN';locationId:string|null};
   record:{title:string|null;reference:string|null;lifecycle:'open'|'closed';reviewState:'unreviewed'|'reviewed';locationId:string|null;updatedAt:string};
@@ -71,7 +71,7 @@ export function evaluateSnapshotRequirements(manifest:Pick<OperationalManifest,'
 export function validateOperationalManifest(value:unknown):asserts value is OperationalManifest {
   snapshotExact(value,['profile','assertion','snapshotId','organizationId','environment','proofId','revision','priorSnapshot','core','evaluation','actor','record',...Object.keys(SNAPSHOT_SECTION_FIELDS),'artifacts','omissions']);
   snapshotCheck(value.profile===OPERATIONAL_MANIFEST_PROFILE&&value.assertion==='ORGANIZATION_SUBMITTED'&&['live','sandbox'].includes(value.environment)&&['snapshotId','organizationId','proofId'].every(k=>snapshotId(value[k]))&&Number.isSafeInteger(value.revision)&&value.revision>0,'IDENTITY_INVALID');
-  snapshotExact(value.core,['manifestSha256']);snapshotCheck(digest(value.core.manifestSha256),'CORE_INVALID');
+  snapshotExact(value.core,['manifestSha256']);snapshotCheck(value.core.manifestSha256===null||digest(value.core.manifestSha256),'CORE_INVALID');
   if(value.priorSnapshot!==null){snapshotExact(value.priorSnapshot,['snapshotId','manifestSha256']);snapshotCheck(snapshotId(value.priorSnapshot.snapshotId)&&value.priorSnapshot.snapshotId!==value.snapshotId&&digest(value.priorSnapshot.manifestSha256),'PRIOR_INVALID');}
   snapshotExact(value.evaluation,['at','version']);snapshotCheck(instant(value.evaluation.at)&&value.evaluation.version===OPERATIONAL_EVALUATION_PROFILE,'EVALUATION_INVALID');
   snapshotExact(value.actor,['userId','membershipId','role','locationId']);snapshotCheck(snapshotId(value.actor.userId)&&snapshotId(value.actor.membershipId)&&['OWNER','ADMIN'].includes(value.actor.role)&&nullableId(value.actor.locationId),'ACTOR_INVALID');

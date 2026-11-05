@@ -203,5 +203,69 @@ class OperationalSignatureTests(unittest.TestCase):
         self.assertEqual(result['status'], 'VERIFIED'); self.assertEqual(result['revision'], 2)
 
 
+
+    def make_api_only(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        self.synthetic_private_key = ec.generate_private_key(ec.SECP256R1())
+        self.manifest['core']['manifestSha256'] = None
+        self.manifest['priorSnapshot'] = None
+        self.files.pop(operational.CORE_PATH, None)
+        self.files.pop(operational.PRIOR_PATH, None)
+        artifact = self.manifest['artifacts'][0]
+        artifact['kind'] = 'SOURCE_ARTIFACT'
+        artifact['evidenceType'] = 'SOURCE_ARTIFACT'
+        artifact['source'].update({'kind': 'ORGANIZATION_SERVICE_SUBMITTED', 'actorId': 'principal_fixture', 'receiptSha256': 'a' * 64})
+        for requirement in self.manifest['requirements']:
+            requirement['accepted_evidence_types'] = ['SOURCE_ARTIFACT']
+        trust = copy.deepcopy(self.fixture['trust'])
+        trust['keys'][0]['publicKeyPem'] = self.synthetic_private_key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode('ascii')
+        self.trust_path.write_text(json.dumps(trust), encoding='utf-8')
+        self.resign_current_manifest()
+
+    def resign_current_manifest(self):
+        import rfc8785
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec, utils
+        encode = lambda value: base64.urlsafe_b64encode(value).rstrip(b'=').decode('ascii')
+        manifest_bytes = rfc8785.dumps(self.manifest)
+        self.files[operational.MANIFEST_PATH] = manifest_bytes
+        jws = operational.json_value(self.files[operational.ENVELOPE_PATH])
+        envelope = operational.json_value(operational.b64(jws['payload'], 65536))
+        envelope['manifestSha256'] = hashlib.sha256(manifest_bytes).hexdigest()
+        jws['payload'] = encode(rfc8785.dumps(envelope))
+        signed = self.synthetic_private_key.sign((jws['protected'] + '.' + jws['payload']).encode('ascii'), ec.ECDSA(hashes.SHA256()))
+        r, s = utils.decode_dss_signature(signed)
+        jws['signature'] = encode(r.to_bytes(32, 'big') + s.to_bytes(32, 'big'))
+        self.files[operational.ENVELOPE_PATH] = rfc8785.dumps(jws)
+
+    def test_api_only_org_snapshot_verifies_without_a_fabricated_capture_manifest(self):
+        self.make_api_only()
+        result = self.verify()
+        self.assertEqual(result['status'], 'VERIFIED')
+        self.assertEqual(result['issuerSignature'], 'VALID')
+        self.assertEqual(result['coreCapture'], 'NOT_PRESENT')
+        self.assertIsNone(result['coreManifestSha256'])
+        self.assertEqual(result['assertion'], 'ORGANIZATION_SUBMITTED')
+        self.assertEqual(result['truthOfRecordedScene'], 'NOT_ASSESSED')
+
+    def test_api_only_package_cannot_satisfy_an_independently_required_core(self):
+        self.make_api_only()
+        with self.assertRaisesRegex(ValueError, 'linkage'):
+            self.verify(expected_core=self.fixture['expectedCoreSha256'])
+        self.files[operational.CORE_PATH] = base64.b64decode(self.fixture['files'][operational.CORE_PATH])
+        with self.assertRaisesRegex(ValueError, 'Undeclared'):
+            self.verify()
+
+    def test_core_binding_cannot_disappear_after_a_finalized_prior_snapshot(self):
+        prior_link = copy.deepcopy(self.manifest['priorSnapshot'])
+        self.make_api_only()
+        self.manifest['priorSnapshot'] = prior_link
+        self.files[operational.PRIOR_PATH] = base64.b64decode(self.fixture['files'][operational.PRIOR_PATH])
+        self.resign_current_manifest()
+        with self.assertRaisesRegex(ValueError, 'core|linkage'):
+            self.verify()
+
+
 if __name__ == '__main__':
     unittest.main()

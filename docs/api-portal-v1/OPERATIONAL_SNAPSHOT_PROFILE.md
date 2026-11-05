@@ -28,11 +28,11 @@ encoding. No other algorithm is admitted. The payload has exactly `profile`,
 `snapshotId`, `organizationId`, `environment`, `proofId`, `revision`,
 `manifestPath`, `manifestSha256`, `issuer` and `issuedAt`.
 
-Historical core manifests remain opaque original bytes. Their recorded SHA-256
+Historical core manifests remain opaque original bytes. When a finalized capture manifest exists, its recorded SHA-256
 is checked directly; their bytes and existing signature interpretation are never
 rewritten. Each core original must be included with matching exact commitments
 or explicitly omitted. A prior manifest must match its declared digest, snapshot
-ID, organization, environment, Proof, core digest and an earlier revision.
+ID, organization, environment, Proof and an earlier revision. Core linkage may move from explicitly absent to a preserved finalized capture manifest; an existing core digest cannot change or disappear.
 
 ## Frozen manifest schema
 
@@ -51,7 +51,7 @@ waivers, issues, actions, amendments, artifacts, omissions
 ```
 
 `assertion` is always `ORGANIZATION_SUBMITTED`. Environment is `sandbox` or
-`live`; revision is a positive integer. `core` contains `manifestSha256`.
+`live`; revision is a positive integer. `core` contains `manifestSha256`: a SHA-256 for a preserved finalized capture manifest, or explicit null for an API-only record with no finalized capture. Absence never substitutes for a missing, corrupt or non-durable finalized manifest. A null core omits core/manifest.json from the archive and carries no fabricated core receipt; the independent report labels coreCapture:NOT_PRESENT. Existing packages and their original core bytes keep their prior interpretation. Older verifier builds that require core linkage reject an API-only package; use the current verifier.
 `priorSnapshot` is null or `{snapshotId, manifestSha256}`. `evaluation` contains
 `at` and `version`. Timestamps are valid UTC instants with millisecond precision.
 `actor` contains the accepted human `userId`, `membershipId`, `role` (OWNER or
@@ -165,3 +165,5 @@ public key cannot establish trust. Reports separate mathematical signature,
 key policy, untrusted timestamp, operational scope, omissions and physical truth.
 Snapshot-specific recipient approval, redaction/disclosure policy and any
 irreversible deletion remain their own controlled workflows.
+
+The unreleased profile qualification digest includes OPTIONAL_MONOTONIC_PRESERVED_CORE_V1. Existing qualification evidence cannot enable a changed source/profile tuple. API-only acceptance keeps organization-submitted assurance, current human package selection, protected source/result preservation, independent issuer trust and all streaming/recovery gates; it never manufactures a personal attestation.

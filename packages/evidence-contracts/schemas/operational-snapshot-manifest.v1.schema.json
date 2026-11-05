@@ -90,8 +90,15 @@
       ],
       "properties": {
         "manifestSha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

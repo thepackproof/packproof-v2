@@ -67,7 +67,7 @@ def validate_manifest(manifest):
         exact(prior, 'snapshotId manifestSha256')
         check(identifier(prior['snapshotId']) and prior['snapshotId'] != manifest['snapshotId'] and sha(prior['manifestSha256']), 'Invalid prior snapshot link')
     exact(manifest['core'], 'manifestSha256')
-    check(sha(manifest['core']['manifestSha256']), 'Invalid core linkage')
+    check(manifest['core']['manifestSha256'] is None or sha(manifest['core']['manifestSha256']), 'Invalid core linkage')
     exact(manifest['evaluation'], 'at version')
     check(manifest['evaluation']['version'] == 'packproof.requirement-evaluation.v1', 'Unsupported requirement evaluation profile')
     evaluated = stamp(manifest['evaluation']['at'])
@@ -228,6 +228,10 @@ def verify_signature(jws, envelope, trust_path, now):
 
 def validate_core_membership(core, manifest, artifacts, omissions):
     """Read the known historical inventory; hash/sign its received bytes verbatim."""
+    if core is None:
+        check(manifest['core']['manifestSha256'] is None, 'Missing declared core manifest linkage')
+        return
+    check(manifest['core']['manifestSha256'] is not None, 'Undeclared core manifest linkage')
     check(isinstance(core, dict) and type(core.get('manifestVersion')) is int and core['manifestVersion'] == 1 and core.get('proofId') == manifest['proofId'] and isinstance(core.get('evidence'), list) and len(core['evidence']) <= 4000, 'Unsupported or mismatched core manifest')
     seen = set()
     for item in core['evidence']:
@@ -267,18 +271,21 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
     check(stamp(manifest['evaluation']['at']) <= stamp(envelope['issuedAt']), 'Snapshot issued before frozen evaluation')
     for actual, required in [(manifest['proofId'], expected_proof), (manifest_sha, expected_digest.lower() if expected_digest else None), (manifest['organizationId'], expected_organization), (manifest['environment'], expected_environment), (manifest['revision'], expected_revision), (manifest['core']['manifestSha256'], expected_core.lower() if expected_core else None), (manifest['priorSnapshot']['manifestSha256'] if manifest['priorSnapshot'] else None, expected_prior.lower() if expected_prior else None)]:
         check(required is None or actual == required, 'Independently required operational linkage mismatch')
-    core_bytes = read(CORE_PATH)
-    check(len(core_bytes) <= 8 * 1024 * 1024 and hashlib.sha256(core_bytes).hexdigest() == manifest['core']['manifestSha256'], 'Core manifest linkage mismatch')
-    core = json_value(core_bytes)
+    reserved = {'package.json', ENVELOPE_PATH, MANIFEST_PATH}
+    core = None
+    if manifest['core']['manifestSha256'] is not None:
+        core_bytes = read(CORE_PATH)
+        check(len(core_bytes) <= 8 * 1024 * 1024 and hashlib.sha256(core_bytes).hexdigest() == manifest['core']['manifestSha256'], 'Core manifest linkage mismatch')
+        core = json_value(core_bytes)
+        reserved.add(CORE_PATH)
     validate_core_membership(core, manifest, artifacts, omissions)
-    reserved = {'package.json', ENVELOPE_PATH, MANIFEST_PATH, CORE_PATH}
     if manifest['priorSnapshot'] is not None:
         prior_bytes = read(PRIOR_PATH)
         check(len(prior_bytes) <= 8 * 1024 * 1024 and hashlib.sha256(prior_bytes).hexdigest() == manifest['priorSnapshot']['manifestSha256'], 'Prior snapshot digest mismatch')
         prior = json_value(prior_bytes)
         prior_artifacts, prior_omissions = validate_manifest(prior)
-        validate_core_membership(core, prior, prior_artifacts, prior_omissions)
-        check(rfc8785.dumps(prior) == prior_bytes and prior['snapshotId'] == manifest['priorSnapshot']['snapshotId'] and all(prior[key] == manifest[key] for key in ('organizationId', 'environment', 'proofId')) and prior['revision'] < manifest['revision'] and prior['core'] == manifest['core'] and stamp(prior['evaluation']['at']) <= stamp(manifest['evaluation']['at']), 'Prior snapshot tenant, revision or core linkage mismatch')
+        validate_core_membership(None if prior['core']['manifestSha256'] is None else core, prior, prior_artifacts, prior_omissions)
+        check(rfc8785.dumps(prior) == prior_bytes and prior['snapshotId'] == manifest['priorSnapshot']['snapshotId'] and all(prior[key] == manifest[key] for key in ('organizationId', 'environment', 'proofId')) and prior['revision'] < manifest['revision'] and (prior['core']['manifestSha256'] is None or prior['core'] == manifest['core']) and stamp(prior['evaluation']['at']) <= stamp(manifest['evaluation']['at']), 'Prior snapshot tenant, revision or core linkage mismatch')
         reserved.add(PRIOR_PATH)
     check(not (set(names) - reserved - {artifact['path'] for artifact in artifacts.values()}), 'Undeclared operational package entries')
     files, missing, modified = [], [], []
@@ -295,4 +302,4 @@ def verify_package(package, names, read, trust_path, now, expected_proof=None, e
     hash_integrity = 'FAIL' if modified else 'INCOMPLETE' if missing else 'PASS'
     coverage = 'UNKNOWN' if mathematics != 'VALID' else 'PARTIAL' if missing or modified or omissions else 'COMPLETE_FOR_DECLARED_SCOPE'
     verified = mathematics == 'VALID' and hash_integrity == 'PASS' and coverage == 'COMPLETE_FOR_DECLARED_SCOPE' and trusted and current
-    return {'status': 'VERIFIED' if verified else 'INTEGRITY_INCOMPLETE', 'profile': PROFILE, 'proofId': manifest['proofId'], 'snapshotId': manifest['snapshotId'], 'recordType': 'OPERATIONAL_SNAPSHOT', 'recordId': manifest['snapshotId'], 'organizationId': manifest['organizationId'], 'environment': manifest['environment'], 'revision': manifest['revision'], 'priorSnapshot': manifest['priorSnapshot'], 'manifestSha256': manifest_sha, 'coreManifestSha256': manifest['core']['manifestSha256'], 'evaluation': manifest['evaluation'], 'assertion': manifest['assertion'], 'issuer': envelope['issuer'], 'issuedAt': envelope['issuedAt'], 'hashIntegrity': hash_integrity, 'issuerSignature': mathematics, 'coverage': coverage, 'operationalCoverage': 'FROZEN_DECLARED_REVISION', 'keyStatus': key_status, 'keyTrustedAtIssue': trusted, 'signatureVerified': mathematics == 'VALID', 'timestamp': 'NOT_PRESENT', 'truthOfRecordedScene': 'NOT_ASSESSED', 'trust': trust, 'files': files, 'missing': missing, 'modified': modified, 'omissions': list(omissions.values()), 'evidenceVerified': len(artifacts) - len(missing) - len(modified), 'limitations': ['Operational values and reviews are organization-submitted assertions, not independent physical verification.', 'The received revision and prior linkage cannot rule out unseen later snapshots or operational additions.', 'Requirement evaluation is recomputed from the signed declared evidence, times, types, links and waivers; source assertions remain unverified physical claims.', 'Storage version commitments do not constitute a live preservation or retention audit.', 'Issuer time is not an independent timestamp. Current revocation knowledge is unavailable offline.', 'Archive-included keys never establish trust.']}
+    return {'status': 'VERIFIED' if verified else 'INTEGRITY_INCOMPLETE', 'profile': PROFILE, 'proofId': manifest['proofId'], 'snapshotId': manifest['snapshotId'], 'recordType': 'OPERATIONAL_SNAPSHOT', 'recordId': manifest['snapshotId'], 'organizationId': manifest['organizationId'], 'environment': manifest['environment'], 'revision': manifest['revision'], 'priorSnapshot': manifest['priorSnapshot'], 'manifestSha256': manifest_sha, 'coreManifestSha256': manifest['core']['manifestSha256'], 'coreCapture': 'NOT_PRESENT' if core is None else 'PRESENT', 'evaluation': manifest['evaluation'], 'assertion': manifest['assertion'], 'issuer': envelope['issuer'], 'issuedAt': envelope['issuedAt'], 'hashIntegrity': hash_integrity, 'issuerSignature': mathematics, 'coverage': coverage, 'operationalCoverage': 'FROZEN_DECLARED_REVISION', 'keyStatus': key_status, 'keyTrustedAtIssue': trusted, 'signatureVerified': mathematics == 'VALID', 'timestamp': 'NOT_PRESENT', 'truthOfRecordedScene': 'NOT_ASSESSED', 'trust': trust, 'files': files, 'missing': missing, 'modified': modified, 'omissions': list(omissions.values()), 'evidenceVerified': len(artifacts) - len(missing) - len(modified), 'limitations': ['Operational values and reviews are organization-submitted assertions, not independent physical verification.', 'The received revision and prior linkage cannot rule out unseen later snapshots or operational additions.', 'Requirement evaluation is recomputed from the signed declared evidence, times, types, links and waivers; source assertions remain unverified physical claims.', 'Storage version commitments do not constitute a live preservation or retention audit.', 'Issuer time is not an independent timestamp. Current revocation knowledge is unavailable offline.', 'Archive-included keys never establish trust.']}

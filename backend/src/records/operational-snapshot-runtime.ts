@@ -15,7 +15,7 @@ import type { KmsSigningTransport } from '../integrity/kms-signing-runtime.js';
 import { jcsBytes, sha256 } from '../integrity/envelope-profile.js';
 import { createOperationalSnapshotSigner, OPERATIONAL_MANIFEST_PROFILE, OPERATIONAL_SNAPSHOT_PROFILE, OPERATIONAL_SNAPSHOT_TYPE, SNAPSHOT_SECTION_FIELDS, snapshotCheck, validateOperationalEnvelope } from './operational-snapshot-profile.js';
 
-export const OPERATIONAL_PROFILE_SHA256=sha256(jcsBytes({manifest:OPERATIONAL_MANIFEST_PROFILE,envelope:OPERATIONAL_SNAPSHOT_PROFILE,type:OPERATIONAL_SNAPSHOT_TYPE,sections:SNAPSHOT_SECTION_FIELDS,artifactSourceFields:['kind','reference','reportedAt','receivedAt','acceptedAt','actorId','connectionId','receiptSha256'],transport:'packproof.operational-snapshot-package.v1',source:'OPERATIONAL_SNAPSHOT_REQUESTED',result:'OPERATIONAL_SNAPSHOT_SIGNED'}));
+export const OPERATIONAL_PROFILE_SHA256=sha256(jcsBytes({coreBinding:'OPTIONAL_MONOTONIC_PRESERVED_CORE_V1',manifest:OPERATIONAL_MANIFEST_PROFILE,envelope:OPERATIONAL_SNAPSHOT_PROFILE,type:OPERATIONAL_SNAPSHOT_TYPE,sections:SNAPSHOT_SECTION_FIELDS,artifactSourceFields:['kind','reference','reportedAt','receivedAt','acceptedAt','actorId','connectionId','receiptSha256'],transport:'packproof.operational-snapshot-package.v1',source:'OPERATIONAL_SNAPSHOT_REQUESTED',result:'OPERATIONAL_SNAPSHOT_SIGNED'}));
 export interface OperationalSnapshotBinding {
   sourceSha:string;profileSha256:string;organizationIds:string[];environment:'live'|'sandbox';cutoverAt:string;
   artifactBucket:string;evidenceBucket:string;sourceArtifactBucket:string;journalBucket:string;account:string;region:string;
