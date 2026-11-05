@@ -16,3 +16,27 @@ for megabytes in (512, 768, 1024):
     print(f"FFPROBE_AS_MB={megabytes} EXIT={result.returncode}", flush=True)
     print(result.stdout.decode("utf-8", "replace")[:2000], flush=True)
     print(result.stderr.decode("utf-8", "replace")[:4000], flush=True)
+
+# Exercise the exact bounded decoder/encoder paths, not just loader startup.
+import tempfile
+with tempfile.TemporaryDirectory(prefix="packproof-native-media-") as temporary:
+    directory = Path(temporary)
+    image = directory / "source.png"
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                    "color=c=red:s=32x32", "-threads", "1", "-frames:v", "1", str(image)],
+                   env=env, check=True, capture_output=True, timeout=20)
+    for megabytes in (512, 768, 1024):
+        for name, source, transform in (
+            ("redaction", image, "drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill"),
+            ("thumbnail", fixture, "scale=320:-2"),
+        ):
+            output = directory / f"{name}-{megabytes}.png"
+            command = ["prlimit", f"--as={megabytes * 1024 * 1024}", "--cpu=15",
+                       "--fsize=2097152", "--nofile=64", "--", "ffmpeg", "-nostdin",
+                       "-v", "error", "-threads", "1", "-filter_threads", "1", "-y",
+                       "-protocol_whitelist", "file,pipe", "-i", str(source), "-map", "0:v:0",
+                       "-threads", "1", "-frames:v", "1", "-vf", transform, "-an", "-sn", "-dn",
+                       "-map_metadata", "-1", "-map_chapters", "-1", str(output)]
+            result = subprocess.run(command, env=env, capture_output=True, timeout=20)
+            print(f"FFMPEG_AS_MB={megabytes} CASE={name} EXIT={result.returncode}", flush=True)
+            print(result.stderr.decode("utf-8", "replace")[:4000], flush=True)
