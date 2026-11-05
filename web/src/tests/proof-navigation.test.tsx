@@ -48,31 +48,27 @@ it("loads search matches beyond the first server page and rejects a broken pagin
   fetchMock.mockImplementation(async () => json({ proofs: [summary], nextOffset: 0 }));
   await expect(api.listProofs({ view: "all", q: "camera" })).rejects.toThrow("could not be loaded completely");
 });
-it("opens the workspace Home with one creation action and the desktop navigation", async () => {
+it("opens the desktop records workspace after authentication while preserving legacy proof access", async () => {
   saveSession({ apiBaseUrl: "", authMode: "dev", userId: "navigation-test", username: "seller", displayName: "Seller", token: "test-token", refreshToken: null, accessExpiresAt: null, subject: "seller" });
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes("/me/records/context")) return json({ schema: "packproof.records/v1", organizations: [{ id: "org-1", name: "Shipping team", environment: "live", enabled: true, role: "OWNER", locations: [] }], selectedOrganizationId: "org-1", environment: "live", capabilities: { records: true, import: true, review: true, manage: true } });
+    if (url.includes("/me/records?")) return json({ records: [], nextCursor: null, counts: { total: 0, open: 0, closed: 0, needsAttention: 0, policyComplete: 0 }, updatedAt: "2026-11-04T12:00:00Z" });
     if (url.includes("/me/proofs?")) return json({ proofs: [summary], nextOffset: null });
     if (url.includes("/me/fulfillment-queue")) return json({ items: [] });
     if (url.includes("/me/integration-connections")) return json({ connections: [] });
     return json({ invitations: [] });
   }));
-  window.history.replaceState({}, "", "/app");
+  window.history.replaceState({}, "", "/app/records");
   render(<App />);
-  expect(await screen.findByRole("button", { name: /Vintage camera. Recording needed. Record packing/ })).toBeVisible();
-  expect(window.location.pathname).toBe("/app");
-  expect(screen.getByRole("heading", { name: "Home" })).toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: "New Proof" })).toHaveLength(1);
-  const navigation = within(screen.getByRole("navigation", { name: "Workspace" }));
-  expect(navigation.getAllByRole("link").map(link => link.textContent)).toEqual(["Home", "Proofs", "Packing Station", "Orders", "Integrations", "Uploads", "Notifications", "Settings"]);
-  expect(navigation.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
-  await userEvent.click(navigation.getByRole("link", { name: "Proofs" }));
-  expect(await screen.findByRole("button", { name: /Vintage camera. Recording needed. Record packing/ })).toBeVisible();
-  expect(window.location.pathname).toBe("/proofs");
-  expect(screen.getAllByRole("button", { name: "New Proof" })).toHaveLength(1);
-  expect(navigation.getByRole("link", { name: "Proofs" })).toHaveAttribute("aria-current", "page");
-  expect(screen.queryByRole("link", { name: "Overview" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Shipping records" }, { timeout: 10000 })).toBeVisible();
+  const navigation = within(screen.getByRole("navigation", { name: "Records workspace" }));
+  expect(navigation.getAllByRole("link").map(link => link.textContent)).toEqual(["Records", "Needs attention", "Connections", "Exports", "Settings"]);
+  expect(navigation.getByRole("link", { name: "Records" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("link", { name: "Capture workspace" })).toHaveAttribute("href", "/capture/home");
+  expect(canonicalWorkspacePath("/proofs/existing-proof")).toBe("/proofs/existing-proof");
 });
+
 const listProps = { proofs: [], view: "all" as const, query: "", loading: false, error: null, onChange: vi.fn(), onRetry: vi.fn(), onOpenProof: vi.fn(), onOpenInvitation: vi.fn(), onOpenReceiver: vi.fn(), onCreate: vi.fn() };
 it("keeps failed loading distinct from empty lists and routes receiver invitations through their existing access flow", async () => {
   const { rerender } = render(<ProofsScreen {...listProps} error="Network unavailable" />);

@@ -51,6 +51,12 @@ function accountDeletionView(value: AccountDeletionRequestView): AccountDeletion
 
 export type ProofEmailPreference = "IMPORTANT" | "ALL" | "FINAL_ONLY";
 
+export interface RecordDownloadOptions {
+  signal?: AbortSignal;
+  onProgress?: (receivedBytes: number, totalBytes: number | null) => void;
+}
+export const RECORD_DOWNLOAD_LIMIT = 220 * 1024 * 1024;
+
 export interface ProofEmailSubscriptionView {
   subscriptionId: string;
   proofId: string;
@@ -63,6 +69,52 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async recordsCanonicalExport(exportId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/canonical-exports/${encodeURIComponent(exportId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsOperationalSnapshotPackage(proofId: string, snapshotId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/snapshots/${encodeURIComponent(snapshotId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsSourceOriginal(proofId: string, artifactId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/source-artifacts/${encodeURIComponent(artifactId)}/blob?${scope}`, true, { ...options, maxBytes: 250_000_000 });
+  }
+  async recordsUploadPart(sessionId: string, partNumber: number, organizationId: string, environment: string, bytes: Blob, signal?: AbortSignal): Promise<unknown> {
+    if (!sessionId || !Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > 1000 || bytes.size > 5 * 1024 * 1024) throw new Error('Invalid source upload part.');
+    const token = await this.options.getToken();
+    if (!token) throw new ApiError('UNAUTHENTICATED', 'Missing bearer token', 401);
+    const scope = new URLSearchParams({ organizationId, environment });
+    return withRequestTimeout(async timeoutSignal => {
+      const combined = new AbortController(), cancel = () => combined.abort();
+      timeoutSignal.addEventListener('abort', cancel, { once: true }); signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted || timeoutSignal.aborted) combined.abort();
+      try {
+        const response = await fetch(joinUrl(this.options.baseUrl, `/me/records/source-upload-sessions/${encodeURIComponent(sessionId)}/parts/${partNumber}?${scope}`), { method: 'PUT', body: bytes, signal: combined.signal, headers: { Authorization: `Bearer ${token}`, 'Content-Type': bytes.type || 'application/octet-stream' }, referrerPolicy: 'no-referrer' });
+        if (!response.ok) throw await errorFromResponse(response);
+        const text = await response.text(); return text.trim() ? JSON.parse(text) : undefined;
+      } finally { timeoutSignal.removeEventListener('abort', cancel); signal?.removeEventListener('abort', cancel); }
+    }, 120000);
+  }
+  async recordsOriginal(proofId: string, evidenceId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}/blob?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsPackage(proofId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/${encodeURIComponent(proofId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsRequest<T>(path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    if ((path && !path.startsWith("/") && !path.startsWith("?")) || path.startsWith("//") || path.includes("..") || path.includes("#")) throw new Error("Invalid records request.");
+    return this.request(`/me/records${path}`, { method, body, headers });
+  }
+  async organizationRequest<T>(organizationId: string, path: string, method = "GET", body?: unknown, headers?: Record<string, string>): Promise<T> {
+    if (!path.startsWith("/") || path.startsWith("//") || path.includes("..") || path.includes("#")) throw new Error("Invalid organization request.");
+    await this.options.getToken();
+    const token = this.options.getIdentityToken?.();
+    return this.request(`/me/organizations/${encodeURIComponent(organizationId)}${path}`, { method, body, headers: { ...headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(token ? { auth: false } : {}) });
+  }
   private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{const request=buildRndRequest(operation,input);return this.request(request.path,request);}
   async rndCapabilities(): Promise<RndCapabilities> { return this.rndOperation('getCapabilities',{}); }
   async rndAnalyses(proofId:string):Promise<RndSnapshot> { return this.rndOperation('listAnalyses',{path:{id:proofId}}); }
@@ -606,7 +658,7 @@ export class PackProofApi {
     return this.download(`/proofs/${encodeURIComponent(proofId)}/evidence/${encodeURIComponent(evidenceId)}`);
   }
 
-  private async download(path: string, auth = true): Promise<Blob> {
+  private async download(path: string, auth = true, options: RecordDownloadOptions & { maxBytes?: number } = {}): Promise<Blob> {
     const headers: Record<string, string> = {};
     if (auth) {
       const token = await this.options.getToken();
@@ -614,11 +666,45 @@ export class PackProofApi {
       headers.Authorization = `Bearer ${token}`;
     }
     return withRequestTimeout(async (signal) => {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (signal.aborted || options.signal?.aborted) controller.abort();
+      try {
       const response = await fetch(joinUrl(this.options.baseUrl, path), {
-        method: "GET", headers, signal, referrerPolicy: "no-referrer",
+        method: "GET", headers, signal: controller.signal, referrerPolicy: "no-referrer",
       });
       if (!response.ok) throw await errorFromResponse(response);
-      return response.blob();
+      if (options.maxBytes !== undefined) {
+        const rawLength = response.headers.get("content-length");
+        const parsedLength = rawLength === null ? NaN : Number(rawLength);
+        const totalBytes = Number.isSafeInteger(parsedLength) && parsedLength >= 0 ? parsedLength : null;
+        const tooLarge = () => new Error("This file exceeds the 220 MiB browser download limit.");
+        if (totalBytes !== null && totalBytes > options.maxBytes) { controller.abort(); throw tooLarge(); }
+        // Bounded routes must stream: blob() alone cannot stop an oversized body.
+        if (!response.body) throw new Error("Streaming downloads are unavailable in this browser. Try another browser.");
+        const reader = response.body.getReader();
+        const chunks: BlobPart[] = [];
+        let receivedBytes = 0;
+        options.onProgress?.(0, totalBytes);
+        try {
+          while (true) {
+            const result = await reader.read();
+            if (result.done) break;
+            receivedBytes += result.value.byteLength;
+            if (receivedBytes > options.maxBytes) { controller.abort(); await reader.cancel(); throw tooLarge(); }
+            chunks.push(result.value.slice().buffer);
+            options.onProgress?.(receivedBytes, totalBytes);
+          }
+          return new Blob(chunks, { type: response.headers.get("content-type") || "application/octet-stream" });
+        } finally { reader.releaseLock(); }
+      }
+      return await response.blob();
+      } finally {
+        signal.removeEventListener("abort", abort);
+        options.signal?.removeEventListener("abort", abort);
+      }
     }, 120_000);
   }
 
@@ -796,9 +882,14 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
   try {
     const payload = (await response.json()) as {
       error?: { code?: string; message?: string };
+      code?: string;
+      title?: string;
+      detail?: string;
     };
-    code = payload.error?.code ?? code;
-    message = payload.error?.message ?? message;
+    const suppliedCode = payload.error?.code ?? payload.code ?? payload.title;
+    const suppliedMessage = payload.error?.message ?? payload.detail;
+    if (typeof suppliedCode === 'string' && suppliedCode) code = suppliedCode;
+    if (typeof suppliedMessage === 'string' && suppliedMessage) message = suppliedMessage;
   } catch {
     // Keep the HTTP fallback.
   }

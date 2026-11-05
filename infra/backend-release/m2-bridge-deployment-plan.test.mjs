@@ -6,7 +6,9 @@ import {m2BridgeDeploymentPlan as plan,M2_BRIDGE as bridge} from './m2-bridge-de
 import {TARGET} from './backend-deployment-plan.mjs';
 const now=new Date('2026-10-22T19:00:00Z');
 const migrations=new URL('../../backend/migrations/',import.meta.url);
-const applied=await Promise.all((await readdir(migrations)).filter(n=>n.endsWith('.sql')&&!/^09[345]_/.test(n)).sort().map(async name=>({id:name.slice(0,-4),checksum:createHash('sha256').update(await readFile(new URL(name,migrations))).digest('hex')})));
+// This fixture represents the historical pre-M2 database, not today's schema.
+// Later migrations must never enter its pinned 91-receipt baseline.
+const applied=await Promise.all((await readdir(migrations)).filter(n=>/^\d{3}_.+\.sql$/.test(n)&&Number(n.slice(0,3))<=92).sort().map(async name=>({id:name.slice(0,-4),checksum:createHash('sha256').update(await readFile(new URL(name,migrations))).digest('hex')})));
 function fixture(){
  const environment=Object.entries({PACKPROOF_ENVIRONMENT:'production',PACKPROOF_MIGRATE_ON_START:'false',PACKPROOF_REQUIRE_DURABLE_RECEIPTS:'false',PACKPROOF_S3_BUCKET:'packproof-v2-evidence-staging-20260829-a7f3',PACKPROOF_RELEASE_SHA:bridge.previousSource,PACKPROOF_RELEASE_IMAGE:bridge.previousImage,PACKPROOF_RELEASE_VERSION:'foundation'}).map(([name,value])=>({name,value}));
  const primaryContainer={image:bridge.previousImage,containerPort:3000,environment,secrets:[{name:'PACKPROOF_DB_PASSWORD',valueFrom:'runtime-reference'}]};
@@ -21,6 +23,13 @@ function fixture(){
   ci:{backend:{source:bridge.source,status:'PASSED'},postgres:{source:bridge.source,status:'PASSED'},web:{source:bridge.harness,status:'PASSED'},sourceSecurity:{source:bridge.harness,status:'PASSED'},overlay:{base:bridge.source,head:bridge.harness,changedPaths:['.gitleaksignore','backend/scripts/m2-bridge-compatibility-acceptance.mjs','web/src/tests/app.test.tsx']}}};
  return {snapshot,candidate};
 }
+test('keeps the historical pre-M2 fixture pinned and rejects later records migrations',()=>{
+ assert.equal(applied.length,91);
+ assert.ok(applied.every(row=>Number(row.id.slice(0,3))<=92));
+ const {snapshot,candidate}=fixture();
+ candidate.preflight.applied.push({id:'096_records_portal',checksum:'0'.repeat(64)});
+ assert.throws(()=>plan(snapshot,candidate,now),/BRIDGE_MUST_PRECEDE_MIGRATION/);
+});
 test('changes only the immutable image and release identity, preserving secrets and rollback',()=>{
  const {snapshot,candidate}=fixture(),before=structuredClone(snapshot),result=plan(snapshot,candidate,now);
  assert.deepEqual(snapshot,before);assert.deepEqual(Object.keys(result.update),['serviceArn','primaryContainer']);

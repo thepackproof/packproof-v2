@@ -34,7 +34,7 @@ export default {
       target.pathname = url.pathname.slice(4);
       target.search = url.search;
       const headers = new Headers();
-      for (const name of ["authorization", "content-type", "accept", "range", "if-none-match", "idempotency-key", "x-packproof-station-token", "x-shopify-hmac-sha256", "x-shopify-shop-domain", "x-shopify-topic", "x-shopify-webhook-id"]) {
+      for (const name of ["authorization", "content-type", "accept", "range", "if-match", "if-none-match", "idempotency-key", "packproof-merchant-id", "packproof-delegation-id", "x-packproof-station-token", "x-shopify-hmac-sha256", "x-shopify-shop-domain", "x-shopify-topic", "x-shopify-webhook-id"]) {
         const value = request.headers.get(name);
         if (value) headers.set(name, value);
       }

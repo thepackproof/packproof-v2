@@ -3,6 +3,19 @@ import { joinUrl, PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
 
 describe("API client boundary", () => {
+  it('preserves actionable records problem details as well as the retained nested error contract',async()=>{
+    const replies=[
+      {type:'about:blank',title:'CSV_MAPPING_REQUIRED',code:'CSV_MAPPING_REQUIRED',status:400,detail:'Choose the column that identifies the shipment.'},
+      {error:{code:'WORKSPACE_PENDING',message:'This workspace is waiting for API activation.'}},
+    ];
+    const fetchMock=vi.fn(async()=>new Response(JSON.stringify(replies.shift()),{status:400,headers:{'Content-Type':'application/problem+json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    try{
+      const api=new PackProofApi({baseUrl:'',getToken:()=> 'fixture-token'});
+      await expect(api.recordsRequest('/imports/preview','POST',{})).rejects.toMatchObject({code:'CSV_MAPPING_REQUIRED',message:'Choose the column that identifies the shipment.',status:400});
+      await expect(api.recordsRequest('/context')).rejects.toMatchObject({code:'WORKSPACE_PENDING',message:'This workspace is waiting for API activation.',status:400});
+    }finally{vi.unstubAllGlobals();}
+  });
   it('sends explicit claim retry keys in headers for creates and revisions',async()=>{
     const fetchMock=vi.fn(async()=>new Response('{}',{status:200,headers:{'Content-Type':'application/json'}}));
     vi.stubGlobal('fetch',fetchMock);

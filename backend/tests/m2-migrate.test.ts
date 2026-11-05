@@ -16,7 +16,9 @@ const binding={source:'a'.repeat(40),compatibleImage:'sha256:'+'b'.repeat(64),co
 const now=new Date('2026-10-22T12:00:00Z'),clock={now:()=>new Date(now)};
 let inventory:Awaited<ReturnType<typeof migrationInventory>>;
 const baseline=()=>inventory.filter(r=>!MIGRATIONS.some(m=>m.id===r.id));
-beforeAll(async()=>{inventory=await migrationInventory();});
+// The inactive-M2 operator qualifies its original 94-receipt candidate. Future
+// source migrations must not silently become part of this historical fixture.
+beforeAll(async()=>{inventory=(await migrationInventory()).filter(row=>Number(row.id.slice(0,3))<=95);});
 
 describe('exact inactive M2 migration inventory',()=>{
  it('accepts only 91 baseline or 94 complete receipts, with exact reviewed bytes',()=>{
@@ -27,6 +29,7 @@ describe('exact inactive M2 migration inventory',()=>{
   expect(()=>inspectInventory(inventory.map((r,i)=>i?r:{...r,sql:r.sql+'\n'}),baseline())).toThrow('M2_MIGRATION_BYTES_MISMATCH');
   expect(()=>inspectInventory(inventory,baseline().map((r,i)=>i?r:{...r,checksum:'d'.repeat(64)}))).toThrow('M2_APPLIED_CHECKSUM_MISMATCH');
   expect(()=>inspectInventory([...inventory,{id:'future'}],inventory)).toThrow('M2_CANDIDATE_INVENTORY_MISMATCH');
+  expect(()=>inspectInventory([...inventory,{id:'096_records_portal',checksum:'0'.repeat(64),sql:''}],baseline())).toThrow('M2_CANDIDATE_INVENTORY_MISMATCH');
  });
  it('binds a fresh inspection to exact state, source, bridge image and reviewed bridge evidence',()=>{
   const state=inspectInventory(inventory,baseline()),receipt=inspectionReceipt(state,binding,now);

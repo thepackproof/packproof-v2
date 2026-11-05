@@ -19,5 +19,9 @@ export function guardAuthorizedStream(source:Readable,authorize:()=>Promise<void
       }
     }finally{source.destroy();}
   }
-  return Readable.from(guarded(),{objectMode:false,highWaterMark:64*1024});
+  const result=Readable.from(guarded(),{objectMode:false,highWaterMark:64*1024});
+  // return() on an unstarted async generator does not run its finally block.
+  // A client that disconnects before the first read must still close storage.
+  result.once('close',()=>source.destroy());
+  return result;
 }

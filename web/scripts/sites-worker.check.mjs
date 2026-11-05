@@ -78,6 +78,21 @@ test("redirects www to the main domain while preserving paths and query strings"
   assert.equal(response.headers.get("location"), "https://thepackproof.com/p/shared-proof?view=timeline");
 });
 
+test("preserves optimistic revision and explicit partner selectors through the fixed API proxy", async () => {
+  const original = globalThis.fetch;
+  let headers;
+  globalThis.fetch = async (_url, options) => { headers = options.headers; return Response.json({ revision: 4 }); };
+  try {
+    const response = await worker.fetch(new Request("https://packproof.example/api/v1/partner/proofs/proof_fixture", { method: "PATCH", headers: { "if-match": '"3"', "idempotency-key": "same-command", "packproof-merchant-id": "org_fixture", "packproof-delegation-id": "grant_fixture", cookie: "private=secret" }, body: "{}" }), {});
+    assert.equal(response.status, 200);
+    assert.equal(headers.get("if-match"), '"3"');
+    assert.equal(headers.get("packproof-merchant-id"), "org_fixture");
+    assert.equal(headers.get("packproof-delegation-id"), "grant_fixture");
+    assert.equal(headers.get("idempotency-key"), "same-command");
+    assert.equal(headers.get("cookie"), null);
+  } finally { globalThis.fetch = original; }
+});
+
 test("returns a useful API error when the upstream cannot be reached", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () => { throw new Error("network"); };

@@ -1,3 +1,5 @@
+import {requireRecordWorkspace} from '../src/records/access.js';
+import {publishRequirementTemplate,assignRequirementTemplate} from '../src/records/requirement-templates.js';
 import {openRecipientTestRoles} from './recipient-role-test-database.js';
 import type {Database} from '../src/db/database.js';
 import {recipientStorageFixture} from './recipient-storage-fixture.js';
@@ -203,6 +205,10 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
   await expect(createClaimCase(api,clock,opA,proofA,input('du_http'))).rejects.toThrow();
  });
  it('reconstructs exact claim identities and revision history in a fresh fenced database',async()=>{
+  const workspace=await requireRecordWorkspace(h.db,ownerA,merchantA,'sandbox',true);
+  const template=(await publishRequirementTemplate({db:h.db,clock},workspace,'restore-template',{expectedVersion:0,definition:{name:'Restore-bound loading requirement',rules:[{key:'loading',stage:'loading',title:'Loading source document',acceptedEvidenceTypes:['SOURCE_ARTIFACT'],gracePeriodMs:0}]}})).value;
+  const recordRevision=Number((await h.db.query<{revision:number}>('SELECT revision FROM record_state WHERE proof_id=$1',[proofA])).rows[0]?.revision??1);
+  const assignment=await assignRequirementTemplate({db:h.db,clock},workspace,proofA,'restore-template-assignment','"'+recordRevision+'"',{templateId:template.templateId,version:template.version,definitionSha256:template.definitionSha256,subjectId:proofA,reason:'Preserve the exact immutable requirement policy'});
   await preserve();
   const target=await openFreshRestoreTestDatabase();
   try{
@@ -222,6 +228,8 @@ describe('merchant ClaimCase identity and exact review binding',()=>{
    const protectedWrites=protectedFiles.calls.filter(c=>c.operation==='put').length;
    const restored=await restoreFreshRecoveryDatabase(target.db,restoreInput);
    expect(restored.trafficMayOpen).toBe(false);expect(restored.writersEnabled).toBe(false);
+   expect((await target.db.query('SELECT definition_sha256 FROM record_requirement_templates WHERE template_id=$1 AND version=$2',[template.templateId,template.version])).rows[0].definition_sha256).toBe(template.definitionSha256);
+   expect((await target.db.query('SELECT requirement_ids FROM record_requirement_assignments WHERE id=$1',[assignment.value.id])).rows[0].requirement_ids).toEqual(assignment.value.requirementIds);
    expect(protectedFiles.calls.filter(c=>c.operation==='put')).toHaveLength(protectedWrites);
    for(const table of ['claim_cases','claim_case_revisions'])expect((await target.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows).toEqual((await h.db.query(`SELECT to_jsonb(t) AS row FROM ${table} t ORDER BY id`)).rows);
    if((await h.db.query('SELECT id FROM recipient_export_jobs')).rows.length)for(const table of ['recipient_export_jobs','recipient_export_preservations','recipient_export_approvals','signature_cases','signature_snapshots']){

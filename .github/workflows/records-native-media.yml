@@ -1,0 +1,35 @@
+name: Records native media acceptance
+on:
+  pull_request:
+    paths: ['backend/**', 'scripts/diagnose-media-limits.py', '.github/workflows/records-native-media.yml']
+permissions:
+  contents: read
+jobs:
+  bounded-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --prefix backend
+      - name: Build API and verify legacy credential boundaries before the broader suites
+        run: npm run build --prefix backend && node --test infra/tests/admin-runtime-credentials.test.mjs
+      - name: Record the exact compiled API and migration inventory
+        run: node scripts/release-bom.mjs --root . --out "$RUNNER_TEMP/records-api-bom.json" --api-dist backend/dist --expected-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: records-source-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/records-api-bom.json
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Diagnose native address-space requirements with synthetic inputs only
+        run: python3 scripts/diagnose-media-limits.py
+      - name: Typecheck API and validate immutable review and worker authority
+        working-directory: backend
+        run: npm run typecheck && npm test -- --run tests/runtime-database-roles.test.ts tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts tests/claim-cases.test.ts tests/operational-snapshot-profile.test.ts tests/operational-snapshot-runtime.test.ts tests/operational-snapshots.test.ts --maxWorkers=1 --no-file-parallelism
+      - name: Verify actual opaque redaction and recording thumbnails
+        working-directory: backend
+        run: npm test -- --run tests/media-render-bounds.test.ts tests/disclosure-receipts.test.ts --maxWorkers=1 --no-file-parallelism

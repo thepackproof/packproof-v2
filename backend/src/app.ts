@@ -185,6 +185,19 @@ import { verifyShopifyWebhookHmac } from "./integrations/shopify/hmac.js";
 import { SHOPIFY_COMMERCE_WEBHOOK_TOPICS, SHOPIFY_PRIVACY_WEBHOOK_TOPICS } from "./integrations/shopify/webhooks.js";
 import { createPlatformRouter, createTenantManagementRouter } from "./platform/router.js";
 import { createOrganizationRouter } from './platform/organization-router.js';
+import { createRecordsRouter } from './records/router.js';
+import { createRecordImportsRouter } from './records/imports-router.js';
+import { createRecordConnectionsRouter } from './records/connections-router.js';
+import { createWorkspaceRequestsRouter } from './records/workspace-requests.js';
+import { createRecordMediaRouter } from './records/media-router.js';
+import { createPartnerRouter } from './platform/partner-router.js';
+import { createSourceArtifactsRouter } from './records/partner-artifacts-router.js';
+import { createRecordCanonicalExportsRouter } from './records/partner-exports.js';
+import { createRecordSnapshotsRouter } from './records/partner-snapshots.js';
+import { createOperationalSnapshotsRouter } from './records/operational-snapshots-router.js';
+import { createSnapshotSharesRouter, createPublicSnapshotSharesRouter } from './records/snapshot-shares.js';
+import { createRecordDeletionRouter } from './records/deletion-requests.js';
+import {createRequirementTemplatesRouter} from './records/requirement-templates.js';
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
 import { intakeRouter } from "./http/intake-router.js";
@@ -264,6 +277,7 @@ export interface AppDependencies {
   manifestSigning?: ManifestSigningRuntime;
   envelopeTrustPublication?: import("./integrity/envelope-publication.js").EnvelopeTrustPublication | null;
   envelopes?: import("./integrity/envelope-access.js").EnvelopeAccessRuntime;
+  operationalSnapshots?: import('./records/operational-snapshot-runtime.js').OperationalSnapshotRuntime;
   recipientPreservation?: import("./export/recipient-preservation.js").RecipientPreservationRuntime;
   requireDurableReceipts?: boolean;
   readinessProbes?: DependencyProbe[];
@@ -347,6 +361,18 @@ export function createApp(deps: AppDependencies): Express {
   }
   app.use(httpBoundary(corsOrigins));
   app.use(publicAnalyticsRouter(deps));
+  // Stream source originals through their authenticated admission boundary
+  // before any JSON/raw parser can consume or buffer the request body.
+  const sourceIngress = /^\/source-upload-sessions\/[^/]+\/(?:bytes|parts\/[0-9]+)$/;
+  const partnerIngress = /^\/upload-sessions\/[^/]+\/(?:bytes|parts\/[0-9]+)$/;
+  const humanSourceUploads = createSourceArtifactsRouter(deps);
+  const partnerSourceUploads = createPartnerRouter(deps);
+  app.use('/me/records', (req,res,next) => {
+    if(req.method==='PUT'&&sourceIngress.test(req.path)) authenticationRateLimit(req,res,error=>error?next(error):humanSourceUploads(req,res,next)); else next();
+  });
+  app.use('/v1/partner', (req,res,next) => {
+    if(req.method==='PUT'&&partnerIngress.test(req.path)) partnerSourceUploads(req,res,next); else next();
+  });
   // Admission must happen before a body parser can buffer or accept upload bytes.
   app.put("/upload/:token", asyncRoute(async (req, res) => {
     const result = await receiveAdmittedUpload(deps.db, deps.clock, deps.objectStore, req.params.token, req);
@@ -372,7 +398,7 @@ export function createApp(deps: AppDependencies): Express {
     if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
       next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
     }
-    express.json({limit:submissionPath?'64kb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
+    express.json({limit:submissionPath?'64kb':/^\/(?:me\/records|v1\/partner)\/imports(?:\/|$)/.test(req.path)?'6mb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
       if(submissionPath&&error?.type==='entity.too.large')return next(new DomainError('INPUT_TOO_LARGE','Share at most 20,000 characters and 64 KiB.',413));
       next(error);
     });
@@ -383,6 +409,7 @@ export function createApp(deps: AppDependencies): Express {
   });
 
   app.get("/live", liveness);
+  app.use('/public/record-shares',createPublicSnapshotSharesRouter(deps));
   app.get("/ready", createReadiness(deps.readinessProbes ?? [{name:"database",check:()=>deps.db.query("SELECT 1")}]).handler);
 
   app.get("/health", (_req, res) => {
@@ -573,6 +600,20 @@ export function createApp(deps: AppDependencies): Express {
   }));
   app.use("/me/tenants", createTenantManagementRouter(deps));
   app.use('/me/organizations',createOrganizationRouter(deps));
+  // Fixed resource names must precede the canonical record-id routes. All
+  // adapters retain the existing authenticated human and organization boundary.
+  app.use('/me/records/workspace-requests',createWorkspaceRequestsRouter(deps));
+  app.use('/me/records/imports',createRecordImportsRouter(deps));
+  app.use('/me/records/connections',createRecordConnectionsRouter(deps));
+  app.use('/me/records',createSourceArtifactsRouter(deps));
+  app.use('/me/records',createRecordCanonicalExportsRouter(deps));
+  app.use('/me/records',createRecordSnapshotsRouter(deps));
+  app.use('/me/records',createOperationalSnapshotsRouter(deps));
+  app.use('/me/records',createSnapshotSharesRouter(deps,true));
+  app.use('/me/records',createRecordDeletionRouter(deps,true));
+  app.use('/me/records',createRequirementTemplatesRouter(deps));
+  app.use('/me/records',createRecordMediaRouter(deps));
+  app.use('/me/records',createRecordsRouter(deps));
   app.get("/me/developer-access", asyncRoute(async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json({ allowed: await hasDeveloperAccess(deps.db, bearerUser(req)) });

@@ -66,7 +66,14 @@ interface PreservedRow { object_key: string; object_version_id: string | null; s
 
 /** Exact frozen manifests and sources, emitted with bounded memory and complete end-of-stream checks. */
 export async function exportEvidencePackageStream(db: Database, clock: Clock, store: ObjectStore, userId: string, proofId: string,
-  options: { maximumMediaBytes?: number; lifecycleSnapshotId?: string } = {}): Promise<Readable> {
+  options: { maximumMediaBytes?: number; lifecycleSnapshotId?: string;
+    /** Server-only fixed-selection profile. Later heads and projections are excluded. */
+    coreSnapshotOnly?:boolean;requireCompleteOriginals?:boolean;exportedAt?:string;
+    /** Server-resolved read authority, never copied from an HTTP request. */
+    organizationDisclosure?:{organizationId:string;environment:'sandbox'|'live';membershipId:string} } = {}): Promise<Readable> {
+  if(options.coreSnapshotOnly&&options.lifecycleSnapshotId)throw new DomainError('INVALID_EXPORT_PROFILE','Select one fixed canonical snapshot profile',400);
+  const exportedAt=options.exportedAt??clock.now().toISOString();
+  if(!Number.isFinite(Date.parse(exportedAt)))throw new DomainError('INVALID_EXPORT_PROFILE','A valid server export timestamp is required',400);
   const proof = await getProofForUser(db, userId, proofId), manifest = await getManifest(db, userId, proofId);
   const lifecycle = options.lifecycleSnapshotId
     ? await getLifecycleSnapshot(db, userId, proofId, options.lifecycleSnapshotId) : null;
@@ -86,8 +93,8 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
       sha256: lifecycle.supplements.at(-1)?.sha256 ?? manifest.sha256,
       supplements: lifecycle.supplements,
       snapshotLimit: "This signed historical snapshot cannot establish that no later records exist.",
-    } : await getProofSupplementSnapshot(db, proofId)),
-    snapshotAt: lifecycleIndex?.cutoffAt ?? clock.now().toISOString() };
+    } : options.coreSnapshotOnly ? {coreManifestSha256:manifest.sha256,sequence:0,sha256:manifest.sha256,supplements:[],snapshotLimit:'Frozen CORE selection excludes later supplements.'} : await getProofSupplementSnapshot(db, proofId)),
+    snapshotAt: lifecycleIndex?.cutoffAt ?? exportedAt };
   if (supplementSnapshot.coreManifestSha256 !== manifest.sha256) throw integrityFailure("Supplement snapshot is not bound to the frozen manifest");
   const supplementSource = { path: "proof-supplements.json", sequence: supplementSnapshot.sequence, sha256: supplementSnapshot.sha256, snapshotAt: supplementSnapshot.snapshotAt };
   const portableRoot = lifecycle ? {
@@ -99,10 +106,10 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     sources: { signedSupplements: supplementSource, ...(lifecycle ? { lifecycleSnapshot: {
       path: "lifecycle/snapshot.json", sha256: lifecycle.sha256, snapshotId: lifecycle.snapshotId,
     } } : {}) } };
-  const core = manifest.manifest as { transaction: unknown; participants: unknown; attestations?: unknown; shipping: unknown; evidence: FrozenMedia[] };
+  const core = manifest.manifest as { transaction: unknown; participants: unknown; attestations?: unknown; shipping: unknown; evidence: FrozenMedia[];auditEventIds?:string[] };
   const stageSources = lifecycle
     ? lifecycle.stages.map(stage => ({ ...stage, manifest: JSON.parse(stage.canonicalJson) }))
-    : (await listCommerceStages(db, proofId)).filter(stage => stage.finalizedAt).map(stage => ({ ...stage, canonicalJson: undefined as string | undefined }));
+    : options.coreSnapshotOnly ? [] : (await listCommerceStages(db, proofId)).filter(stage => stage.finalizedAt).map(stage => ({ ...stage, canonicalJson: undefined as string | undefined }));
   const stages = stageSources.map(stage => {
     const frozen = stage.manifest as { baseManifestSha256: string; evidence: FrozenMedia[] };
     const encoded = stage.canonicalJson ?? canonicalize(frozen);
@@ -120,7 +127,7 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
   }
   // A historical export must never include observations from after its cutoff.
   // Unsealed timeline projections are intentionally excluded from this profile.
-  const shipment = lifecycle ? null : await getShipmentIntegrity(db, proofId);
+  const shipment = lifecycle||options.coreSnapshotOnly ? null : await getShipmentIntegrity(db, proofId);
   async function openFrozen(evidence: FrozenMedia, stageId?: string): Promise<Readable | null> {
     await authorizeProofAccess(db, proofId, userId);
     const row = stageId
@@ -160,13 +167,14 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     yield json("proof-supplements.json", supplementSnapshot);
     yield json("transaction.json", core.transaction); yield json("participants.json", core.participants);
     yield json("attestations.json", core.attestations ?? []);
-    yield json("shipping.json", { frozen: core.shipping, supplement: shipment, observations: lifecycle ? [] : proof.shipmentObservations,
-      ...(lifecycle ? { limitation: "Unsealed shipping projections are excluded; see signed carrier supplements where present." } : {}) });
-    yield json("events.json", lifecycle ? [] : proof.events);
+    yield json("shipping.json", { frozen: core.shipping, supplement: shipment, observations: lifecycle||options.coreSnapshotOnly ? [] : proof.shipmentObservations,
+      ...(lifecycle||options.coreSnapshotOnly ? { limitation: "Unsealed shipping projections are excluded; see signed carrier supplements where selected." } : {}) });
+    yield json("events.json", lifecycle ? [] : options.coreSnapshotOnly ? proof.events.filter(e=>core.auditEventIds?.includes(e.eventId)) : proof.events);
     const evidenceIndex: Array<Record<string, unknown>> = [];
     for (const evidence of core.evidence) {
       const source = await openFrozen(evidence);
       if (!source) {
+        if(options.requireCompleteOriginals)throw new DomainError('EXPORT_ORIGINAL_UNAVAILABLE','A selected original is unavailable; no complete canonical export was produced',409);
         omissions.push({ evidenceId: evidence.evidenceId, reason: "UNAVAILABLE" });
         evidenceIndex.push({ evidenceId: evidence.evidenceId, sha256: evidence.sha256, byteSize: evidence.byteSize, status: "OMITTED", reason: "UNAVAILABLE" }); continue;
       }
@@ -185,6 +193,7 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
       for (const evidence of stage.frozen.evidence) {
         const source = await openFrozen(evidence, stage.stageId);
         if (!source) {
+          if(options.requireCompleteOriginals)throw new DomainError('EXPORT_ORIGINAL_UNAVAILABLE','A selected lifecycle original is unavailable; no complete canonical export was produced',409);
           omissions.push({ evidenceId: evidence.evidenceId, stageId: stage.stageId, reason: "UNAVAILABLE" });
           media.push({ evidenceId: evidence.evidenceId, sha256: evidence.sha256, byteSize: evidence.byteSize, status: "OMITTED", reason: "UNAVAILABLE" }); continue;
         }
@@ -198,16 +207,20 @@ export async function exportEvidencePackageStream(db: Database, clock: Clock, st
     yield json("lifecycle/stages.json", stageIndex);
     yield json("archive.json", {
       schema: "packproof.proof-archive.v1", canonicalization: "packproof.sorted-json.v1",
-      snapshot: { proofId, manifestId: manifest.manifestId, manifestSha256: manifest.sha256 }, exportedAt: clock.now().toISOString(),
-      disclosure: { kind: "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId }, omissions, derivatives: [],
+      snapshot: { proofId, manifestId: manifest.manifestId, manifestSha256: manifest.sha256 }, exportedAt,
+      ...(options.coreSnapshotOnly?{selectionScope:'FROZEN_CORE_ONLY'}:{}),
+      disclosure: { kind: options.organizationDisclosure ? "ORGANIZATION_CANONICAL_PROOF" : "PARTICIPANT_FULL_RECORD", policyVersion: 1, exportedBy: userId,
+        ...(options.organizationDisclosure??{}) }, omissions, derivatives: [],
       sources: { canonicalRecord: "manifest.json", evidenceInventory: "integrity/evidence.json", lifecycleManifests: "lifecycle/stages.json", supplements: ["shipping.json", "events.json"], signedSupplements: supplementSource,
         ...(lifecycle ? { lifecycleSnapshot: { path: "lifecycle/snapshot.json", sha256: lifecycle.sha256, snapshotId: lifecycle.snapshotId } } : {}) },
       supplementIntegrity: { signedSupplements: "SEPARATELY_SIGNED_RECEIVED_CHAIN_REQUIRES_INDEPENDENT_TRUST",
         otherSupplementalFiles: "SELF_CONSISTENCY_ONLY_NOT_COVERED_BY_ROOT_SIGNATURE" },
       limitations: ["Signing time is not filming time", "Integrity is not a physical truth verdict", "Offline trust cannot discover later revocations", "Unavailable media has not been verified",
+        ...(options.organizationDisclosure ? ["Later operational revisions, requirements, issues, relationships, amendments and review notes are excluded from the signed canonical manifest inventory; any supplemental history is unsigned and is not a complete operational snapshot."] : []),
         ...(lifecycle ? ["Only original and sealed records selected by the signed index are included; unsealed timeline projections are excluded."] : [])],
     });
-    yield bytesEntry("README.txt", Buffer.from("PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nproof-supplements.json contains the separately signed received supplement chain, bound to that core record.\nEach supplement requires independent signing-key trust; its dated head cannot establish that no later supplements exist.\nLegacy shipping.json and events.json remain self-consistency-only files outside the root signature.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nFile self-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list or signed registry with an independently pinned authority; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n"));
+    yield bytesEntry("README.txt", Buffer.from("PackProof portable evidence package v1\nmanifest.json is the frozen canonical record.\nproof-supplements.json contains the separately signed received supplement chain, bound to that core record.\nEach supplement requires independent signing-key trust; its dated head cannot establish that no later supplements exist.\nLegacy shipping.json and events.json remain self-consistency-only files outside the root signature.\nVerify manifest SHA-256 against a digest obtained separately from PackProof.\nFile self-consistency does not establish origin or the truth of recorded assertions.\nObtain the read-only verifier independently from the PackProof repository: verifier/verify.py.\nUse a separately obtained trust list or signed registry with an independently pinned authority; package contents cannot make their own key trusted.\nUnavailable files are explicit omissions and have not been verified.\n"+
+      (options.organizationDisclosure?"This organization export covers the canonical Proof, not a signed operational snapshot. Later operational revisions, requirements, issues, relationships, amendments and review notes are outside its signed manifest inventory.\n":"")));
     yield zipBytes("integrity/hashes.json", Buffer.from(canonicalize(hashes)));
     // The ZIP directory and its authorization checks have not completed here.
     // Preparing content establishes neither a complete archive nor delivery.

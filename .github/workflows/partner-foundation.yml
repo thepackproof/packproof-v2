@@ -41,6 +41,10 @@ jobs:
         env:
           PACKPROOF_TEST_DATABASE_URL: postgres://packproof_test:synthetic_ci_only@localhost:5432/packproof_test
         run: npm test -- --run tests/organization-foundation.test.ts tests/commit-safe-event-stream.test.ts tests/partner-receiver.test.ts tests/finalize-signing-boundary.test.ts tests/partner-postgres-gate.test.ts tests/foundation-migrate.test.ts tests/m2-migrate.test.ts tests/claim-cases.test.ts tests/recipient-preservation.test.ts tests/recipient-runtime.test.ts tests/rnd-platform-assurance.test.ts tests/m2-runtime-privileges.test.ts --pool=threads --reporter=default --reporter=junit --outputFile=partner-foundation.xml
+      - name: Records API and worker acceptance on PostgreSQL
+        env:
+          PACKPROOF_TEST_DATABASE_URL: postgres://packproof_test:synthetic_ci_only@localhost:5432/packproof_test
+        run: npm test -- --run tests/partner-imports-exports.test.ts tests/canonical-human-exports.test.ts tests/source-artifacts.test.ts tests/source-artifacts-http.test.ts tests/source-artifact-storage.test.ts tests/source-artifact-requirements.test.ts tests/record-snapshot-shares.test.ts tests/record-deletion-review.test.ts tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts --pool=threads --maxWorkers=2 --no-file-parallelism --reporter=default --reporter=junit --outputFile=records-postgres.xml
       - name: Reference adapter contract
         run: node --test ../examples/merchant-receiver/partner-client.test.mjs
       - name: Published contract and migration packaging compatibility
@@ -54,4 +58,6 @@ jobs:
         if: always()
         with:
           name: partner-foundation-${{ github.sha }}
-          path: backend/partner-foundation.xml
+          path: |
+            backend/partner-foundation.xml
+            backend/records-postgres.xml

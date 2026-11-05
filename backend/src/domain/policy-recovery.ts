@@ -39,6 +39,9 @@ export const POLICY_RECOVERY_KEYS: Record<string, string[]> = {
   platform_organizations:['id'],platform_memberships:['id'],platform_principals:['id'],platform_credentials:['id'],platform_delegations:['id'],
   platform_integration_accounts:['id'],platform_proof_ownership:['proof_id'],
   platform_external_bindings:['merchant_id','environment','integration_account_id','resource_type','external_id'],
+  record_locations:['id','organization_id'],record_membership_locations:['membership_id','location_id'],record_state:['proof_id'],
+  record_snapshot_shares:['id'],
+  record_requirement_templates:['template_id','version'],
 };
 
 export async function configurePolicyDurability(db: Database, input: {required: boolean}) {

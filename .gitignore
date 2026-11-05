@@ -13,3 +13,5 @@ infra/cdk.out
 infra/.cache
 __pycache__/
 *.py[cod]
+backend/.test-temp*/
+web/.test-tmp/

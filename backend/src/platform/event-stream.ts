@@ -3,8 +3,9 @@ import type { Database } from '../db/database.js';
 import type { Clock } from '../clock.js';
 import { DomainError } from '../domain/errors.js';
 import { publicEvent, type EventRow } from './webhooks.js';
+import {requirePartnerAggregateVisibility} from './organizations.js';
 
-export interface StreamScope { tenantId: string; environment: 'sandbox' | 'live' }
+export interface StreamScope { tenantId: string; environment: 'sandbox' | 'live'; delegationGrantId?:string|null }
 interface Cursor extends StreamScope { v: 1; position: string; expiresAt: number; proofId: string | null }
 export interface EventStreamConfig { signingKey: string; cursorLifetimeMs?: number }
 const MAX_POSITION = 9223372036854775807n;
@@ -38,6 +39,7 @@ function decode(value: unknown, scope: StreamScope, proofId: string | null, cloc
 /** Primary database only. Positions are decimal strings; never parse as Number. */
 export async function listEventStream(db: Database, clock: Clock, scope: StreamScope, config: EventStreamConfig,
   input: {after?: unknown; limit?: unknown; proofId?: string}={}) {
+  await requirePartnerAggregateVisibility(db,scope);
   key(config);
   const proofId=input.proofId??null;
   if(input.limit!=null&&!(typeof input.limit==='number'||(typeof input.limit==='string'&&/^\d{1,3}$/.test(input.limit))))throw new DomainError('INVALID_LIMIT','limit must be an integer from 1 to 100',400);
@@ -57,6 +59,7 @@ export async function listEventStream(db: Database, clock: Clock, scope: StreamS
       AND ($4::text IS NULL OR o.proof_id=$4) ORDER BY s.position LIMIT $5`,[scope.tenantId,position,highWater,proofId,limit+1]);
   const rows=found.rows.slice(0,limit),hasMore=found.rows.length>limit;
   const next=hasMore?rows[rows.length-1].stream_position:highWater;
+  await requirePartnerAggregateVisibility(db,scope);
   const expiresAt=clock.now().getTime()+Math.min(config.cursorLifetimeMs??604800000,604800000);
   const cursor=(p:string)=>encode({tenantId:scope.tenantId,environment:scope.environment,v:1,position:p,proofId,expiresAt},config);
   return {schemaVersion:'packproof.event-stream/v1',environment:scope.environment,

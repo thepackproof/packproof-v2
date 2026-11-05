@@ -1,4 +1,5 @@
 import { liveShippingIdentity, trackingAssociation } from './tracking-associations.js';
+import { authorizePartnerProof, type PartnerActor } from '../platform/organizations.js';
 import type { Clock } from "../clock.js";
 import type { ManifestSigner } from "./manifest-signing.js";
 import { appendProofSupplementInTransaction } from "./proof-supplements.js";
@@ -132,11 +133,17 @@ export async function recordShipmentEvent(
   clock: Clock,
   actorUserId: string,
   input: RecordShipmentEventInput,
+  /** Internal organization adapter only; never populated from request JSON. */
+  organizationActor?: PartnerActor,
 ): Promise<RecordShipmentEventResult> {
   const parsed = parseRecordInput(input);
   return db.transaction(async (tx) => {
     const locked = await lockTransactionContext(tx, parsed.transactionId);
-    await assertCanRecord(tx, actorUserId, locked, parsed.authority);
+    if(organizationActor){
+      if(actorUserId!==organizationActor.actorUserId||!locked.proofId)throw new DomainError('PARTICIPANT_NOT_AUTHORIZED','The organization actor does not own this source authorization',403);
+      await authorizePartnerProof(tx,clock,organizationActor,locked.proofId,'proofs:write');
+      if(parsed.source!=='PARTICIPANT_SUPPLIED')throw new DomainError('INTEGRATION_TRUST_BOUNDARY','Organization-submitted observations must retain their submitted-assertion provenance',403);
+    }else await assertCanRecord(tx, actorUserId, locked, parsed.authority);
     if (!locked.proofId) {
       throw new DomainError(
         "SHIPMENT_EVENT_PROOF_REQUIRED",

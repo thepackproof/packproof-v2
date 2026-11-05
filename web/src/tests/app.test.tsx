@@ -611,7 +611,7 @@ describe("PackProof web reference client", () => {
       if (url.endsWith(`/proofs/${item.proofId}`)) return json(proof);
       return originalFetch(input, init);
     }));
-    window.history.replaceState(null, "", "/app"); render(<App />);
+    window.history.replaceState(null, "", "/capture/home"); render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Nikon F3 Camera. Recording needed. Record packing" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Record packing" })).toBeEnabled());
     expect(screen.getByRole("heading", { name: "Nikon F3 Camera" })).toBeInTheDocument();

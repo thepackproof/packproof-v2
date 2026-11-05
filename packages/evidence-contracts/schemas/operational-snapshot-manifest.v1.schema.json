@@ -1,0 +1,878 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.thepackproof.com/operational/v1/manifest.schema.json",
+  "title": "Organization-submitted operational record manifest v1",
+  "description": "Structural schema. Canonical bytes, digest/tenant/core/prior linkage, membership, evaluation and cycle constraints must also pass the independent profile validators.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "assertion",
+    "snapshotId",
+    "organizationId",
+    "environment",
+    "proofId",
+    "revision",
+    "priorSnapshot",
+    "core",
+    "evaluation",
+    "actor",
+    "record",
+    "entities",
+    "links",
+    "requirements",
+    "waivers",
+    "issues",
+    "actions",
+    "amendments",
+    "artifacts",
+    "omissions"
+  ],
+  "properties": {
+    "profile": {
+      "const": "packproof.operational-record-manifest.v1"
+    },
+    "assertion": {
+      "const": "ORGANIZATION_SUBMITTED"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,160}$"
+    },
+    "organizationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,160}$"
+    },
+    "environment": {
+      "enum": [
+        "sandbox",
+        "live"
+      ]
+    },
+    "proofId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,160}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "priorSnapshot": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "snapshotId",
+            "manifestSha256"
+          ],
+          "properties": {
+            "snapshotId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,160}$"
+            },
+            "manifestSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestSha256"
+      ],
+      "properties": {
+        "manifestSha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "version"
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+        },
+        "version": {
+          "const": "packproof.requirement-evaluation.v1"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userId",
+        "membershipId",
+        "role",
+        "locationId"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,160}$"
+        },
+        "membershipId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,160}$"
+        },
+        "role": {
+          "enum": [
+            "OWNER",
+            "ADMIN"
+          ]
+        },
+        "locationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,160}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "reference",
+        "lifecycle",
+        "reviewState",
+        "locationId",
+        "updatedAt"
+      ],
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycle": {
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "reviewState": {
+          "enum": [
+            "unreviewed",
+            "reviewed"
+          ]
+        },
+        "locationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,160}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proof_id",
+          "kind",
+          "external_reference",
+          "parent_id",
+          "attributes",
+          "actor_user_id",
+          "supersedes_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "proof_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "kind": {
+            "enum": [
+              "shipment",
+              "stop",
+              "package",
+              "pallet",
+              "item",
+              "return"
+            ]
+          },
+          "external_reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,160}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attributes": {},
+          "actor_user_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,160}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proof_id",
+          "evidence_id",
+          "subject_id",
+          "reason",
+          "actor_user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "proof_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "evidence_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "subject_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "actor_user_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proof_id",
+          "subject_id",
+          "stage",
+          "title",
+          "template_version",
+          "accepted_evidence_types",
+          "due_at",
+          "grace_period_ms",
+          "created_at",
+          "evaluation_status",
+          "matching_artifact_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "proof_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "subject_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "stage": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "template_version": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "accepted_evidence_types": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "grace_period_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2592000000
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          },
+          "evaluation_status": {
+            "enum": [
+              "satisfied",
+              "missing",
+              "not_yet_due",
+              "waived"
+            ]
+          },
+          "matching_artifact_ids": {
+            "type": "array",
+            "maxItems": 4000,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,160}$"
+            }
+          }
+        }
+      }
+    },
+    "waivers": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "requirement_id",
+          "reason",
+          "actor_user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "requirement_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "actor_user_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proof_id",
+          "category",
+          "severity",
+          "title",
+          "subject_id",
+          "rule_version",
+          "compared_sources",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "proof_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "subject_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "rule_version": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "compared_sources": {},
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sequence",
+          "issue_id",
+          "action",
+          "reason",
+          "actor_user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "sequence": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "issue_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "action": {
+            "enum": [
+              "acknowledge",
+              "resolve",
+              "reopen",
+              "note"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "actor_user_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "amendments": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proof_id",
+          "supersedes_id",
+          "assertion",
+          "reason",
+          "actor_user_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "proof_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,160}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assertion": {},
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "actor_user_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 4000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactId",
+          "path",
+          "kind",
+          "evidenceType",
+          "sha256",
+          "byteSize",
+          "contentType",
+          "storage",
+          "source",
+          "derivation"
+        ],
+        "properties": {
+          "artifactId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^originals/[A-Za-z0-9_-]{1,160}$"
+          },
+          "kind": {
+            "enum": [
+              "CAPTURE_ORIGINAL",
+              "SOURCE_ARTIFACT"
+            ]
+          },
+          "evidenceType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 209715200
+          },
+          "contentType": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "storage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bucket",
+              "key",
+              "versionId"
+            ],
+            "properties": {
+              "bucket": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63
+              },
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "versionId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "not": {
+                  "const": "null"
+                }
+              }
+            }
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "reference",
+              "reportedAt",
+              "receivedAt",
+              "acceptedAt",
+              "actorId",
+              "connectionId",
+              "receiptSha256"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reportedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "receivedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+              },
+              "acceptedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+              },
+              "actorId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,160}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "connectionId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,160}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "receiptSha256": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "derivation": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceArtifactId",
+                  "recipeSha256"
+                ],
+                "properties": {
+                  "sourceArtifactId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,160}$"
+                  },
+                  "recipeSha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactId",
+          "reason",
+          "detail"
+        ],
+        "properties": {
+          "artifactId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,160}$"
+          },
+          "reason": {
+            "enum": [
+              "MISSING",
+              "QUARANTINED",
+              "WITHHELD",
+              "UNAVAILABLE",
+              "PENDING"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      }
+    }
+  }
+}

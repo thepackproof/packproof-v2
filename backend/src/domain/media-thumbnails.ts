@@ -13,7 +13,7 @@ import {requireParticipant} from './proof-access.js';
 import {spoolCommittedEvidence} from './media-files.js';
 import {DomainError} from './errors.js';
 const exec=promisify(execFile);
-const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=60','--fsize=2097152','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C'}});
+const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=60','--fsize=2097152','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C',OPENBLAS_NUM_THREADS:'1',OMP_NUM_THREADS:'1',MALLOC_ARENA_MAX:'1'}});
 const VERSION='committed-source-thumbnail/v1';
 interface ThumbnailTransform {anchorId:string|null;sourceVersion:string;startMs:number;endMs:number;elapsedMs:number;removeAudio:true;stripMetadata:true;withheldIntervals:never[]}
 interface ThumbnailRow {id:string;proof_id:string;evidence_id:string;source_sha256:string;transform:ThumbnailTransform;status:string;sha256:string|null;object_key:string|null;content_type:string|null;byte_size:number|null;created_by_user_id:string;attempt_count:number;failure_code:string|null}

@@ -50,3 +50,8 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # contains only fabricated IAM/database role names (m2_api_fixture), no password
 # or credential. Current test identifiers are shorter; all scanner rules remain.
 312431f4347490df2f87b321971697f6641a0365:backend/tests/envelope-runtime.test.ts:generic-api-key:15
+
+# Reviewed source-secret scan on PR 135: this historical line is an idempotency key
+# "persistent-operation-1001" in a synthetic SDK test, not an API credential.
+# Exact commit/file/rule/line only; scanner rules and credential detection remain.
+488a11bbd1c5fc9e81b4dafbcb104d407168c161:examples/api-client/client.test.mjs:generic-api-key:11

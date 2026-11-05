@@ -10,7 +10,7 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { record, textField } from './tenants.js';
 
-export const PARTNER_SCOPES=['proofs:read','proofs:write','capture:request','exports:read','events:read','webhooks:manage'] as const;
+export const PARTNER_SCOPES=['issues:assign','proofs:read','proofs:write','capture:request','exports:read','exports:create','imports:read','imports:write','evidence:write','shares:manage','deletion:request','events:read','webhooks:manage','audit:read'] as const;
 export type PartnerScope=typeof PARTNER_SCOPES[number];
 export const AUTHORIZATION_POLICY='packproof.authorization/v1';
 export interface PartnerActor {
@@ -208,6 +208,15 @@ export async function authorizePartnerProof(db:Database,clock:Clock,actor:Partne
  await reauthorizePartner(db,clock,actor,scope);
  const row=(await db.query<{operator_user_id:string;operator_membership_id:string}>(`SELECT m.user_id AS operator_user_id,p.operator_membership_id
   FROM platform_proof_ownership p JOIN platform_memberships m ON m.id=p.operator_membership_id
-  WHERE p.proof_id=$1 AND p.merchant_id=$2 AND p.environment=$3`,[proofId,actor.merchantId,actor.environment])).rows[0];
+  LEFT JOIN record_state rs ON rs.proof_id=p.proof_id
+  WHERE p.proof_id=$1 AND p.merchant_id=$2 AND p.environment=$3 AND ($4::boolean=false OR rs.location_id IS NULL)`,[proofId,actor.merchantId,actor.environment,!!actor.delegationGrantId])).rows[0];
  if(!row)throw new DomainError('PROOF_NOT_FOUND','Proof not found',404);return row;
+}
+/** The frozen tenant-wide sequence is observable in the v1 cursor payload.
+ * Filtering rows cannot turn it into a private location projection. */
+export async function requirePartnerAggregateVisibility(db:Database,scope:{tenantId:string;environment:'sandbox'|'live';delegationGrantId?:string|null}) {
+  if(!scope.delegationGrantId)return;
+  const restricted=await db.query(`SELECT 1 FROM platform_proof_ownership p JOIN platform_organizations m ON m.id=p.merchant_id
+    JOIN record_state rs ON rs.proof_id=p.proof_id WHERE m.tenant_id=$1 AND p.environment=$2 AND rs.location_id IS NOT NULL LIMIT 1`,[scope.tenantId,scope.environment]);
+  if(restricted.rows[0])throw new DomainError('LOCATION_SCOPED_AGGREGATE_UNAVAILABLE','This delegated aggregate is unavailable until an explicit location-grant profile is enabled; use authorized individual record reads',409);
 }

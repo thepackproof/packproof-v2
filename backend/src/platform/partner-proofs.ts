@@ -31,7 +31,8 @@ export async function importPartnerOrder(db:Database,clock:Clock,actor:PartnerAc
   if(old){if(old.snapshot_sha256!==snapshotSha256)throw new DomainError('EXTERNAL_ID_CONFLICT','This order is bound to a different immutable snapshot; append a correction explicitly',409);
     const assignment=await authorizePartnerProof(tx,clock,actor,old.proof_id,'proofs:read');
     if(assignment.operator_membership_id!==membershipId)throw new DomainError('OPERATOR_ASSIGNMENT_CONFLICT','An existing Proof keeps its recorded operator assignment',409);
-    return {proofId:old.proof_id,externalId,created:false};}
+    const revision=(await tx.query<{revision:number}>('SELECT revision FROM record_state WHERE proof_id=$1',[old.proof_id])).rows[0]?.revision??1;
+    return {proofId:old.proof_id,externalId,created:false,recordRevision:Number(revision),portalPath:recordPortalPath(actor,old.proof_id)};}
   const member=(await tx.query<{user_id:string;organization_id:string}>(`SELECT m.user_id,m.organization_id FROM platform_memberships m JOIN users u ON u.id=m.user_id
     WHERE m.id=$1 AND m.organization_id IN ($2,$3) AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND u.status='ACTIVE' FOR SHARE OF m,u`,[membershipId,actor.merchantId,actor.principalOrganizationId])).rows[0];
   if(!member)throw new DomainError('OPERATOR_NOT_AUTHORIZED','Assign an active operator in the authorized organization',403);
@@ -45,9 +46,10 @@ export async function importPartnerOrder(db:Database,clock:Clock,actor:PartnerAc
   await tx.query("INSERT INTO platform_external_bindings(merchant_id,environment,integration_account_id,resource_type,external_id,proof_id,snapshot_sha256,created_at) VALUES($1,$2,$3,'ORDER',$4,$5,$6,$7)",[actor.merchantId,actor.environment,accountId,externalId,proof.proofId,snapshotSha256,now]);
   await tx.query('INSERT INTO api_tenant_proofs(tenant_id,external_id,proof_id,request_hash,created_at) VALUES($1,$2,$3,$4,$5)',[actor.tenantId,`org:${sha256Hex(canonicalize({accountId,externalId}))}`,proof.proofId,snapshotSha256,now]);
   await auditOrganization(tx,clock,{actor,requestId:actor.requestId,operation:'ORDER_IMPORTED',resourceId:proof.proofId});
-  return {proofId:proof.proofId,externalId,created:true};
+  return {proofId:proof.proofId,externalId,created:true,recordRevision:1,portalPath:recordPortalPath(actor,proof.proofId)};
  });
 }
+function recordPortalPath(actor:PartnerActor,proofId:string){return `/app/records/${encodeURIComponent(proofId)}?organizationId=${encodeURIComponent(actor.merchantId)}&environment=${actor.environment}`;}
 export async function resolvePartnerProof(db:Database,clock:Clock,actor:PartnerActor,account:unknown,external:unknown){
  await reauthorizePartner(db,clock,actor,'proofs:read');
  const row=(await db.query<{proof_id:string}>("SELECT proof_id FROM platform_external_bindings WHERE merchant_id=$1 AND environment=$2 AND integration_account_id=$3 AND resource_type='ORDER' AND external_id=$4",[actor.merchantId,actor.environment,textField(account,'integrationAccountId'),textField(external,'externalId')])).rows[0];

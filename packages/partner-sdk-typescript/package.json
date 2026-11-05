@@ -1,0 +1,11 @@
+{
+  "name": "@packproof/partner-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed server-side client for the PackProof partner/v1 contract",
+  "type": "module",
+  "exports": { ".": { "types": "./index.d.ts", "import": "./index.mjs" } },
+  "files": ["index.mjs", "index.d.ts", "README.md"],
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

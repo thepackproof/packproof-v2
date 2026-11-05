@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Website } from "./site/PublicSite";
+import { ShareViewer } from './records/ShareViewer';
+import './records/records.css';
 import "./styles.css";
 import "./site/site.css";
 import "./site/refinements.css";
@@ -33,7 +35,7 @@ if (canonicalPath === "/delete-account") {
 } else {
   createRoot(root).render(
     <StrictMode>
-      <Website />
+      {canonicalPath === '/review-package' ? <ShareViewer /> : <Website />}
     </StrictMode>,
   );
 }
