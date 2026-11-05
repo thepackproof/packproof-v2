@@ -1,6 +1,8 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {createHash,createHmac,pbkdf2Sync} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {PGlite} from '../../backend/node_modules/@electric-sql/pglite/dist/index.js';
@@ -20,16 +22,23 @@ const credentialEnv={PACKPROOF_NEW_RUNTIME_USERNAME:RUNTIME_ROLE,PACKPROOF_NEW_R
 const sql=await readFile(new URL('../sql/runtime-roles.sql',import.meta.url),'utf8');
 const inventory=await migrationInventory();
 const schemaHash=inventoryDigest(inventory);
+// Retain the actual reviewed legacy schema, rather than removing a new
+// security-definer function from a current schema to make broad grants pass.
+const legacyInventory=inventory.filter(row=>row.id<='095_recipient_export_preservation');
+const legacySchemaHash=inventoryDigest(legacyInventory);
+const legacyDirectory=await mkdtemp(join(tmpdir(),'packproof-legacy-roles-'));
+after(()=>rm(legacyDirectory,{recursive:true,force:true}));
+for(const item of legacyInventory)await writeFile(join(legacyDirectory,item.id+'.sql'),item.sql,'utf8');
 const wrap=client=>({query:(query,params)=>client.query(query,params),transaction:work=>client.transaction(tx=>work(wrap(tx)))});
-async function fixture(){
+async function fixture({current=false}={}){
   const pg=new PGlite();await pg.waitReady;
   await pg.exec('CREATE ROLE packproof LOGIN; GRANT ALL ON SCHEMA public TO packproof; SET ROLE packproof;');
-  const db=wrap(pg);await migrate(db);await pg.exec('RESET ROLE');
+  const db=wrap(pg);await migrate(db,current?undefined:legacyDirectory);await pg.exec('RESET ROLE');
   return{pg,db};
 }
 async function baseline(db){
   const applied=(await db.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
-  validateInventory(inventory,applied,schemaHash);
+  validateInventory(legacyInventory,applied,legacySchemaHash);
   return inspectObjects(db);
 }
 const applyArgs=db=>({db,sql,expectedSqlHash:hash(sql),splitStatements:splitSqlStatements,password,verifyBaseline:baseline,
@@ -134,6 +143,25 @@ test('full migration inventory matches independently pinned source and database 
   for(const malformed of [[],receipts.slice(1),[...receipts,receipts[0]],receipts.map((row,index)=>index===0?{...row,checksum:'0'.repeat(64)}:row),
     [...receipts,{id:'999_future',checksum:'f'.repeat(64)}]])assert.throws(()=>validateInventory(inventory,malformed,schemaHash),/INVALID_SCHEMA_INVENTORY|PINNED_SCHEMA_MISMATCH/);
   assert.throws(()=>validateInventory(inventory,receipts,'0'.repeat(64)),/PINNED_SCHEMA_MISMATCH/);
+});
+
+
+test('legacy credential setup refuses the records schema before creating roles or changing ACLs',async()=>{
+  const {pg,db}=await fixture({current:true});
+  try{
+    const prior=(await db.query("SELECT nspacl::text AS acl FROM pg_namespace WHERE nspname='public'")).rows[0].acl;
+    let split=false;
+    await assert.rejects(applyRuntimeRoles({...applyArgs(db),verifyBaseline:async tx=>{
+      const applied=(await tx.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
+      validateInventory(inventory,applied,schemaHash);
+      return inspectObjects(tx);
+    },splitStatements:()=>{split=true;return[];}}),/LEGACY_RUNTIME_SCHEMA_UNSUPPORTED/);
+    assert.equal(split,false);
+    assert.equal((await db.query('SELECT rolname FROM pg_roles WHERE rolname=ANY($1::text[])',[[...GROUP_ROLES,RUNTIME_ROLE]])).rows.length,0);
+    assert.equal((await db.query("SELECT nspacl::text AS acl FROM pg_namespace WHERE nspname='public'")).rows[0].acl,prior);
+    const definer=(await db.query("SELECT p.prosecdef FROM pg_proc p WHERE p.proname='lock_operational_snapshot_authority'")).rows[0];
+    assert.equal(definer.prosecdef,true);
+  }finally{await pg.close();}
 });
 
 test('real schema role setup grants precisely bounded runtime and recovery authority',async()=>{

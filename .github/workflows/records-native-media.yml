@@ -16,6 +16,8 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --prefix backend
+      - name: Build API and verify legacy credential boundaries before the broader suites
+        run: npm run build --prefix backend && node --test infra/tests/admin-runtime-credentials.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Diagnose native address-space requirements with synthetic inputs only
         run: python3 scripts/diagnose-media-limits.py

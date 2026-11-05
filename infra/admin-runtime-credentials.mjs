@@ -15,6 +15,9 @@ import {pathToFileURL} from 'node:url';
 export const OWNER_ROLE='packproof';
 export const RUNTIME_ROLE='packproof_app_runtime_v1';
 export const DATABASE_TARGET=Object.freeze({host:'packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com',port:5432,database:'packproof_v2',region:'us-east-1',environment:'staging'});
+// This combined-role tool predates the records API/worker authority split.
+// Later schemas require the source-bound records privilege plan and qualification.
+export const LEGACY_LAST_MIGRATION='095_recipient_export_preservation';
 export const GROUP_ROLES=Object.freeze(['packproof_runtime','packproof_recovery','packproof_backup','packproof_maintenance']);
 export const APPLICATION_GROUPS=Object.freeze(['packproof_runtime','packproof_recovery']);
 class CredentialSetupError extends Error { constructor(code){super(code);this.safeCode=code;} }
@@ -146,6 +149,8 @@ export async function inspectAuthority(db,{requireRuntime=false}={}){
 }
 
 export async function inspectObjects(db){
+  const future=(await db.query('SELECT id FROM public.schema_migrations WHERE id>$1 ORDER BY id',[LEGACY_LAST_MIGRATION])).rows;
+  if(future.length)fail('LEGACY_RUNTIME_SCHEMA_UNSUPPORTED');
   const objects=(await db.query(`SELECT c.relname,c.relkind,r.rolname AS owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='public' AND c.relkind IN ('r','p','S','v','m','f') ORDER BY c.relname`)).rows;
   if(!objects.length||objects.some(row=>row.owner!==OWNER_ROLE))fail('PUBLIC_OBJECT_OWNER_MISMATCH');
   const functions=(await db.query(`SELECT p.oid::regprocedure::text AS name,r.rolname AS owner,p.prosecdef AS security_definer,EXISTS(SELECT 1 FROM aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner WHERE n.nspname='public' ORDER BY p.oid::regprocedure::text`)).rows;
