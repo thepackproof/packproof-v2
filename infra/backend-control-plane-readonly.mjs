@@ -143,6 +143,6 @@ async function main(){
   result.completedAt=new Date().toISOString();
   result.allReadCallsSucceeded=calls.every(v=>v.status==='SUCCESS');
   await writeFile(process.argv[2],JSON.stringify(result,null,2)+'\n',{flag:'wx',mode:0o600});
-  console.log(JSON.stringify({readOnly:true,account,calls:calls.length,allReadCallsSucceeded:result.allReadCallsSucceeded}));
+  console.log(JSON.stringify({readOnly:true,account,calls:calls.length,allReadCallsSucceeded:result.allReadCallsSucceeded,unavailableCalls:calls.filter(v=>v.status!=='SUCCESS').map(v=>pick(v,['service','operation','status','errorCategory','errorCode']))}));
 }
 main().catch(()=>{console.error('READ_ONLY_DISCOVERY_FAILED: inspect authentication and whitelisted receipt; raw AWS output withheld');process.exitCode=1;});
