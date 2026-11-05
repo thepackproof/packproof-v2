@@ -1,5 +1,11 @@
 # Exact-source backend release
 
+## Inactive application transition before runtime-role activation
+
+The bridge and full application images were built from the same source commit `65700aac0d8d3d0640b13469a2d508d86efcc318`. `records-inactive-deployment-plan.mjs` admits only the measured `4302f878...` bridge at production task definition 50 to the immutable `6a396f67...` application. The generic planner and retired 77-receipt runner remain unchanged. The new constructor requires the successful actual-image startup receipt from `records-inactive-app-preflight.mjs`, all 106 exact migration checksums, source CI and the verified Git source archive. It preserves every primary-container setting except the image and release identity fields.
+
+The startup probe uses the existing non-owner login with `default_transaction_read_only=on`, starts only the API process, and verifies the real application meta/health/readiness routes and website CORS origin. Intake enrollment lists must be empty and organization, claims and durable-receipt features must remain inactive. No workers, role grants or feature activation are qualified by this transitional receipt. Separate API/worker grants and actual-login admission must pass before records activation. Once M2 runtime grants are applied, the inactive bridge is no longer a valid rollback target; preserve the full application image for that later boundary.
+
 ## Current records upgrade (096-107)
 
 The measurement-only `backend-release-runner.mjs` remains retired for this
