@@ -1,0 +1,24 @@
+name: Records native media acceptance
+on:
+  pull_request:
+    paths: ['backend/**', 'scripts/diagnose-media-limits.py', '.github/workflows/records-native-media.yml']
+permissions:
+  contents: read
+jobs:
+  bounded-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --prefix backend
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Diagnose native address-space requirements with synthetic inputs only
+        run: python3 scripts/diagnose-media-limits.py
+      - name: Verify actual opaque redaction and recording thumbnails
+        working-directory: backend
+        run: npm test -- --run tests/media-render-bounds.test.ts tests/disclosure-receipts.test.ts --maxWorkers=1 --no-file-parallelism
