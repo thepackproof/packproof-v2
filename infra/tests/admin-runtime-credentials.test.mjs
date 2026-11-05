@@ -150,6 +150,9 @@ test('legacy credential setup refuses the records schema before creating roles o
   const {pg,db}=await fixture({current:true});
   try{
     const prior=(await db.query("SELECT nspacl::text AS acl FROM pg_namespace WHERE nspname='public'")).rows[0].acl;
+    await assert.rejects(db.transaction(async tx=>{
+      for(const statement of splitSqlStatements(sql))await tx.query(statement);
+    }),/LEGACY_RUNTIME_SCHEMA_UNSUPPORTED/);
     let split=false;
     await assert.rejects(applyRuntimeRoles({...applyArgs(db),verifyBaseline:async tx=>{
       const applied=(await tx.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;

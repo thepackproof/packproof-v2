@@ -1,6 +1,13 @@
 -- Apply with psql as the database owner, in a reviewed migration/privilege window.
 -- Non-login group roles. Provision separate login roles/managed secrets out of band.
 -- Existing tables MUST be owned by the migration login, never an application login.
+-- This legacy combined-role profile must never grant the records domain's
+-- separately qualified API/worker authority, even when invoked without the CLI.
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM public.schema_migrations WHERE id>'095_recipient_export_preservation') THEN
+    RAISE EXCEPTION 'LEGACY_RUNTIME_SCHEMA_UNSUPPORTED';
+  END IF;
+END $$;
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='packproof_runtime') THEN CREATE ROLE packproof_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='packproof_recovery') THEN CREATE ROLE packproof_recovery NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF;

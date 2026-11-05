@@ -18,6 +18,12 @@ jobs:
       - run: npm ci --prefix backend
       - name: Build API and verify legacy credential boundaries before the broader suites
         run: npm run build --prefix backend && node --test infra/tests/admin-runtime-credentials.test.mjs
+      - name: Record the exact compiled API and migration inventory
+        run: node scripts/release-bom.mjs --root . --out "$RUNNER_TEMP/records-api-bom.json" --api-dist backend/dist --expected-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: records-source-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/records-api-bom.json
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Diagnose native address-space requirements with synthetic inputs only
         run: python3 scripts/diagnose-media-limits.py
