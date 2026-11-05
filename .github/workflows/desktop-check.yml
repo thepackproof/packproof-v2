@@ -1,0 +1,39 @@
+name: Desktop checks
+
+on:
+  pull_request:
+    paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
+  push:
+    branches: [main]
+    paths: ['desktop/**', 'packages/**', 'mobile/src/**', '.github/workflows/desktop*.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Desktop dependencies and application
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=low
+      - run: npm run typecheck
+      - run: npm test
+      - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/native-launch-harness.test.cjs tests/acceptance-kit.test.cjs
+      - run: npm run build
+        env:
+          APP_ENV: development
+      # Installer creation, signing and publication remain behind the existing
+      # main-source distribution policy in desktop-ci.yml / desktop-release.yml.
