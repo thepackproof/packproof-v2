@@ -197,6 +197,7 @@ import { createRecordSnapshotsRouter } from './records/partner-snapshots.js';
 import { createOperationalSnapshotsRouter } from './records/operational-snapshots-router.js';
 import { createSnapshotSharesRouter, createPublicSnapshotSharesRouter } from './records/snapshot-shares.js';
 import { createRecordDeletionRouter } from './records/deletion-requests.js';
+import {createRequirementTemplatesRouter} from './records/requirement-templates.js';
 import type { WebhookConfig } from "./platform/webhooks.js";
 import { previewOrderIntake } from "./intake/order-intake.js";
 import { intakeRouter } from "./http/intake-router.js";
@@ -610,6 +611,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use('/me/records',createOperationalSnapshotsRouter(deps));
   app.use('/me/records',createSnapshotSharesRouter(deps,true));
   app.use('/me/records',createRecordDeletionRouter(deps,true));
+  app.use('/me/records',createRequirementTemplatesRouter(deps));
   app.use('/me/records',createRecordMediaRouter(deps));
   app.use('/me/records',createRecordsRouter(deps));
   app.get("/me/developer-access", asyncRoute(async (req, res) => {

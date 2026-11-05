@@ -57,7 +57,7 @@ describe('records source-bound API and worker privileges',()=>{
  });
  it('pins source SQL receipts, plans only scoped grants, and verifies under both actual callers',async()=>{
   const plan=await planRecordsRuntimePrivileges(opened.db,options);
-  expect(Object.keys(plan.migrations)).toHaveLength(10);
+  expect(Object.keys(plan.migrations)).toHaveLength(12);
   expect(plan.statements.every(sql=>/^(GRANT|REVOKE) /.test(sql)&&!sql.includes('CREATE ROLE')&&!sql.includes('GRANT ALL'))).toBe(true);
   const before=await asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options));
   expect(before.caller).toBe(runtimeRole);
@@ -68,7 +68,8 @@ describe('records source-bound API and worker privileges',()=>{
  });
  it('separates source acceptance, immutable originals, worker state and human decisions',async()=>{
   await asRole(runtimeRole,db=>db.query('SELECT * FROM record_requirements'));
-  await expect(asRole(workerRole,db=>db.query('SELECT * FROM record_requirements'))).rejects.toMatchObject({code:'42501'});
+  await asRole(workerRole,db=>db.query('SELECT * FROM record_requirements'));
+  await expect(asRole(workerRole,db=>db.query('INSERT INTO record_requirements SELECT * FROM record_requirements WHERE false'))).rejects.toMatchObject({code:'42501'});
   await asRole(workerRole,db=>db.query('UPDATE record_import_jobs SET state=state WHERE false'));
   await expect(asRole(workerRole,db=>db.query('UPDATE record_import_jobs SET original_sha256=original_sha256 WHERE false'))).rejects.toMatchObject({code:'42501'});
   await expect(asRole(runtimeRole,db=>db.query('UPDATE record_connection_state SET last_success_at=last_success_at WHERE false'))).rejects.toMatchObject({code:'42501'});

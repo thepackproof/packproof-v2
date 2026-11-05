@@ -29,7 +29,7 @@ jobs:
         run: node scripts/check-records-api-readiness.mjs
       - name: Validate TypeScript SDK behavior and declarations
         run: |
-          node --test packages/partner-sdk-typescript/test/client.test.mjs
+          node --test packages/partner-sdk-typescript/test/*.test.mjs
           node backend/node_modules/typescript/bin/tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --lib es2022,dom packages/partner-sdk-typescript/test/types.ts
       - name: Validate Python SDK behavior
         run: python -m unittest discover -s packages/partner-sdk-python/tests -v

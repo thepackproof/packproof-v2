@@ -2,6 +2,14 @@ export interface RequestOptions { method?: string; body?: unknown; idempotencyKe
 export interface MutationOptions extends RequestOptions { idempotencyKey: string }
 export interface RevisionOptions extends MutationOptions { revision: number }
 export interface RecordChildPageOptions { cursor?: string; limit?: number; signal?: AbortSignal }
+export interface Quantity {amount:string;unit:string}
+export interface QuantitySource {system:string;reference:string;reportedAt:string;payloadSha256?:string|null}
+export interface QuantityAssertion {quantity:Quantity;source:QuantitySource}
+export interface QuantityTolerance {absolute?:Quantity|null;relativePpm?:number}
+export interface QuantityComparisonInput {schema:'packproof.quantity-comparison/v1';expected:QuantityAssertion;observed:QuantityAssertion;tolerance?:QuantityTolerance}
+export interface ItemAllocationInput {schema:'packproof.item-allocation/v1';sku?:string|null;description?:string|null;ordered:QuantityAssertion;allocations:Array<{handlingUnitId:string;quantity:Quantity;source:QuantitySource}>;tolerance?:QuantityTolerance}
+export interface RecordEntityInput {kind:'shipment'|'stop'|'package'|'pallet'|'item'|'return';externalReference?:string;parentId?:string;attributes?:Record<string,unknown>&{quantityComparison?:QuantityComparisonInput;itemAllocation?:ItemAllocationInput};supersedesId?:string;reason:string}
+export interface EntityMatch {reference:string;outcome:'not_found'|'matched'|'ambiguous';matches:Array<{id:string;kind:string;externalReference:string}>;hasMore:boolean;automaticMatch:string|null;matchingPolicy:'EXACT_CURRENT_REFERENCE_ONLY'}
 export interface RecordChildIterationOptions extends RecordChildPageOptions { maxPages?: number }
 /** Responses can add enum values without a client upgrade; do not exhaustively adjudicate unknown states. */
 export type OpenEnum<T extends string> = T | (string & {});
@@ -58,6 +66,9 @@ export declare class PackProofClient {
   request<T = unknown>(path: string, options?: RequestOptions): Promise<ApiResponse<T>>;
   createProof(input: CreateProofInput, options: MutationOptions): Promise<ApiResponse<ProofReceipt>>;
   getProof<T = unknown>(proofId: string, options?: RequestOptions): Promise<ApiResponse<T>>;
+  matchEntityReference(proofId:string,reference:string,options?:RequestOptions):Promise<ApiResponse<EntityMatch>>;
+  listIssueReviewers(proofId:string,options?:RequestOptions):Promise<ApiResponse<{reviewers:Array<{membershipId:string;label:string;role:string}>;limit:200}>>;
+  assignIssue(issueId:string,input:{membershipId:string|null;reason:string},options:RevisionOptions):Promise<ApiResponse<RecordCommandReceipt>>;
   getRecord<T = ShippingRecordDetail>(proofId: string, options?: RequestOptions): Promise<ApiResponse<T>>;
   getTimeline<T = RecordTimelinePage>(proofId: string, options?: RecordChildPageOptions): Promise<ApiResponse<T>>;
   getEvidence<T = RecordEvidencePage>(proofId: string, options?: RecordChildPageOptions): Promise<ApiResponse<T>>;
@@ -66,7 +77,7 @@ export declare class PackProofClient {
   closeRecord<T = RecordCommandReceipt>(proofId: string, reason: string, options: RevisionOptions): Promise<ApiResponse<T>>;
   reopenRecord<T = RecordCommandReceipt>(proofId: string, reason: string, options: RevisionOptions): Promise<ApiResponse<T>>;
   appendAmendment<T = RecordCommandReceipt>(proofId: string, input: { supersedesId: string; assertion: Record<string, unknown>; reason: string }, options: RevisionOptions): Promise<ApiResponse<T>>;
-  appendEntity<T = RecordCommandReceipt>(proofId: string, input: { kind: 'shipment' | 'stop' | 'package' | 'pallet' | 'item' | 'return'; externalReference?: string; parentId?: string; attributes?: Record<string, unknown>; supersedesId?: string; reason: string }, options: RevisionOptions): Promise<ApiResponse<T>>;
+  appendEntity<T = RecordCommandReceipt>(proofId: string, input: RecordEntityInput, options: RevisionOptions): Promise<ApiResponse<T>>;
   linkEvidence<T = RecordCommandReceipt>(proofId: string, input: { evidenceId: string; subjectId: string; reason: string }, options: RevisionOptions): Promise<ApiResponse<T>>;
   listProofs(options?: { after?: string; signal?: AbortSignal }): Promise<ApiResponse<ProofPage>>;
   resolveProof(integrationAccountId: string, externalId: string, options?: RequestOptions): Promise<ApiResponse<{ proofId: string }>>;

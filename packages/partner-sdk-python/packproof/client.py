@@ -203,6 +203,18 @@ class PackProofClient:
     def append_entity(self, proof_id: str, value: dict, *, revision: int, idempotency_key: str) -> ApiResponse:
         return self._record_command(proof_id, "/entities", value, revision, idempotency_key)
 
+    def match_entity_reference(self, proof_id: str, reference: str) -> ApiResponse:
+        return self.request(_query(f"/v1/partner/proofs/{_segment(proof_id)}/entity-matches", reference=reference))
+
+    def list_issue_reviewers(self, proof_id: str) -> ApiResponse:
+        return self.request(f"/v1/partner/proofs/{_segment(proof_id)}/issue-reviewers")
+
+    def assign_issue(self, issue_id: str, value: dict, *, revision: int, idempotency_key: str) -> ApiResponse:
+        if isinstance(revision, bool) or not isinstance(revision, int) or not 1 <= revision <= 999999999:
+            raise ValueError('revision must be an integer from 1 to 999999999')
+        return self.request(f'/v1/partner/issues/{_segment(issue_id)}/assignment', method='POST', body=value,
+                            if_match=f'"{revision}"', idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
     def link_evidence(self, proof_id: str, value: dict, *, revision: int, idempotency_key: str) -> ApiResponse:
         return self._record_command(proof_id, "/evidence-links", value, revision, idempotency_key)
 

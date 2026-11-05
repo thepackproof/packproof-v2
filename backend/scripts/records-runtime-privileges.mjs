@@ -14,12 +14,12 @@ const policy={
  record_membership_locations:{api:select,worker:select},
  record_state:{api:{...select,insert:['proof_id','organization_id','environment','revision','title','reference','location_id','updated_at'],update:['revision','lifecycle','review_state','title','reference','location_id','updated_at']},worker:{...select,insert:['proof_id','organization_id','environment','revision','title','reference','location_id','updated_at'],update:['revision','updated_at']}},
  record_entities:{api:{...select,insert:'*'},worker:{...select,insert:'*'}},
- record_evidence_links:{api:{...select,insert:'*'},worker:{}},
- record_requirements:{api:{...select,insert:'*'},worker:{}},
- record_requirement_waivers:{api:{...select,insert:'*'},worker:{}},
- record_issues:{api:{...select,insert:'*'},worker:{}},
- record_issue_actions:{api:{...select,insert:['id','issue_id','action','reason','actor_user_id','created_at']},worker:{}},
- record_amendments:{api:{...select,insert:'*'},worker:{}},
+ record_evidence_links:{api:{...select,insert:'*'},worker:select},
+ record_requirements:{api:{...select,insert:'*'},worker:select},
+ record_requirement_waivers:{api:{...select,insert:'*'},worker:select},
+ record_issues:{api:{...select,insert:'*'},worker:select},
+ record_issue_actions:{api:{...select,insert:['id','issue_id','action','reason','actor_user_id','created_at']},worker:select},
+ record_amendments:{api:{...select,insert:'*'},worker:select},
  record_command_results:{api:{...select,insert:['organization_id','environment','actor_id','operation','key_hash','request_hash','created_at'],update:['response']},worker:{}},
  record_import_jobs:{api:{...select,insert:['id','organization_id','environment','created_by','source_name','integration_account_id','preview_version','mapping_version','mapping','headers','delimiter','time_zone','original_object_key','original_version_id','original_sha256','original_byte_size','state','received_at','updated_at'],update:['committed_by','state','import_valid_rows','updated_at','lease_token','lease_expires_at','last_error_code']},worker:{...select,update:['state','lease_token','lease_expires_at','updated_at','last_error_code']}},
  record_import_rows:{api:{...select,insert:['import_id','row_number','status','source_values','normalized','payload_sha256','errors','proof_id'],update:['status','errors']},worker:{...select,update:['status','proof_id','attempts','errors']}},
@@ -44,6 +44,9 @@ const policy={
  record_snapshot_shares:{api:{...select,insert:['id','proof_id','organization_id','environment','owner_kind','owner_context','target_kind','target_id','selection_sha256','token_sha256','recipient_hint','created_by','created_at','expires_at'],update:['revoked_at','revoked_by','revoke_reason']},worker:select},
  record_deletion_contexts:{api:{...select,insert:'*'},worker:select},
  record_deletion_reviews:{api:{...select,insert:'*'},worker:select},
+ record_requirement_templates:{api:{...select,insert:'*'},worker:select},
+ record_requirement_assignments:{api:{...select,insert:'*'},worker:select},
+ record_issue_assignments:{api:{...select,insert:'*'},worker:select},
 };
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -75,8 +78,8 @@ function sourceColumns(sql){
 
 export async function recordsMigrationInventory(){
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-5])_[a-z0-9_]+\.sql$/.test(name)).sort();
- if(files.length!==10||new Set(files.map(f=>f.slice(0,3))).size!==10)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-7])_[a-z0-9_]+\.sql$/.test(name)).sort();
+ if(files.length!==12||new Set(files.map(f=>f.slice(0,3))).size!==12)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={},tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);Object.assign(tableColumns,sourceColumns(sql));}
  if(Object.keys(policy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!policy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
  return {migrations,migrationSha256:sha(migrations),tableColumns};

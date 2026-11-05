@@ -6,6 +6,8 @@ import { assertPolicyAccessSafe } from '../domain/policy-recovery.js';
 import { requireHumanActor } from '../platform/organization-access.js';
 import { authorizePartnerProof,reauthorizePartner,type PartnerActor } from '../platform/organizations.js';
 import { partnerProblem } from '../platform/partner-router.js';
+import {listRecordReviewers,assignRecordIssue} from './issue-assignments.js';
+import {resolveRecordEntityReference} from './service.js';
 import { requireRecordWorkspace,listRecordLocations,requireRecordAccess,type RecordWorkspace } from './access.js';
 import { listRecordConnections } from './connections.js';
 import { getRecord,listRecords,readRecordEvidence,readRecordIssues,readRecordRequirements,readRecordTimeline,
@@ -53,6 +55,8 @@ export function createRecordsRouter(deps:AppDependencies) {
   router.get('/:proofId/timeline',run(async(r,s)=>{const w=await workspace(r);s.json(await pageRecordTimeline(deps.db,deps.clock,w,r.params.proofId,r.query));}));
   router.get('/:proofId/evidence',run(async(r,s)=>{const w=await workspace(r);s.json(await pageRecordEvidence(deps.db,deps.clock,w,r.params.proofId,r.query));}));
   router.get('/:proofId/requirements',run(async(r,s)=>{const w=await workspace(r);await requireRecordAccess(deps.db,w,r.params.proofId);s.json({requirements:await readRecordRequirements(deps.db,deps.clock,r.params.proofId)});}));
+  router.get('/:proofId/entity-matches',run(async(r,s)=>{s.json(await resolveRecordEntityReference(deps.db,await workspace(r),r.params.proofId,r.query.reference));}));
+  router.get('/:proofId/issue-reviewers',run(async(r,s)=>{s.json(await listRecordReviewers(deps.db,deps.clock,await workspace(r),r.params.proofId));}));
   router.get('/:proofId',run(async(r,s)=>{const w=await workspace(r),result=await getRecord(deps.db,deps.clock,w,r.params.proofId);const runtime=deps.operationalSnapshots;try{runtime?.assertReady();result.capabilities.operationalSnapshots=!!runtime&&['OWNER','ADMIN'].includes(w.role)&&runtime.binding.environment===w.environment&&runtime.binding.organizationIds.includes(w.organizationId);}catch{result.capabilities.operationalSnapshots=false;}s.setHeader('ETag',`"${result.record.revision}"`);s.json(result);}));
   function command(method:'post'|'patch',path:string,fn:(r:Request,w:RecordWorkspace,tx:AppDependencies['db'],proofId:string)=>Promise<unknown>,issue=false) {
     router[method](path,run(async(r,s)=>{
@@ -75,6 +79,7 @@ export function createRecordsRouter(deps:AppDependencies) {
   command('post','/:proofId/amendments',(r,w,db,id)=>appendAmendment(db,deps.clock,w,id,r.body));
   command('post','/:proofId/entities',(r,w,db,id)=>addRecordEntity(db,deps.clock,w,id,r.body));
   command('post','/:proofId/evidence-links',(r,w,db,id)=>linkRecordEvidence(db,deps.clock,w,id,r.body));
+  command('post','/issues/:issueId/assignment',(r,w,db,id)=>assignRecordIssue(db,deps.clock,w,id,r.params.issueId,r.body),true);
   command('post','/issues/:issueId/actions',(r,w,db,id)=>actOnIssue(db,deps.clock,w,id,r.params.issueId,r.body),true);
   router.use(partnerProblem);return router;
 }
@@ -89,6 +94,7 @@ export function createPartnerRecordsRouter(deps:AppDependencies) {
     return {organizationId:a.merchantId,environment:a.environment,tenantId:a.tenantId,membershipId:'',userId:a.actorUserId,role:'OPERATOR',enabled:true,locationScoped:false,partner:a,authorizationClock:deps.clock};
   }
   function read(path:string,fn:(r:Request,w:RecordWorkspace)=>Promise<unknown>){router.get(path,run(async(r,s)=>{const w=workspace(r);await authorizePartnerProof(deps.db,deps.clock,w.partner!,r.params.proofId,'proofs:read');await requireRecordAccess(deps.db,w,r.params.proofId);s.json(await fn(r,w));}));}
+  read('/proofs/:proofId/entity-matches',(r,w)=>resolveRecordEntityReference(deps.db,w,r.params.proofId,r.query.reference));
   read('/proofs/:proofId/record',(r,w)=>getRecord(deps.db,deps.clock,w,r.params.proofId));
   read('/proofs/:proofId/timeline',async(r,w)=>pageRecordTimeline(deps.db,deps.clock,w,r.params.proofId,r.query));
   read('/proofs/:proofId/evidence',async(r,w)=>pageRecordEvidence(deps.db,deps.clock,w,r.params.proofId,r.query));

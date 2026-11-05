@@ -92,7 +92,7 @@ export class PackProofClient {
       if(binary&&response.ok){
         const reader=response.body?.getReader();if(!reader)throw new PackProofError('The download response has no readable body',{status:response.status});
         const chunks=[];let bytes=0;
-        try{for(;;){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>220*1024*1024)throw new PackProofError('The download exceeded the supported 220 MiB limit');chunks.push(next.value);}}
+        try{for(;;){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>250000000)throw new PackProofError('The download exceeded the supported 250 MB limit');chunks.push(next.value);}}
         finally{await reader.cancel();reader.releaseLock();}
         const data=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.byteLength;}
         return {data,rawBody:data,status:response.status,headers:response.headers,requestId:response.headers.get('X-Request-Id'),replayed:false};
@@ -133,6 +133,9 @@ export class PackProofClient {
   createWebhook(input, options) { requireKey(options); return this.request('/v1/partner/webhooks', { ...options, method: 'POST', body: input }); }
   listWebhooks(options) { return this.request('/v1/partner/webhooks', options); }
   revokeWebhook(webhookId, options) { requireKey(options); return this.request(`/v1/partner/webhooks/${segment(webhookId)}`, { ...options, method: 'DELETE' }); }
+  matchEntityReference(proofId,reference,options){return this.request(withQuery('/v1/partner/proofs/'+segment(proofId)+'/entity-matches',{reference}),options);}
+  listIssueReviewers(proofId,options){return this.request('/v1/partner/proofs/'+segment(proofId)+'/issue-reviewers',options);}
+  assignIssue(issueId,input,options){return this.request('/v1/partner/issues/'+segment(issueId)+'/assignment',{...revisionOptions(options),method:'POST',body:input});}
   getLimits(options) { return this.request('/v1/partner/limits', options); }
   listIssues({ status, proofId, cursor, limit, signal } = {}) { return this.request(withQuery('/v1/partner/issues', { status, proofId, cursor, limit }), { signal }); }
   actOnIssue(issueId, input, options) { return this.request(`/v1/partner/issues/${segment(issueId)}/actions`, { ...revisionOptions(options), method: 'POST', body: input }); }

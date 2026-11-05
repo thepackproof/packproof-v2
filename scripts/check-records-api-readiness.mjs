@@ -52,6 +52,7 @@ const modules = [
   ['backend/src/records/deletion-requests.ts','createRecordDeletionRouter','/v1/partner',partner,'router',null,{human:false}],
   ['backend/src/records/deletion-requests.ts','createRecordDeletionRouter','/me/records',app,'app','/me/records',{human:true}],
 ];
+modules.push(['backend/src/records/requirement-templates.ts','createRequirementTemplatesRouter','/me/records',app,'app','/me/records']);
 const optionalOperations = 'backend/src/records/partner-operations-router.ts';
 if (fs.existsSync(path.join(root, optionalOperations))) modules.push([optionalOperations, 'createPartnerOperationsRouter', '/v1/partner', partner, 'router', null]);
 const sourceIngestions = 'backend/src/records/ingestions-router.ts';

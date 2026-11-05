@@ -1,0 +1,9 @@
+import {useState} from 'react';
+import type {PackProofApi} from '../api/client';
+import {useWorkflowData,useWorkflowCommand} from './workflow';
+export function IssueAssignment({api,proofId,issueId,revision,query,onUpdated}:{api:PackProofApi;proofId:string;issueId:string;revision:number;query:string;onUpdated:()=>void}){
+ const [open,setOpen]=useState(false),[membershipId,setMembershipId]=useState(''),[reason,setReason]=useState('');
+ const people=useWorkflowData<{reviewers:Array<{membershipId:string;label:string;role:string}>}>(api,open?'/'+encodeURIComponent(proofId)+'/issue-reviewers?'+query:null,revision),command=useWorkflowCommand(api,proofId+'.'+issueId+'.'+query);
+ async function assign(){const saved=await command.run('/issues/'+encodeURIComponent(issueId)+'/assignment?'+query,{membershipId:membershipId||null,reason:reason.trim()},{'If-Match':'"'+revision+'"'});if(saved){setReason('');onUpdated();}}
+ return <details className="records-review-form" onToggle={e=>setOpen(e.currentTarget.open)}><summary>Assign review responsibility</summary><p>Assignment routes the review to a current member with access to this record. It does not resolve the issue or create evidence.</p>{people.loading&&<p role="status">Checking eligible reviewers…</p>}{people.error&&<p role="alert">{people.error}</p>}<label>Responsible reviewer<select value={membershipId} onChange={e=>setMembershipId(e.target.value)}><option value="">Clear assignment</option>{people.data?.reviewers.map(person=><option key={person.membershipId} value={person.membershipId}>{person.label} · {person.role.toLowerCase()}</option>)}</select></label><label>Assignment reason<textarea maxLength={700} value={reason} onChange={e=>setReason(e.target.value)}/></label>{command.error&&<p role="alert">{command.error}</p>}<button className="records-button secondary" disabled={command.busy||people.loading||!people.data||!reason.trim()} onClick={()=>void assign()}>Save assignment</button></details>;
+}

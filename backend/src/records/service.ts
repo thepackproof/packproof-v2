@@ -11,6 +11,7 @@ import { strictBody } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
 import { requireRecordAccess,requireRecordLocation,requireRecordWorkspace,reauthorizeRecordWorkspace,type RecordWorkspace } from './access.js';
 import type { RecordSummary,RecordEvidence,RecordRequirement,RecordIssue,RecordTimelineEvent } from './types.js';
+import {normalizeQuantityComparison,normalizeItemAllocation} from './quantities.js';
 
 const json=(v:unknown):any=>typeof v==='string'?JSON.parse(v):v;
 const date=(v:unknown)=>v==null?null:asRequiredIso(v as string|Date);
@@ -107,10 +108,12 @@ export async function readRecordIssues(db:Database,proofId:string,issueIds:strin
   const rows=(await db.query<any>('SELECT * FROM record_issues WHERE proof_id=$1 AND ($2::text[] IS NULL OR id=ANY($2)) ORDER BY created_at DESC,id DESC LIMIT 500',[proofId,issueIds])).rows;
   if(!rows.length)return [];
   const actions=(await db.query<any>('SELECT * FROM record_issue_actions WHERE issue_id=ANY($1::text[]) ORDER BY sequence',[rows.map(r=>r.id)])).rows;
+  const assignments=(await db.query<any>('SELECT DISTINCT ON(a.issue_id) a.*, (m.id IS NOT NULL AND m.revoked_at IS NULL) AS membership_active FROM record_issue_assignments a LEFT JOIN platform_memberships m ON m.id=a.assignee_membership_id WHERE a.issue_id=ANY($1::text[]) ORDER BY a.issue_id,a.sequence DESC',[rows.map(r=>r.id)])).rows;
   return rows.map(r=>{
-    const own=actions.filter(a=>a.issue_id===r.id),last=own.filter(a=>a.action!=='note').at(-1);
+    const own=actions.filter(a=>a.issue_id===r.id),last=own.filter(a=>a.action!=='note').at(-1),assignment=assignments.find(a=>a.issue_id===r.id);
     return {id:r.id,proofId:r.proof_id,category:r.category,severity:r.severity,title:r.title,subjectId:r.subject_id,ruleVersion:r.rule_version,comparedSources:safeRecordData(r.compared_sources),
       status:last?.action==='resolve'?'resolved':last?.action==='acknowledge'?'acknowledged':'open',createdAt:date(r.created_at)!,updatedAt:date(own.at(-1)?.created_at??r.created_at)!,
+      assignment:assignment?{membershipId:assignment.assignee_membership_id,userId:assignment.assignee_user_id,membershipActive:assignment.membership_active,assignedBy:assignment.actor_user_id,assignedAt:date(assignment.created_at)!,reason:assignment.reason}:null,
       actions:own.map(a=>({id:a.id,action:a.action,reason:a.reason,actorId:a.actor_user_id,createdAt:date(a.created_at)!}))};
   });
 }
@@ -298,19 +301,38 @@ export async function appendAmendment(db:Database,clock:Clock,w:RecordWorkspace,
 async function requireSubject(db:Database,proofId:string,id:string) {
   if(id!==proofId&&!(await db.query('SELECT 1 FROM record_entities WHERE id=$1 AND proof_id=$2',[id,proofId])).rows[0])throw new DomainError('RECORD_SUBJECT_NOT_FOUND','Subject does not belong to this record',404);
 }
+export async function resolveRecordEntityReference(db:Database,w:RecordWorkspace,proofId:string,reference:unknown){
+ await requireRecordAccess(db,w,proofId);const value=textField(reference,'reference',200);
+ const rows=(await db.query<{id:string;kind:string;externalReference:string}>('SELECT e.id,e.kind,e.external_reference AS "externalReference" FROM record_entities e WHERE e.proof_id=$1 AND e.external_reference=$2 AND NOT EXISTS(SELECT 1 FROM record_entities newer WHERE newer.supersedes_id=e.id) ORDER BY e.id LIMIT 11',[proofId,value])).rows;
+ await requireRecordAccess(db,w,proofId);return {reference:value,outcome:rows.length===0?'not_found':rows.length===1?'matched':'ambiguous',matches:rows.slice(0,10),hasMore:rows.length>10,automaticMatch:rows.length===1?rows[0].id:null,matchingPolicy:'EXACT_CURRENT_REFERENCE_ONLY'};
+}
 export async function addRecordEntity(db:Database,clock:Clock,w:RecordWorkspace,proofId:string,input:unknown) {
   const b=strictBody(input,['kind','externalReference','parentId','attributes','supersedesId','reason']);
   if(!['shipment','stop','package','pallet','item','return'].includes(String(b.kind)))throw new DomainError('INVALID_ENTITY','Choose a shipment, stop, package, pallet, item or return',400);
-  const attributes=b.attributes??{};if(typeof attributes!=='object'||Array.isArray(attributes)||Buffer.byteLength(JSON.stringify(attributes))>8192)throw new DomainError('INVALID_ENTITY','Entity attributes must be an object of at most 8 KiB',400);
+  const rawAttributes=b.attributes??{};if(typeof rawAttributes!=='object'||Array.isArray(rawAttributes)||Buffer.byteLength(JSON.stringify(rawAttributes))>8192)throw new DomainError('INVALID_ENTITY','Entity attributes must be an object of at most 8 KiB',400);
+  const attributes={...rawAttributes as Record<string,unknown>};
+  if(attributes.quantityComparison!=null)attributes.quantityComparison=normalizeQuantityComparison(attributes.quantityComparison);
+  if(attributes.itemAllocation!=null){
+    if(b.kind!=='item')throw new DomainError('INVALID_ENTITY','Typed item allocations belong to an item entity.',400);
+    const item=normalizeItemAllocation(attributes.itemAllocation);
+    for(const allocation of item.allocations)if(!(await db.query("SELECT 1 FROM record_entities e WHERE e.id=$1 AND e.proof_id=$2 AND e.kind IN ('package','pallet') AND NOT EXISTS(SELECT 1 FROM record_entities newer WHERE newer.supersedes_id=e.id)",[allocation.handlingUnitId,proofId])).rows[0])throw new DomainError('RECORD_SUBJECT_NOT_FOUND','Every allocation must identify a current package or pallet in this same record.',404);
+    attributes.itemAllocation=item;
+  }
+  if(Buffer.byteLength(JSON.stringify(attributes))>8192)throw new DomainError('INVALID_ENTITY','Normalized entity attributes exceed the 8 KiB limit.',400);
   for(const field of ['parentId','supersedesId'] as const)if(b[field]!=null){
     const target=textField(b[field],field);
     const prior=(await db.query<{kind:string}>('SELECT kind FROM record_entities WHERE id=$1 AND proof_id=$2',[target,proofId])).rows[0];
     if(!prior)throw new DomainError('RECORD_SUBJECT_NOT_FOUND','Related entity does not belong to this record',404);
     if(field==='supersedesId'&&prior.kind!==b.kind)throw new DomainError('INVALID_ENTITY','A correction must keep the entity kind',400);
+    if(field==='supersedesId'&&(await db.query('SELECT 1 FROM record_entities WHERE supersedes_id=$1',[target])).rows[0])throw new DomainError('ENTITY_ALREADY_SUPERSEDED','Correct the current entity version; history cannot branch silently.',409);
   }
   const id=newId('entity'),reason=textField(b.reason,'reason',1000);
   await db.query('INSERT INTO record_entities(id,proof_id,kind,external_reference,parent_id,attributes,actor_user_id,supersedes_id,created_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)',[id,proofId,b.kind,optionalText(b.externalReference,'externalReference'),b.parentId??null,JSON.stringify(attributes),w.userId,b.supersedesId??null,clock.now().toISOString()]);
   const a=attributes as Record<string,unknown>;
+  for(const field of ['quantityComparison','itemAllocation'] as const){
+    const comparison=attributes[field] as ReturnType<typeof normalizeQuantityComparison>|ReturnType<typeof normalizeItemAllocation>|undefined;
+    if(comparison&&comparison.evaluation.outcome!=='within_tolerance')await createRecordIssue(db,clock,proofId,{category:comparison.evaluation.outcome==='not_comparable'?'quantity_not_comparable':'quantity_mismatch',severity:'warning',title:comparison.evaluation.outcome==='not_comparable'?'Reported units need review':'Reported quantities exceed the declared tolerance',subjectId:id,ruleVersion:comparison.evaluation.ruleVersion,comparedSources:comparison});
+  }
   if(typeof a.expectedQuantity==='number'&&typeof a.observedQuantity==='number'&&Number.isFinite(a.expectedQuantity)&&Number.isFinite(a.observedQuantity)&&a.expectedQuantity!==a.observedQuantity)
     await createRecordIssue(db,clock,proofId,{category:'quantity_mismatch',severity:'warning',title:'Reported quantities differ',subjectId:id,ruleVersion:'quantity-equality/v1',comparedSources:{expected:{value:a.expectedQuantity,source:a.expectedSource??'unattributed assertion'},observed:{value:a.observedQuantity,source:a.observedSource??'unattributed assertion'},units:a.units??'unspecified',uncertainty:'Source assertions are not independent physical verification.'}});
   await emitRecordChange(db,clock,proofId,w.userId,'RECORD_ENTITY_ADDED',{entityId:id,kind:b.kind,reason});return {id,proofId,revision:(await revisionOf(db,proofId))+1};

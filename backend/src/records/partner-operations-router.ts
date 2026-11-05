@@ -15,6 +15,7 @@ import {CSV_LIMITS} from './csv.js';
 import {connectionHealth} from './connections.js';
 import {requireRecordAccess,type RecordWorkspace} from './access.js';
 import {readRecordIssues,recordCommand,actOnIssue} from './service.js';
+import {listRecordReviewers,assignRecordIssue} from './issue-assignments.js';
 
 type PartnerRequest=Request&{partnerActor:PartnerActor};
 type Position={createdAt:string;id:string};
@@ -106,6 +107,13 @@ export function createPartnerOperationsRouter(deps:AppDependencies) {
     for(const [id,ids]of byProof){await requireRecordAccess(deps.db,w,id);issues.push(...await readRecordIssues(deps.db,id,ids));}
     const order=new Map(selected.selected.map((row,i)=>[row.id,i]));issues.sort((x,y)=>order.get(x.id)!-order.get(y.id)!);
     await authorize(a,'proofs:read');s.json({issues,nextCursor:selected.nextCursor,hasMore:selected.hasMore});
+  }));
+  router.get('/proofs/:proofId/issue-reviewers',run(async(r,s)=>{s.json(await listRecordReviewers(deps.db,deps.clock,workspace(actor(r)),r.params.proofId));}));
+  router.post('/issues/:issueId/assignment',run(async(r,s)=>{
+    const a=actor(r);await authorize(a,'issues:assign');await authorize(a,'proofs:write');
+    const row=(await deps.db.query<{proof_id:string}>('SELECT i.proof_id FROM record_issues i JOIN platform_proof_ownership o ON o.proof_id=i.proof_id WHERE i.id=$1 AND o.merchant_id=$2 AND o.environment=$3',[r.params.issueId,a.merchantId,a.environment])).rows[0];if(!row)throw new DomainError('ISSUE_NOT_FOUND','Issue not found.',404);
+    const w=workspace(a),result=await recordCommand(deps.db,deps.clock,w,row.proof_id,'partner:assignment:'+r.params.issueId,r.header('Idempotency-Key'),r.header('If-Match'),r.body,(tx,current)=>assignRecordIssue(tx,deps.clock,current,row.proof_id,r.params.issueId,r.body));
+    s.setHeader('Idempotency-Replayed',String(result.replayed));s.json(result.value);
   }));
   router.post('/issues/:issueId/actions',run(async(r,s)=>{
     const a=actor(r);await authorize(a,'proofs:write');

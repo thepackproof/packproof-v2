@@ -27,5 +27,6 @@ export interface RecordIssue {
   id:string; proofId:string; category:string; severity:'info'|'warning'|'critical';
   title:string; subjectId:string; ruleVersion:string; comparedSources:unknown;
   status:'open'|'acknowledged'|'resolved'; createdAt:string; updatedAt:string;
+  assignment:null|{membershipId:string|null;userId:string|null;membershipActive:boolean;assignedBy:string;assignedAt:string;reason:string};
   actions:Array<{id:string;action:string;reason:string;actorId:string;createdAt:string}>;
 }

@@ -10,7 +10,7 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { record, textField } from './tenants.js';
 
-export const PARTNER_SCOPES=['proofs:read','proofs:write','capture:request','exports:read','exports:create','imports:read','imports:write','evidence:write','shares:manage','deletion:request','events:read','webhooks:manage','audit:read'] as const;
+export const PARTNER_SCOPES=['issues:assign','proofs:read','proofs:write','capture:request','exports:read','exports:create','imports:read','imports:write','evidence:write','shares:manage','deletion:request','events:read','webhooks:manage','audit:read'] as const;
 export type PartnerScope=typeof PARTNER_SCOPES[number];
 export const AUTHORIZATION_POLICY='packproof.authorization/v1';
 export interface PartnerActor {
