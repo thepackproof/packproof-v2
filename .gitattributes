@@ -4,3 +4,5 @@
 
 # Database receipts bind canonical repository bytes on every platform.
 *.sql text eol=lf
+/backend/tests/fixtures/records-bridge-forward-compatible.js.txt text eol=lf
+/backend/tests/fixtures/records-bridge-m2-inactive.js.txt text eol=lf

@@ -1,0 +1,9 @@
+# Preserve the running core, native media tools, dependencies and inactive-M2
+# guard. The two compatibility modules admit only the twelve exact future
+# receipts, then apply every existing inactive-M2 check to its unchanged ledger.
+FROM 784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54
+USER root
+COPY backend/scripts/records-bridge-patch.mjs /tmp/records-bridge-patch.mjs
+COPY backend/scripts/records-migration-manifest.json /tmp/records-migration-manifest.json
+RUN node /tmp/records-bridge-patch.mjs /app/backend/dist/db/forward-compatible-migrations.js /tmp/records-migration-manifest.json
+USER node

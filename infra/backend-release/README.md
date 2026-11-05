@@ -1,5 +1,50 @@
 # Exact-source backend release
 
+## Current records upgrade (096-107)
+
+The measurement-only `backend-release-runner.mjs` remains retired for this
+candidate. Its 77-receipt guard must not be changed to 106 to force a release.
+The current live database has 94 applied receipts through 095; its bridge image
+bundles 91 source migrations. The records source has 106 files and exactly twelve
+pending additions. `backend/scripts/records-migration-manifest.json` freezes the
+full inventory digest and each new SQL checksum.
+
+`records-buildspec.yml` builds a compatibility bridge from the measured immutable
+live image and a separate current application image. It fails unless ECR retains
+the old rollback image after both pushes. The reviewed bounded retention policy
+is `records-release-ecr-retention.json` (ten images). Applying it is an explicit
+release operation; the build never changes retention itself. New archives use
+the `records-v1` root-layout profile, including shared contracts and research
+configuration required by the existing Dockerfile.
+
+`backend/scripts/records-migrate-cli.mjs --rehearse` accepts only a private restored
+database whose identifier begins `packproof-records-release-`. A successful
+migration and a separate stopped, exit-zero bridge task are required for the
+source-bound rehearsal receipt. The production `--inspect` / `--apply` modes
+require this receipt, current source/image bindings, TLS, an inactive organization
+profile, and a fresh inspection. The operator uses a temporary 15-minute login,
+applies all twelve migrations atomically under the existing migration lock, and
+removes that login. Existing data, function bodies, triggers, table/column ACLs
+and runtime memberships are hashed before and after. Only the two reads needed
+by the legacy operator predicate are granted on new tables. Existing ACLs and
+default policies are preserved. No organization, provider, signer, deletion
+executor or new runtime credential is activated by this operation.
+
+After rehearsal and the compatible bridge deployment, perform the production
+migration through the reviewed one-shot owner-secret injection task. Then
+provision separately reviewed API/worker credentials and baseline permissions.
+Apply the source-bound records grant plan and M2 separation policy, and launch
+`records-database-preflight.mjs` separately as each actual runtime login. It
+requires all 106 exact receipts and rejects owner, migration-write, system-role
+write and shared-role authority. The private authority-lock function is included
+in the grant plan; the snapshot verifier accepts the same exact column grants.
+Passing the schema migration alone does not qualify that runtime cutover.
+
+Production cutover still requires the source-bound application/worker, restored
+database, topology, operational profile and feature acceptance evidence. Never
+substitute a fixture rehearsal, an unsigned installer, or a source-only build for
+those results. Sites source synchronization is a separate publishing operation.
+
 This dispatch-only route targets the existing customer-facing API named `packproof-v2-staging-api` in account `784514617543`, region `us-east-1`. It does not deploy Sites, change IAM, pricing, integrations, signing, or run migrations. It replaces the image and three release identity values through ECS Express while copying the existing primary-container configuration.
 
 The first-proof implementation reuses the security-release operators prepared in the October 11 security follow-through. Their request-construction and service-revision reconciliation tests pass locally. Actual AWS permission, image, database and deployment gates remain unverified until the workflow executes successfully. Do not describe prepared source as a deployed release.

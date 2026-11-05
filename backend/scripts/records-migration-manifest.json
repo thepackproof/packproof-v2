@@ -1,0 +1,57 @@
+{
+  "schema": "packproof.records-migration-manifest/v1",
+  "baselineCount": 94,
+  "sourceCount": 106,
+  "baselineSha256": "1f9acaaa62fc4f3f19bf4af6331b94053d9662587d461d29d74900c6d5f896b9",
+  "inventorySha256": "605ba38f1c9ffcd6dd28a64a7d07d9cc41c3397ee7c10ba26198ad14ec50c2e1",
+  "additions": [
+    {
+      "id": "096_records_portal",
+      "checksum": "e1e1e6cf708b1810598051c7eb00ebf36ee89aeb1628e04f90316b714ee17738"
+    },
+    {
+      "id": "097_record_imports",
+      "checksum": "897afca84439849e4e27379e3855a86d1a3287242427ddd80b30c11852c0a437"
+    },
+    {
+      "id": "098_record_connections",
+      "checksum": "50ae3bcd1d9d203fb29c5a250866c1019331c06f4c80fc003e087087bb21803c"
+    },
+    {
+      "id": "099_workspace_requests",
+      "checksum": "b53dbb586e25c2e4dd53bfe658af50d206bdba946bd9300cf7db5822d6fab1c0"
+    },
+    {
+      "id": "100_source_ingestions",
+      "checksum": "e8271a163324b120c263485966041a30b0925939234cb2f52c3dbf5ad46ff8b2"
+    },
+    {
+      "id": "101_partner_imports_exports",
+      "checksum": "718840eb997eb7e1be4fb201fd1aac7994c6cb5653a70f9dd7a9d69cc90b1c91"
+    },
+    {
+      "id": "102_source_artifacts",
+      "checksum": "6b3b810a98a1b9d447308649df241fb3327dab3de4a8542eafa078efa482b86a"
+    },
+    {
+      "id": "103_operational_snapshots",
+      "checksum": "265f756242b969428caea0214155a8be90eaa23964b1e711c6067482c7d2980a"
+    },
+    {
+      "id": "104_record_snapshot_shares",
+      "checksum": "1abd528f058f6ee69ca7b08d4846fb89e8f033875a1dad1423a11ead61dcc534"
+    },
+    {
+      "id": "105_record_deletion_review",
+      "checksum": "2861536f40efa3ba4f241385d6053ccacf942118f50853e43185727ebda26ae3"
+    },
+    {
+      "id": "106_requirement_templates",
+      "checksum": "fd238e239d76209eda950cabd6a2419a0fe183ecfea4decc9ed79adeb3e870ca"
+    },
+    {
+      "id": "107_record_issue_assignments",
+      "checksum": "88eb3991374e37c2dc61b96abc374d92c2b6227d22be0b5af334c397a6098c76"
+    }
+  ]
+}

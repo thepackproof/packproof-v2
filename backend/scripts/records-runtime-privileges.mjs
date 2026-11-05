@@ -52,6 +52,8 @@ const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCE
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
 const sequenceName='record_issue_actions_sequence_seq';
 const sequencePrivileges=['SELECT','UPDATE','USAGE'];
+const authorityFunction='lock_operational_snapshot_authority(text,text,text,text,text)';
+const policyDigest=()=>sha({tables:policy,authorityFunction});
 
 function sourceColumns(sql){
  const tables={};
@@ -115,6 +117,7 @@ async function inspect(db,o,actualCaller){
   const unsafe=(await db.query(`SELECT r.rolname FROM pg_roles r WHERE pg_has_role($1,r.oid,'MEMBER') AND
    (r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls OR
     r.oid IN(SELECT c.relowner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$2) OR
+    r.oid IN(SELECT p.proowner FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$2) OR
     r.oid=(SELECT nspowner FROM pg_namespace WHERE nspname=$2) OR r.oid=(SELECT datdba FROM pg_database WHERE datname=current_database()))`,[role,o.schema])).rows;
   const schema=(await db.query("SELECT has_schema_privilege($1,$2,'USAGE') AS usage,has_schema_privilege($1,$2,'CREATE') AS create,has_schema_privilege($1,$2,'USAGE WITH GRANT OPTION') AS grantable",[role,o.schema])).rows[0];
   if(unsafe.length||!schema?.usage||schema.create||schema.grantable)fail('RECORDS_ROLE_AUTHORITY_UNSAFE');
@@ -133,14 +136,20 @@ async function inspect(db,o,actualCaller){
  has_sequence_privilege(roles.role,c.oid,p.privilege||' WITH GRANT OPTION') AS grantable FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
  CROSS JOIN unnest($1::text[]) roles(role) CROSS JOIN unnest($2::text[]) p(privilege) WHERE n.nspname=$3 AND c.relkind='S' AND c.relname=$4 ORDER BY roles.role,p.privilege`,[roles,sequencePrivileges,o.schema,sequenceName])).rows;
  if(sequences.length!==6)fail('RECORDS_SEQUENCE_MISSING');
- return {identity,columns,tables,fields,sequences};
+ const publicFunction=(await db.query(`SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
+ WHERE p.oid=to_regprocedure($1) AND a.grantee=0 AND a.privilege_type='EXECUTE' LIMIT 1`,[`${quote(o.schema)}.${authorityFunction}`])).rows;
+ if(publicFunction.length)fail('RECORDS_FUNCTION_PUBLIC_ACCESS_UNSAFE');
+ const functions=(await db.query(`SELECT role,has_function_privilege(role,$2,'EXECUTE') AS allowed,has_function_privilege(role,$2,'EXECUTE WITH GRANT OPTION') AS grantable
+ FROM unnest($1::text[]) roles(role) ORDER BY role`,[roles,`${quote(o.schema)}.${authorityFunction}`])).rows;
+ return {identity,columns,tables,fields,sequences,functions};
 }
 function verify(state,o){
- if([...state.tables,...state.fields,...state.sequences].some(row=>row.grantable))fail('RECORDS_DELEGABLE_PRIVILEGES_UNSAFE');
+ if([...state.tables,...state.fields,...state.sequences,...state.functions].some(row=>row.grantable))fail('RECORDS_DELEGABLE_PRIVILEGES_UNSAFE');
  const kind=Object.fromEntries(Object.entries(o.roles).map(([k,v])=>[v,k]));
  for(const row of state.tables){const rule=policy[row.name][kind[row.role]],expected=row.privilege==='SELECT'&&!!rule.select;if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');}
  for(const row of state.fields){const rule=policy[row.name][kind[row.role]],grant=rule[row.privilege.toLowerCase()],expected=row.privilege==='SELECT'?!!rule.select:grant==='*'||Array.isArray(grant)&&grant.includes(row.column_name);if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_COLUMN_PRIVILEGES_MISMATCH');}
  for(const row of state.sequences)if(row.allowed!==(row.role===o.runtimeRole&&row.privilege==='USAGE'))fail('RECORDS_EFFECTIVE_SEQUENCE_PRIVILEGES_MISMATCH');
+ if(state.functions.length!==2||state.functions.some(row=>!row.allowed))fail('RECORDS_AUTHORITY_LOCK_PRIVILEGES_MISMATCH');
 }
 /** Read-only, actual-caller preflight. Effective PUBLIC/inherited privileges count. */
 export async function verifyRecordsRuntimePrivileges(db,input){
@@ -148,7 +157,7 @@ export async function verifyRecordsRuntimePrivileges(db,input){
  if(process.env.PACKPROOF_RELEASE_SHA!==o.reviewedSourceCommit)fail('RECORDS_RUNTIME_SOURCE_MISMATCH');
  const state=await inspect(db,o,true);verify(state,o);
  return {schema:'packproof.records-runtime-privileges/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,caller:state.identity.caller,
-  runtimeRole:o.runtimeRole,workerRole:o.workerRole,migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:sha(policy),effectivePrivilegesSha256:sha({tables:state.tables,fields:state.fields,sequences:state.sequences})};
+  runtimeRole:o.runtimeRole,workerRole:o.workerRole,migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(),effectivePrivilegesSha256:sha({tables:state.tables,fields:state.fields,sequences:state.sequences,functions:state.functions})};
 }
 /** Owner-operated planning only. Caller must execute the reviewed statements in
  * one transaction, rerun actual-role preflight, and separately verify baseline
@@ -164,6 +173,8 @@ export async function planRecordsRuntimePrivileges(db,input){
  const sequence=`${quote(o.schema)}.${quote(sequenceName)}`;
  for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON SEQUENCE ${sequence} FROM ${quote(role)}`);
  statements.push(`GRANT USAGE ON SEQUENCE ${sequence} TO ${quote(o.runtimeRole)}`);
+ for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON FUNCTION ${quote(o.schema)}.${authorityFunction} FROM ${quote(role)}`,
+  `GRANT EXECUTE ON FUNCTION ${quote(o.schema)}.${authorityFunction} TO ${quote(role)}`);
  return {schema:'packproof.records-privilege-plan/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,runtimeRole:o.runtimeRole,workerRole:o.workerRole,
-  migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:sha(policy),statementsSha256:sha(statements),statements};
+  migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(),statementsSha256:sha(statements),statements};
 }

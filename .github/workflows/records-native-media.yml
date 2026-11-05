@@ -1,7 +1,7 @@
 name: Records native media acceptance
 on:
   pull_request:
-    paths: ['backend/**', 'scripts/diagnose-media-limits.py', '.github/workflows/records-native-media.yml']
+    paths: ['backend/**', 'scripts/ci-install-media-tools.sh', 'scripts/diagnose-media-limits.py', '.github/workflows/records-native-media.yml']
 permissions:
   contents: read
 jobs:
@@ -24,7 +24,8 @@ jobs:
         with:
           name: records-source-evidence-${{ github.sha }}
           path: ${{ runner.temp }}/records-api-bom.json
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install media validation tools
+        run: bash "$GITHUB_WORKSPACE/scripts/ci-install-media-tools.sh"
       - name: Diagnose native address-space requirements with synthetic inputs only
         run: python3 scripts/diagnose-media-limits.py
       - name: Typecheck API and validate immutable review and worker authority

@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Retain ten releases, including both records images and the pinned live rollback image",
+      "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 10},
+      "action": {"type": "expire"}
+    }
+  ]
+}

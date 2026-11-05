@@ -3,7 +3,7 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     paths=['backend'] if profile=='bridge' else ['backend','packages/evidence-contracts','config/rnd/research-build.json','.dockerignore']
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])

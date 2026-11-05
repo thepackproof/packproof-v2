@@ -6,6 +6,7 @@ import {insertUser} from '../src/domain/users.js';
 import {createTransaction} from '../src/domain/transactions.js';
 import {createOrGetProof} from '../src/domain/create-proof.js';
 import {recordsMigrationInventory,planRecordsRuntimePrivileges,verifyRecordsRuntimePrivileges,type RecordsPrivilegeOptions} from '../scripts/records-runtime-privileges.mjs';
+import {verifyOperationalSnapshotPrivileges,type OperationalSnapshotBinding} from '../src/records/operational-snapshot-runtime.js';
 
 describe('records source-bound API and worker privileges',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,options:RecordsPrivilegeOptions,ownerRole:string;
@@ -62,6 +63,11 @@ describe('records source-bound API and worker privileges',()=>{
   const before=await asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options));
   expect(before.caller).toBe(runtimeRole);
   expect((await asRole(workerRole,db=>verifyRecordsRuntimePrivileges(db,options))).caller).toBe(workerRole);
+  // Production qualification targets public explicitly. The default PGlite
+  // fixture exercises its real ACLs; isolated PostgreSQL schemas still check
+  // both actual callers through verifyRecordsRuntimePrivileges above.
+  if(options.schema==='public')for(const [kind,role] of [['api',runtimeRole],['worker',workerRole]] as const)
+   await asRole(role,db=>verifyOperationalSnapshotPrivileges(db,kind,{apiDatabaseRole:runtimeRole,workerDatabaseRole:workerRole} as OperationalSnapshotBinding));
   const receipt=await apply();expect(receipt.policySha256).toBe(before.policySha256);
   expect(await planRecordsRuntimePrivileges(opened.db,options)).toEqual(plan);
   expect((await asRole(runtimeRole,db=>db.query("SELECT has_table_privilege(current_user,'rnd_sources','SELECT') AS ok"))).rows[0]).toEqual({ok:true});
@@ -99,6 +105,9 @@ describe('records source-bound API and worker privileges',()=>{
   expect((await opened.db.query('SELECT normalized,payload_canonical,payload_sha256,state,attempts FROM record_source_receipts WHERE id=$1',[receipt])).rows[0]).toEqual({normalized:JSON.parse(payload),payload_canonical:payload,payload_sha256:'b'.repeat(64),state:'failed',attempts:1});
  });
  it('detects inherited/PUBLIC/grantable expansion and wrong sequence privileges',async()=>{
+  await opened.db.query(`GRANT EXECUTE ON FUNCTION ${options.schema}.lock_operational_snapshot_authority(text,text,text,text,text) TO PUBLIC`);
+  await expect(asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options))).rejects.toThrow('RECORDS_FUNCTION_PUBLIC_ACCESS_UNSAFE');
+  await opened.db.query(`REVOKE EXECUTE ON FUNCTION ${options.schema}.lock_operational_snapshot_authority(text,text,text,text,text) FROM PUBLIC`);
   await opened.db.query(`GRANT UPDATE ON record_entities TO ${inherited}`);await opened.db.query(`GRANT ${inherited} TO ${runtimeRole}`);
   await expect(asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options))).rejects.toThrow('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');
   await opened.db.query(`REVOKE ${inherited} FROM ${runtimeRole}`);

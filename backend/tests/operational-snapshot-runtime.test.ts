@@ -19,7 +19,7 @@ async function input(change:{qualificationBinding?:OperationalSnapshotBinding;ex
     if(sql.startsWith('SELECT pg_has_role'))return {rows:[{shared:false}],rowCount:1};
     if(sql.startsWith('SELECT has_function_privilege'))return {rows:[{permitted:true}],rowCount:1};
     if(sql.startsWith('SELECT has_column_privilege')){const [table,column,privilege]=args!;return {rows:[{permitted:privilege==='SELECT'||privilege==='INSERT'&&(table==='operational_snapshot_candidates'||table==='operational_snapshot_delivery'&&['snapshot_id','next_attempt_at'].includes(String(column)))}],rowCount:1};}
-    const allowed=args?.[0]==='operational_snapshot_candidates'?['SELECT','INSERT']:args?.[0]==='operational_snapshot_delivery'?['SELECT']:change.unsafeApiRole?['SELECT','INSERT']:['SELECT'];return {rows:[{permitted:allowed.includes(String(args?.[1]))}],rowCount:1};
+    const allowed=change.unsafeApiRole&&args?.[0]==='operational_snapshot_results'?['SELECT','INSERT']:['SELECT'];return {rows:[{permitted:allowed.includes(String(args?.[1]))}],rowCount:1};
   }} as unknown as Database;
   return {enabled:true,processRole:'api' as const,db,clock,binding:{...binding},qualification,qualificationSha256:sha256(qualification),qualificationAuthority:(id:string)=>id==='qualification-authority'?reviewerPem:null,trust:{issuer:binding.issuer,snapshot:()=>({}),activeKey:()=>({publicKeyPem:signerPem}),trustedPublicKey:async()=>signerPem},reader:{},sourceJournal:{}} as unknown as Parameters<typeof initializeOperationalSnapshotRuntime>[0];
 }
