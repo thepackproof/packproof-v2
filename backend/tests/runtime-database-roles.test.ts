@@ -67,6 +67,7 @@ beforeAll(async()=>{
   await h.db.query('GRANT SELECT ON ALL TABLES IN SCHEMA public TO '+workerRole);
   await h.db.query('GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO '+workerRole);
   await h.db.query('GRANT INSERT ON audit_events,recovery_events TO '+workerRole);
+  await h.db.query('GRANT UPDATE(status,manifest_id,finalized_at,updated_at) ON proofs TO '+workerRole);
   await h.db.query('GRANT INSERT(operation_id,next_attempt_at) ON recovery_delivery TO '+workerRole);
   for(const table of ['users','platform_organizations','platform_memberships'])await h.db.query('GRANT UPDATE(id) ON '+table+' TO '+workerRole);
   const inventory=await recordsMigrationInventory();
