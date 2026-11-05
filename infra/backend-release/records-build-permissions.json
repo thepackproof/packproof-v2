@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InspectOnlyRecordsReleaseRepository",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetLifecyclePolicy",
+        "ecr:DescribeImages"
+      ],
+      "Resource": "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+    }
+  ]
+}
