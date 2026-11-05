@@ -1,3 +1,4 @@
+import {OperationalSnapshots} from '../records/OperationalSnapshots';
 import {afterEach,it,expect,vi} from 'vitest';
 import {cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,4 +46,11 @@ it('offers eligible named reviewers and sends a reasoned revision-protected rout
  await user.selectOptions(screen.getByRole('combobox',{name:'Responsible reviewer'}),'member-a');await user.type(screen.getByRole('textbox',{name:'Assignment reason'}),'Check the loading document');await user.click(screen.getByRole('button',{name:'Save assignment'}));
  await waitFor(()=>expect(updated).toHaveBeenCalled());const post=(request.mock.calls as unknown as Array<[string,string,unknown,Record<string,string>]>).find(call=>call[1]==='POST')!;
  expect(post[2]).toEqual({membershipId:'member-a',reason:'Check the loading document'});expect(post[3]['If-Match']).toBe('"4"');expect(screen.getByText(/does not resolve the issue/)).toBeVisible();
+});
+
+it('labels an API-only snapshot without implying finalized capture evidence exists',async()=>{
+ const receipt={snapshotId:'snapshot-source',state:'READY',coreCapture:'NOT_PRESENT',revision:7,omissions:[],inventory:{artifacts:[],includedCount:0,omittedCount:0,artifactBytes:0,hasMore:false,limit:100}};
+ const request=vi.fn(async(path:string)=>path.includes('/source-artifacts?')?{artifacts:[]}:path.includes('/snapshots?')?{snapshots:[receipt],hasMore:false}:receipt);
+ render(<OperationalSnapshots api={{recordsRequest:request} as unknown as PackProofApi} proofId="source-proof" organizationId="source-org" environment="sandbox" recordRevision={7} enabled storageScope="source-user.api"/>);
+ expect(await screen.findByText(/It contains no finalized capture manifest or personal attestation/)).toBeVisible();
 });
