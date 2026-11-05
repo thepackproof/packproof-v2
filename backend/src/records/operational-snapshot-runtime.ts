@@ -51,7 +51,9 @@ export async function verifyOperationalSnapshotPrivileges(db:Database,role:'api'
   const shared=(await db.query<{shared:boolean}>("SELECT pg_has_role($1,$2,'MEMBER') OR pg_has_role($2,$1,'MEMBER') AS shared",[binding.apiDatabaseRole,binding.workerDatabaseRole])).rows[0];
   snapshotCheck(escalations.length===0&&schema?.allowed===false&&shared?.shared===false,'DATABASE_ESCALATION_DENIED');
   const lock=(await db.query<{permitted:boolean}>("SELECT has_function_privilege(current_user,'public.lock_operational_snapshot_authority(text,text,text,text,text)','EXECUTE') AS permitted")).rows[0];snapshotCheck(lock?.permitted,'AUTHORITY_LOCK_PRIVILEGE_REQUIRED');
-  const expectations:Record<string,string[]>=role==='api'?{operational_snapshot_candidates:['SELECT','INSERT'],operational_snapshot_delivery:['SELECT'],operational_snapshot_results:['SELECT']}:{operational_snapshot_candidates:['SELECT'],operational_snapshot_delivery:['SELECT'],operational_snapshot_results:['SELECT','INSERT']};
+  // Inserts and lease updates are admitted by exact column grants below. A
+  // table-wide INSERT would also authorize future, unreviewed columns.
+  const expectations:Record<string,string[]>={operational_snapshot_candidates:['SELECT'],operational_snapshot_delivery:['SELECT'],operational_snapshot_results:['SELECT']};
   for(const [table,allowed] of Object.entries(expectations))for(const privilege of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']){
     const row=(await db.query<{permitted:boolean}>('SELECT has_table_privilege(current_user,$1,$2) AS permitted',[table,privilege])).rows[0];
     snapshotCheck(row?.permitted===allowed.includes(privilege),'DATABASE_PRIVILEGE_MISMATCH');

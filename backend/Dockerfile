@@ -36,6 +36,10 @@ COPY backend/scripts/foundation-migrate-cli.mjs ./scripts/foundation-migrate-cli
 COPY backend/scripts/m2-migrate.mjs ./scripts/m2-migrate.mjs
 COPY backend/scripts/m2-migrate-cli.mjs ./scripts/m2-migrate-cli.mjs
 COPY backend/scripts/m2-runtime-privileges.mjs ./scripts/m2-runtime-privileges.mjs
+COPY backend/scripts/records-runtime-privileges.mjs ./scripts/records-runtime-privileges.mjs
+COPY backend/scripts/records-migrate.mjs ./scripts/records-migrate.mjs
+COPY backend/scripts/records-migrate-cli.mjs ./scripts/records-migrate-cli.mjs
+COPY backend/scripts/records-migration-manifest.json ./scripts/records-migration-manifest.json
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
 COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
