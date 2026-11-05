@@ -1,7 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {expect,it} from 'vitest';
-import {extendForwardCompatibility,BASE_MODULE_SHA256} from '../scripts/records-bridge-patch.mjs';
+import {extendForwardCompatibility,extendInactiveM2Compatibility,BASE_MODULE_SHA256,BASE_M2_MODULE_SHA256} from '../scripts/records-bridge-patch.mjs';
 import {qualifiedRehearsal,run} from '../scripts/records-migrate-cli.mjs';
 import {digest,INVENTORY_DIGEST} from '../scripts/records-migrate.mjs';
 
@@ -16,6 +16,9 @@ it('patches only the measured immutable bridge module and admits exact future re
  expect(()=>extendForwardCompatibility(fixture+'\n',manifest)).toThrow('RECORDS_BRIDGE_BASE_BYTES_MISMATCH');
  expect(()=>extendForwardCompatibility(fixture,{...manifest,inventorySha256:'0'.repeat(64)})).toThrow('RECORDS_BRIDGE_MANIFEST_MISMATCH');
  expect(()=>extendForwardCompatibility(fixture,{...manifest,additions:manifest.additions.map((row:any,i:number)=>i?row:{...row,checksum:'0'.repeat(64)})})).toThrow('RECORDS_BRIDGE_MANIFEST_MISMATCH');
+ const oldM2=await readFile(new URL('./fixtures/records-bridge-m2-inactive.js.txt',import.meta.url),'utf8');
+ expect(createHash('sha256').update(oldM2).digest('hex')).toBe(BASE_M2_MODULE_SHA256);
+ expect(()=>extendInactiveM2Compatibility(oldM2+'\n',manifest)).toThrow('RECORDS_BRIDGE_BASE_BYTES_MISMATCH');
 });
 
 it('rejects owner shortcuts or absent restored qualification before attempting a production connection',async()=>{

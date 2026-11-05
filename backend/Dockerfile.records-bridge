@@ -1,5 +1,6 @@
 # Preserve the running core, native media tools, dependencies and inactive-M2
-# guard. This bridge only recognizes the twelve exact reviewed future receipts.
+# guard. The two compatibility modules admit only the twelve exact future
+# receipts, then apply every existing inactive-M2 check to its unchanged ledger.
 FROM 784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:434f5cd40bf365a6bdf585fa6302f786ea4571dda892fd761c3dbd85d6b5aa54
 USER root
 COPY backend/scripts/records-bridge-patch.mjs /tmp/records-bridge-patch.mjs

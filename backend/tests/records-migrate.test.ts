@@ -1,6 +1,7 @@
 import {beforeAll,afterAll,describe,it,expect} from 'vitest';
 import {randomBytes,createHash} from 'node:crypto';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {migrationInventory,migrate} from '../src/db/migrate.js';
@@ -10,6 +11,7 @@ import {createTransaction} from '../src/domain/transactions.js';
 import {createOrGetProof} from '../src/domain/create-proof.js';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
 import {MIGRATIONS,inspectInventory,inspectState,inspectionReceipt,validateInspection,applyInTransaction} from '../scripts/records-migrate.mjs';
+import {extendInactiveM2Compatibility} from '../scripts/records-bridge-patch.mjs';
 
 const binding={source:'a'.repeat(40),compatibleImage:'sha256:'+'b'.repeat(64),compatibilityEvidenceSha256:'c'.repeat(64),rehearsalSha256:'d'.repeat(64)};
 const now=new Date('2026-11-05T12:00:00Z'),clock={now:()=>new Date(now)};
@@ -49,6 +51,7 @@ describe('records migration transaction and historical preservation',()=>{
   for(const role of [runtimeRole,broad])await db.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
   await db.query(`GRANT USAGE ON SCHEMA ${schema} TO ${runtimeRole}`);
   await db.query(`GRANT SELECT ON ALL TABLES IN SCHEMA ${schema} TO ${runtimeRole}`);
+  for(const table of ['claim_case_revisions','claim_cases','integrity_envelope_delivery','integrity_envelope_jobs','integrity_envelope_results','recipient_export_preservations'])await db.query(`REVOKE ALL ON ${table} FROM ${runtimeRole}`);
   await db.query(`GRANT ${broad} TO ${runtimeRole}`);
   await db.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ALL ON TABLES TO ${broad}`);
   const actor=await insertUser(db,clock);
@@ -83,6 +86,12 @@ describe('records migration transaction and historical preservation',()=>{
   expect((await db.query('SELECT canonical_json FROM final_manifests WHERE proof_id=$1',[proofId])).rows[0].canonical_json).toBe('{"synthetic":"records-migration"}');
   const next=inspectionReceipt(await inspectState(db,inventory,runtimeRole),binding,now);
   expect((await db.transaction(tx=>applyInTransaction(tx,inventory,next,options))).alreadyApplied).toBe(true);
+  const original=await readFile(new URL('./fixtures/records-bridge-m2-inactive.js.txt',import.meta.url),'utf8'),manifest=JSON.parse(await readFile(new URL('../scripts/records-migration-manifest.json',import.meta.url),'utf8'));
+  const bridge=await import('data:text/javascript;base64,'+Buffer.from(extendInactiveM2Compatibility(original,manifest)).toString('base64'));
+  const applied=(await db.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
+  await db.transaction(async tx=>{await tx.query(`SET LOCAL ROLE ${runtimeRole}`);await bridge.assertInactiveM2Bridge(tx,applied,{PACKPROOF_ORGANIZATIONS_ENABLED:'false',PACKPROOF_CLAIM_EXPORTS_ENABLED:'false'});});
+  await expect(bridge.assertInactiveM2Bridge(db,applied,{PACKPROOF_ORGANIZATIONS_ENABLED:'true'})).rejects.toThrow('M2_BRIDGE_FEATURE_ACTIVATION_FORBIDDEN');
+  await expect(bridge.assertInactiveM2Bridge(db,applied.filter(row=>row.id!=='107_record_issue_assignments'),{})).rejects.toThrow('RECORDS_BRIDGE_RECEIPT_MISMATCH');
  },60000);
  it('refuses feature activation or disabled immutability guards on a repeat run',async()=>{
   const db=opened.db;
