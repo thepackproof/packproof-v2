@@ -1,0 +1,118 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadReleaseTaskDefinitions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTaskDefinition"
+      ],
+      "Resource": [
+        "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:*",
+        "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-security-verifier-*"
+      ]
+    },
+    {
+      "Sid": "ReadReleaseServiceDeploymentMetadata",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListServiceDeployments",
+        "ecs:DescribeServiceDeployments",
+        "ecs:DescribeServiceRevisions"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "ReadReleaseLoadBalancerTopology",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeLoadBalancerAttributes"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "ReadReleaseSourceBucketVersioning",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketVersioning"
+      ],
+      "Resource": "arn:aws:s3:::packproof-v2-staging-build-784514617543"
+    },
+    {
+      "Sid": "ReadExactReleaseSourceObjectVersions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::packproof-v2-staging-build-784514617543/security-release/*"
+    },
+    {
+      "Sid": "ReadOwnDeploymentRoleConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::784514617543:role/PackProofGitHubDeploy"
+    },
+    {
+      "Sid": "RunOnlyReleaseVerifierTasks",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RunTask"
+      ],
+      "Resource": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-security-verifier-*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:us-east-1:784514617543:cluster/packproof-v2-staging-cluster"
+        },
+        "Null": {
+          "aws:RequestTag/packproof-release": "false"
+        }
+      }
+    },
+    {
+      "Sid": "RemoveOnlyVerifierDefinitions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterTaskDefinition"
+      ],
+      "Resource": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-security-verifier-*"
+    },
+    {
+      "Sid": "StopOnlyTaggedReleaseVerifierTasks",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:StopTask"
+      ],
+      "Resource": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/*",
+      "Condition": {
+        "Null": {
+          "ecs:ResourceTag/packproof-release": "false"
+        }
+      }
+    },
+    {
+      "Sid": "ReadRuntimeVerifierReceipts",
+      "Effect": "Allow",
+      "Action": [
+        "logs:GetLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/ecs/packproof-v2-staging-api:log-stream:api/Main/*"
+    }
+  ]
+}
