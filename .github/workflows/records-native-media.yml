@@ -29,7 +29,7 @@ jobs:
         run: python3 scripts/diagnose-media-limits.py
       - name: Typecheck API and validate immutable review and worker authority
         working-directory: backend
-        run: npm run typecheck && npm test -- --run tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts tests/claim-cases.test.ts tests/operational-snapshot-profile.test.ts tests/operational-snapshot-runtime.test.ts tests/operational-snapshots.test.ts --maxWorkers=1 --no-file-parallelism
+        run: npm run typecheck && npm test -- --run tests/runtime-database-roles.test.ts tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts tests/claim-cases.test.ts tests/operational-snapshot-profile.test.ts tests/operational-snapshot-runtime.test.ts tests/operational-snapshots.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Verify actual opaque redaction and recording thumbnails
         working-directory: backend
         run: npm test -- --run tests/media-render-bounds.test.ts tests/disclosure-receipts.test.ts --maxWorkers=1 --no-file-parallelism
