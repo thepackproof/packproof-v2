@@ -7,10 +7,12 @@
       "Action": [
         "ecs:DescribeTaskDefinition"
       ],
-      "Resource": [
-        "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:*",
-        "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-security-verifier-*"
-      ]
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
     },
     {
       "Sid": "ReadReleaseServiceDeploymentMetadata",

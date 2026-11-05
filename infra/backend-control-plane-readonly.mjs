@@ -31,7 +31,7 @@ function failure(error){
 function aws(service,operation,args=[]){
   const call={service,operation,status:'PENDING'};calls.push(call);
   if(args.some(v=>typeof v!=='string'||!v.length)){Object.assign(call,{status:'FAILED',errorCategory:'LOCAL',errorCode:'INVALID_ARGUMENTS'});return null;}
-  try{const result=JSON.parse(execFileSync('aws',[service,operation,...args,'--region',region,'--output','json','--no-cli-pager'],{encoding:'utf8',timeout:60000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']}));call.status='SUCCESS';if(result.failures?.length)Object.assign(call,{status:'PARTIAL',errorCategory:'RESOURCE',errorCode:'RESOURCE_READ_FAILURE',failureCount:result.failures.length});return result;}
+  try{const output=execFileSync('aws',[service,operation,...args,'--region',region,'--output','json','--no-cli-pager'],{encoding:'utf8',timeout:60000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']});const result=service==='s3api'&&operation==='get-bucket-versioning'&&!output.trim()?{}:JSON.parse(output);call.status='SUCCESS';if(result.failures?.length)Object.assign(call,{status:'PARTIAL',errorCategory:'RESOURCE',errorCode:'RESOURCE_READ_FAILURE',failureCount:result.failures.length});return result;}
   catch(error){Object.assign(call,{status:'FAILED',...failure(error)});return null;}
 }
 const pick=(v,names)=>Object.fromEntries(names.filter(n=>v?.[n]!==undefined).map(n=>[n,v[n]]));
