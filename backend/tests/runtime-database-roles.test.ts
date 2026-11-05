@@ -38,7 +38,7 @@ const publisher:RecoveryPublisher={
   },
 };
 async function drainPolicies(){for(let i=0;i<100;i++){const result=await processPolicyRecoveryOutbox(h.db,clock,publisher);if(!result.processed)return;expect(result.state).toBe('DURABLE');}throw new Error('Policy publication did not finish');}
-async function drainRecovery(){for(let i=0;i<20;i++){const result=await processRecoveryOutbox(h.db,clock,publisher);if(!result.processed)return;expect(result.state).toBe('DURABLE');}throw new Error('Recovery publication did not finish');}
+async function drainRecovery(){for(let i=0;i<20;i++){const result=await processRecoveryOutbox(h.db,clock,publisher);if(!result.processed)return;if(result.state!=='DURABLE')throw new Error('Recovery publication remains pending: '+JSON.stringify((await h.db.query("SELECT operation_id,error_code FROM recovery_delivery WHERE state<>'DURABLE' ORDER BY operation_id")).rows));}throw new Error('Recovery publication did not finish');}
 
 beforeAll(async()=>{
   // Provision the historical baseline only on its actual supported schema.
@@ -58,6 +58,7 @@ beforeAll(async()=>{
   await h.db.query("INSERT INTO user_system_roles(user_id,role,granted_at) VALUES($1,'SYSTEM_ADMIN',$2)",[admin,clock.now().toISOString()]);
   await expect(h.db.transaction(async tx=>{for(const sql of splitSqlStatements(script))await tx.query(sql);})).rejects.toThrow('LEGACY_RUNTIME_SCHEMA_UNSUPPORTED');
   for(const role of [apiRole,workerRole])await h.db.query('CREATE ROLE '+role+' LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
+  for(const role of [apiRole,workerRole])await h.db.query('GRANT SELECT(datname,datdba) ON pg_catalog.pg_database TO '+role);
   await h.db.query('GRANT packproof_runtime TO '+apiRole);
   await h.db.query('GRANT packproof_recovery TO '+workerRole);
   // Narrow inherited M2 authority before either login is admitted.
@@ -66,7 +67,8 @@ beforeAll(async()=>{
   // permit complete recovery snapshots; they are not a production role policy.
   await h.db.query('GRANT SELECT ON ALL TABLES IN SCHEMA public TO '+workerRole);
   await h.db.query('GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO '+workerRole);
-  await h.db.query('GRANT INSERT ON audit_events,recovery_events TO '+workerRole);
+  await h.db.query('GRANT INSERT ON audit_events,recovery_events,proof_outbox,api_event_stream TO '+workerRole);
+  await h.db.query('GRANT INSERT(tenant_id),UPDATE(position) ON api_event_stream_heads TO '+workerRole);
   await h.db.query('GRANT UPDATE(status,manifest_id,finalized_at,updated_at) ON proofs TO '+workerRole);
   await h.db.query('GRANT INSERT(operation_id,next_attempt_at) ON recovery_delivery TO '+workerRole);
   for(const table of ['users','platform_organizations','platform_memberships'])await h.db.query('GRANT UPDATE(id) ON '+table+' TO '+workerRole);
@@ -81,7 +83,7 @@ beforeEach(async()=>{await h.db.query(`SET SESSION AUTHORIZATION ${apiRole}`);})
 afterEach(async()=>{await h.db.query('RESET SESSION AUTHORIZATION');});
 afterAll(async()=>{await h?.db.query('RESET SESSION AUTHORIZATION');await h?.close();await opened?.close();vi.unstubAllEnvs();});
 
-describe('current application under separately qualified API and worker groups',()=>{
+describe('current application under separate API and worker groups',()=>{
   it('checks the real SQL session authority and reads the schema without owner powers',async()=>{
     expect((await h.db.query('SELECT current_user AS actor,session_user AS login')).rows[0]).toEqual({actor:apiRole,login:apiRole});
     expect((await h.db.query('SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0]).toEqual({rolsuper:false,rolcreatedb:false,rolcreaterole:false,rolreplication:false,rolbypassrls:false});
@@ -141,12 +143,16 @@ describe('current application under separately qualified API and worker groups',
     const seller=await createUser(h);
     const transaction=await createTransaction(h.db,clock,seller,{itemTitle:'Privilege-verified preservation'});
     const proof=await createOrGetProof(h.db,clock,seller,transaction.transactionId);
+    const tenant='runtime-role-tenant';
+    await h.db.query("INSERT INTO api_tenants(id,owner_user_id,name,environment,created_at) VALUES($1,$2,'Runtime role fixture','sandbox',$3)",[tenant,seller,clock.now().toISOString()]);
+    await h.db.query("INSERT INTO api_tenant_proofs(tenant_id,external_id,proof_id,request_hash,created_at) VALUES($1,'runtime-role-proof',$2,$3,$4)",[tenant,proof.proofId,'a'.repeat(64),clock.now().toISOString()]);
     await commitFulfillmentAndAttest(h,seller,proof.proofId);
     await asWorker(async()=>{await drainPolicies();await drainRecovery();});
     await finalizeProof(h.db,clock,seller,proof.proofId,publisher.signer,{requireDurableReceipts:true});
     await asWorker(async()=>{await drainPolicies();await drainRecovery();});
     const final=await finalizeProof(h.db,clock,seller,proof.proofId,publisher.signer,{requireDurableReceipts:true});
     expect(final.proof.status).toBe('FINALIZED');
+    expect((await h.db.query("SELECT 1 FROM api_event_stream s JOIN proof_outbox o ON o.id=s.event_id WHERE s.tenant_id=$1 AND o.proof_id=$2 AND o.event_type='proof.finalized'",[tenant,proof.proofId])).rows).toHaveLength(1);
     expect((await h.db.query('SELECT state FROM recovery_delivery WHERE operation_id=$1',[`finalize:${proof.proofId}`])).rows[0].state).toBe('DURABLE');
     const fence=(await h.db.query<{reconciled_sequence:string;reconciled_head_sha256:string}>('SELECT reconciled_sequence,reconciled_head_sha256 FROM policy_recovery_fence')).rows[0];
     expect(Number(fence.reconciled_sequence)).toBeGreaterThan(0);expect(fence.reconciled_head_sha256).toMatch(/^[a-f0-9]{64}$/);
