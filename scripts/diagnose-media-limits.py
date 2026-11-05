@@ -5,7 +5,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 env = {"PATH": os.environ.get("PATH", ""), "LANG": "C",
-       "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"}
+       "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MALLOC_ARENA_MAX": "1"}
 fixture = root / "backend/tests/fixtures/camera-recording.mp4"
 for megabytes in (512, 768, 1024):
     command = ["prlimit", f"--as={megabytes * 1024 * 1024}", "--cpu=15",

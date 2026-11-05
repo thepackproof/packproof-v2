@@ -15,7 +15,7 @@ import { spoolCommittedEvidence } from './media-files.js';
 import { DomainError } from './errors.js';
 import { appendAudit } from './audit.js';
 const exec = promisify(execFile);
-const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=120','--fsize=104857600','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C',OPENBLAS_NUM_THREADS:'1',OMP_NUM_THREADS:'1'}});
+const boundedExec=(command:string,args:string[],options:{timeout:number;maxBuffer:number})=>exec(process.platform==='linux'?'prlimit':command,process.platform==='linux'?['--as=536870912','--cpu=120','--fsize=104857600','--nofile=64','--',command,...args]:args,{...options,killSignal:'SIGKILL',env:{PATH:process.env.PATH,LANG:'C',OPENBLAS_NUM_THREADS:'1',OMP_NUM_THREADS:'1',MALLOC_ARENA_MAX:'1'}});
 const VERSION='opaque-mask-silent/v1';
 export interface RedactionMask { x:number;y:number;width:number;height:number }
 export interface RedactionTransform { masks:RedactionMask[]; removeAudio:true; stripMetadata:true; withheldIntervals:never[] }

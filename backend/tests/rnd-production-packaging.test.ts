@@ -26,7 +26,7 @@ it('keeps all 104 migration files byte-identical to the reviewed Git index with 
  expect(files.at(-1)).toBe('105_record_deletion_review.sql');
  const output=execFileSync('git',['ls-files','--stage','--','backend/migrations'],{cwd:root,encoding:'utf8'});
  const indexed=new Map(output.trim().split(/\r?\n/).map(line=>{const found=/^100644 ([a-f0-9]{40}) 0\t(.+)$/.exec(line);if(!found)throw Error('Unmerged or unexpected migration index entry');return [found[2],found[1]];}));
- expect(indexed.size).toBe(99);
+ expect(indexed.size).toBe(104);
  for(const name of files){const bytes=await readFile(path.join(backend,'migrations',name)),gitBlob=execFileSync('git',['cat-file','blob',indexed.get('backend/migrations/'+name)!],{cwd:root});expect(bytes.includes(13),name).toBe(false);expect(createHash('sha256').update(bytes).digest('hex'),name).toBe(createHash('sha256').update(gitBlob).digest('hex'));}
 },30_000);
 it('imports the compiled server graph and resolves contracts, profile, migrations and scripts from the image layout',async()=>{
