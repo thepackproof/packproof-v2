@@ -1,0 +1,51 @@
+name: Desktop dependency repair
+
+# Resolve the reviewed security overrides without giving this job write access.
+# Remove this temporary workflow once its exact lockfile is committed and tested.
+on:
+  push:
+    branches: [codex/desktop-audit-repair-2026-11-05]
+    paths: ['desktop/package.json', '.github/workflows/desktop-dependency-repair.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Resolve the reviewed overrides
+        working-directory: desktop
+        run: npm install --package-lock-only --ignore-scripts --no-fund --no-audit
+      - name: Record exact lockfile patch
+        run: |
+          node --input-type=module <<'JS'
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {readFileSync} from 'node:fs';
+          const paths=execFileSync('git',['diff','--name-only'],{encoding:'utf8'}).trim();
+          if(paths!=='desktop/package-lock.json')throw Error('UNEXPECTED_RESOLUTION_CHANGE');
+          const patch=execFileSync('git',['diff','--binary','--','desktop/package-lock.json']);
+          if(patch.length>200000)throw Error('LOCK_PATCH_REVIEW_TOO_LARGE');
+          console.log('DESKTOP_LOCK_PATCH_BASE64_BEGIN');
+          console.log(patch.toString('base64'));
+          console.log('DESKTOP_LOCK_PATCH_BASE64_END');
+          console.log(JSON.stringify({source:process.env.GITHUB_SHA,patchSha256:createHash('sha256').update(patch).digest('hex'),lockSha256:createHash('sha256').update(readFileSync('desktop/package-lock.json')).digest('hex')}));
+          JS
+      - name: Audit resolved dependency tree
+        working-directory: desktop
+        run: npm audit --audit-level=low
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-reviewed-lock-${{ github.sha }}
+          path: desktop/package-lock.json
+          if-no-files-found: error
+          retention-days: 7
