@@ -25,7 +25,7 @@ const CORE_KEYS: Record<string, string[]> = {
   record_source_artifacts:['id'],record_source_upload_sessions:['id'],record_source_upload_parts:['session_id','part_number'],record_source_artifact_operations:['id'],record_source_artifact_results:['artifact_id'],
   operational_snapshot_candidates:['snapshot_id'],operational_snapshot_results:['snapshot_id'],
   record_deletion_contexts:['request_id'],record_deletion_reviews:['id'],
-  record_requirement_assignments:['id'],record_issue_assignments:['id'],
+  record_requirement_templates:['template_id','version'],record_requirement_assignments:['id'],record_issue_assignments:['id'],
   recipient_export_jobs:['id'],recipient_export_preservations:['job_id'],recipient_export_approvals:['job_id'],
   signature_snapshots:['id'],signature_cases:['id'],signature_case_approvals:['case_id'],
   claim_cases:['id'], claim_case_revisions:['id'],
