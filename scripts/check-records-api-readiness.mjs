@@ -53,6 +53,9 @@ const modules = [
   ['backend/src/records/deletion-requests.ts','createRecordDeletionRouter','/me/records',app,'app','/me/records',{human:true}],
 ];
 modules.push(['backend/src/records/requirement-templates.ts','createRequirementTemplatesRouter','/me/records',app,'app','/me/records']);
+modules.push(['backend/src/records/agent-router.ts','createConnectEnrollmentRouter','/connect',app,'app','/connect']);
+modules.push(['backend/src/records/agent-router.ts','createAgentHumanRouter','/me/records',app,'app','/me/records']);
+modules.push(['backend/src/records/agent-router.ts','createAgentPartnerRouter','/v1/partner',partner,'router',null]);
 const optionalOperations = 'backend/src/records/partner-operations-router.ts';
 if (fs.existsSync(path.join(root, optionalOperations))) modules.push([optionalOperations, 'createPartnerOperationsRouter', '/v1/partner', partner, 'router', null]);
 const sourceIngestions = 'backend/src/records/ingestions-router.ts';
@@ -86,6 +89,7 @@ for (const [relative, factory, prefix, parent, receiver, mount,context={}] of mo
     } else if (ts.isIdentifier(node.expression) && ['command', 'endpoint'].includes(node.expression.text)) {
       method = literal(node.arguments[0]);
       route = literal(node.arguments[1]);
+      if(node.expression.text==='command'&&method?.startsWith('/')){route=method;method='post';}
     } else if (ts.isIdentifier(node.expression) && node.expression.text === 'read') {
       method = 'get'; route = literal(node.arguments[0]);
     }

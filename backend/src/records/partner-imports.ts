@@ -11,10 +11,13 @@ import { importPartnerOrder } from '../platform/partner-proofs.js';
 import { idempotent } from '../platform/idempotency.js';
 import { textField } from '../platform/tenants.js';
 import { parseShipmentCsv, correctionCsv, type ShipmentCsvRow, type CsvMapping } from './csv.js';
+import { authorizeAgentPreview, authorizeAgentImport } from './agent-restrictions.js';
 type Deps = Pick<AppDependencies, 'db' | 'clock' | 'objectStore' | 'devAuth'>;
 type State = 'previewed' | 'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed' | 'action_needed';
 interface Job {
     id: string;
+    agent_installation_id: string | null;
+    agent_config_revision: number | null;
     organization_id: string;
     environment: 'sandbox' | 'live';
     actor: PartnerActor;
@@ -93,16 +96,18 @@ async function requireOperator(db: Database, a: PartnerActor, membershipId: stri
     if (!l.rows[0])
         throw new DomainError('LOCATION_NOT_FOUND', 'Location not found', 404);
 }
-async function authorize(deps: Deps, db: Database, a: PartnerActor, j: Job, write = false, inspectRows = true) {
+async function authorize(deps: Deps, db: Database, a: PartnerActor, j: Job, write = false, inspectRows = true, processing = false, importValidRows?: boolean) {
     sameActor(a, j);
     await reauthorizePartner(db, deps.clock, a, write ? 'imports:write' : 'imports:read');
     if (write)
         await reauthorizePartner(db, deps.clock, a, 'proofs:write');
     await reauthorizePartner(db, deps.clock, a, 'proofs:read');
     await requireOperator(db, a, j.operator_membership_id, undefined);
+    const rs = inspectRows ? await rows(db, j.id) : [];
+    await authorizeAgentImport(db, deps.clock, a, j, processing ? 'process' : write ? 'commit' : 'read', rs.map(r => ({values:r.source_values,normalized:r.normalized})), importValidRows);
     if (!inspectRows)
         return;
-    const rs = await rows(db, j.id), locations = new Set(rs.flatMap(r => r.normalized ? [r.normalized.locationId] : [])), proofs = new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []));
+    const locations = new Set(rs.flatMap(r => r.normalized ? [r.normalized.locationId] : [])), proofs = new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []));
     for (const location of locations)
         await requireOperator(db, a, j.operator_membership_id, location);
     for (const proofId of proofs)
@@ -127,8 +132,11 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:write');
     await reauthorizePartner(deps.db, deps.clock, a, 'imports:read');
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:read');
+    const approvedInput = {integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone};
+    await authorizeAgentPreview(deps.db,deps.clock,a,approvedInput,parsed.rows);
     const result = await idempotent(deps.db, deps.clock, a.tenantId, `service-import-preview:${a.principalId}:${a.credentialId}:${a.delegationGrantId ?? ''}`, key, b, async (tx) => {
         await reauthorizePartner(tx, deps.clock, a, 'imports:write');
+        await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
         await tx.query('SELECT pg_advisory_xact_lock(1347438147,hashtext($1))', [a.merchantId]);
         const source = await tx.query('SELECT 1 FROM platform_integration_accounts WHERE id=$1 AND merchant_id=$2 AND environment=$3', [account, a.merchantId, a.environment]);
         if (!source.rows[0])
@@ -170,8 +178,9 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
         for (const r of parsed.rows)
             if (r.normalized)
                 await requireOperator(tx, a, operator, r.normalized.locationId);
+        const installation = await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
         const now = deps.clock.now().toISOString(), version = sha256Hex(canonicalize({ schema: MAPPING_VERSION, sha256: digest, mapping: parsed.mapping, timeZone: parsed.timeZone, account, operator, sourceName: name }));
-        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now]);
+        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null]);
         for (const r of parsed.rows)
             await tx.query('INSERT INTO partner_import_rows(import_id,row_number,status,source_values,normalized,payload_sha256,errors,proof_id) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7::jsonb,$8)', [id, r.rowNumber, r.status, JSON.stringify(r.values), JSON.stringify(r.normalized), r.payloadSha256, JSON.stringify(r.errors), r.proofId ?? null]);
         await auditOrganization(tx, deps.clock, { actor: a, requestId: a.requestId, operation: 'SERVICE_CSV_PREVIEWED', resourceId: id });
@@ -183,11 +192,12 @@ export async function commitPartnerImport(deps: Deps, a: PartnerActor, id: strin
     const b = strictBody(input, ['previewVersion', 'importValidRows']);
     if (typeof b.previewVersion !== 'string' || typeof b.importValidRows !== 'boolean')
         throw new DomainError('INVALID_REQUEST', 'Confirm the preview version and partial-import choice', 400);
+    const importValidRows = b.importValidRows;
     const current = await job(deps.db, id);
-    await authorize(deps, deps.db, a, current, true);
+    await authorize(deps, deps.db, a, current, true, true, false, importValidRows);
     const result = await idempotent(deps.db, deps.clock, a.tenantId, `service-import-commit:${a.principalId}:${a.credentialId}:${id}`, key, b, async (tx) => {
         const j = await job(tx, id, true);
-        await authorize(deps, tx, a, j, true);
+        await authorize(deps, tx, a, j, true, true, false, importValidRows);
         if (j.preview_version !== b.previewVersion)
             throw new DomainError('IMPORT_PREVIEW_CHANGED', 'Review the current preview before committing', 409);
         if (['queued', 'running', 'succeeded'].includes(j.state))
@@ -222,13 +232,13 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
         if (!j)
             break;
         try {
-            await authorize(deps, deps.db, j.actor, j, true);
+            await authorize(deps, deps.db, j.actor, j, true, true, true);
             const stored = await deps.objectStore.digest(j.original_object_key, { versionId: j.original_version_id });
             if (!stored || stored.sha256 !== j.original_sha256 || stored.byteSize !== j.original_byte_size || stored.versionId !== j.original_version_id)
                 throw new DomainError('IMPORT_ORIGINAL_INTEGRITY_FAILED', 'The exact preserved spreadsheet is unavailable or changed', 409);
             await deps.db.transaction(async (tx) => {
                 lease(await job(tx, j.id, true), token, deps);
-                await authorize(deps, tx, j.actor, j, true);
+                await authorize(deps, tx, j.actor, j, true, true, true);
                 await tx.query("UPDATE partner_import_rows SET status='valid',errors='[]'::jsonb WHERE import_id=$1 AND status='failed' AND normalized IS NOT NULL AND attempts<5", [j.id]);
             });
             for (const source of await rows(deps.db, j.id))
@@ -237,10 +247,11 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                         await deps.db.transaction(async (tx) => {
                             const active = await job(tx, j.id, true);
                             lease(active, token, deps);
-                            await authorize(deps, tx, j.actor, j, true, false);
+                            await authorize(deps, tx, j.actor, j, true, false, true);
                             const r = (await tx.query<Row>('SELECT * FROM partner_import_rows WHERE import_id=$1 AND row_number=$2 FOR UPDATE', [j.id, source.row_number])).rows[0];
                             if (r.status !== 'valid' || !r.normalized)
                                 return;
+                            await authorizeAgentImport(tx,deps.clock,j.actor,j,'process',[{values:r.source_values,normalized:r.normalized}]);
                             const n = r.normalized;
                             await requireOperator(tx, j.actor, j.operator_membership_id, n.locationId);
                             await tx.query('SELECT pg_advisory_xact_lock(1347438147,hashtext($1))', [j.organization_id]);
@@ -274,7 +285,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                         });
                     }
                     catch (error) {
-                        if (error instanceof DomainError && ['IMPORT_LEASE_LOST', 'CREDENTIAL_REVOKED', 'DELEGATION_REVOKED', 'INSUFFICIENT_SCOPE'].includes(error.code))
+                        if (error instanceof DomainError && (error.code.startsWith('AGENT_') || ['IMPORT_LEASE_LOST', 'CREDENTIAL_REVOKED', 'DELEGATION_REVOKED', 'INSUFFICIENT_SCOPE'].includes(error.code)))
                             throw error;
                         await deps.db.transaction(async (tx) => {
                             lease(await job(tx, j.id, true), token, deps);
@@ -284,7 +295,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                 }
             await deps.db.transaction(async (tx) => {
                 lease(await job(tx, j.id, true), token, deps);
-                await authorize(deps, tx, j.actor, j, true);
+                await authorize(deps, tx, j.actor, j, true, true, true);
                 // A duplicate inside the same CSV points to the accepted first
                 // occurrence, rather than claiming success without a Proof ID.
                 for(const r of await rows(tx,j.id))if(r.status==='duplicate'&&!r.proof_id&&r.normalized){

@@ -188,6 +188,7 @@ import { createOrganizationRouter } from './platform/organization-router.js';
 import { createRecordsRouter } from './records/router.js';
 import { createRecordImportsRouter } from './records/imports-router.js';
 import { createRecordConnectionsRouter } from './records/connections-router.js';
+import {createConnectEnrollmentRouter,createAgentHumanRouter} from './records/agent-router.js';
 import { createWorkspaceRequestsRouter } from './records/workspace-requests.js';
 import { createRecordMediaRouter } from './records/media-router.js';
 import { createPartnerRouter } from './platform/partner-router.js';
@@ -410,6 +411,7 @@ export function createApp(deps: AppDependencies): Express {
 
   app.get("/live", liveness);
   app.use('/public/record-shares',createPublicSnapshotSharesRouter(deps));
+  app.use('/connect',createConnectEnrollmentRouter(deps));
   app.get("/ready", createReadiness(deps.readinessProbes ?? [{name:"database",check:()=>deps.db.query("SELECT 1")}]).handler);
 
   app.get("/health", (_req, res) => {
@@ -605,6 +607,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use('/me/records/workspace-requests',createWorkspaceRequestsRouter(deps));
   app.use('/me/records/imports',createRecordImportsRouter(deps));
   app.use('/me/records/connections',createRecordConnectionsRouter(deps));
+  app.use('/me/records',createAgentHumanRouter(deps));
   app.use('/me/records',createSourceArtifactsRouter(deps));
   app.use('/me/records',createRecordCanonicalExportsRouter(deps));
   app.use('/me/records',createRecordSnapshotsRouter(deps));

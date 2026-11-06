@@ -127,7 +127,7 @@ function parseHref(href: string): Route {
   const url = new URL(canonicalWorkspacePath(href), "http://packproof.local");
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   if (pathname === "/sample-proof") return { name: "sample" };
-  if (/^\/app\/(?:records(?:\/[A-Za-z0-9_-]{1,160})?|needs-attention|connections|exports|settings|setup)$/.test(pathname)) return { name: "records", href: `${pathname}${url.search}` };
+  if (/^\/app\/(?:records(?:\/connect\/approve|\/[A-Za-z0-9_-]{1,160})?|needs-attention|connections|exports|settings|setup)$/.test(pathname)) return { name: "records", href: `${pathname}${url.search}` };
   if (pathname === "/app") return { name: "home" };
   if (pathname === "/capture/home") return { name: "home", capture: true };
   if (pathname === "/pack") return { name: "pack" };

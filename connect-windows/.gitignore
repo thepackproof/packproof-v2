@@ -1,0 +1,13 @@
+node_modules/
+dist/
+native/
+release/
+service/**/bin/
+service/**/obj/
+bridge/bin/
+bridge/obj/
+ui/public/brand/
+ui/public/fonts/
+service-tests/bin/
+service-tests/obj/
+build/icon.png

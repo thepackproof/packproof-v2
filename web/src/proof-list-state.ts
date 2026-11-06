@@ -14,7 +14,7 @@ export function canonicalWorkspacePath(href: string, scope?: string): string {
   const path = url.pathname.replace(/\/$/, "") || "/";
   // Owned HTTPS app links are locators only. Drop all query/fragment input before
   // routing; public /p links deliberately remain a separate sharing surface.
-  if (/^\/app\/(?:records(?:\/[A-Za-z0-9_-]{1,160})?|needs-attention|connections|exports|settings|setup)$/.test(path)) {
+  if (/^\/app\/(?:records(?:\/connect\/approve|\/[A-Za-z0-9_-]{1,160})?|needs-attention|connections|exports|settings|setup)$/.test(path)) {
     // The authenticated records workspace owns these exact paths. Its query is
     // view state; it never confers organization or location access.
     url.pathname = path;

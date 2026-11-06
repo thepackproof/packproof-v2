@@ -1,0 +1,8 @@
+import {describe,it,expect} from 'vitest';
+import {trustedRenderer,approvalUrl,argumentsByMethod,rendererSafe} from '../main/security';
+describe('privileged UI boundary',()=>{
+ it('accepts only the packaged top-level origin',()=>{expect(trustedRenderer('packproof-connect://app/index.html')).toBe(true);for(const value of ['https://thepackproof.com','file:///tmp/index.html','packproof-connect://evil/index.html','packproof-connect://a:password@app/index.html'])expect(trustedRenderer(value)).toBe(false);});
+ it('does not accept commands, traversal, arbitrary URLs or missing consent',()=>{for(const file of ['../x.csv','C:\\x.csv','x.txt','x/y.csv'])expect(argumentsByMethod.previewLocal.safeParse([file]).success).toBe(false);expect(argumentsByMethod.previewCloud.safeParse([{wholeFileUploadApproved:false}]).success).toBe(false);expect(argumentsByMethod.commitBatch.safeParse([{wholeBatchApproved:true,command:'delete'}]).success).toBe(false);});
+ it('opens only an approval locator on the configured origin',()=>{expect(approvalUrl('/app/records/connect/approve?id=one','https://thepackproof.com')).toContain('https://thepackproof.com/app/records/connect/');for(const value of ['https://evil.com','//evil.com/app/records/connect','/app/records/connect?secret=oops','/app/records/connect#x','/stores'])expect(()=>approvalUrl(value,'https://thepackproof.com')).toThrow();});
+ it('does not pass accidentally returned service secrets to the renderer',()=>{expect(rendererSafe({state:'active',token:'abc',nested:{redeemSecret:'hidden',value:'Bearer abc'},preview:{rows:[{value:'0000123'}]}})).toEqual({state:'active',nested:{value:'[redacted]'},preview:{rows:[{value:'0000123'}]}});});
+});

@@ -16,7 +16,13 @@ import {extendInactiveM2Compatibility} from '../scripts/records-bridge-patch.mjs
 const binding={source:'a'.repeat(40),compatibleImage:'sha256:'+'b'.repeat(64),compatibilityEvidenceSha256:'c'.repeat(64),rehearsalSha256:'d'.repeat(64)};
 const now=new Date('2026-11-05T12:00:00Z'),clock={now:()=>new Date(now)};
 let inventory:Awaited<ReturnType<typeof migrationInventory>>;
-beforeAll(async()=>{inventory=await migrationInventory();});
+let currentInventory:Awaited<ReturnType<typeof migrationInventory>>;
+beforeAll(async()=>{
+ // The historical bridge remains deliberately pinned to 096-107. Exercise its
+ // original exact-source envelope and separately prove newer source is denied.
+ currentInventory=await migrationInventory();
+ inventory=currentInventory.filter(row=>Number(row.id.slice(0,3))<=107);
+});
 
 describe('records release source and inspection boundaries',()=>{
  it('admits exactly 94 historical or 106 complete receipts, never a partial or changed upgrade',()=>{
@@ -28,6 +34,7 @@ describe('records release source and inspection boundaries',()=>{
   expect(()=>inspectInventory(inventory,before.map((row,i)=>i?row:{...row,checksum:'e'.repeat(64)}))).toThrow('RECORDS_APPLIED_CHECKSUM_MISMATCH');
   expect(()=>inspectInventory(inventory.map((row,i)=>i?row:{...row,sql:row.sql+'\n'}),before)).toThrow('RECORDS_MIGRATION_BYTES_MISMATCH');
   expect(()=>inspectInventory([...inventory,{id:'108_future',checksum:'e'.repeat(64),sql:''}],before)).toThrow('RECORDS_CANDIDATE_INVENTORY_MISMATCH');
+  expect(()=>inspectInventory(currentInventory,before)).toThrow('RECORDS_CANDIDATE_INVENTORY_MISMATCH');
  });
  it('requires fresh source, bridge and rehearsal bindings and unchanged inspected state',()=>{
   const state=inspectInventory(inventory,inventory),receipt=inspectionReceipt(state,binding,now);

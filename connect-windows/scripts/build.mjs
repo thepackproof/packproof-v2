@@ -1,0 +1,14 @@
+import {build as bundle} from 'esbuild';
+import {build as vite} from 'vite';
+import {mkdir,writeFile,copyFile,cp} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),{context,validate,sourceCommit}=require('./release-policy.cjs');
+const c=validate();
+await mkdir('dist/main',{recursive:true});await mkdir('build',{recursive:true});
+await copyFile('../desktop/build/icon.png','build/icon.png');
+await mkdir('ui/public/brand',{recursive:true});await cp('../web/public/brand','ui/public/brand',{recursive:true});
+await mkdir('ui/public/fonts',{recursive:true});await copyFile('../web/public/fonts/Inter-variable.ttf','ui/public/fonts/Inter-variable.ttf');await copyFile('../web/public/fonts/OFL-Inter.txt','ui/public/fonts/OFL-Inter.txt');
+const runtime={channel:c.channel,apiBaseUrl:process.env.PACKPROOF_API_BASE_URL||'',webBaseUrl:process.env.PACKPROOF_WEB_BASE_URL||'https://thepackproof.com',updateUrl:c.updateUrl,publisher:process.env.WINDOWS_PUBLISHER_NAME||'',sourceCommit:sourceCommit()};
+await writeFile('dist/main/runtime-config.json',JSON.stringify(runtime,null,2));
+for(const name of ['index','preload'])await bundle({entryPoints:[`main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',external:['electron','electron-updater'],sourcemap:false});
+await vite({configFile:'vite.config.ts'});

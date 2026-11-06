@@ -19,6 +19,22 @@ const list = { records: [record], nextCursor: null, counts: { total: 1, open: 1,
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/app/records'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 function portal(api: PackProofApi, href = '/app/records?organizationId=org-a&environment=live') { return <RecordsPortal api={api} session={session} href={href} onGo={vi.fn()} onSignOut={vi.fn()}/>; }
+it('opens the Connect approval locator and retains it while choosing the workspace', async () => {
+  const enrollment = { id: 'enroll-a', comparisonCode: 'ABC-123', deviceName: 'Collection PC', version: '0.1.0', state: 'pending', expiresAt: '2026-11-06T14:00:00Z', choices: { integrationAccounts: [], operators: [], locations: [] } };
+  const request = vi.fn(async (path: string) => path.startsWith('/context') ? context : path.startsWith('/agent-enrollments/enroll-a?') ? enrollment : Promise.reject(new Error(`Unexpected record request: ${path}`)));
+  const onGo = vi.fn(), user = userEvent.setup();
+  render(<RecordsPortal api={{ recordsRequest: request } as unknown as PackProofApi} session={session} href="/app/records/connect?enrollmentId=enroll-a" onGo={onGo} onSignOut={vi.fn()}/>);
+  expect(await screen.findByRole('heading', { name: 'Review this collection computer' })).toBeVisible();
+  expect(await screen.findByText('Collection PC')).toBeVisible();
+  expect(screen.queryByLabelText('Location')).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Organization workspace' }), 'org-b:sandbox');
+  const destination = new URL(onGo.mock.calls[0][0], 'https://packproof.local');
+  expect(destination.pathname).toBe('/app/records/connect/approve');
+  expect(destination.searchParams.get('enrollmentId')).toBe('enroll-a');
+  expect(destination.searchParams.get('organizationId')).toBe('org-b');
+  expect(destination.searchParams.get('environment')).toBe('sandbox');
+  expect(request.mock.calls.some(([path]) => path.startsWith('/connect?'))).toBe(false);
+});
 it('shows a failed scoped request as a failure, without claiming the account is empty', async () => {
   const request = vi.fn(async (path: string) => { if (path.startsWith('/context')) return context; throw new Error('Records service unavailable'); });
   render(portal({ recordsRequest: request } as unknown as PackProofApi));
