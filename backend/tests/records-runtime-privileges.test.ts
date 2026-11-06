@@ -58,7 +58,7 @@ describe('records source-bound API and worker privileges',()=>{
  });
  it('pins source SQL receipts, plans only scoped grants, and verifies under both actual callers',async()=>{
   const plan=await planRecordsRuntimePrivileges(opened.db,options);
-  expect(Object.keys(plan.migrations)).toHaveLength(12);
+  expect(Object.keys(plan.migrations)).toHaveLength(13);
   expect(plan.statements.every(sql=>/^(GRANT|REVOKE) /.test(sql)&&!sql.includes('CREATE ROLE')&&!sql.includes('GRANT ALL'))).toBe(true);
   const before=await asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options));
   expect(before.caller).toBe(runtimeRole);
@@ -86,6 +86,35 @@ describe('records source-bound API and worker privileges',()=>{
    await expect(asRole(role,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
    await expect(asRole(role,db=>db.query(`TRUNCATE ${table}`))).rejects.toMatchObject({code:'42501'});
   }
+ });
+ it('permits API installation lifecycle decisions but denies all worker decision writes',async()=>{
+  for(const table of ['record_agent_enrollments','record_agent_installations']){
+   await asRole(runtimeRole,db=>db.query(`SELECT * FROM ${table} WHERE false`));
+   if(table==='record_agent_installations')await asRole(workerRole,db=>db.query(`SELECT * FROM ${table} WHERE false`));
+   else await expect(asRole(workerRole,db=>db.query(`SELECT * FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   await asRole(runtimeRole,db=>db.query(`INSERT INTO ${table}(id) SELECT id FROM ${table} WHERE false`));
+   const field=table==='record_agent_enrollments'?'state':'status';
+   await asRole(runtimeRole,db=>db.query(`UPDATE ${table} SET ${field}=${field} WHERE false`));
+   await expect(asRole(workerRole,db=>db.query(`INSERT INTO ${table} SELECT * FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   await expect(asRole(workerRole,db=>db.query(`UPDATE ${table} SET ${field}=${field} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   await expect(asRole(runtimeRole,db=>db.query(`UPDATE ${table} SET id=id WHERE false`))).rejects.toMatchObject({code:'42501'});
+   for(const role of [runtimeRole,workerRole]){
+    await expect(asRole(role,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+    await expect(asRole(role,db=>db.query(`TRUNCATE ${table}`))).rejects.toMatchObject({code:'42501'});
+   }
+  }
+  for(const field of ['organization_id','environment','principal_id','integration_account_id','operator_membership_id','location_id','source_name'])
+   await expect(asRole(runtimeRole,db=>db.query(`UPDATE record_agent_installations SET ${field}=${field} WHERE false`))).rejects.toMatchObject({code:'42501'});
+  // Effective inherited/PUBLIC authority counts, even when the direct worker
+  // grants are read-only. Admission must fail closed on either drift path.
+  await opened.db.query(`GRANT UPDATE ON record_agent_installations TO ${inherited}`);
+  await opened.db.query(`GRANT ${inherited} TO ${workerRole}`);
+  await expect(asRole(workerRole,db=>verifyRecordsRuntimePrivileges(db,options))).rejects.toThrow('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');
+  await opened.db.query(`REVOKE ${inherited} FROM ${workerRole}`);
+  await opened.db.query('GRANT INSERT ON record_agent_enrollments TO PUBLIC');
+  await expect(asRole(workerRole,db=>verifyRecordsRuntimePrivileges(db,options))).rejects.toThrow('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');
+  await opened.db.query('REVOKE INSERT ON record_agent_enrollments FROM PUBLIC');
+  await asRole(workerRole,db=>verifyRecordsRuntimePrivileges(db,options));
  });
  it('executes source admission INSERTs with normalized payload/fence columns and admits revision UPSERT planning',async()=>{
   const operation=`priv_operation_${suffix}`,receipt=`priv_receipt_${suffix}`,payload=JSON.stringify({sourceEventId:'source-event-1',proofId:fixture.proof,reportedAt:fixture.at});

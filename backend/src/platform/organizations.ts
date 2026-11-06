@@ -9,6 +9,7 @@ import { insertUser } from '../domain/users.js';
 import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { record, textField } from './tenants.js';
+import { authorizeAgentScope, authorizeAgentProof } from '../records/agent-restrictions.js';
 
 export const PARTNER_SCOPES=['issues:assign','proofs:read','proofs:write','capture:request','exports:read','exports:create','imports:read','imports:write','evidence:write','shares:manage','deletion:request','events:read','webhooks:manage','audit:read'] as const;
 export type PartnerScope=typeof PARTNER_SCOPES[number];
@@ -193,6 +194,7 @@ export async function authenticatePartner(db:Database,clock:Clock,authorization:
 }
 export async function reauthorizePartner(db:Database,clock:Clock,actor:PartnerActor,scope:PartnerScope){
  await assertPolicyAccessSafe(db);
+ await authorizeAgentScope(db,clock,actor,scope);
  const row=(await db.query<{scopes:PartnerScope[]}>(`SELECT c.scopes FROM platform_credentials c JOIN platform_principals p ON p.id=c.principal_id
   JOIN platform_organizations o ON o.id=p.organization_id JOIN users u ON u.id=p.actor_user_id
   WHERE c.id=$1 AND p.id=$2 AND p.organization_id=$3 AND c.revoked_at IS NULL AND c.expires_at>$4
@@ -206,6 +208,7 @@ export async function reauthorizePartner(db:Database,clock:Clock,actor:PartnerAc
 }
 export async function authorizePartnerProof(db:Database,clock:Clock,actor:PartnerActor,proofId:string,scope:PartnerScope){
  await reauthorizePartner(db,clock,actor,scope);
+ await authorizeAgentProof(db,clock,actor,proofId);
  const row=(await db.query<{operator_user_id:string;operator_membership_id:string}>(`SELECT m.user_id AS operator_user_id,p.operator_membership_id
   FROM platform_proof_ownership p JOIN platform_memberships m ON m.id=p.operator_membership_id
   LEFT JOIN record_state rs ON rs.proof_id=p.proof_id

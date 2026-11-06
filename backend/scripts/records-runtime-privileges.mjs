@@ -47,6 +47,11 @@ const policy={
  record_requirement_templates:{api:{...select,insert:'*'},worker:select},
  record_requirement_assignments:{api:{...select,insert:'*'},worker:select},
  record_issue_assignments:{api:{...select,insert:'*'},worker:select},
+ // Installation approval, configuration and credential lifecycle are API-only
+ // decisions. The import worker can observe the current restriction, never
+ // approve/rebind an installation or mint enrollment authority.
+ record_agent_enrollments:{api:{...select,insert:['id','secret_hash','comparison_code','device_name','device_hash','version','created_at','expires_at'],update:['state','last_poll_at','installation_id','credential_response']},worker:{}},
+ record_agent_installations:{api:{...select,insert:['id','organization_id','environment','principal_id','credential_id','integration_account_id','operator_membership_id','location_id','source_name','device_name','version','approval_user_id','enrollment_expires_at','created_at','updated_at'],update:['credential_id','status','config_revision','approved_config','config_sha256','pending_proposal','pending_proposal_sha256','test_import_id','verified_import_id','approval_user_id','enrollment_acknowledged_at','updated_at','last_seen_at','version','heartbeat','renewal_credential_id','renewal_response','renewal_expires_at','renewal_key_hash']},worker:select},
 };
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -55,8 +60,8 @@ const sequencePrivileges=['SELECT','UPDATE','USAGE'];
 const authorityFunction='lock_operational_snapshot_authority(text,text,text,text,text)';
 const policyDigest=()=>sha({tables:policy,authorityFunction});
 
-function sourceColumns(sql){
- const tables={};
+function sourceColumns(sql,existing={}){
+ const tables=Object.fromEntries(Object.entries(existing).map(([table,columns])=>[table,[...columns]]));
  // These reviewed CREATE TABLE statements use ordinary quoted SQL literals.
  // Parse comma/parenthesis nesting rather than splitting CHECK/FK expressions.
  for(const match of sql.matchAll(/CREATE TABLE ([a-z][a-z0-9_]*)\s*\(/g)){
@@ -75,14 +80,21 @@ function sourceColumns(sql){
   }parts.push(part);
   tables[match[1]]=parts.flatMap(part=>{const column=part.trim().match(/^([a-z][a-z0-9_]*)\s+/);return column?[column[1]]:[];});
  }
+ // Migration 108 appends immutable installation/revision bindings to the
+ // existing import receipt. Include these additive columns in exact schema
+ // admission and column-scoped INSERT planning; worker UPDATE stays explicit.
+ for(const match of sql.matchAll(/ALTER TABLE ([a-z][a-z0-9_]*) ADD COLUMN ([a-z][a-z0-9_]*)\s+/g)){
+  if(!tables[match[1]]||tables[match[1]].includes(match[2]))fail('RECORDS_SOURCE_SCHEMA_UNSUPPORTED');
+  tables[match[1]].push(match[2]);
+ }
  return tables;
 }
 
 export async function recordsMigrationInventory(){
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-7])_[a-z0-9_]+\.sql$/.test(name)).sort();
- if(files.length!==12||new Set(files.map(f=>f.slice(0,3))).size!==12)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
- const migrations={},tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);Object.assign(tableColumns,sourceColumns(sql));}
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-8])_[a-z0-9_]+\.sql$/.test(name)).sort();
+ if(files.length!==13||new Set(files.map(f=>f.slice(0,3))).size!==13)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
+ const migrations={};let tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);tableColumns=sourceColumns(sql,tableColumns);}
  if(Object.keys(policy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!policy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
  return {migrations,migrationSha256:sha(migrations),tableColumns};
 }

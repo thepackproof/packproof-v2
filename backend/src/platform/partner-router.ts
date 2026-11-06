@@ -19,6 +19,8 @@ import { createPartnerRecordsRouter } from '../records/router.js';
 import { createPartnerOperationsRouter } from '../records/partner-operations-router.js';
 import { createPartnerIngestionsRouter } from '../records/ingestions-router.js';
 import { createPartnerImportsRouter } from '../records/partner-imports.js';
+import { authorizeAgentRoute } from '../records/agent-restrictions.js';
+import { createAgentPartnerRouter } from '../records/agent-router.js';
 import { createPartnerExportsRouter } from '../records/partner-exports.js';
 import { createPartnerSnapshotsRouter } from '../records/partner-snapshots.js';
 import { createPartnerArtifactsRouter } from '../records/partner-artifacts-router.js';
@@ -36,8 +38,9 @@ export function createPartnerRouter(deps:AppDependencies){
   try{requirePartnerFeature();}catch(e){next(e);return;}
   const requestId=res.locals.operationId??newId('req');res.setHeader('X-Request-Id',requestId);
   void authenticatePartner(deps.db,deps.clock,raw.header('authorization'),raw.header('PackProof-Merchant-Id'),raw.header('PackProof-Delegation-Id'),requestId)
-   .then(async actor=>{await consumeApiRate(deps.db,deps.clock,actor.tenantId);(raw as PartnerRequest).partnerActor=actor;next();}).catch(next);
+   .then(async actor=>{await authorizeAgentRoute(deps.db,deps.clock,actor,raw.method,raw.path);await consumeApiRate(deps.db,deps.clock,actor.tenantId);(raw as PartnerRequest).partnerActor=actor;next();}).catch(next);
  });
+ router.use(createAgentPartnerRouter(deps));
  router.use(createPartnerRecordsRouter(deps));
  router.use(createPartnerOperationsRouter(deps));
  router.use(createPartnerIngestionsRouter(deps));

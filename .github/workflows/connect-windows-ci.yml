@@ -1,0 +1,55 @@
+name: Connect Windows candidate
+on:
+  pull_request:
+    paths: ['connect-windows/**', '.github/workflows/connect-windows*.yml']
+  push:
+    branches: [main]
+    paths: ['connect-windows/**', '.github/workflows/connect-windows*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: connect-candidate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  candidate:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: connect-windows
+        shell: pwsh
+    env:
+      APP_ENV: development
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_CONNECT_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
+      PACKPROOF_WEB_BASE_URL: https://thepackproof.com
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: connect-windows/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.100'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:release
+      - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
+      - run: npm run build
+      - run: npm run publish:native
+      - run: npm run package:win
+      - run: npm run verify:artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-connect-DEVELOPMENT-win32-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            connect-windows/release/development/win32-x64/*.exe
+            connect-windows/release/development/win32-x64/SHA256SUMS
+            connect-windows/release/development/win32-x64/release-evidence.json
+            connect-windows/release/development/win32-x64/DEVELOPMENT-BUILD.txt

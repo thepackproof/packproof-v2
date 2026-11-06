@@ -36587,6 +36587,3158 @@
           }
         }
       }
+    },
+    "/connect/enrollments": {
+      "post": {
+        "operationId": "post__connect_enrollments",
+        "summary": "Begin a short-lived Windows setup request",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Unauthenticated, IP-rate-limited start. Returns a private 32-byte polling secret to the service only; compare the separate code in the browser. Ten-minute expiry, minimum five-second polling, three pending intents per device label. No organization authority is issued by this call.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {}
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "redeemSecret": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "comparisonCode": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 10
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "pollAfterSeconds": {
+                      "const": 5
+                    },
+                    "approvalPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2048
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "redeemSecret",
+                    "comparisonCode",
+                    "expiresAt",
+                    "pollAfterSeconds",
+                    "approvalPath"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "deviceName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "deviceName",
+                  "version"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connect/enrollments/{enrollmentId}/redeem": {
+      "post": {
+        "operationId": "post__connect_enrollments__enrollmentId__redeem",
+        "summary": "Recover the same privately approved setup credential",
+        "description": "Requires the separate high-entropy secret in the JSON body, never a URL. Current pending/denied/expired/acknowledged state or bounded encrypted credential replay to the same secret; five-second minimum polling. Lost responses do not mint multiple credentials. Protected persistence must precede authenticated heartbeat acknowledgement, which erases replay bytes.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "enrollmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "pending",
+                        "denied",
+                        "expired",
+                        "acknowledged",
+                        "credential"
+                      ]
+                    },
+                    "installationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "credentialId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "organizationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "redeemSecret": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "redeemSecret"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-enrollments/{enrollmentId}": {
+      "get": {
+        "operationId": "get__me_records_agent_enrollments__enrollmentId_",
+        "summary": "Inspect the comparison code and eligible setup choices",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Current human administrator workspace required; returns eligible integration accounts, teammates and permitted locations, never polling secrets or service tokens.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "enrollmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "comparisonCode": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 10
+                    },
+                    "deviceName": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "state": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "choices": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "comparisonCode",
+                    "deviceName",
+                    "state",
+                    "expiresAt",
+                    "choices"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-enrollments/{enrollmentId}/decision": {
+      "post": {
+        "operationId": "post__me_records_agent_enrollments__enrollmentId__decision",
+        "summary": "Approve or deny setup-only installation authority",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication, exact comparison code and explicit source/operator/location binding required. Existing source installation must be explicitly revoked before replacement. Stable Idempotency-Key replays the original human decision; no secret is returned to the browser.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "enrollmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Stable identity for this exact command and payload. Preserve it across retries."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "approved",
+                        "denied"
+                      ]
+                    },
+                    "installationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "decision": {
+                    "enum": [
+                      "approve",
+                      "deny"
+                    ]
+                  },
+                  "comparisonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 10
+                  },
+                  "integrationAccountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "operatorMembershipId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "locationId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sourceName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "decision",
+                  "comparisonCode"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations": {
+      "get": {
+        "operationId": "get__me_records_agent_installations",
+        "summary": "List this workspace’s restricted collection installations",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Up to 100 installations. Service online, folder scan, last observed export and server-confirmed imports are distinct; freshness remains unknown without a qualified upstream watermark.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "installations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AgentInstallation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "installations"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}": {
+      "get": {
+        "operationId": "get__me_records_agent_installations__installationId_",
+        "summary": "Review the exact installation proposal and optional test batch",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Optional importId displays current source/config-bound preview counts and original digest for deliberate whole-batch authorization. Whole original uploads preserve unmapped columns.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "importId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInstallation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/actions": {
+      "post": {
+        "operationId": "post__me_records_agent_installations__installationId__actions",
+        "summary": "Approve exact configuration, test batch, activation or lifecycle action",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication plus stable Idempotency-Key. Configure requires current proposalSha256. authorize_test, activate and resume require exact configRevision/configSha256. abandon_preview explicitly stops an uncommitted preview without deleting its original or rows, allowing later authorized re-preview after rotation. Test authorization binds a completely valid whole preview; activation requires terminal success and an existing canonical record. Reconfiguration invalidates verification. Pause permits already accepted server work to finish; revoke prevents worker writes. Replacement requires revoke and fresh enrollment.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Stable identity for this exact command and payload. Preserve it across retries."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInstallation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "action": {
+                    "enum": [
+                      "configure",
+                      "authorize_test",
+                      "abandon_preview",
+                      "activate",
+                      "pause",
+                      "resume",
+                      "revoke"
+                    ]
+                  },
+                  "proposalSha256": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "importId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "configRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "configSha256": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "action"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/config": {
+      "get": {
+        "operationId": "get__v1_partner_agent_config",
+        "summary": "Read current approved collection policy",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInstallation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/config-proposals": {
+      "post": {
+        "operationId": "post__v1_partner_agent_config_proposals",
+        "summary": "Stage a configuration for human review",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "proposalSha256": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "approvalPath": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2048
+                    }
+                  },
+                  "required": [
+                    "proposalSha256",
+                    "approvalPath"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentConfig"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/heartbeat": {
+      "post": {
+        "operationId": "post__v1_partner_agent_heartbeat",
+        "summary": "Acknowledge protected credentials and report bounded local observations",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentInstallation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enrollmentAcknowledged": {
+                    "type": "boolean"
+                  },
+                  "renewalAcknowledged": {
+                    "type": "boolean"
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "queueCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "lastScanAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastExportAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastErrorCode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9_]{1,80}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "queueCount"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/credential-renewals": {
+      "post": {
+        "operationId": "post__v1_partner_agent_credential_renewals",
+        "summary": "Renew the same restricted authority after draining originating receipts",
+        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "x-packproof-generated-records": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          },
+          {
+            "name": "PackProof-Delegation-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact current delegated selector when required by the service credential."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Stable identity for this exact command and payload. Preserve it across retries."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized current response. Private, no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "installationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "credentialId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "token": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "state": {
+                      "enum": [
+                        "expired",
+                        "cancelled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "installationId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Application problem or compatible safe HTTP boundary error. Current authorization is checked before data or replay is returned.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordSafeHttpError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "cancelCredentialId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -42639,6 +45791,309 @@
           "schema",
           "ordered",
           "allocations"
+        ]
+      },
+      "AgentConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "folderDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "integrationAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "operatorMembershipId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "locationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapping": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "shipmentReference": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "itemTitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "quantity": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "trackingNumber": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "carrier": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "shippedAt": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "locationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "shipmentReference",
+              "itemTitle",
+              "quantity"
+            ]
+          },
+          "timeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "importValidRows": {
+            "type": "boolean"
+          },
+          "offlineWindowHours": {
+            "type": "integer",
+            "enum": [
+              0,
+              24
+            ]
+          }
+        },
+        "required": [
+          "folderDigest",
+          "sourceName",
+          "integrationAccountId",
+          "operatorMembershipId",
+          "locationId",
+          "mapping",
+          "timeZone",
+          "importValidRows",
+          "offlineWindowHours"
+        ]
+      },
+      "AgentInstallation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "enum": [
+              "setup",
+              "ready",
+              "active",
+              "paused",
+              "revoked"
+            ]
+          },
+          "authorizationUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "deviceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "integrationAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "operatorMembershipId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "locationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "configRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "configSha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pendingProposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pendingProposalSha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "testImportId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verifiedImportId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastSeenAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credentialExpiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "health": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "testCandidate": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "installationId",
+          "state",
+          "configRevision",
+          "configSha256",
+          "config",
+          "health",
+          "limits"
         ]
       }
     }

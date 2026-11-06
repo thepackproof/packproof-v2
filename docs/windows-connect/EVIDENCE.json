@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-06",
+  "baselineCommit": "a42c10653258b63217043f8670b94ca87a233684",
+  "implementationBranch": "feature/packproof-connect-windows",
+  "testedCommit": null,
+  "gates": { "G0": "pending", "G1": "pending", "G2": "pending", "G3": "pending", "G4": "pending" },
+  "tests": [],
+  "artifacts": [],
+  "deployed": { "backend": null, "portal": null, "windows": null },
+  "customerAcceptance": null,
+  "limits": ["Linux source checks do not establish Windows service, signing or installation acceptance", "No synthetic fixture is customer acceptance"]
+}

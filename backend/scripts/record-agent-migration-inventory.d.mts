@@ -1,0 +1,2 @@
+export interface MigrationInventoryRow {id:string;checksum:string;sql:string;}
+export function inspectAgentMigrationInventory(inventory:MigrationInventoryRow[],applied:{id:string;checksum:string|null}[],options:{reviewedSourceCommit:string;reviewedInventorySha256:string}):{schema:string;sourceCommit:string;sourceCount:number;appliedCount:number;inventorySha256:string;predecessorInventorySha256:string;pending:boolean;additions:{id:string;checksum:string}[];migrationApplied:false;rolesChanged:false;featureActivation:false};

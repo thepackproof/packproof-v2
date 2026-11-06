@@ -1,0 +1,78 @@
+name: Connect signed Windows candidate
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Protected Connect release environment
+        type: choice
+        options: [staging, production]
+        default: staging
+permissions:
+  contents: read
+concurrency:
+  group: connect-release-${{ inputs.channel }}
+  cancel-in-progress: false
+jobs:
+  signed:
+    environment: connect-${{ inputs.channel }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: connect-windows
+        shell: pwsh
+    env:
+      APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
+      PACKPROOF_WEB_BASE_URL: https://thepackproof.com
+      PACKPROOF_UPDATES_URL: https://downloads.thepackproof.com/connect/${{ inputs.channel }}/win32/x64/
+      WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+      PACKPROOF_WINDOWS_SIGNING_PROVIDER: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx' }}
+      WIN_CSC_LINK: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_P12 || '' }}
+      WIN_CSC_KEY_PASSWORD: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+      AZURE_TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: connect-windows/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.100'
+      - run: node scripts/release-policy.cjs
+      - uses: azure/login@v2
+        if: env.PACKPROOF_WINDOWS_SIGNING_PROVIDER == 'azure'
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:release
+      - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
+      - run: npm run build
+      - run: npm run publish:native
+      - run: npm run package:win
+      - run: npm run verify:artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-connect-${{ inputs.channel }}-win32-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            connect-windows/release/${{ inputs.channel }}/win32-x64/*.exe
+            connect-windows/release/${{ inputs.channel }}/win32-x64/*.blockmap
+            connect-windows/release/${{ inputs.channel }}/win32-x64/latest*.yml
+            connect-windows/release/${{ inputs.channel }}/win32-x64/SHA256SUMS
+            connect-windows/release/${{ inputs.channel }}/win32-x64/release-evidence.json
