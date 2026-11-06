@@ -29,6 +29,33 @@ Stop-Connect
 $groupName='PackProof Connect '+$suffix+' Operators'
 $group=Get-LocalGroup -Name $groupName -ErrorAction SilentlyContinue
 if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'PackProof Connect setup operators' }
+$metadataRoot='HKLM:\SOFTWARE\PackProofConnect'
+$metadataPath=Join-Path $metadataRoot $channel
+function Assert-OperatorMetadataPermissions([string]$Path) {
+ $acl=Get-Acl -LiteralPath $Path
+ $trusted=@('S-1-5-18','S-1-5-32-544')
+ $writes=[Security.AccessControl.RegistryRights]::SetValue -bor [Security.AccessControl.RegistryRights]::CreateSubKey -bor [Security.AccessControl.RegistryRights]::Delete -bor [Security.AccessControl.RegistryRights]::ChangePermissions -bor [Security.AccessControl.RegistryRights]::TakeOwnership
+ if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $trusted) { throw 'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.' }
+ foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
+  if ($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and $rule.IdentityReference.Value -notin $trusted -and -not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and ($rule.RegistryRights -band $writes)) { throw 'Connect operator metadata allows non-administrator changes. Ask IT to repair the dedicated product registry permissions.' }
+ }
+}
+function Initialize-OperatorMetadataKey([string]$Path) {
+ if (-not (Test-Path -LiteralPath $Path)) {
+  # Create only dedicated Connect metadata; never rewrite another product's key.
+  New-Item -Path $Path -ErrorAction Stop | Out-Null
+  $acl=New-Object Security.AccessControl.RegistrySecurity
+  $acl.SetAccessRuleProtection($true,$false)
+  $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+  foreach ($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule((New-Object Security.AccessControl.RegistryAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)),'FullControl','ContainerInherit','None','Allow'))) }
+  $acl.AddAccessRule((New-Object Security.AccessControl.RegistryAccessRule((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')),'ReadKey','ContainerInherit','None','Allow')))
+  Set-Acl -LiteralPath $Path -AclObject $acl
+ }
+ Assert-OperatorMetadataPermissions $Path
+}
+Initialize-OperatorMetadataKey $metadataRoot
+Initialize-OperatorMetadataKey $metadataPath
+$storedOperatorSid=(Get-Item -LiteralPath $metadataPath).GetValue('OperatorsSid')
 # The interactive shell belongs to the original operator even when UAC uses another administrator account.
 # With no interactive shell, an IT-installed service remains inaccessible until IT assigns an exact operator SID.
 if (-not ('ConnectShellIdentity' -as [type])) {
@@ -41,6 +68,10 @@ if ($OperatorSid) {
  if ($OperatorSid -notmatch '^S-1-5-21-(?:[0-9]+-){3}[0-9]+$') { throw 'Choose an exact local or domain operator SID.' }
  $approvedOperatorSid=(New-Object Security.Principal.SecurityIdentifier($OperatorSid)).Value
  [void](New-Object Security.Principal.SecurityIdentifier($OperatorSid)).Translate([Security.Principal.NTAccount])
+}
+elseif ($null -ne $storedOperatorSid) {
+ if ($storedOperatorSid -isnot [string] -or $storedOperatorSid -notmatch '^S-1-5-21-(?:[0-9]+-){3}[0-9]+$') { throw 'Saved local operator metadata is invalid. Ask IT to explicitly assign the approved operator SID; repair did not choose another account.' }
+ $approvedOperatorSid=(New-Object Security.Principal.SecurityIdentifier($storedOperatorSid)).Value
 }
 [uint32]$shellPid=0
 [void][ConnectShellIdentity]::GetWindowThreadProcessId([ConnectShellIdentity]::GetShellWindow(),[ref]$shellPid)
@@ -62,6 +93,28 @@ function Assert-NoReparseAncestors([string]$Path,[string]$Boundary) {
  if (-not $candidate.StartsWith($base+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Protected storage must remain beneath ProgramData.' }
  while ($candidate.Length -gt $base.Length) { if ((Test-Path -LiteralPath $candidate) -and ((Get-Item -LiteralPath $candidate -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Protected storage ancestors must not be reparse points.' };$candidate=Split-Path $candidate -Parent }
 }
+function Assert-ProtectedAncestry([string]$Path,[string]$Boundary) {
+ # A protected leaf can still be moved/replaced through an attacker-controlled
+ # ancestor. Validate shared parents rather than changing Desktop or IT ACLs.
+ $base=[IO.Path]::GetFullPath($Boundary).TrimEnd('\')
+ $ancestor=Split-Path ([IO.Path]::GetFullPath($Path).TrimEnd('\')) -Parent
+ $trusted=@('S-1-5-18','S-1-5-32-544')
+ $dangerous=[Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
+ while ($ancestor.Length -ge $base.Length) {
+  if (Test-Path -LiteralPath $ancestor) {
+   $entry=Get-Item -LiteralPath $ancestor -Force
+   if (-not $entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Protected storage ancestry must contain ordinary local directories. Ask IT to repair the dedicated Connect path.' }
+   $acl=Get-Acl -LiteralPath $ancestor
+   if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $trusted) { throw 'A shared storage ancestor has an untrusted owner. Ask IT to assign SYSTEM or Administrators ownership and remove ordinary-user replacement rights; PackProof did not change shared parent ACLs.' }
+   foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
+    if ($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and $rule.IdentityReference.Value -notin $trusted -and -not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and ($rule.FileSystemRights -band $dangerous)) { throw 'A shared storage ancestor permits ordinary-user deletion, replacement or permission changes. Ask IT to remove those parent rights; existing Desktop and source ACLs were preserved.' }
+   }
+  }
+  if ($ancestor.Equals($base,[StringComparison]::OrdinalIgnoreCase)) { return }
+  $ancestor=Split-Path $ancestor -Parent
+ }
+ throw 'Protected storage ancestry left its ProgramData boundary.'
+}
 function Set-DirectoryPermissions([string]$Path,[array]$Rules) {
  if ((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Protected directories must not be reparse points.' }
  $acl=New-Object Security.AccessControl.DirectorySecurity
@@ -71,16 +124,23 @@ function Set-DirectoryPermissions([string]$Path,[array]$Rules) {
  Set-Acl -LiteralPath $Path -AclObject $acl
 }
 Assert-NoReparseAncestors $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
+Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 New-Item -Path $dataRoot -ItemType Directory -Force | Out-Null
 Set-DirectoryPermissions $dataRoot @(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'Modify'))
+Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 # A dedicated prepared export folder is the only producer directory whose ACL this installer changes.
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('PackProof\Exports\'+$serviceConfig.environment)
 Assert-NoReparseAncestors $exports ([Environment]::GetFolderPath('CommonApplicationData'))
+Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicationData'))
 if (-not (Test-Path -LiteralPath $exports)) {
  New-Item -Path $exports -ItemType Directory -Force | Out-Null
  $exportRules=@(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'ReadAndExecute'),@($group.SID.Value,'Modify'))
  if ($approvedOperatorSid) { $exportRules+=,@($approvedOperatorSid,'Modify') }
  Set-DirectoryPermissions $exports $exportRules
 }
+Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicationData'))
+Assert-OperatorMetadataPermissions $metadataRoot
+Assert-OperatorMetadataPermissions $metadataPath
+New-ItemProperty -LiteralPath $metadataPath -Name OperatorsSid -PropertyType String -Value $serviceConfig.operatorsSid -Force | Out-Null
 Start-Service -Name $serviceName
 (Get-Service -Name $serviceName).WaitForStatus('Running',[TimeSpan]::FromSeconds(30))

@@ -1,5 +1,39 @@
 using System.Security.Cryptography;
+using System.Security.AccessControl;
+using System.Security.Principal;
 namespace PackProof.Connect;
+
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public static class ProtectedAncestry
+{
+    private static readonly HashSet<string> Administrators = ["S-1-5-18", "S-1-5-32-544"];
+    private const FileSystemRights ReplacementRights = FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+    private static ConnectException Unsafe() => new("PROTECTED_STORAGE_PERMISSIONS", "The protected storage path has an unsafe owner or replacement permissions. Ask IT to repair the dedicated Connect path and its shared parents; the service has not changed shared folder permissions or opened the queue.");
+    internal static void AssertAcl(DirectorySecurity acl, string serviceSid, bool leaf)
+    {
+        if (acl.GetOwner(typeof(SecurityIdentifier)) is not SecurityIdentifier owner || !Administrators.Contains(owner.Value)) throw Unsafe();
+        foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+        {
+            if (rule.AccessControlType != AccessControlType.Allow || (rule.PropagationFlags & PropagationFlags.InheritOnly) != 0) continue;
+            var sid = ((SecurityIdentifier)rule.IdentityReference).Value;
+            if (!Administrators.Contains(sid) && !(leaf && sid == serviceSid) && (rule.FileSystemRights & ReplacementRights) != 0) throw Unsafe();
+        }
+    }
+    public static void Assert(string root, string boundary, string serviceSid)
+    {
+        var path = Path.GetFullPath(root).TrimEnd('\\'); var parentBoundary = Path.GetFullPath(boundary).TrimEnd('\\');
+        if (!path.StartsWith(parentBoundary + "\\", StringComparison.OrdinalIgnoreCase)) throw Unsafe();
+        var leaf = true;
+        for (var directory = new DirectoryInfo(path); directory is not null; directory = directory.Parent)
+        {
+            if (!directory.Exists || (directory.Attributes & FileAttributes.ReparsePoint) != 0) throw Unsafe();
+            AssertAcl(directory.GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access), serviceSid, leaf);
+            if (directory.FullName.TrimEnd('\\').Equals(parentBoundary, StringComparison.OrdinalIgnoreCase)) return;
+            leaf = false;
+        }
+        throw Unsafe();
+    }
+}
 
 public interface ISecretProtector { byte[] Protect(byte[] bytes); byte[] Unprotect(byte[] bytes); }
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]

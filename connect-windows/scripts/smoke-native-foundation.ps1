@@ -20,8 +20,10 @@ function Invoke-Bridge([string]$Operation,[object]$Payload=$null) {
  if (-not $reply.ok -or $reply.id -ne $request.id -or $reply.version -ne 1) { throw 'The installed pipe protocol did not return the expected receipt.' }
  return $reply.result
 }
-function Run-Lifecycle([string]$Action) {
- & (Join-Path $install 'resources\installer\lifecycle.ps1') -Action $Action -InstallRoot $install -OperatorSid $operatorSid -AllowUnsupportedDevelopmentHost
+function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator) {
+ $parameters=@{Action=$Action;InstallRoot=$install;AllowUnsupportedDevelopmentHost=$true}
+ if (-not $KeepApprovedOperator) { $parameters.OperatorSid=$operatorSid }
+ & (Join-Path $install 'resources\installer\lifecycle.ps1') @parameters
 }
 try {
  if (Test-Path -LiteralPath $install) { throw 'The isolated Connect foundation smoke directory already exists.' }
@@ -53,10 +55,13 @@ try {
  if (-not $restarted.source.accessible -or $restarted.source.selectedFileName -ne 'setup.csv') { throw 'The restarted service did not recover the protected setup state.' }
  if ((Get-FileHash -LiteralPath (Join-Path $data 'state.bin') -Algorithm SHA256).Hash -ne $stateHash) { throw 'Restart unexpectedly replaced the protected setup state.' }
  Record-Pass 'service restart recovers identity-protected configuration without an interactive UI'
- Run-Lifecycle Install
+ Run-Lifecycle Install -KeepApprovedOperator
  $repaired=Invoke-Bridge status
  if ($repaired.source.selectedFileName -ne 'setup.csv') { throw 'Repair reset the protected setup state.' }
+ $repairedConfig=Get-Content -LiteralPath (Join-Path $install 'resources\service\service-config.json') -Raw | ConvertFrom-Json
+ if ($repairedConfig.operatorsSid -ne $operatorSid -or (Get-Item -LiteralPath 'HKLM:\SOFTWARE\PackProofConnect\development').GetValue('OperatorsSid') -ne $operatorSid) { throw 'Repair replaced the originally approved local operator.' }
  Record-Pass 'same-source service repair preserves protected state'
+ Record-Pass 'repair without an override preserves the approved operator SID'
  Run-Lifecycle Remove
  if (-not (Test-Path -LiteralPath (Join-Path $data 'state.bin')) -or -not (Test-Path -LiteralPath (Join-Path $data 'spool-key.bin')) -or -not (Test-Path -LiteralPath (Join-Path $exports 'setup.csv'))) { throw 'Removal discarded protected state, encryption key or source export.' }
  Record-Pass 'service removal preserves encrypted data keys and source original'

@@ -32,7 +32,7 @@ export interface ConnectStatus {
   pendingProposal?: Configuration;
   preview?: { id: string; previewVersion: string; state: string; original: { sha256: string; byteSize: number }; counts: Record<string, number>; rows: Array<{ rowNumber: number; status: string; errors: string[]; normalized?: Record<string, unknown>; values?: Record<string, string> }>; recordIds: string[] };
   verification?: { complete: boolean; recordId?: string; recordUrl?: string; configRevision?: number; fileSha256?: string };
-  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; queueCount: number; preservedQueueCount?: number; lastErrorCode?: string };
+  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; queueCount: number | null; preservedQueueCount?: number; lastErrorCode?: string };
   approvalPath?: string;
 }
 export interface ConnectBridge {

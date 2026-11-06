@@ -13,7 +13,12 @@ public sealed class AgentRuntime : IDisposable
     public AgentRuntime(HostConfiguration configuration)
     {
         host = configuration; host.Validate(); if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The installed collector requires Windows."); if (!WindowsIdentity.GetCurrent().User!.IsWellKnown(WellKnownSidType.LocalServiceSid)) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must run as its installed LocalService identity."); store = new(host.DataRoot, new ServiceIdentityProtector()); state = new(); api = new(host);
-        try{store.Initialize();state=store.Read<LocalState>("state.bin")??new();queue=new(store);}
+        try{
+            var serviceSid = (SecurityIdentifier)new NTAccount($"NT SERVICE\\{host.ServiceName}").Translate(typeof(SecurityIdentifier));
+            if (WindowsIdentity.GetCurrent().Groups?.Contains(serviceSid) != true) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must receive its dedicated service SID. Ask IT to repair the installed service identity before accessing protected work.");
+            ProtectedAncestry.Assert(host.DataRoot, Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), serviceSid.Value);
+            store.Initialize();state=store.Read<LocalState>("state.bin")??new();queue=new(store);
+        }
         catch(ConnectException error){startupError=error;state=new(){LastErrorCode=error.Code};}
         catch(Microsoft.Data.Sqlite.SqliteException){startupError=new("LOCAL_QUEUE_UNAVAILABLE","The retained queue cannot be opened safely. Preserve its database, journal and protected keys and contact support; the service will not replace it with an empty queue.");state=new(){LastErrorCode=startupError.Code};}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}

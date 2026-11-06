@@ -64,8 +64,8 @@
       "result": "passed_with_platform_skips",
       "passed": 31,
       "failed": 0,
-      "skipped": 3,
-      "skipReason": "Actual Windows NTFS folder behavior cannot run on Linux"
+      "skipped": 5,
+      "skipReason": "3 actual NTFS folder cases and 2 Windows ACL cases require Windows; older hosted source passed all 34 then-existing native cases"
     },
     {
       "name": "native_compile",
@@ -97,9 +97,29 @@
       "name": "visual_preview",
       "result": "welcome_layout_inspected",
       "scope": "Browser-only production renderer shows honest missing-service state with disabled actions; no Windows service, full journey, screen-reader or 200% claim"
+    },
+    {
+      "name": "packaging_compatibility",
+      "result": "3_passed_1_environment_failure",
+      "passed": 3,
+      "failed": 1,
+      "failure": "Unchanged legacy-deployment inertness case requires pwsh, absent on local host. Historical migration byte checks and compiled image graph passed; hosted test still required.",
+      "command": "node node_modules/vitest/vitest.mjs run tests/rnd-production-packaging.test.ts --pool=threads --maxWorkers=1 --reporter=verbose"
     }
   ],
-  "artifacts": [],
+  "artifacts": [
+    {
+      "runId": 42275353935,
+      "artifactId": 13532173474,
+      "name": "PackProof-Connect-development-Setup-0.1.0.exe",
+      "bytes": 167256136,
+      "sha256": "4af22bf757284f279852910c03acadeeaf800e706cc6db7b966c5d0650631c40",
+      "sourceCommit": "dc13cd74a68c9fb15b7794866c27d7170c17ce8c",
+      "signed": false,
+      "status": "superseded_internal_failed_foundation",
+      "publicDistributionAllowed": false
+    }
+  ],
   "deployed": {
     "backend": null,
     "portal": null,
@@ -113,7 +133,9 @@
   "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/147",
   "sourceCommits": [
     "ae40bcd77ac504ef559b8f74d1a9f8319c66d1ac",
-    "b1ed9bc8001bec7857cc064c1f284387fb8d9dad"
+    "b1ed9bc8001bec7857cc064c1f284387fb8d9dad",
+    "6d151adf9a211a0acad2b1655013a81cadb9300b",
+    "456faa53b88069f0ace1d28a509e78492079aea6"
   ],
   "hostedRuns": [
     {
@@ -130,6 +152,24 @@
       "runId": 42275131554,
       "name": "Connect Windows candidate",
       "result": "in_progress"
+    },
+    {
+      "commit": "6d151adf9a211a0acad2b1655013a81cadb9300b",
+      "testedMergeCommit": "dc13cd74a68c9fb15b7794866c27d7170c17ce8c",
+      "runId": 42275353935,
+      "name": "Connect Windows candidate",
+      "result": "failed_native_foundation_after_package",
+      "nativeCasesPassed": 34,
+      "failedNativeCases": 0,
+      "cause": "New-LocalGroup description exceeded Windows 48-character bound; shortened in next source"
+    },
+    {
+      "commit": "456faa53b88069f0ace1d28a509e78492079aea6",
+      "testedMergeCommit": "39b70db92ec7b827b738fb7adc9548fb6fce5492",
+      "runId": 42275992483,
+      "name": "Connect Windows candidate",
+      "result": "native_foundation_passed",
+      "scope": "Hosted Windows Server 2025, actual LocalService protected storage, expected-service pipe bridge, local immutable CSV preview, restart, repair and preserved-data removal. Windows11/UAC/NSIS/reboot/unauthorized-local-or-remote-client acceptance not established."
     }
   ],
   "acceptanceScenarios": {

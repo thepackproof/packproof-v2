@@ -129,3 +129,18 @@ public sealed class NativeFolderTests : IDisposable {
     [WindowsFact] public void Reparse_source_and_file_escape_are_rejected(){Directory.CreateDirectory(root);var outside=root+"-outside";Directory.CreateDirectory(outside);try{File.WriteAllText(Path.Combine(outside,"source.csv"),"reference\noutside\n");Directory.CreateSymbolicLink(Path.Combine(root,"linked"),outside);Assert.Throws<ConnectException>(()=>FolderSource.Validate(Path.Combine(root,"linked")));File.CreateSymbolicLink(Path.Combine(root,"source.csv"),Path.Combine(outside,"source.csv"));Assert.Throws<ConnectException>(()=>FolderSource.Snapshot(root,"source.csv"));}finally{if(Directory.Exists(outside))Directory.Delete(outside,true);}}
     public void Dispose(){if(Directory.Exists(root))Directory.Delete(root,true);}
 }
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class NativeProtectedAncestryTests
+{
+    private static System.Security.AccessControl.DirectorySecurity Acl(string owner="S-1-5-32-544") { var acl=new System.Security.AccessControl.DirectorySecurity();acl.SetOwner(new System.Security.Principal.SecurityIdentifier(owner));acl.SetAccessRuleProtection(true,false);return acl; }
+    [WindowsFact] public void User_owned_or_replaceable_ancestor_is_denied_without_changing_its_permissions()
+    {
+        var service="S-1-5-80-1-2-3-4-5";var owned=Acl("S-1-5-21-1-2-3-1001");Assert.Equal("PROTECTED_STORAGE_PERMISSIONS",Assert.Throws<ConnectException>(()=>ProtectedAncestry.AssertAcl(owned,service,false)).Code);
+        var replaceable=Acl();replaceable.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier("S-1-5-32-545"),System.Security.AccessControl.FileSystemRights.DeleteSubdirectoriesAndFiles,System.Security.AccessControl.AccessControlType.Allow));Assert.Equal("PROTECTED_STORAGE_PERMISSIONS",Assert.Throws<ConnectException>(()=>ProtectedAncestry.AssertAcl(replaceable,service,false)).Code);Assert.Single(replaceable.GetAccessRules(true,true,typeof(System.Security.Principal.SecurityIdentifier)).Cast<System.Security.AccessControl.FileSystemAccessRule>());
+    }
+    [WindowsFact] public void Inherit_only_creator_rule_is_safe_but_service_replacement_rights_apply_only_to_data_leaf()
+    {
+        var service="S-1-5-80-1-2-3-4-5";var acl=Acl();acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier("S-1-3-0"),System.Security.AccessControl.FileSystemRights.FullControl,System.Security.AccessControl.InheritanceFlags.ContainerInherit|System.Security.AccessControl.InheritanceFlags.ObjectInherit,System.Security.AccessControl.PropagationFlags.InheritOnly,System.Security.AccessControl.AccessControlType.Allow));ProtectedAncestry.AssertAcl(acl,service,false);
+        acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier(service),System.Security.AccessControl.FileSystemRights.Modify,System.Security.AccessControl.AccessControlType.Allow));ProtectedAncestry.AssertAcl(acl,service,true);Assert.Throws<ConnectException>(()=>ProtectedAncestry.AssertAcl(acl,service,false));
+    }
+}

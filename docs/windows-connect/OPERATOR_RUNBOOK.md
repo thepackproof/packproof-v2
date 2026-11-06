@@ -39,7 +39,9 @@ Pause stops new reads and submissions. Already accepted server work may finish. 
 
 Use the channel's signed installer and verify the expected publisher. A missing or wrong signature blocks release and upgrade. Do not disable Windows protection to install a package.
 
-Before upgrade, pause admission and checkpoint the queue, then stop the service. Preserve the existing encrypted data and keys. Reject a downgrade that cannot read the current schema. Repair restores binaries, service registration and expected ACLs without resetting enrollment or pending work.
+Before upgrade, pause admission and checkpoint the queue, then stop the service. Preserve the existing encrypted data and keys. Reject a downgrade that cannot read the current schema. Repair restores binaries, service registration and expected ACLs without resetting enrollment or pending work. The approved local Windows operator is retained in protected machine metadata; a different administrator session does not silently replace that operator. An explicit IT operator-SID override is separate from cloud administrator approval.
+
+If a shared ProgramData ancestor has an untrusted owner or ordinary-user replacement rights, setup stops before protected storage is used. Have IT review the exact dedicated ancestry and preserve any existing Desktop/source permissions. Do not recursively rewrite shared data ACLs or move the encrypted queue as a shortcut.
 
 Disconnect/revoke in the authenticated portal before uninstall when possible. Offline uninstall cannot claim cloud revocation. Uninstall removes the service/UI and retains encrypted queued work and keys by default; it never deletes source exports, cloud records or PackProof Desktop evidence. Any cleanup of uncertain evidence needs explicit reconciliation or an informed recorded discard under the applicable policy.
 
