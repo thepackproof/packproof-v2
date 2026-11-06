@@ -16,7 +16,7 @@ import { finalizeProof } from '../src/domain/finalize.js';
 import { getManifest } from '../src/domain/finalize.js';
 import { requireRecordWorkspace } from '../src/records/access.js';
 import { createLifecycleSnapshot } from '../src/domain/lifecycle-snapshots.js';
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { generateKeyPairSync, sign, randomBytes } from 'node:crypto';
 import { appendAudit } from '../src/domain/audit.js';
 import type { AppDependencies } from '../src/app.js';
 import type { ManifestSigner } from '../src/domain/manifest-signing.js';
@@ -293,4 +293,47 @@ it('separates stored download expiry from sharing and keeps immutable job select
     expect(await readCanonicalExport(deps, po(), accepted.value.id)).toMatchObject({ state: 'expired', shareCreated: false, downloadAvailable: false });
     expect(await createCanonicalExport(deps, po(), 'expiry', body)).toMatchObject({ replayed: true, value: { id: accepted.value.id, state: 'expired' } });
     await expect(createCanonicalExport(deps, po(), 'new-expired-key', body)).rejects.toMatchObject({ code: 'INVALID_EXPORT_EXPIRY' });
+});
+
+it('commits and retries with API column privileges while only the worker changes row outcomes', async () => {
+    const suffix=randomBytes(6).toString('hex'),role='csv_commit_api_'+suffix;
+    const p=await preview('role-bounded-'+suffix);
+    const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
+    const ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
+    const quote=(value:string)=>'"'+value.replace(/"/g,'""')+'"';
+    const asApi=async(key:string,partial:boolean)=>{
+        try{return await opened.db.transaction(async tx=>{
+            await tx.query('SET LOCAL SESSION AUTHORIZATION '+quote(role));
+            return commitPartnerImport({...deps,db:tx},full,p.id,key,{previewVersion:p.previewVersion,importValidRows:partial});
+        });}finally{await opened.db.query('SET SESSION AUTHORIZATION '+quote(ownerRole));}
+    };
+    await opened.db.query('CREATE ROLE '+quote(role)+' NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS');
+    try{
+        // Existing organization authorization rows need UPDATE privilege for
+        // SELECT FOR SHARE; these grants never include import result columns.
+        await opened.db.query('GRANT USAGE ON SCHEMA '+quote(schema)+' TO '+quote(role));
+        await opened.db.query('GRANT SELECT ON ALL TABLES IN SCHEMA '+quote(schema)+' TO '+quote(role));
+        await opened.db.query('GRANT UPDATE ON platform_credentials,platform_principals,platform_organizations,platform_memberships,users TO '+quote(role));
+        await opened.db.query('GRANT INSERT,UPDATE ON api_idempotency TO '+quote(role));
+        await opened.db.query('GRANT INSERT ON platform_action_audit TO '+quote(role));
+        await opened.db.query('GRANT UPDATE(state,import_valid_rows,updated_at) ON partner_import_jobs TO '+quote(role));
+        expect((await asApi('bounded-first-'+suffix,false)).value.state).toBe('queued');
+        await opened.db.query("UPDATE partner_import_rows SET status='failed',attempts=1,errors='[\"previous worker failure\"]'::jsonb WHERE import_id=$1",[p.id]);
+        await opened.db.query("UPDATE partner_import_jobs SET state='failed',lease_token='previous-lease',lease_expires_at=$2,last_error_code='PREVIOUS_WORKER_FAILURE' WHERE id=$1",[p.id,new Date(time-1000).toISOString()]);
+        const retried=await asApi('bounded-retry-'+suffix,true);
+        expect(retried.value).toMatchObject({state:'queued',counts:{failed:1,valid:0},lastErrorCode:'PREVIOUS_WORKER_FAILURE'});
+        expect(retried.value.rows[0]).toMatchObject({status:'failed',errors:['previous worker failure']});
+        expect((await opened.db.query<{attempts:number}>('SELECT attempts FROM partner_import_rows WHERE import_id=$1',[p.id])).rows[0].attempts).toBe(1);
+        expect(await processPendingPartnerImports(deps,1)).toEqual({processed:1,failed:0});
+        const done=await readPartnerImport(deps,full,p.id);
+        expect(done).toMatchObject({state:'succeeded',counts:{imported:1,failed:0},lastErrorCode:null});
+        expect(done.rows[0]).toMatchObject({status:'imported',errors:[]});
+        expect((await opened.db.query<{attempts:number}>('SELECT attempts FROM partner_import_rows WHERE import_id=$1',[p.id])).rows[0].attempts).toBe(2);
+    }finally{
+        await opened.db.query('SET SESSION AUTHORIZATION '+quote(ownerRole));
+        await opened.db.query('REVOKE UPDATE(state,import_valid_rows,updated_at) ON partner_import_jobs FROM '+quote(role));
+        await opened.db.query('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA '+quote(schema)+' FROM '+quote(role));
+        await opened.db.query('REVOKE USAGE ON SCHEMA '+quote(schema)+' FROM '+quote(role));
+        await opened.db.query('DROP ROLE '+quote(role));
+    }
 });

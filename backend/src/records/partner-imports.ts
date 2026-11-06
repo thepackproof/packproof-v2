@@ -197,8 +197,9 @@ export async function commitPartnerImport(deps: Deps, a: PartnerActor, id: strin
             throw new DomainError('IMPORT_HAS_ROW_ERRORS', 'Repair the highlighted rows or explicitly accept importing valid rows only', 409);
         if (!rs.some(r => r.status === 'valid' || (r.status === 'failed' && r.normalized && r.attempts < 5)) && rs.some(r => ['invalid', 'ambiguous', 'failed'].includes(r.status)))
             throw new DomainError('IMPORT_NO_VALID_ROWS', 'Create a corrected preview for unresolved rows', 409);
-        await tx.query("UPDATE partner_import_rows SET status='valid',errors='[]'::jsonb WHERE import_id=$1 AND status='failed' AND normalized IS NOT NULL AND attempts<5", [id]);
-        await tx.query("UPDATE partner_import_jobs SET state='queued',import_valid_rows=$2,updated_at=$3,lease_token=NULL,lease_expires_at=NULL,last_error_code=NULL WHERE id=$1", [id, b.importValidRows, deps.clock.now().toISOString()]);
+        // API authority accepts the retry; worker outcomes and lease fields stay
+        // unchanged until the worker verifies the original and owns a new lease.
+        await tx.query("UPDATE partner_import_jobs SET state='queued',import_valid_rows=$2,updated_at=$3 WHERE id=$1", [id, b.importValidRows, deps.clock.now().toISOString()]);
         await auditOrganization(tx, deps.clock, { actor: a, requestId: a.requestId, operation: 'SERVICE_CSV_COMMITTED', resourceId: id });
         return { id };
     });
@@ -215,7 +216,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
             const r = (await tx.query<Job>("SELECT * FROM partner_import_jobs WHERE state='queued' OR (state='running' AND lease_expires_at<$1) ORDER BY received_at,id LIMIT 1 FOR UPDATE SKIP LOCKED", [deps.clock.now().toISOString()])).rows[0];
             if (!r)
                 return null;
-            await tx.query("UPDATE partner_import_jobs SET state='running',lease_token=$2,lease_expires_at=$3,updated_at=$4 WHERE id=$1", [r.id, token, new Date(deps.clock.now().getTime() + 120000).toISOString(), deps.clock.now().toISOString()]);
+            await tx.query("UPDATE partner_import_jobs SET state='running',lease_token=$2,lease_expires_at=$3,updated_at=$4,last_error_code=NULL WHERE id=$1", [r.id, token, new Date(deps.clock.now().getTime() + 120000).toISOString(), deps.clock.now().toISOString()]);
             return r;
         });
         if (!j)
@@ -228,6 +229,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
             await deps.db.transaction(async (tx) => {
                 lease(await job(tx, j.id, true), token, deps);
                 await authorize(deps, tx, j.actor, j, true);
+                await tx.query("UPDATE partner_import_rows SET status='valid',errors='[]'::jsonb WHERE import_id=$1 AND status='failed' AND normalized IS NOT NULL AND attempts<5", [j.id]);
             });
             for (const source of await rows(deps.db, j.id))
                 if (source.status === 'valid') {
