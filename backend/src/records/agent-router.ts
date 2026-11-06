@@ -9,6 +9,7 @@ import {textField} from '../platform/tenants.js';
 import {reauthorizePartner,type PartnerActor,organizationAdmin} from '../platform/organizations.js';
 import {partnerProblem,requirePartnerFeature} from '../platform/partner-router.js';
 import {distributedRateLimit} from '../http/boundary.js';
+import {requireRecordWorkspace} from './access.js';
 import {startEnrollment,redeemEnrollment,readEnrollment,decideEnrollment,agentWorkspace,readAgentInventory,readAgentDetail,actOnAgent,installationForActor,agentView,proposeAgentConfig,heartbeatAgent,renewAgentCredential} from './agent-enrollments.js';
 const route=(fn:(r:Request,s:Response)=>Promise<void>)=>(r:Request,s:Response,n:NextFunction)=>void fn(r,s).catch(n);
 export function createConnectEnrollmentRouter(deps:AppDependencies){
@@ -29,6 +30,8 @@ export function createAgentHumanRouter(deps:AppDependencies){
    const w=await workspace(r,true),operation=`connect:POST:${r.path}`,keyHash=sha256Hex(textField(r.header('Idempotency-Key'),'Idempotency-Key')),hash=sha256Hex(canonicalize(r.body??{}));
    const value=await deps.db.transaction(async tx=>{
     await organizationAdmin(tx,w.userId,w.organizationId);
+    // Recheck entitlement before cached responses as well as new commands.
+    await requireRecordWorkspace(tx,w.userId,w.organizationId,w.environment,true);
     await tx.query('INSERT INTO platform_command_results(actor_user_id,operation,key_hash,request_hash,created_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[w.userId,operation,keyHash,hash,deps.clock.now().toISOString()]);
     const old=(await tx.query<{request_hash:string;response:unknown}>('SELECT request_hash,response FROM platform_command_results WHERE actor_user_id=$1 AND operation=$2 AND key_hash=$3 FOR UPDATE',[w.userId,operation,keyHash])).rows[0];
     if(old.request_hash!==hash)throw new DomainError('IDEMPOTENCY_CONFLICT','The command key was used with different choices',409);

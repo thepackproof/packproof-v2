@@ -9,12 +9,13 @@ public sealed class AgentRuntime : IDisposable
 {
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private ConnectException? startupError;
-    private bool networkOnline = true; private bool checkpointed; private JsonElement? localPreview; private DateTimeOffset lastRefresh = DateTimeOffset.MinValue; private DateTimeOffset lastScan = DateTimeOffset.MinValue;
+    private bool networkOnline = true; private bool checkpointed; private JsonElement? localPreview; private DateTimeOffset lastRefresh = DateTimeOffset.MinValue; private DateTimeOffset lastScan = DateTimeOffset.MinValue; private DateTimeOffset lastCleanup = DateTimeOffset.MinValue;
     public AgentRuntime(HostConfiguration configuration)
     {
         host = configuration; host.Validate(); if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("The installed collector requires Windows."); if (!WindowsIdentity.GetCurrent().User!.IsWellKnown(WellKnownSidType.LocalServiceSid)) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must run as its installed LocalService identity."); store = new(host.DataRoot, new ServiceIdentityProtector()); state = new(); api = new(host);
         try{store.Initialize();state=store.Read<LocalState>("state.bin")??new();queue=new(store);}
         catch(ConnectException error){startupError=error;state=new(){LastErrorCode=error.Code};}
+        catch(Microsoft.Data.Sqlite.SqliteException){startupError=new("LOCAL_QUEUE_UNAVAILABLE","The retained queue cannot be opened safely. Preserve its database, journal and protected keys and contact support; the service will not replace it with an empty queue.");state=new(){LastErrorCode=startupError.Code};}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
@@ -25,7 +26,9 @@ public sealed class AgentRuntime : IDisposable
     private JsonElement? Approved => state.ServerConfig?.TryGetProperty("config", out var config) == true && config.ValueKind == JsonValueKind.Object ? config : null;
     private string ServerState => state.ServerConfig?.TryGetProperty("state", out var status) == true ? status.GetString() ?? "needs_approval" : "needs_approval";
     private string ConfigDigest => state.ServerConfig?.TryGetProperty("configSha256", out var d) == true ? d.GetString() ?? "none" : "none";
-    private string QueueConfigIdentity => Hash($"{ConfigDigest}:{ConfigRevision}");
+    private string QueueConfigIdentity => Hash($"{state.InstallationId ?? "unenrolled"}:{ConfigDigest}:{ConfigRevision}");
+    private IReadOnlyList<QueueEntry> CurrentEntries() => queue.Entries().Where(x => x.CredentialGeneration == Generation && x.ConfigDigest == QueueConfigIdentity).ToArray();
+    private bool RecoveryAvailable => state.Token is not null && (ServerState == "revoked" || state.CredentialExpiresAt <= DateTimeOffset.UtcNow || (state.CredentialRecoveryConfirmedAt is not null && DateTimeOffset.UtcNow - state.CredentialRecoveryConfirmedAt.Value is var elapsed && elapsed >= TimeSpan.Zero && elapsed <= TimeSpan.FromMinutes(5)));
     private int ConfigRevision => state.ServerConfig?.TryGetProperty("configRevision", out var r) == true ? r.GetInt32() : 0;
     private bool ConfigMatches => Approved?.GetProperty("folderDigest").GetString() == state.FolderDigest;
     private void RequireCredential() { if (state.Token is null) throw new ConnectException("ENROLLMENT_REQUIRED", "Approve this collection computer in PackProof first."); }
@@ -40,12 +43,13 @@ public sealed class AgentRuntime : IDisposable
     private static JsonElement? Optional(JsonElement? document,string property)=>document?.TryGetProperty(property,out var value)==true?value:null;
     private object Status()
     {
-        if(startupError is not null)return new{state="action_needed",environment=host.Environment,installedVersion="0.1.0",health=new{serviceOnline=true,queueCount=0,lastErrorCode=startupError.Code},error=new{code=startupError.Code,message=startupError.Message}};
-        object? source = null; if (state.Folder is not null) { try { source = new { folder = state.Folder, folderDigest = state.FolderDigest, accessible = true, files = FolderSource.Inventory(state.Folder).Take(20).ToArray(), selectedFileName = state.FileName, headers = localPreview?.GetProperty("headers"), samples = localPreview?.GetProperty("samples"), fileSha256 = localPreview?.GetProperty("fileSha256"), rowCount = localPreview?.GetProperty("rowCount") }; } catch (Exception e) when (e is ConnectException or IOException or UnauthorizedAccessException) { source = new { folder = state.Folder, folderDigest = state.FolderDigest, accessible = false, errorCode = e is ConnectException c ? c.Code : "SOURCE_ACCESS_DENIED" }; } }
+        if(startupError is not null)return new{state="action_needed",environment=host.Environment,installedVersion="0.1.0",health=new{serviceOnline=true,queueCount=(int?)null,lastErrorCode=startupError.Code},error=new{code=startupError.Code,message=startupError.Message}};
+        object? source = null; if (state.Folder is not null) { try { source = new { folder = state.Folder, folderDigest = state.FolderDigest, accessible = true, files = FolderSource.Inventory(state.Folder).Take(20).ToArray(), selectedFileName = state.FileName, headers = localPreview?.GetProperty("headers"), samples = localPreview?.GetProperty("samples"), fileSha256 = state.FileDigest, rowCount = localPreview?.GetProperty("rowCount") }; } catch (Exception e) when (e is ConnectException or IOException or UnauthorizedAccessException) { source = new { folder = state.Folder, folderDigest = state.FolderDigest, accessible = false, errorCode = e is ConnectException c ? c.Code : "SOURCE_ACCESS_DENIED" }; } }
         JsonElement? preview = null; if (state.SetupQueueId is not null) { var entry = queue.Find(state.SetupQueueId); if (entry is not null) preview = queue.Payload(entry).Receipt; }
         var verified = state.VerifiedRecordId is not null && ConfigMatches;
-        var display = ServerState == "revoked" ? "revoked" : (ServerState == "paused" || (ServerState == "active" && state.LocalPaused)) ? "paused" : state.Token is null ? "needs_approval" : state.Folder is null ? "source_selected" : !ConfigMatches ? "needs_approval" : verified ? ServerState == "active" && !state.LocalPaused ? "active" : "ready_to_activate" : preview is null ? "source_selected" : preview.Value.GetProperty("state").GetString() == "previewed" ? "preview_ready" : "verification_pending";
-        return new { state = display, installationId = state.InstallationId, environment = host.Environment, configRevision = ConfigRevision, source, enrollment = state.EnrollmentId is null ? null : new { id = state.EnrollmentId, comparisonCode = state.ComparisonCode, expiresAt = state.EnrollmentExpiresAt, approvalPath = state.ApprovalPath, state = state.EnrollmentState }, installedVersion = "0.1.0", pendingProposal = Optional(state.ServerConfig,"pendingProposal"), config = Approved, binding = state.ServerConfig is null ? null : new { integrationAccountId = state.ServerConfig.Value.GetProperty("integrationAccountId"), operatorMembershipId = state.ServerConfig.Value.GetProperty("operatorMembershipId"), sourceName = state.ServerConfig.Value.GetProperty("sourceName"), locationId = Optional(state.ServerConfig,"locationId") }, preview = preview is null ? null : PreviewView(preview.Value), verification = new { complete = verified, recordId = verified ? state.VerifiedRecordId : null, recordUrl = verified ? $"{host.WebOrigin.TrimEnd('/')}/app/records/{Uri.EscapeDataString(state.VerifiedRecordId!)}" : null, configRevision = ConfigRevision }, health = new { serviceOnline = true, lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = state.LastCompletedImportAt, queueCount = queue.Entries().Count(x => x.State != "complete"), orphanedPayloadCount = queue.OrphanCount, lastErrorCode = state.LastErrorCode, sourceFreshness = "unknown" }, approvalPath = state.ApprovalPath };
+        var currentCollectionPolicy = CollectionPolicy.IsWithinApprovedWindow(DateTimeOffset.UtcNow, state.LastPolicyCheckAt, state.CredentialExpiresAt, Approved?.GetProperty("offlineWindowHours").GetDouble() ?? 24, networkOnline);
+        var display = ServerState == "active" && !state.LocalPaused && !currentCollectionPolicy ? "action_needed" : ServerState == "revoked" ? "revoked" : (ServerState == "paused" || (ServerState == "active" && state.LocalPaused)) ? "paused" : state.Token is null ? "needs_approval" : state.Folder is null ? "source_selected" : !ConfigMatches ? "needs_approval" : verified ? ServerState == "active" && !state.LocalPaused ? "active" : "ready_to_activate" : preview is null ? "source_selected" : preview.Value.GetProperty("state").GetString() == "previewed" ? "preview_ready" : "verification_pending";
+        return new { state = display, installationId = state.InstallationId, environment = host.Environment, configRevision = ConfigRevision, source, enrollment = state.EnrollmentId is null ? null : new { id = state.EnrollmentId, comparisonCode = state.ComparisonCode, expiresAt = state.EnrollmentExpiresAt, approvalPath = state.ApprovalPath, state = state.EnrollmentState }, installedVersion = "0.1.0", recoveryAvailable = RecoveryAvailable, pendingProposal = Optional(state.ServerConfig,"pendingProposal"), config = Approved, binding = state.ServerConfig is null ? null : new { integrationAccountId = state.ServerConfig.Value.GetProperty("integrationAccountId"), operatorMembershipId = state.ServerConfig.Value.GetProperty("operatorMembershipId"), sourceName = state.ServerConfig.Value.GetProperty("sourceName"), locationId = Optional(state.ServerConfig,"locationId") }, preview = preview is null ? null : PreviewView(preview.Value), verification = new { complete = verified, recordId = verified ? state.VerifiedRecordId : null, recordUrl = verified ? $"{host.WebOrigin.TrimEnd('/')}/app/records/{Uri.EscapeDataString(state.VerifiedRecordId!)}" : null, configRevision = ConfigRevision, fileSha256 = state.FileDigest }, health = new { serviceOnline = true, lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = state.LastCompletedImportAt, queueCount = CurrentEntries().Count(x => x.State != "complete"), preservedQueueCount = queue.Entries().Count(x => x.State != "complete") - CurrentEntries().Count(x => x.State != "complete"), orphanedPayloadCount = queue.OrphanCount, lastErrorCode = state.LastErrorCode, sourceFreshness = "unknown" }, approvalPath = state.ApprovalPath };
     }
     private static object PreviewView(JsonElement receipt)
     {
@@ -67,6 +71,18 @@ public sealed class AgentRuntime : IDisposable
                 case "status": return Status();
                 case "preflight": return await Preflight(ct);
                 case "beginEnrollment": await BeginEnrollment(ct); break;
+                case "recoverEnrollment":
+                    {
+                        if (!p.TryGetProperty("preservePendingWorkApproved", out var consent) || consent.ValueKind != JsonValueKind.True || p.EnumerateObject().Any(x => x.Name != "preservePendingWorkApproved")) throw new ConnectException("RECOVERY_CONSENT_REQUIRED", "Confirm that former originals and receipt ownership remain preserved before starting fresh browser approval.");
+                        if (!RecoveryAvailable) throw new ConnectException("RECOVERY_NOT_AVAILABLE", "This installation still has current authority. Pause or revoke it in PackProof before replacing its approval.");
+                        state.LocalPaused = true; Save();
+                        // A durable protected archive must exist before any credential,
+                        // source binding or receipt reference is cleared from current state.
+                        store.Write($"recovery-{Guid.NewGuid():N}.bin", new { schema = "packproof.connect-recovery/v1", archivedAt = DateTimeOffset.UtcNow, previousState = state, preservedQueue = queue.Entries() });
+                        state = new LocalState { RecoveryPrepared = true, LocalPaused = true };
+                        Save(); checkpointed = false; networkOnline = false; lastRefresh = DateTimeOffset.MinValue; localPreview = null;
+                        break;
+                    }
                 case "pollEnrollment": await PollEnrollment(ct); break;
                 case "selectFolder":
                     {
@@ -79,7 +95,7 @@ public sealed class AgentRuntime : IDisposable
                     }
                 case "proposeConfiguration":
                     {
-                        RequireCredential(); if (state.FolderDigest is null) throw new ConnectException("SOURCE_REQUIRED", "Choose an approved local export folder first."); var map = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(p.GetRawText())!; map["folderDigest"] = Json.Element(state.FolderDigest); var result = await api.Request("POST", "/v1/partner/agent/config-proposals", map, state.Token, Guid.NewGuid().ToString("N"), ct); state.ApprovalPath = result.GetProperty("approvalPath").GetString(); state.LocalPaused = true; state.VerifiedRecordId = null; state.SetupQueueId = null; break;
+                        RequireCredential(); if (state.FolderDigest is null) throw new ConnectException("SOURCE_REQUIRED", "Choose an approved local export folder first."); var map = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(p.GetRawText())!; map["folderDigest"] = Json.Element(state.FolderDigest); state.LocalPaused = true; state.VerifiedRecordId = null; state.SetupQueueId = null; Save(); var result = await api.Request("POST", "/v1/partner/agent/config-proposals", map, state.Token, Guid.NewGuid().ToString("N"), ct); state.ApprovalPath = result.GetProperty("approvalPath").GetString(); state.LocalPaused = true; state.VerifiedRecordId = null; state.SetupQueueId = null; Save(); await Refresh(ct); break;
                     }
                 case "preview":
                     {
@@ -95,7 +111,7 @@ public sealed class AgentRuntime : IDisposable
                 case "pause": state.LocalPaused = true; state.PauseAuthorizationTimestamp = state.ServerConfig?.TryGetProperty("authorizationUpdatedAt", out var at) == true ? at.GetString() : DateTimeOffset.UtcNow.ToString("O"); state.ApprovalPath = $"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId!)}&action=resume"; break;
                 case "refresh": if (state.Token is not null) await Refresh(ct); else await PollEnrollment(ct); break;
                 case "checkpoint": checkpointed = true; Save(); queue.Checkpoint(); return new { checkpointed = true, queuePreserved = true };
-                case "diagnostics": return new { schema = "packproof.connect-diagnostics/v1", version = "0.1.0", environment = host.Environment, installationId = state.InstallationId, configRevision = ConfigRevision, createdAt = DateTimeOffset.UtcNow, serviceOnline = true, orphanedPayloadCount = queue.OrphanCount, queue = queue.Entries().GroupBy(x => x.State).ToDictionary(x => x.Key, x => x.Count()), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = state.LastCompletedImportAt, lastErrorCode = state.LastErrorCode };
+                case "diagnostics": return new { schema = "packproof.connect-diagnostics/v1", version = "0.1.0", environment = host.Environment, installationId = state.InstallationId, configRevision = ConfigRevision, createdAt = DateTimeOffset.UtcNow, serviceOnline = true, orphanedPayloadCount = queue.OrphanCount, preservedQueueCount = queue.Entries().Count(x => x.State != "complete") - CurrentEntries().Count(x => x.State != "complete"), receiptIds = queue.Entries().Where(x => x.ImportId is not null).Select(x => x.ImportId).Distinct().Take(20).ToArray(), queue = queue.Entries().GroupBy(x => x.State).ToDictionary(x => x.Key, x => x.Count()), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = state.LastCompletedImportAt, lastErrorCode = state.LastErrorCode };
                 default: throw new ConnectException("LOCAL_OPERATION_UNSUPPORTED", "This local operation is not supported.");
             }
             Save(); return Status();
@@ -103,15 +119,26 @@ public sealed class AgentRuntime : IDisposable
         finally { gate.Release(); }
     }
     private QueueEntry SetupEntry() => state.SetupQueueId is not null ? queue.Find(state.SetupQueueId) ?? throw new ConnectException("PREVIEW_REQUIRED", "Create a secure preview first.") : throw new ConnectException("PREVIEW_REQUIRED", "Create a secure preview first.");
+    private static bool IsSupportedWindowsClient() => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)
+        && System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64
+        && string.Equals(Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\ProductOptions", "ProductType", null) as string, "WinNT", StringComparison.Ordinal);
+    private void RequireReasonableClock(DateTimeOffset now)
+    {
+        if (state.LastPolicyCheckAt > now || (api.LastServerDate is not null && Math.Abs((now - api.LastServerDate.Value).TotalMinutes) > 5))
+        {
+            state.LocalPaused = true; state.LastErrorCode = "CLOCK_UNCERTAIN"; Save();
+            throw new ConnectException("CLOCK_UNCERTAIN", "The collection computer clock changed or differs from PackProof. Correct Windows time, then refresh and approve resuming collection.");
+        }
+    }
     private async Task<object> Preflight(CancellationToken ct)
     {
-        var checks = new List<object> { new { id = "windows", label = "Windows 11 x64", state = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) && System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64 ? "passed" : "blocked", detail = "Windows 11 x64 is required for this connector." }, new { id = "identity", label = "Collection service identity", state = OperatingSystem.IsWindows() && WindowsIdentity.GetCurrent().User?.IsWellKnown(WellKnownSidType.LocalServiceSid) == true ? "passed" : "blocked", detail = "Collection runs as LocalService." }, new { id = "storage", label = "Protected service storage", state = startupError is null?"passed":"blocked", detail = startupError?.Message??"The running service encrypted and recovered a protected test value." }, new { id = "disk", label = "Disk reserve", state = new DriveInfo(Path.GetPathRoot(host.DataRoot)!).AvailableFreeSpace > DurableQueue.DiskReserveBytes ? "passed" : "blocked", detail = "At least 1 GiB of free reserve is required." } };
+        var checks = new List<object> { new { id = "windows", label = "Windows 11 x64", state = IsSupportedWindowsClient() ? "passed" : "blocked", detail = "Windows 11 x64 is required for this connector." }, new { id = "identity", label = "Collection service identity", state = OperatingSystem.IsWindows() && WindowsIdentity.GetCurrent().User?.IsWellKnown(WellKnownSidType.LocalServiceSid) == true ? "passed" : "blocked", detail = "Collection runs as LocalService." }, new { id = "storage", label = "Protected service storage", state = startupError is null?"passed":"blocked", detail = startupError?.Message??"The running service encrypted and recovered a protected test value." }, new { id = "disk", label = "Disk reserve", state = new DriveInfo(Path.GetPathRoot(host.DataRoot)!).AvailableFreeSpace > DurableQueue.DiskReserveBytes ? "passed" : "blocked", detail = "At least 1 GiB of free reserve is required." } };
         try { await api.Request("GET", "/health", null, null, null, ct); checks.Add(new { id = "network", label = "HTTPS and service proxy access", state = "passed", detail = "The service reached the configured PackProof endpoint using Windows TLS trust." }); } catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException) { checks.Add(new { id = "network", label = "HTTPS and service proxy access", state = "blocked", detail = "The service could not verify the PackProof endpoint. Ask IT to check outbound HTTPS and service proxy access." }); }
         checks.Add(new { id = "clock", label = "Clock reasonableness", state = api.LastServerDate is null ? "not_checked" : Math.Abs((DateTimeOffset.UtcNow - api.LastServerDate.Value).TotalMinutes) <= 5 ? "passed" : "blocked", detail = "Windows time must remain within five minutes of the PackProof server clock." }); return new { checks };
     }
     private async Task BeginEnrollment(CancellationToken ct)
     {
-        if (queue.Entries().Any(x => x.State != "complete")) throw new ConnectException("QUEUE_RECONCILIATION_REQUIRED", "Resolve or explicitly preserve the existing installation queue before replacing enrollment.");
+        if (!state.RecoveryPrepared && queue.Entries().Any(x => x.State != "complete")) throw new ConnectException("QUEUE_RECONCILIATION_REQUIRED", "Resolve or explicitly preserve the existing installation queue before replacing enrollment.");
         if (state.Token is not null) throw new ConnectException("INSTALLATION_ALREADY_ENROLLED", "This service is already enrolled. Use its PackProof portal to replace or revoke it.");
         var result = await api.Request("POST", "/connect/enrollments", new { deviceName = Environment.MachineName, version = "0.1.0" }, null, null, ct); state.EnrollmentId = result.GetProperty("id").GetString(); state.RedeemSecret = result.GetProperty("redeemSecret").GetString(); state.ComparisonCode = result.GetProperty("comparisonCode").GetString(); state.ApprovalPath = result.GetProperty("approvalPath").GetString(); state.EnrollmentExpiresAt = result.GetProperty("expiresAt").GetDateTimeOffset(); state.EnrollmentState = "pending"; state.LastEnrollmentPollAt = null; Save();
     }
@@ -127,7 +154,7 @@ public sealed class AgentRuntime : IDisposable
     }
     private async Task Refresh(CancellationToken ct)
     {
-        RequireCredential(); var before = ConfigDigest; var beforeRevision = ConfigRevision; var result = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = "0.1.0", enrollmentAcknowledged = true, queueCount = queue.Entries().Count(x => x.State != "complete"), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastErrorCode = state.LastErrorCode }, state.Token, null, ct); state.ServerConfig = result; if (result.TryGetProperty("credentialExpiresAt", out var expires) && expires.ValueKind == JsonValueKind.String) state.CredentialExpiresAt = expires.GetDateTimeOffset(); state.LastPolicyCheckAt = DateTimeOffset.UtcNow; lastRefresh = DateTimeOffset.UtcNow; networkOnline = true; if (state.EnrollmentState == "credential") state.RedeemSecret = null;
+        RequireCredential(); RequireReasonableClock(DateTimeOffset.UtcNow); var before = ConfigDigest; var beforeRevision = ConfigRevision; JsonElement result; try { result = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = "0.1.0", enrollmentAcknowledged = true, queueCount = CurrentEntries().Count(x => x.State != "complete"), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastErrorCode = state.LastErrorCode }, state.Token, null, ct); } catch (ApiException denied) when (denied.Status is 401 or 403) { state.CredentialRecoveryConfirmedAt = DateTimeOffset.UtcNow; state.LocalPaused = true; Save(); throw; } state.CredentialRecoveryConfirmedAt = null; RequireReasonableClock(DateTimeOffset.UtcNow); state.ServerConfig = result; if (result.TryGetProperty("credentialExpiresAt", out var expires) && expires.ValueKind == JsonValueKind.String) state.CredentialExpiresAt = expires.GetDateTimeOffset(); state.LastPolicyCheckAt = DateTimeOffset.UtcNow; lastRefresh = DateTimeOffset.UtcNow; networkOnline = true; if (state.EnrollmentState == "credential") state.RedeemSecret = null;
         if (before != "none" && (before != ConfigDigest || beforeRevision != ConfigRevision)) { state.SetupQueueId = null; state.VerifiedRecordId = null; state.LocalPaused = true; }
         if (ServerState == "revoked") state.LocalPaused = true; Save();
     }
@@ -149,7 +176,7 @@ public sealed class AgentRuntime : IDisposable
         }
         catch (ApiException e) { var current = queue.Find(entry.Id) ?? entry; queue.Save(current, payload, e.Transient ? current.State : "action_needed", error: e.Code, failed: e.Transient, retryAfter: e.RetryAfter); state.LastErrorCode = e.Code; if (!e.Transient) state.LocalPaused = true; throw; }
         catch (ConnectException e) { queue.Save(entry, payload, "action_needed", error: e.Code); state.LastErrorCode = e.Code; state.LocalPaused = true; throw; }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { var current = queue.Find(entry.Id) ?? entry; queue.Save(current, payload, current.State, error: "NETWORK_UNAVAILABLE", failed: true); state.LastErrorCode = "NETWORK_UNAVAILABLE"; throw; }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { networkOnline = false; var current = queue.Find(entry.Id) ?? entry; queue.Save(current, payload, current.State, error: "NETWORK_UNAVAILABLE", failed: true); state.LastErrorCode = "NETWORK_UNAVAILABLE"; throw; }
     }
     private async Task Verify(CancellationToken ct)
     {
@@ -160,6 +187,7 @@ public sealed class AgentRuntime : IDisposable
         await gate.WaitAsync(ct); try
         {
             if (startupError is not null || checkpointed || state.Token is null) return;
+            if (DateTimeOffset.UtcNow - lastCleanup >= TimeSpan.FromMinutes(1)) { queue.CompactCompleted(DateTimeOffset.UtcNow); lastCleanup = DateTimeOffset.UtcNow; }
             if(state.PendingToken is not null||state.RenewalKey is not null){
                 if(state.NextRenewalAttemptAt>DateTimeOffset.UtcNow)return;
                 try{if(state.PendingToken is not null)await CompleteRenewal(ct);else await Renew(ct);}
@@ -167,12 +195,12 @@ public sealed class AgentRuntime : IDisposable
                 return;
             }
             if (DateTimeOffset.UtcNow - lastRefresh >= TimeSpan.FromSeconds(60)) { try { await Refresh(ct); } catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException) { networkOnline = false; lastRefresh = DateTimeOffset.UtcNow; state.LastErrorCode = e is ApiException a ? a.Code : "NETWORK_UNAVAILABLE"; if (e is ApiException authority && authority.Status is 401 or 403) { state.LocalPaused = true; Save(); return; } } }
-            var next = queue.Entries().FirstOrDefault(x => x.State is not ("complete" or "partial" or "action_needed" or "awaiting_review") && x.NextAttemptAt <= DateTimeOffset.UtcNow);
+            var next = CurrentEntries().FirstOrDefault(x => x.State is not ("complete" or "partial" or "action_needed" or "awaiting_review") && x.NextAttemptAt <= DateTimeOffset.UtcNow);
             if (next is not null && networkOnline && !checkpointed && !state.LocalPaused && ServerState == "active") await Process(next, ct);
             // Setup accepted work can be polled while automatic reads remain disabled.
             if (networkOnline && state.SetupQueueId is not null) { var setup = queue.Find(state.SetupQueueId); if (setup?.State == "server_processing" && setup.NextAttemptAt <= DateTimeOffset.UtcNow) await Process(setup, ct); }
             if (state.CredentialExpiresAt - DateTimeOffset.UtcNow < TimeSpan.FromDays(7)) { if (networkOnline) await Renew(ct); return; }
-            if (!MayCollect(DateTimeOffset.UtcNow) || DateTimeOffset.UtcNow - lastScan < TimeSpan.FromSeconds(30) || queue.Entries().Any(x => x.State is "preview_pending" or "commit_pending" or "server_processing")) return;
+            if (!MayCollect(DateTimeOffset.UtcNow) || DateTimeOffset.UtcNow - lastScan < TimeSpan.FromSeconds(30) || CurrentEntries().Any(x => x.State is "preview_pending" or "commit_pending" or "server_processing")) return;
             if (state.Folder is null) return; lastScan = DateTimeOffset.UtcNow; _ = FolderSource.Inventory(state.Folder); state.LastScanAt = DateTimeOffset.UtcNow;
             var knownEntries = queue.Entries().Select(x => x.Id).ToHashSet(); foreach (var path in Directory.EnumerateFiles(state.Folder, "*.csv", SearchOption.TopDirectoryOnly))
             {
@@ -186,7 +214,7 @@ public sealed class AgentRuntime : IDisposable
     }
     private async Task Renew(CancellationToken ct)
     {
-        if (queue.Entries().Any(x => x.State is not ("complete" or "partial" or "action_needed"))) return;
+        if (CurrentEntries().Any(x => x.State is not ("complete" or "partial" or "action_needed"))) return;
         // Local staging stays intact; all accepted old-credential imports must be terminal first.
         state.RenewalKey ??= Guid.NewGuid().ToString("N"); Save(); var r = await api.Request("POST", "/v1/partner/agent/credential-renewals", new { }, state.Token, state.RenewalKey, ct); if (r.TryGetProperty("state", out var renewalState) && renewalState.GetString() is "cancelled" or "expired") { state.RenewalKey = null; Save(); return; }
         state.PendingToken = r.GetProperty("token").GetString(); state.PendingCredentialId = r.GetProperty("credentialId").GetString(); state.CredentialExpiresAt = r.GetProperty("expiresAt").GetDateTimeOffset(); try { Save(); } catch { var failedId = state.PendingCredentialId; try { await api.Request("POST", "/v1/partner/agent/credential-renewals", new { cancelCredentialId = failedId }, state.Token, state.RenewalKey + "-cancel", ct); } catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException) { } state.PendingToken = null; state.PendingCredentialId = null; checkpointed = true; state.LocalPaused = true; throw; }
@@ -194,7 +222,7 @@ public sealed class AgentRuntime : IDisposable
     }
     private async Task CompleteRenewal(CancellationToken ct)
     {
-        var r = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = "0.1.0", renewalAcknowledged = true, queueCount = queue.Entries().Count(x => x.State != "complete"), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastErrorCode = state.LastErrorCode }, state.PendingToken, null, ct); state.Token = state.PendingToken; state.PendingToken = null; state.PendingCredentialId = null; state.RenewalKey = null;state.RenewalAttempts=0;state.NextRenewalAttemptAt=null; state.ServerConfig = r; state.LastPolicyCheckAt = DateTimeOffset.UtcNow; Save();
+        var r = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = "0.1.0", renewalAcknowledged = true, queueCount = CurrentEntries().Count(x => x.State != "complete"), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastErrorCode = state.LastErrorCode }, state.PendingToken, null, ct); state.Token = state.PendingToken; state.PendingToken = null; state.PendingCredentialId = null; state.RenewalKey = null;state.RenewalAttempts=0;state.NextRenewalAttemptAt=null; RequireReasonableClock(DateTimeOffset.UtcNow); state.ServerConfig = r; state.LastPolicyCheckAt = DateTimeOffset.UtcNow; Save();
     }
     public void Dispose() { queue?.Checkpoint(); queue?.Dispose(); api.Dispose(); gate.Dispose(); }
 }

@@ -47,6 +47,19 @@ it('enrollment credentials replay only to the private secret and disappear after
  await ack(a);const after=await redeemEnrollment(deps,a.e.id,{redeemSecret:a.e.redeemSecret});expect(after).toEqual({state:'acknowledged',installationId:a.result.installationId});
  expect((await opened.db.query('SELECT credential_response FROM record_agent_enrollments WHERE id=$1',[a.e.id])).rows[0].credential_response).toBeNull();
  const detail=await readEnrollment(deps,a.e.id,w);expect(detail.choices?.integrationAccounts.length).toBeGreaterThan(0);expect(detail.choices?.operators[0]).toHaveProperty('name');
+ await expect(readEnrollment(deps,a.e.id,{...w,organizationId:'another-workspace'})).rejects.toMatchObject({code:'ENROLLMENT_NOT_FOUND'});
+});
+it('rechecks current workspace entitlement inside browser decisions rather than trusting a stale workspace object',async()=>{
+ const a=await enroll();await ack(a);
+ const pending=await startEnrollment(deps,{deviceName:`PC pending ${sequence}`,version:'0.1.0'});
+ const rollback=new Error('rollback entitlement fixture');
+ await expect(opened.db.transaction(async tx=>{
+  await tx.query('UPDATE platform_organizations SET enabled=false WHERE id=$1',[org]);
+  await expect(actOnAgent(deps,tx,w,a.result.installationId,{action:'pause'},'stale')).rejects.toMatchObject({code:'WORKSPACE_PENDING'});
+  await expect(decideEnrollment(deps,tx,w,pending.id,{decision:'deny',comparisonCode:pending.comparisonCode},'stale')).rejects.toMatchObject({code:'WORKSPACE_PENDING'});
+  throw rollback;
+ })).rejects.toBe(rollback);
+ expect((await loadInstallation(opened.db,a.result.installationId)).status).toBe('setup');
 });
 it('requires exact human config, whole-batch test authority and durable terminal import before activation',async()=>{
  const a=await enroll();await ack(a);const c=config(a.account),proposal=await proposeAgentConfig(deps,a.actor,c);
@@ -117,5 +130,7 @@ it('holds preview-bound credentials until explicit preserved-original resolution
 it('requires recent human authentication and refuses enrollment without protected server response storage',async()=>{
  const oldSession={...deps,devAuth:false,testFixtures:false,auth:{authenticate:async()=>({userId:owner,authenticatedAt:time/1000-400})}} as unknown as AppDependencies;
  await expect(agentWorkspace(oldSession,{},org,'sandbox',true)).rejects.toMatchObject({code:'RECENT_AUTHENTICATION_REQUIRED'});
+ const malformedSession={...oldSession,auth:{authenticate:async()=>({userId:owner,authenticatedAt:Number.NaN})}} as unknown as AppDependencies;
+ await expect(agentWorkspace(malformedSession,{},org,'sandbox',true)).rejects.toMatchObject({code:'RECENT_AUTHENTICATION_REQUIRED'});
  await expect(startEnrollment({...deps,webhookConfig:{encryptionKey:'',allowedHosts:[]}},{deviceName:'No protected storage',version:'0.1.0'})).rejects.toMatchObject({code:'SECRET_RESPONSE_UNAVAILABLE'});
 });

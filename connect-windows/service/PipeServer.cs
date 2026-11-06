@@ -22,7 +22,7 @@ public sealed class PipeServer(HostConfiguration host, AgentRuntime agent)
         {
             using var pipe = NamedPipeServerStreamAcl.Create(host.PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, MaxRequestBytes, MaxResponseBytes, Security(host.OperatorsSid, host.ServiceName));
             await pipe.WaitForConnectionAsync(ct);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(35));
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(45));
             try
             {
                 string? caller = null; pipe.RunAsClient(() => caller = WindowsIdentity.GetCurrent().User?.Value);

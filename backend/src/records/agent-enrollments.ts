@@ -36,7 +36,7 @@ export async function agentWorkspace(deps:Deps,headers:Record<string,unknown>,or
  const auth=await deps.auth.authenticate(headers as Parameters<Deps['auth']['authenticate']>[0]);
  if(mutating&&!(deps.devAuth&&deps.testFixtures)){
   const age=deps.clock.now().getTime()/1000-(auth.authenticatedAt??0);
-  if(age<0||age>300)fail('RECENT_AUTHENTICATION_REQUIRED','Sign in again before approving this computer',401);
+  if(!Number.isFinite(age)||age<0||age>300)fail('RECENT_AUTHENTICATION_REQUIRED','Sign in again before approving this computer',401);
  }
  const workspace=await requireRecordWorkspace(deps.db,auth.userId,organizationId,environment,mutating);
  if(!['OWNER','ADMIN'].includes(workspace.role))fail('AGENT_ADMIN_REQUIRED','A workspace owner or administrator must approve this connection',403);
@@ -72,6 +72,10 @@ async function enrollment(db:Database,id:string,lock=false){
 }
 export async function readEnrollment(deps:Deps,id:string,w?:RecordWorkspace){
  const e=await enrollment(deps.db,id);
+ if(e.installation_id){
+  const i=await loadInstallation(deps.db,e.installation_id);
+  if(!w||i.organization_id!==w.organizationId||i.environment!==w.environment)fail('ENROLLMENT_NOT_FOUND','Setup request not found',404);
+ }
  const choices=w?{integrationAccounts:(await deps.db.query(`SELECT id,provider AS name,external_account_id AS "sourceSystem" FROM platform_integration_accounts WHERE merchant_id=$1 AND environment=$2 ORDER BY provider,id LIMIT 100`,[w.organizationId,w.environment])).rows,operators:(await deps.db.query(`SELECT m.id,COALESCE(u.display_name,u.username,'Team member') AS name,m.role FROM platform_memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND u.status='ACTIVE' ORDER BY m.id LIMIT 200`,[w.organizationId])).rows,locations:await listRecordLocations(deps.db,w)}:undefined;
  return {id:e.id,comparisonCode:e.comparison_code,deviceName:e.device_name,version:e.version,state:new Date(e.expires_at)<=deps.clock.now()&&e.state!=='acknowledged'?'expired':e.state,expiresAt:iso(e.expires_at),...(choices?{choices}:{})};
 }
@@ -102,8 +106,17 @@ async function validateBinding(db:Database,w:RecordWorkspace,b:Record<string,unk
  if(m.location_scoped&&(!locationId||!(await db.query('SELECT 1 FROM record_membership_locations WHERE membership_id=$1 AND location_id=$2 AND organization_id=$3',[operator,locationId,w.organizationId])).rows[0]))fail('LOCATION_NOT_FOUND','The teammate needs an explicit grant for this location',404);
  return {account,operator,sourceName,locationId};
 }
+async function currentAdministrator(db:Database,w:RecordWorkspace){
+ // The browser's request may wait behind another command. Hold the current
+ // entitlement and membership rows through the authority-changing transaction;
+ // a previously authenticated workspace object is not a durable grant.
+ const current=await requireRecordWorkspace(db,w.userId,w.organizationId,w.environment,true);
+ if(!['OWNER','ADMIN'].includes(current.role))fail('AGENT_ADMIN_REQUIRED','A workspace owner or administrator must approve this connection',403);
+ return current;
+}
 export async function decideEnrollment(deps:Deps,tx:Database,w:RecordWorkspace,id:string,input:unknown,requestId:string){
  ensureEncryption(deps);
+ w=await currentAdministrator(tx,w);
  const b=strictBody(input,['organizationId','environment','decision','comparisonCode','integrationAccountId','operatorMembershipId','locationId','sourceName']),e=await enrollment(tx,id,true);
  if(e.state!=='pending'||new Date(e.expires_at)<=deps.clock.now())fail('ENROLLMENT_UNAVAILABLE','This setup request has ended; start again on the computer');
  if(b.comparisonCode!==e.comparison_code)fail('COMPARISON_CODE_MISMATCH','Compare the code shown on the setup computer',400);
@@ -144,6 +157,7 @@ export async function readAgentDetail(deps:Deps,w:RecordWorkspace,id:string,impo
  return {...await agentView(deps,i),...(importId?{testCandidate:await ownedImport(deps.db,i,importId)}:{})};
 }
 export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:string,input:unknown,requestId:string){
+ w=await currentAdministrator(tx,w);
  const b=strictBody(input,['organizationId','environment','action','proposalSha256','importId','configRevision','configSha256']),i=await loadInstallation(tx,id,true),now=deps.clock.now().toISOString();
  if(i.organization_id!==w.organizationId||i.environment!==w.environment)fail('INSTALLATION_NOT_FOUND','Installation not found',404);
  if(i.status==='revoked')fail('INSTALLATION_REVOKED','Enroll again to restore this connection');

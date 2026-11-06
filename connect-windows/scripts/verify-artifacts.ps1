@@ -6,8 +6,13 @@ $output=Join-Path $root ('release\'+$channel+'\win32-x64')
 $signed=$channel -ne 'development'
 $installer=Get-ChildItem -LiteralPath $output -File -Filter 'PackProof-Connect-*-Setup-*.exe'
 if (@($installer).Count -ne 1) {throw 'Exactly one immutable Connect installer is required.'}
-$owned=@($installer)+@(Get-ChildItem -LiteralPath (Join-Path $output 'win-unpacked') -File -Filter 'PackProof Connect*.exe')+@(Get-ChildItem -LiteralPath (Join-Path $output 'win-unpacked\resources') -Recurse -File | Where-Object {$_.Name -match '^PackProof\.Connect\.(Service|Bridge)\.(exe|dll)$'})
-if ($owned.Count -ne 6) {throw 'The installer, UI, service and verified bridge executable inventory is incomplete.'}
+$unpacked=Join-Path $output 'win-unpacked'
+$ui=@(Get-ChildItem -LiteralPath $unpacked -File -Filter 'PackProof Connect*.exe')
+if ($ui.Count -ne 1) { throw 'Exactly one Connect setup UI executable must be shipped.' }
+$required=@((Join-Path $unpacked 'resources\service\PackProof.Connect.Service.exe'),(Join-Path $unpacked 'resources\bridge\PackProof.Connect.Bridge.exe'))
+foreach ($path in $required) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'A required PackProof service or verified bridge executable is missing.' } }
+# Self-contained single-file publishes may bundle the owned managed DLL. Verify it when shipped, without inventing a required duplicate.
+$owned=@($installer)+$ui+@(Get-ChildItem -LiteralPath (Join-Path $unpacked 'resources') -Recurse -File | Where-Object {$_.Name -match '^PackProof\.Connect\.(Service|Bridge)\.(exe|dll)$'})
 foreach ($file in $owned) {if ($signed) {& (Join-Path $root '..\desktop\scripts\verify-windows-signature.ps1') -Artifact $file.FullName -Publisher $env:WINDOWS_PUBLISHER_NAME}}
 $inventory=@(Get-ChildItem -LiteralPath (Join-Path $output 'win-unpacked') -Recurse -File | Where-Object {$_.Extension -in @('.exe','.dll')} | Sort-Object FullName | ForEach-Object {$signature=Get-AuthenticodeSignature -LiteralPath $_.FullName;@{file=[IO.Path]::GetRelativePath($output,$_.FullName).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant();signatureStatus=$signature.Status.ToString();publisher=if($signature.SignerCertificate){$signature.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName,$false)}else{$null}}})
 $sha=(& git -C $root rev-parse HEAD).Trim()

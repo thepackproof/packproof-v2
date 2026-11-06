@@ -1,3 +1,14 @@
+!include "WordFunc.nsh"
+!macro customInit
+  ReadRegStr $0 HKLM "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
+  ${If} $0 != ""
+    ${VersionCompare} $0 "${VERSION}" $1
+    ${If} $1 == 1
+      MessageBox MB_ICONSTOP "A newer PackProof Connect version is already installed. Downgrade is blocked to preserve the queue and protected configuration."
+      Abort
+    ${EndIf}
+  ${EndIf}
+!macroend
 !macro customInstall
   ${DisableX64FSRedirection}
   nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\resources\installer\lifecycle.ps1" -Action Install -InstallRoot "$INSTDIR"'

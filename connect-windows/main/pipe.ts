@@ -9,7 +9,7 @@ export class ServiceBridge{
   if(Buffer.byteLength(request)>64*1024)throw Error('The setup request exceeds its safe limit.');
   return new Promise((resolve,reject)=>{
    const child=spawn(join(this.resourcePath,'bridge','PackProof.Connect.Bridge.exe'),[],{shell:false,windowsHide:true,stdio:['pipe','pipe','pipe'],env:{SystemRoot:process.env.SystemRoot,PATH:process.env.SystemRoot+'\\System32'}});
-   let output='',settled=false;const timer=setTimeout(()=>finish(Error('The background service did not respond. Open diagnostics to check its status.')),35000);
+   let output='',settled=false;const timer=setTimeout(()=>finish(Error('The background service did not respond. Open diagnostics to check its status.')),50000);
    function finish(error?:Error,value?:unknown){if(settled)return;settled=true;clearTimeout(timer);if(error){child.kill();reject(error);}else resolve(value);}
    child.stdout.on('data',bytes=>{output+=bytes.toString('utf8');if(Buffer.byteLength(output)>256*1024)finish(Error('The service response exceeds its safe limit.'));});child.stderr.resume();
    child.on('error',()=>finish(Error('The trusted background service bridge is unavailable. Repair this installation.')));

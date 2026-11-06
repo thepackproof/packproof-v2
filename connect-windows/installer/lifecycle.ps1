@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][ValidateSet('Install','Stop','Remove')][string]$Action,[Parameter(Mandatory=$true)][string]$InstallRoot)
+param([Parameter(Mandatory=$true)][ValidateSet('Install','Stop','Remove')][string]$Action,[Parameter(Mandatory=$true)][string]$InstallRoot,[string]$OperatorSid,[switch]$AllowUnsupportedDevelopmentHost)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $installPath=[IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
@@ -21,22 +21,34 @@ function Stop-Connect {
 }
 if ($Action -eq 'Stop') { Stop-Connect;exit 0 }
 if ($Action -eq 'Remove') { Stop-Connect;if ($null -ne $service) { & "$env:SystemRoot\System32\sc.exe" delete $serviceName | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service removal failed. Data was preserved.' } };exit 0 }
-if (-not ([Environment]::OSVersion.Version.Build -ge 22000) -or -not [Environment]::Is64BitOperatingSystem) { throw 'Windows 11 x64 is required.' }
+$productType=(Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\ProductOptions').ProductType
+$isSupportedHost=$productType -eq 'WinNT' -and [Environment]::OSVersion.Version.Build -ge 22000 -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64'
+if ($AllowUnsupportedDevelopmentHost -and $channel -ne 'development') { throw 'Unsupported-host service smoke is development-only.' }
+if (-not $isSupportedHost -and -not $AllowUnsupportedDevelopmentHost) { throw 'Windows 11 x64 is required. Windows Server needs separately qualified support.' }
 Stop-Connect
 $groupName='PackProof Connect '+$suffix+' Operators'
 $group=Get-LocalGroup -Name $groupName -ErrorAction SilentlyContinue
 if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'Approved local users of the PackProof Connect setup application. Cloud administrator approval is separately required.' }
 # The interactive shell belongs to the original operator even when UAC uses another administrator account.
 # With no interactive shell, an IT-installed service remains inaccessible until IT assigns an exact operator SID.
+if (-not ('ConnectShellIdentity' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;using System.Runtime.InteropServices;public static class ConnectShellIdentity{[DllImport("user32.dll")]public static extern IntPtr GetShellWindow();[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr window,out uint pid);}
 '@
+}
+$approvedOperatorSid=$null
+if ($OperatorSid) {
+ if ($OperatorSid -notmatch '^S-1-5-21-(?:[0-9]+-){3}[0-9]+$') { throw 'Choose an exact local or domain operator SID.' }
+ $approvedOperatorSid=(New-Object Security.Principal.SecurityIdentifier($OperatorSid)).Value
+ [void](New-Object Security.Principal.SecurityIdentifier($OperatorSid)).Translate([Security.Principal.NTAccount])
+}
 [uint32]$shellPid=0
 [void][ConnectShellIdentity]::GetWindowThreadProcessId([ConnectShellIdentity]::GetShellWindow(),[ref]$shellPid)
-if ($shellPid -ne 0) { $shell=Get-CimInstance Win32_Process -Filter "ProcessId=$shellPid";if ($null -ne $shell) { $owner=Invoke-CimMethod -InputObject $shell -MethodName GetOwnerSid;if ($owner.ReturnValue -ne 0 -or $owner.Sid -notmatch '^S-1-5-21-') { throw 'The original operator identity could not be verified.' };$member=Get-LocalGroupMember -Group $groupName | Where-Object { $_.SID.Value -eq $owner.Sid };if ($null -eq $member) { Add-LocalGroupMember -Group $groupName -Member $owner.Sid } } }
+if (-not $approvedOperatorSid -and $shellPid -ne 0) { $shell=Get-CimInstance Win32_Process -Filter "ProcessId=$shellPid";if ($null -ne $shell) { $owner=Invoke-CimMethod -InputObject $shell -MethodName GetOwnerSid;if ($owner.ReturnValue -ne 0 -or $owner.Sid -notmatch '^S-1-5-21-') { throw 'The original operator identity could not be verified.' };$approvedOperatorSid=$owner.Sid;$member=Get-LocalGroupMember -Group $groupName | Where-Object { $_.SID.Value -eq $owner.Sid };if ($null -eq $member) { Add-LocalGroupMember -Group $groupName -Member $owner.Sid } } }
 $serviceConfigPath=Join-Path $installPath 'resources\service\service-config.json'
 $serviceConfig=Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
-$serviceConfig.operatorsSid=$group.SID.Value
+# An exact original-user SID works immediately; newly added group membership requires a new logon token.
+$serviceConfig.operatorsSid=if ($approvedOperatorSid) { $approvedOperatorSid } else { $group.SID.Value }
 $serviceConfig | ConvertTo-Json | Set-Content -LiteralPath $serviceConfigPath -Encoding utf8
 $binary=Join-Path $installPath 'resources\service\PackProof.Connect.Service.exe'
 if ($null -eq $service) { & "$env:SystemRoot\System32\sc.exe" create $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto DisplayName= ('PackProof Connect '+$suffix) | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service creation failed.' } }
@@ -64,6 +76,11 @@ Set-DirectoryPermissions $dataRoot @(@('S-1-5-18','FullControl'),@('S-1-5-32-544
 # A dedicated prepared export folder is the only producer directory whose ACL this installer changes.
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('PackProof\Exports\'+$serviceConfig.environment)
 Assert-NoReparseAncestors $exports ([Environment]::GetFolderPath('CommonApplicationData'))
-if (-not (Test-Path -LiteralPath $exports)) { New-Item -Path $exports -ItemType Directory -Force | Out-Null;Set-DirectoryPermissions $exports @(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'ReadAndExecute'),@($group.SID.Value,'Modify')) }
+if (-not (Test-Path -LiteralPath $exports)) {
+ New-Item -Path $exports -ItemType Directory -Force | Out-Null
+ $exportRules=@(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'ReadAndExecute'),@($group.SID.Value,'Modify'))
+ if ($approvedOperatorSid) { $exportRules+=,@($approvedOperatorSid,'Modify') }
+ Set-DirectoryPermissions $exports $exportRules
+}
 Start-Service -Name $serviceName
 (Get-Service -Name $serviceName).WaitForStatus('Running',[TimeSpan]::FromSeconds(30))

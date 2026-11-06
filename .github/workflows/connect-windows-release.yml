@@ -15,7 +15,7 @@ concurrency:
 jobs:
   signed:
     environment: connect-${{ inputs.channel }}
-    runs-on: windows-2022
+    runs-on: windows-2025
     timeout-minutes: 60
     permissions:
       contents: read
@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: connect-windows/package-lock.json
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.100'
+          dotnet-version: '10.0.403'
       - run: node scripts/release-policy.cjs
       - uses: azure/login@v2
         if: env.PACKPROOF_WINDOWS_SIGNING_PROVIDER == 'azure'

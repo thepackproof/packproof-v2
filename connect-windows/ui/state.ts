@@ -4,7 +4,7 @@ const synonyms: Record<string, string[]> = {
   shipmentReference: ['shipment reference', 'shipment_reference', 'shipment id', 'order id', 'order number'],
   itemTitle: ['item description', 'description', 'item title', 'item_title'],
   quantity: ['quantity', 'qty'], trackingNumber: ['tracking number', 'tracking_number'],
-  carrier: ['carrier'], shipmentDate: ['shipment date', 'shipment_date'], locationId: ['location id', 'location_id'],
+  carrier: ['carrier'], shippedAt: ['shipment date', 'shipment_date'], locationId: ['location id', 'location_id'],
 };
 export function suggestMapping(headers: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
@@ -20,9 +20,9 @@ export function previewValid(status: ConnectStatus): boolean {
   return !!counts && (counts.valid > 0) && !counts.duplicate && !counts.invalid && !counts.ambiguous && !counts.failed;
 }
 export function verificationCurrent(status: ConnectStatus, draft: Configuration | undefined, dirty: boolean): boolean {
-  return !dirty && !status.pendingProposal && !!status.verification?.complete && !!status.verification.recordId && configKey(draft) === configKey(status.config)
-    && (status.verification.configRevision === undefined || status.verification.configRevision === status.configRevision)
-    && (status.verification.fileSha256 === undefined || status.verification.fileSha256 === status.source?.fileSha256);
+  return status.state !== 'revoked' && !dirty && !status.pendingProposal && !!status.verification?.complete && !!status.verification.recordId && configKey(draft) === configKey(status.config)
+    && typeof status.configRevision === 'number' && status.verification.configRevision === status.configRevision
+    && !!status.source?.fileSha256 && status.verification.fileSha256 === status.source.fileSha256;
 }
 export function resumeStep(status: ConnectStatus): number {
   if (['active', 'paused'].includes(status.state)) return 6;

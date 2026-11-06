@@ -7,7 +7,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal static class Program
 {
-    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "pollEnrollment", "selectFolder", "localPreview", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint"];
+    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint"];
     public static async Task<int> Main()
     {
         string id = "unknown";
@@ -26,7 +26,7 @@ internal static class Program
             var pipeName = "PackProofConnect-" + channel + "-v1";
             var expected = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "service", "PackProof.Connect.Service.exe"));
             using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous, System.Security.Principal.TokenImpersonationLevel.Identification);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
             await pipe.ConnectAsync(timeout.Token);
             if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid) || pid == 0 || pid != ServiceProcessId(serviceName)) throw new InvalidOperationException();
             using var process = OpenProcess(0x1000, false, pid);

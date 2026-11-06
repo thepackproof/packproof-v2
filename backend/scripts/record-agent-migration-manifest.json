@@ -2,11 +2,11 @@
   "schema": "packproof.record-agent-migration-manifest/v1",
   "sourceCount": 107,
   "predecessorInventorySha256": "605ba38f1c9ffcd6dd28a64a7d07d9cc41c3397ee7c10ba26198ad14ec50c2e1",
-  "inventorySha256": "0e35d848277d455ad29f9a83a8ec0e622a91c98d03706ae28bc9edddae8f20e4",
+  "inventorySha256": "ac0f0b11921f57e6dffeba0561c3e8e0991e63f9b6eaa1870ce5c7246d5a5921",
   "additions": [
     {
       "id": "108_record_agents",
-      "checksum": "cecacf09fe02283cf46df37e49934894f0d7af7fefdc5178037e85a8dea10d7c"
+      "checksum": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f"
     }
   ]
 }

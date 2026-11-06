@@ -34,8 +34,10 @@ public static class FolderSource
     }
     public static IReadOnlyList<object> Inventory(string folder)
     {
-        folder = Validate(folder); var result = new List<object>(); foreach (var file in Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly))
+        folder = Validate(folder); var result = new List<object>(); var examined = 0; foreach (var file in Directory.EnumerateFileSystemEntries(folder, "*", SearchOption.TopDirectoryOnly))
         {
+            if (++examined > 10000) throw new ConnectException("SOURCE_CAPACITY_REACHED", "This dedicated export folder contains too many entries. Ask the source owner to apply the agreed export retention policy.");
+            if ((File.GetAttributes(file) & FileAttributes.Directory) != 0) continue;
             if (!Path.GetExtension(file).Equals(".csv", StringComparison.OrdinalIgnoreCase)) continue;
             if (result.Count >= 10000) throw new ConnectException("SOURCE_CAPACITY_REACHED", "This source folder contains too many final CSV files. Ask the source owner to apply the agreed export retention policy.");
             var f = new FileInfo(file); result.Add(new { name = f.Name, byteSize = f.Length });

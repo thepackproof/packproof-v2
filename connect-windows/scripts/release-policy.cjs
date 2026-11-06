@@ -26,7 +26,7 @@ function validate(env=process.env,platform=process.platform,{native=false}={}){
   if(r.channel!==c.channel||r.apiBaseUrl!==(env.PACKPROOF_API_BASE_URL||'')||r.webBaseUrl!==(env.PACKPROOF_WEB_BASE_URL||'https://thepackproof.com'))throw Error('Rebuild Connect for the selected environment');
   const service=JSON.parse(readFileSync(resolve('native/service/service-config.json'))),bridge=JSON.parse(readFileSync(resolve('native/bridge/bridge-config.json')));
   if(service.environment!==(c.channel==='production'?'live':c.channel)||service.apiOrigin!==r.apiBaseUrl||service.webOrigin!==r.webBaseUrl||bridge.channel!==c.channel||bridge.publisher!==r.publisher)throw Error('Republish native components for the selected environment');
-  if(c.channel!=='development'&&execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim())throw Error('Signed Connect packages require committed source');
+  if(c.channel!=='development'&&execFileSync('git',['status','--porcelain','--untracked-files=all'],{encoding:'utf8'}).trim())throw Error('Signed Connect packages require committed source');
  }
  return c;
 }

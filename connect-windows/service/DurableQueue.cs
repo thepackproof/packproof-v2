@@ -47,10 +47,30 @@ public sealed class DurableQueue : IDisposable
     }
     public void Save(QueueEntry entry, QueuePayload payload, string state, string? importId = null, string? error = null, bool failed = false, TimeSpan? retryAfter = null)
     {
+        if (state == "complete") payload.CompletedAt ??= DateTimeOffset.UtcNow;
         ProtectedStore.AtomicWrite(Path.Combine(spoolRoot, entry.PayloadPath), encryption.Encrypt(Json.Bytes(payload), entry.Id));
         var attempts = failed ? entry.Attempts + 1 : entry.Attempts; var delay = failed ? retryAfter ?? TimeSpan.FromSeconds(Math.Min(300, 2 * Math.Pow(2, Math.Min(attempts, 8))) + Random.Shared.NextDouble() * 2) : TimeSpan.Zero;
         using var tx = db.BeginTransaction(); using var c = db.CreateCommand(); c.Transaction = tx; c.CommandText = "UPDATE queue SET state=$state,import_id=$import,attempts=$attempts,next_attempt_at=$next,error_code=$error WHERE id=$id";
         c.Parameters.AddWithValue("$state", state); c.Parameters.AddWithValue("$import", (object?)importId ?? entry.ImportId ?? (object)DBNull.Value); c.Parameters.AddWithValue("$attempts", attempts); c.Parameters.AddWithValue("$next", DateTimeOffset.UtcNow.Add(delay).ToString("O")); c.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value); c.Parameters.AddWithValue("$id", entry.Id); c.ExecuteNonQuery(); tx.Commit();
+    }
+    public int CompactCompleted(DateTimeOffset now)
+    {
+        var compacted = 0;
+        foreach (var entry in Entries().Where(x => x.State == "complete"))
+        {
+            var payload = Payload(entry);
+            if (payload.OriginalCompacted || payload.CompletedAt is null || now - payload.CompletedAt.Value < TimeSpan.FromHours(24) || payload.Receipt is null) continue;
+            // The durable source digest and receipt stay available for duplicate
+            // detection and support. Only server-confirmed successful originals
+            // are eligible; partial, failed and uncertain work is never aged out.
+            var receipt = payload.Receipt.Value;
+            payload.FileName = ""; payload.Csv = ""; payload.PreviewBody = Json.Element(new { });
+            payload.PreviewWireBody = null; payload.CommitWireBody = null;
+            payload.Receipt = Json.Element(new { id = receipt.GetProperty("id"), state = receipt.GetProperty("state"), previewVersion = receipt.GetProperty("previewVersion"), original = receipt.GetProperty("original"), counts = receipt.GetProperty("counts"), recordIds = receipt.GetProperty("recordIds"), rows = Array.Empty<object>() });
+            payload.OriginalCompacted = true;
+            ProtectedStore.AtomicWrite(Path.Combine(spoolRoot, entry.PayloadPath), encryption.Encrypt(Json.Bytes(payload), entry.Id)); compacted++;
+        }
+        return compacted;
     }
     public void Checkpoint() => Execute("PRAGMA wal_checkpoint(FULL)");
     public void Dispose() => db.Dispose();

@@ -23,6 +23,8 @@ export interface ConnectStatus {
   locationId?: string | null;
   binding?: { sourceName: string; integrationAccountId: string; operatorMembershipId: string; locationId: string | null };
   configRevision?: number;
+  recoveryAvailable?: boolean;
+  authorizationNotice?: string;
   checks?: ComputerCheck[];
   enrollment?: { id: string; comparisonCode: string; expiresAt: string; approvalPath?: string; state: string; workspaceName?: string };
   source?: { folder: string; folderDigest: string; accessible: boolean; files?: Array<{ name: string; byteSize: number }>; selectedFileName?: string; fileSha256?: string; headers?: string[]; samples?: Array<Record<string, string>> };
@@ -30,13 +32,14 @@ export interface ConnectStatus {
   pendingProposal?: Configuration;
   preview?: { id: string; previewVersion: string; state: string; original: { sha256: string; byteSize: number }; counts: Record<string, number>; rows: Array<{ rowNumber: number; status: string; errors: string[]; normalized?: Record<string, unknown>; values?: Record<string, string> }>; recordIds: string[] };
   verification?: { complete: boolean; recordId?: string; recordUrl?: string; configRevision?: number; fileSha256?: string };
-  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; queueCount: number; lastErrorCode?: string };
+  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; queueCount: number; preservedQueueCount?: number; lastErrorCode?: string };
   approvalPath?: string;
 }
 export interface ConnectBridge {
   getStatus(): Promise<ConnectStatus>;
   checkComputer(): Promise<ConnectStatus>;
   beginEnrollment(): Promise<ConnectStatus>;
+  recoverEnrollment(consent: { preservePendingWorkApproved: true }): Promise<ConnectStatus>;
   pollEnrollment(): Promise<ConnectStatus>;
   chooseFolder(): Promise<ConnectStatus>;
   previewLocal(fileName: string): Promise<ConnectStatus>;

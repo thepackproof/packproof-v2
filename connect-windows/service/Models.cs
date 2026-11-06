@@ -59,6 +59,8 @@ public sealed class LocalState
     public DateTimeOffset? NextRenewalAttemptAt { get; set; }
     public string? PendingToken { get; set; }
     public string? PendingCredentialId { get; set; }
+    public DateTimeOffset? CredentialRecoveryConfirmedAt { get; set; }
+    public bool RecoveryPrepared { get; set; }
 }
 public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath);
 public sealed class QueuePayload
@@ -72,6 +74,8 @@ public sealed class QueuePayload
     public string? CommitBodySha256 { get; set; }
     public JsonElement? Receipt { get; set; }
     public bool CommitApproved { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public bool OriginalCompacted { get; set; }
 }
 public sealed record PipeRequest(int Version, string Id, string Operation, JsonElement? Payload);
 

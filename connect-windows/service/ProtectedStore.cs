@@ -35,6 +35,8 @@ public sealed class ProtectedStore(string root, ISecretProtector protector)
     {
         var existing = Read<byte[]>("spool-key.bin");
         if (existing is not null) return existing;
+        if (File.Exists(Path.Combine(Root, "queue.sqlite")) || (Directory.Exists(Path.Combine(Root, "spool")) && Directory.EnumerateFiles(Path.Combine(Root, "spool")).Any()))
+            throw new ConnectException("SPOOL_KEY_MISSING", "The retained queue has no protected encryption key. Preserve its files and contact support; a new empty queue will not be created.");
         var key = RandomNumberGenerator.GetBytes(32); Write("spool-key.bin", key); return key;
     }
     public static void AtomicWrite(string target, byte[] data)

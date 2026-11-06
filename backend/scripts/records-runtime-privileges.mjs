@@ -84,7 +84,9 @@ function sourceColumns(sql,existing={}){
  // existing import receipt. Include these additive columns in exact schema
  // admission and column-scoped INSERT planning; worker UPDATE stays explicit.
  for(const match of sql.matchAll(/ALTER TABLE ([a-z][a-z0-9_]*) ADD COLUMN ([a-z][a-z0-9_]*)\s+/g)){
-  if(!tables[match[1]]||tables[match[1]].includes(match[2]))fail('RECORDS_SOURCE_SCHEMA_UNSUPPORTED');
+  // Canonical/platform tables predate this narrowly scoped records policy.
+  if(!tables[match[1]])continue;
+  if(tables[match[1]].includes(match[2]))fail('RECORDS_SOURCE_SCHEMA_UNSUPPORTED');
   tables[match[1]].push(match[2]);
  }
  return tables;

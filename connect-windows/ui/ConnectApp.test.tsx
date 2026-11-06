@@ -36,3 +36,18 @@ it('a queued response never unlocks automatic collection', async () => {
   expect(screen.getByRole('button', { name: 'Review automatic collection' })).toBeDisabled();
   expect(screen.getByText(/Verification is incomplete/)).toBeVisible();
 });
+
+it('requires informed preservation consent before expired-installation recovery', async () => {
+  const recoverEnrollment = vi.fn(async () => ({ state: 'needs_approval', environment: 'sandbox', enrollment: { id: 'enroll-new', comparisonCode: 'ABCD-EFGH', expiresAt: '2026-11-07T10:00:00Z', state: 'pending' }, health: { serviceOnline: true, queueCount: 0, preservedQueueCount: 2 } }));
+  const current: ConnectStatus = { ...initial, state: 'revoked', recoveryAvailable: true };
+  render(<ConnectApp bridge={{ getStatus: vi.fn(async () => current), recoverEnrollment } as unknown as ConnectBridge}/>);
+  await screen.findByRole('heading', { name: 'Recover this installation with new approval.' });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled());
+  const recover = screen.getByRole('button', { name: 'Begin approved recovery' });
+  expect(recover).toBeDisabled();
+  expect(recoverEnrollment).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /old receipts will not transfer/ }));
+  fireEvent.click(recover);
+  await waitFor(() => expect(recoverEnrollment).toHaveBeenCalledWith({ preservePendingWorkApproved: true }));
+  expect(await screen.findByRole('heading', { name: 'Workspace' })).toBeVisible();
+});

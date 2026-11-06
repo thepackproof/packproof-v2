@@ -12,7 +12,9 @@ export function startUpdates(win:BrowserWindow,bridge:ServiceBridge,config:{chan
  autoUpdater.on('update-downloaded',()=>{void(async()=>{
   const answer=await dialog.showMessageBox(win,{type:'info',title:'PackProof Connect update ready',message:'Install the verified PackProof Connect update?',detail:'Windows will ask for administrator approval. The service checkpoints pending work before its signed installer replaces the application. Queued exports and source files are preserved.',buttons:['Later','Install update'],defaultId:0,cancelId:0});
   if(answer.response!==1)return;
-  try{await bridge.request('checkpoint');autoUpdater.quitAndInstall(false,true);}catch{await dialog.showMessageBox(win,{type:'warning',message:'The service could not checkpoint for this update.',detail:'The working installation and pending exports are preserved. Retry after reviewing connection diagnostics.',buttons:['Keep working']});}
+  // The old installer's pre-removal hook gracefully stops/checkpoints the service before replacing files.
+  // Do not suspend collection before UAC: a canceled elevation must leave the current service working.
+  try{await bridge.request('status');autoUpdater.quitAndInstall(false,true);}catch{await dialog.showMessageBox(win,{type:'warning',message:'The service could not be reached before this update.',detail:'The working installation and pending exports are preserved. Retry after reviewing connection diagnostics.',buttons:['Keep working']});}
  })();});
  void autoUpdater.checkForUpdates().catch(()=>{});
 }

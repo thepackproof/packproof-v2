@@ -46,3 +46,17 @@ it('retains exact browser approval locators without accepting arbitrary nested r
   expect(canonicalWorkspacePath('/app/records/connect/approve?enrollmentId=enroll-a&organizationId=org-a#secret')).toBe('/app/records/connect/approve?enrollmentId=enroll-a&organizationId=org-a');
   expect(canonicalWorkspacePath('/app/records/connect/remote-command?token=secret')).toBe('/proofs');
 });
+it('invalidates whole-batch consent when the displayed original changes', async () => {
+  const batch = (id: string) => ({ ...installation, testCandidate: { id, state: 'previewed', counts: { valid: 1 }, original: { sha256: id, byteSize: 100 } } });
+  const request = vi.fn(async (path: string) => batch(path.includes('import-b') ? 'import-b' : 'import-a'));
+  const api = { recordsRequest: request } as unknown as PackProofApi;
+  const renderApproval = (importId: string) => <AgentApproval api={api} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'agent-a', importId })} canManage/>;
+  const { rerender } = render(renderApproval('import-a'));
+  await screen.findByText('Original SHA-256: import-a');
+  fireEvent.click(screen.getByRole('checkbox', { name: /approve this exact whole-batch/ }));
+  expect(screen.getByRole('button', { name: 'Authorize this batch' })).toBeEnabled();
+  rerender(renderApproval('import-b'));
+  await screen.findByText('Original SHA-256: import-b');
+  expect(screen.getByRole('checkbox', { name: /approve this exact whole-batch/ })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Authorize this batch' })).toBeDisabled();
+});

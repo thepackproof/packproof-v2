@@ -8,6 +8,8 @@ describe('setup trust boundaries', () => {
     expect(verificationCurrent(status, config, false)).toBe(true);
     for (const change of [{ sourceName: 'Other' }, { folderDigest: 'other' }, { timeZone: 'UTC' }, { integrationAccountId: 'source-b' }, { operatorMembershipId: 'member-b' }, { locationId: 'site-b' }, { importValidRows: true }, { offlineWindowHours: 0 }, { mapping: { ...config.mapping, quantity: 'Cases' } }]) expect(verificationCurrent(status, { ...config, ...change }, false)).toBe(false);
     expect(verificationCurrent(status, config, true)).toBe(false);
+    expect(verificationCurrent({ ...status, state: 'revoked' }, config, false)).toBe(false);
+    expect(verificationCurrent({ ...status, verification: { complete: true, recordId: 'proof-a' } }, config, false)).toBe(false);
     expect(verificationCurrent({ ...status, pendingProposal: config }, config, false)).toBe(false);
     expect(verificationCurrent({ ...status, configRevision: 4 }, config, false)).toBe(false);
     expect(verificationCurrent({ ...status, source: { ...status.source!, fileSha256: 'file-b' } }, config, false)).toBe(false);
@@ -17,6 +19,7 @@ describe('setup trust boundaries', () => {
     expect(configKey({ ...config, mapping: { quantity: 'Quantity', itemTitle: 'Description', shipmentReference: 'Reference' } })).toBe(configKey(config));
   });
   it('does not infer ambiguous identifiers or promote upload acceptance to verification', () => {
+    expect(suggestMapping(['Shipment date'])).toEqual({ shippedAt: 'Shipment date' });
     expect(suggestMapping(['Order ID', 'Order number', 'Description', 'Qty'])).toEqual({ itemTitle: 'Description', quantity: 'Qty' });
     expect(verificationCurrent({ ...status, verification: undefined }, config, false)).toBe(false);
   });
