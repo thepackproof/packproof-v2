@@ -55,3 +55,8 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # "persistent-operation-1001" in a synthetic SDK test, not an API credential.
 # Exact commit/file/rule/line only; scanner rules and credential detection remain.
 488a11bbd1c5fc9e81b4dafbcb104d407168c161:examples/api-client/client.test.mjs:generic-api-key:11
+
+# Reviewed PR 147 scan / job 128090350649: this exact historical Markdown
+# line contains prose about queue testing (crash/expiry/quota), no API credential.
+# Current wording is changed; all credential detection rules remain enabled.
+6d151adf9a211a0acad2b1655013a81cadb9300b:docs/windows-connect/IMPLEMENTATION_STATUS.md:generic-api-key:20

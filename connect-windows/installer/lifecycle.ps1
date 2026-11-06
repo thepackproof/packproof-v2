@@ -28,7 +28,7 @@ if (-not $isSupportedHost -and -not $AllowUnsupportedDevelopmentHost) { throw 'W
 Stop-Connect
 $groupName='PackProof Connect '+$suffix+' Operators'
 $group=Get-LocalGroup -Name $groupName -ErrorAction SilentlyContinue
-if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'Approved local users of the PackProof Connect setup application. Cloud administrator approval is separately required.' }
+if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'PackProof Connect setup operators' }
 # The interactive shell belongs to the original operator even when UAC uses another administrator account.
 # With no interactive shell, an IT-installed service remains inaccessible until IT assigns an exact operator SID.
 if (-not ('ConnectShellIdentity' -as [type])) {

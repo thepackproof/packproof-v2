@@ -17,7 +17,7 @@ Date: 2026-11-06. This file separates source implementation, test verification, 
 | W01 baseline/native build | Implemented | Exact baseline and native workflow; candidate runs recorded below | Internal candidate only |
 | W02 service/bridge | Implemented | Service/bridge compile without warnings; native service smoke prepared | Windows permissions/logoff/reboot acceptance pending |
 | W03 enrollment/restrictions | Implemented | 20 focused agent cases; affected backend regression; mounted contract check | Not deployed |
-| W04 queue/spool | Implemented | Protected queue, stable keys, crash/expiry/quota cases in native suite | Windows full-disk/interruption acceptance pending |
+| W04 queue/spool | Implemented | Protected queue, stable operation identity, interruption and quota cases in native suite | Windows full-disk/interruption acceptance pending |
 | W05 CSV vertical slice | Implemented | Original digest, transport, import, worker and duplicate checks with synthetic fixtures | Real Windows to nonproduction API G1 pending |
 | W06 guided setup | Implemented | 12 Connect UI/security cases; visual welcome inspection; stale approval/consent cases | Native screen-reader/200% acceptance pending |
 | W07 health/support | Implemented | Four health facts, server-derived imports, pause/revoke and redacted diagnostic preview | Not deployed |
