@@ -8,11 +8,15 @@ public sealed class DurableQueue : IDisposable
     private readonly SqliteConnection db;
     private readonly string spoolRoot;
     private readonly EncryptedSpool encryption;
+    private readonly int originalFileLimit;
     public const long MaxSpoolBytes = 1024L * 1024 * 1024;
     public const long DiskReserveBytes = 1024L * 1024 * 1024;
     public const int MaxFiles = 10000;
-    public DurableQueue(ProtectedStore store)
+    public DurableQueue(ProtectedStore store) : this(store, MaxFiles) { }
+    internal DurableQueue(ProtectedStore store, int originalFileLimit)
     {
+        if (originalFileLimit is < 1 or > MaxFiles) throw new ArgumentOutOfRangeException(nameof(originalFileLimit));
+        this.originalFileLimit = originalFileLimit;
         spoolRoot = Path.Combine(store.Root, "spool"); Directory.CreateDirectory(spoolRoot); encryption = new(store.Key());
         db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(store.Root, "queue.sqlite"), Mode = SqliteOpenMode.ReadWriteCreate }.ToString()); db.Open();
         try
@@ -40,7 +44,12 @@ public sealed class DurableQueue : IDisposable
         var utf8 = new System.Text.UTF8Encoding(false, true); string csv; try { csv = utf8.GetString(bytes); } catch (System.Text.DecoderFallbackException) { throw new ConnectException("CSV_ENCODING_UNSUPPORTED", "Save the source export as UTF-8 CSV."); }
         var payload = new QueuePayload { FileName = fileName, Csv = csv, PreviewBody = body.Build(csv), CommitApproved = commitApproved }; payload.PreviewWireBody = Json.Bytes(payload.PreviewBody); payload.PreviewBodySha256 = Convert.ToHexStringLower(SHA256.HashData(payload.PreviewWireBody)); var id = Guid.NewGuid().ToString("N"); var path = id + ".bin"; var encrypted = encryption.Encrypt(Json.Bytes(payload), id);
         var files = Directory.EnumerateFiles(spoolRoot).Select(x => new FileInfo(x)).ToArray(); var free = new DriveInfo(Path.GetPathRoot(spoolRoot)!).AvailableFreeSpace;
-        if (files.Length >= MaxFiles || files.Sum(x => x.Length) + encrypted.Length > MaxSpoolBytes || free - encrypted.Length < DiskReserveBytes) throw new ConnectException("SPOOL_CAPACITY_REACHED", "Collection paused to preserve queued originals. Free approved disk space or resolve pending imports.");
+        var references = Entries().ToDictionary(x => x.PayloadPath, StringComparer.OrdinalIgnoreCase);
+        // Retained terminal summaries are small protected metadata, not pending
+        // originals. Their bytes still count against the complete spool budget.
+        // Unknown/orphan files always consume admission capacity until reviewed.
+        var originalFiles = files.Count(file => !references.TryGetValue(file.Name, out var reference) || reference.State != "complete" || !Payload(reference).OriginalCompacted);
+        if (originalFiles >= originalFileLimit || files.Sum(x => x.Length) + encrypted.Length > MaxSpoolBytes || free - encrypted.Length < DiskReserveBytes) throw new ConnectException("SPOOL_CAPACITY_REACHED", "Collection paused to preserve queued originals. Free approved disk space or resolve pending imports.");
         ProtectedStore.AtomicWrite(Path.Combine(spoolRoot, path), encrypted);
         using var tx = db.BeginTransaction(); using var c = db.CreateCommand(); c.Transaction = tx; c.CommandText = "INSERT INTO queue(id,digest,state,preview_key,commit_key,credential_generation,config_digest,next_attempt_at,payload_path) VALUES($id,$digest,'staged',$preview,$commit,$generation,$config,$next,$path)";
         c.Parameters.AddWithValue("$id", id); c.Parameters.AddWithValue("$digest", digest); c.Parameters.AddWithValue("$preview", Guid.NewGuid().ToString("N")); c.Parameters.AddWithValue("$commit", Guid.NewGuid().ToString("N")); c.Parameters.AddWithValue("$generation", generation); c.Parameters.AddWithValue("$config", configDigest); c.Parameters.AddWithValue("$next", DateTimeOffset.UtcNow.ToString("O")); c.Parameters.AddWithValue("$path", path); c.ExecuteNonQuery(); tx.Commit(); return Find(id)!;

@@ -4,10 +4,234 @@
   "baselineCommit": "a42c10653258b63217043f8670b94ca87a233684",
   "implementationBranch": "feature/packproof-connect-windows",
   "testedCommit": null,
-  "gates": { "G0": "pending", "G1": "pending", "G2": "pending", "G3": "pending", "G4": "pending" },
-  "tests": [],
+  "gates": {
+    "G0": "pending",
+    "G1": "pending",
+    "G2": "pending",
+    "G3": "pending",
+    "G4": "pending"
+  },
+  "tests": [
+    {
+      "name": "affected_backend_regression",
+      "command": "node node_modules/vitest/vitest.mjs run tests/agent-restrictions.test.ts tests/organization-foundation.test.ts tests/partner-imports-exports.test.ts tests/record-agent-migration-inventory.test.ts tests/record-agents.test.ts tests/record-connection-operations.test.ts tests/record-connections.test.ts tests/record-imports.test.ts tests/records-api.test.ts tests/records-app-integration.test.ts tests/records-migrate.test.ts tests/records-runtime-privileges.test.ts tests/source-artifact-requirements.test.ts tests/source-artifact-storage.test.ts tests/source-artifacts-http.test.ts tests/source-artifacts.test.ts --pool=threads --maxWorkers=1 --reporter=verbose",
+      "result": "passed",
+      "files": 16,
+      "passed": 134,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 76,
+      "selection": [
+        "tests/agent-restrictions.test.ts",
+        "tests/organization-foundation.test.ts",
+        "tests/partner-imports-exports.test.ts",
+        "tests/record-agent-migration-inventory.test.ts",
+        "tests/record-agents.test.ts",
+        "tests/record-connection-operations.test.ts",
+        "tests/record-connections.test.ts",
+        "tests/record-imports.test.ts",
+        "tests/records-api.test.ts",
+        "tests/records-app-integration.test.ts",
+        "tests/records-migrate.test.ts",
+        "tests/records-runtime-privileges.test.ts",
+        "tests/source-artifact-requirements.test.ts",
+        "tests/source-artifact-storage.test.ts",
+        "tests/source-artifacts-http.test.ts",
+        "tests/source-artifacts.test.ts"
+      ]
+    },
+    {
+      "name": "web_full",
+      "command": "npm test -- --pool=threads --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+      "result": "passed",
+      "files": 73,
+      "passed": 436,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 72.42,
+      "additionalNodeLinkCasesPassed": 12
+    },
+    {
+      "name": "connect_ui_security",
+      "command": "npm run typecheck; npm test; npm run test:release; npm run build",
+      "result": "passed",
+      "uiSecurityCasesPassed": 12,
+      "releasePolicyCasesPassed": 3
+    },
+    {
+      "name": "native_service_core",
+      "command": "/tmp/packproof-dotnet/dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release",
+      "result": "passed_with_platform_skips",
+      "passed": 31,
+      "failed": 0,
+      "skipped": 3,
+      "skipReason": "Actual Windows NTFS folder behavior cannot run on Linux"
+    },
+    {
+      "name": "native_compile",
+      "command": "dotnet build service/PackProof.Connect.Service.csproj -c Release; dotnet build bridge/PackProof.Connect.Bridge.csproj -c Release",
+      "result": "passed",
+      "warnings": 0,
+      "errors": 0
+    },
+    {
+      "name": "api_contract",
+      "command": "node scripts/check-records-api-readiness.mjs",
+      "result": "passed",
+      "recordOperations": 130,
+      "totalOperations": 156
+    },
+    {
+      "name": "backend_web_builds",
+      "command": "npm run build (backend and web); npm run typecheck",
+      "result": "passed"
+    },
+    {
+      "name": "full_backend_discovery",
+      "command": "timeout 90s node node_modules/vitest/vitest.mjs list --json",
+      "result": "timed_out",
+      "exitCode": 124,
+      "notes": "No suite output; affected selection passed; required hosted full regression remains authoritative"
+    },
+    {
+      "name": "visual_preview",
+      "result": "welcome_layout_inspected",
+      "scope": "Browser-only production renderer shows honest missing-service state with disabled actions; no Windows service, full journey, screen-reader or 200% claim"
+    }
+  ],
   "artifacts": [],
-  "deployed": { "backend": null, "portal": null, "windows": null },
+  "deployed": {
+    "backend": null,
+    "portal": null,
+    "windows": null
+  },
   "customerAcceptance": null,
-  "limits": ["Linux source checks do not establish Windows service, signing or installation acceptance", "No synthetic fixture is customer acceptance"]
+  "limits": [
+    "Linux source checks do not establish Windows service, signing or installation acceptance",
+    "No synthetic fixture is customer acceptance"
+  ],
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/147",
+  "sourceCommits": [
+    "ae40bcd77ac504ef559b8f74d1a9f8319c66d1ac",
+    "b1ed9bc8001bec7857cc064c1f284387fb8d9dad"
+  ],
+  "hostedRuns": [
+    {
+      "commit": "ae40bcd77ac504ef559b8f74d1a9f8319c66d1ac",
+      "runId": 42274254134,
+      "name": "Connect Windows candidate",
+      "result": "failed",
+      "passedNativeCases": 25,
+      "failedNativeCases": 1,
+      "cause": "Live SQLite privacy test used File.ReadAllBytes without Windows sharing; fixed without removing assertion"
+    },
+    {
+      "commit": "b1ed9bc8001bec7857cc064c1f284387fb8d9dad",
+      "runId": 42275131554,
+      "name": "Connect Windows candidate",
+      "result": "in_progress"
+    }
+  ],
+  "acceptanceScenarios": {
+    "T01": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T02": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T03": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T04": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T05": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T06": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T07": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T08": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T09": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T10": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T11": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T12": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T13": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T14": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T15": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T16": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T17": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T18": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T19": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T20": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T21": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T22": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T23": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T24": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    },
+    "T25": {
+      "result": "not_accepted",
+      "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
+    }
+  }
 }

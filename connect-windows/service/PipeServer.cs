@@ -22,7 +22,7 @@ public sealed class PipeServer(HostConfiguration host, AgentRuntime agent)
         {
             using var pipe = NamedPipeServerStreamAcl.Create(host.PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, MaxRequestBytes, MaxResponseBytes, Security(host.OperatorsSid, host.ServiceName));
             await pipe.WaitForConnectionAsync(ct);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(45));
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(35));
             try
             {
                 string? caller = null; pipe.RunAsClient(() => caller = WindowsIdentity.GetCurrent().User?.Value);
@@ -42,7 +42,11 @@ public sealed class PipeServer(HostConfiguration host, AgentRuntime agent)
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException) { response = new { version = 1, id = request?.Id, ok = false, error = new { code = "LOCAL_STORAGE_UNAVAILABLE", message = "The service cannot safely access its approved local storage. Queued work is preserved; ask IT to check disk space and permissions." } }; }
                 catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { response = new { version = 1, id = request?.Id, ok = false, error = new { code = "NETWORK_UNAVAILABLE", message = "PackProof could not be reached. Your queued work is preserved; check the service network connection." } }; }
                 var output = Json.Bytes(response); if (output.Length > MaxResponseBytes) output = Json.Bytes(new { version = 1, id = request?.Id, ok = false, error = new { code = "LOCAL_RESPONSE_LIMIT", message = "The local preview is too large. Use a smaller setup export." } });
-                await pipe.WriteAsync(output, timeout.Token); await pipe.WriteAsync(new byte[] { 10 }, timeout.Token); await pipe.FlushAsync(timeout.Token);
+                // A command deadline can cancel HTTP work while its durable
+                // state is safe. Give the bounded error reply its own short
+                // window, before the outer trusted bridge's 40-second deadline.
+                using var replyDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct); replyDeadline.CancelAfter(TimeSpan.FromSeconds(3));
+                await pipe.WriteAsync(output, replyDeadline.Token); await pipe.WriteAsync(new byte[] { 10 }, replyDeadline.Token); await pipe.FlushAsync(replyDeadline.Token);
             }
             catch (Exception e) when (e is IOException or OperationCanceledException or ConnectException) { if (ct.IsCancellationRequested) break; }
         }

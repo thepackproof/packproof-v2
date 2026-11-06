@@ -33,6 +33,10 @@ public sealed class RecoveryTests : IDisposable {
     [Fact] public void Missing_spool_key_never_replaces_retained_queue_key(){
         using(var queue=new DurableQueue(Store())){queue.Stage(Original,"source.csv",Body,"generation","config",false);}File.Delete(Path.Combine(root,"spool-key.bin"));Assert.Equal("SPOOL_KEY_MISSING",Assert.Throws<ConnectException>(()=>new DurableQueue(Store())).Code);Assert.False(File.Exists(Path.Combine(root,"spool-key.bin")));
     }
+    [Fact] public void Completed_summary_retention_releases_original_file_admission_capacity(){
+        using var queue=new DurableQueue(Store(),1);var completed=queue.Stage(Original,"completed.csv",Body,"generation","config",false);var payload=queue.Payload(completed);payload.Receipt=Receipt("succeeded");payload.CompletedAt=DateTimeOffset.UtcNow.AddHours(-25);queue.Save(completed,payload,"complete","import-a");var next=Encoding.UTF8.GetBytes("reference,description,quantity\n0002,Next private,1\n");
+        Assert.Equal("SPOOL_CAPACITY_REACHED",Assert.Throws<ConnectException>(()=>queue.Stage(next,"next.csv",Body,"generation","config",false)).Code);Assert.Equal(1,queue.CompactCompleted(DateTimeOffset.UtcNow));var admitted=queue.Stage(next,"next.csv",Body,"generation","config",false);Assert.Equal(2,queue.Entries().Count);Assert.Equal("",queue.Payload(queue.Find(completed.Id)!).Csv);Assert.Equal(next,Encoding.UTF8.GetBytes(queue.Payload(admitted).Csv));Assert.Equal(2,Directory.EnumerateFiles(Path.Combine(root,"spool"),"*.bin").Count());
+    }
     [Fact] public async Task Explicit_policy_refresh_cannot_extend_approval_after_clock_rollback(){
         var calls=0;using var runtime=new AgentRuntime(Host(),Store(),new PackProofClient(Host(),new FakeHandler(_=>{calls++;throw new Exception("Clock rollback must pause before policy refresh");})),new LocalState{Token="secret",LastPolicyCheckAt=DateTimeOffset.UtcNow.AddHours(1)});
         var error=await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("refresh",null,default));Assert.Equal("CLOCK_UNCERTAIN",error.Code);Assert.Equal(0,calls);Assert.True(Store().Read<LocalState>("state.bin")!.LocalPaused);
