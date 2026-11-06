@@ -49,7 +49,17 @@ function Initialize-OperatorMetadataKey([string]$Path) {
   $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
   foreach ($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule((New-Object Security.AccessControl.RegistryAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)),'FullControl','ContainerInherit','None','Allow'))) }
   $acl.AddAccessRule((New-Object Security.AccessControl.RegistryAccessRule((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')),'ReadKey','ContainerInherit','None','Allow')))
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  # RegistrySecurity created in memory is not bound to a provider path. Apply
+  # it through an explicitly opened native registry handle instead of Set-Acl.
+  $machine=[Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+  $key=$null
+  try {
+   $key=$machine.OpenSubKey($Path.Substring('HKLM:\'.Length),[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[Security.AccessControl.RegistryRights]::FullControl)
+   if ($null -eq $key) { throw 'The newly created Connect metadata key could not be opened for protected initialization.' }
+   if ($null -ne $key.PSObject.Methods['SetAccessControl']) { $key.SetAccessControl($acl) }
+   else { [Microsoft.Win32.RegistryAclExtensions]::SetAccessControl($key,$acl) }
+   $key.Flush()
+  } finally { if ($null -ne $key) { $key.Dispose() };$machine.Dispose() }
  }
  Assert-OperatorMetadataPermissions $Path
 }
