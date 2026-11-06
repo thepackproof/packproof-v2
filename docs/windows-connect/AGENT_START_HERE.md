@@ -1,6 +1,6 @@
 # PackProof Windows setup — coding-agent entry point
 
-Read `PackProof_Windows_Setup_Development_Plan_2026-11-06.md` before implementation.
+Read [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) before implementation.
 This is the entry point, not a competing specification. Document date: November 6, 2026.
 
 ## Outcome

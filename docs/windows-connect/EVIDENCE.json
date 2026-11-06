@@ -3,13 +3,13 @@
   "date": "2026-11-06",
   "baselineCommit": "a42c10653258b63217043f8670b94ca87a233684",
   "implementationBranch": "feature/packproof-connect-windows",
-  "testedCommit": null,
+  "testedCommit": "328b529b85f0c4559f00355776acfa32b897e68d",
   "gates": {
-    "G0": "pending",
-    "G1": "pending",
-    "G2": "pending",
-    "G3": "pending",
-    "G4": "pending"
+    "G0": "passed_internal_foundation_on_hosted_windows_server",
+    "G1": "blocked_approved_nonproduction_end_to_end",
+    "G2": "blocked_signed_windows11_release_acceptance",
+    "G3": "blocked_named_customer_and_novice_acceptance",
+    "G4": "blocked_release_and_production_canary"
   },
   "tests": [
     {
@@ -105,6 +105,61 @@
       "failed": 1,
       "failure": "Unchanged legacy-deployment inertness case requires pwsh, absent on local host. Historical migration byte checks and compiled image graph passed; hosted test still required.",
       "command": "node node_modules/vitest/vitest.mjs run tests/rnd-production-packaging.test.ts --pool=threads --maxWorkers=1 --reporter=verbose"
+    },
+    {
+      "name": "hosted_full_backend",
+      "result": "passed_with_existing_skips",
+      "sourceHead": "f8dd1807561b9b2546318630a67935948f7c9cfb",
+      "testedMergeCommit": "2e221b9d0cb92a96d79363f970fe70104f015ab4",
+      "backendSubtree": "d61e2751bb449bd716665d77e53b47a4ccd82cc7",
+      "passed": 1753,
+      "failed": 0,
+      "skipped": 17,
+      "filesPassed": 227,
+      "filesSkipped": 6,
+      "runId": 42277219315,
+      "notes": "Backend subtree is byte-identical in candidate328b529. Existing opt-in live-provider/cloud and PostgreSQL lanes skipped; dedicated real PostgreSQL checks passed separately."
+    },
+    {
+      "name": "hosted_postgresql_release",
+      "result": "passed",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0,
+      "runId": 42277219315
+    },
+    {
+      "name": "hosted_partner_foundation",
+      "result": "passed",
+      "passed": 167,
+      "nodeReceiverCasesPassed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "runId": 42278979183
+    },
+    {
+      "name": "hosted_native_candidate",
+      "result": "passed",
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0,
+      "uiCasesPassed": 12,
+      "releasePolicyCasesPassed": 3,
+      "nativeFoundationCasesPassed": 8,
+      "runId": 42278979178,
+      "sourceCommit": "785726612dca6a7dda16e2eac5146347aaf6d9b7",
+      "platform": "Windows Server2025 build10.0.26100.0; explicit development-only host exception; not Windows11 qualification"
+    },
+    {
+      "name": "hosted_other_gates",
+      "result": "passed",
+      "runs": {
+        "contractSDK": 42278979216,
+        "nativeMedia": 42278979232,
+        "codeQL": 42278979261,
+        "integrity": 42278979251
+      },
+      "notes": "Later ordinary CI reruns can continue after documentation receipts; no complete latest-head CI claim is made beyond the named runs."
     }
   ],
   "artifacts": [
@@ -118,6 +173,20 @@
       "signed": false,
       "status": "superseded_internal_failed_foundation",
       "publicDistributionAllowed": false
+    },
+    {
+      "bytes": 167275656,
+      "sha256": "30c66bafddacc125d9a1b52a2ffc7321da87742c51e9bf1d8bdadb33526ab8a3",
+      "file": "PackProof-Connect-development-Setup-0.1.0.exe",
+      "runId": 42278979178,
+      "artifactId": 13534087775,
+      "artifactURL": "https://github.com/thepackproof/packproof-v2/actions/runs/42278979178/artifacts/13534087775",
+      "sourceCommit": "785726612dca6a7dda16e2eac5146347aaf6d9b7",
+      "version": "0.1.0",
+      "signed": false,
+      "status": "validated_internal_foundation",
+      "zipSha256": "c0c1d84383a126714cf723c367a25f1b66c08ba0fb9d6ffccd273fcc65cccf40",
+      "publicDistributionAllowed": false
     }
   ],
   "deployed": {
@@ -128,14 +197,18 @@
   "customerAcceptance": null,
   "limits": [
     "Linux source checks do not establish Windows service, signing or installation acceptance",
-    "No synthetic fixture is customer acceptance"
+    "No synthetic fixture is customer acceptance",
+    "NSIS/UAC original-user transition, logoff/reboot, unauthorized local/remote pipe callers, signed upgrade/downgrade/coexistence, proxy and assistive-technology acceptance remain unverified",
+    "No approved actual Windows-to-hosted-sandbox import, named customer export, novice observation or production canary has been performed"
   ],
   "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/147",
   "sourceCommits": [
     "ae40bcd77ac504ef559b8f74d1a9f8319c66d1ac",
     "b1ed9bc8001bec7857cc064c1f284387fb8d9dad",
     "6d151adf9a211a0acad2b1655013a81cadb9300b",
-    "456faa53b88069f0ace1d28a509e78492079aea6"
+    "456faa53b88069f0ace1d28a509e78492079aea6",
+    "f8dd1807561b9b2546318630a67935948f7c9cfb",
+    "328b529b85f0c4559f00355776acfa32b897e68d"
   ],
   "hostedRuns": [
     {
@@ -170,6 +243,13 @@
       "name": "Connect Windows candidate",
       "result": "native_foundation_passed",
       "scope": "Hosted Windows Server 2025, actual LocalService protected storage, expected-service pipe bridge, local immutable CSV preview, restart, repair and preserved-data removal. Windows11/UAC/NSIS/reboot/unauthorized-local-or-remote-client acceptance not established."
+    },
+    {
+      "commit": "328b529b85f0c4559f00355776acfa32b897e68d",
+      "testedMergeCommit": "785726612dca6a7dda16e2eac5146347aaf6d9b7",
+      "runId": 42278979178,
+      "name": "Connect Windows candidate",
+      "result": "success"
     }
   ],
   "acceptanceScenarios": {
@@ -273,5 +353,58 @@
       "result": "not_accepted",
       "notes": "See source tests for synthetic coverage; exact Windows/customer acceptance evidence still required"
     }
+  },
+  "testedNativeMergeCommit": "785726612dca6a7dda16e2eac5146347aaf6d9b7",
+  "nativeFoundation": {
+    "schemaVersion": 1,
+    "sourceCommit": "785726612dca6a7dda16e2eac5146347aaf6d9b7",
+    "scope": "Native service foundation on the hosted Windows Server runner; not Windows 11/customer/installer acceptance",
+    "osBuild": "10.0.26100.0",
+    "tests": [
+      {
+        "name": "service starts under LocalService independently of Electron",
+        "result": "passed"
+      },
+      {
+        "name": "verified expected-service peer bridge returns bounded setup-only state",
+        "result": "passed"
+      },
+      {
+        "name": "actual LocalService identity DPAPI round trip and disk reserve",
+        "result": "passed"
+      },
+      {
+        "name": "actual service read-only immutable CSV local preview preserves leading zeros",
+        "result": "passed"
+      },
+      {
+        "name": "service restart recovers identity-protected configuration without an interactive UI",
+        "result": "passed"
+      },
+      {
+        "name": "same-source service repair preserves protected state",
+        "result": "passed"
+      },
+      {
+        "name": "repair without an override preserves the approved operator SID",
+        "result": "passed"
+      },
+      {
+        "name": "service removal preserves encrypted data keys and source original",
+        "result": "passed"
+      }
+    ],
+    "windows11Acceptance": "not_run",
+    "installerAcceptance": "not_run",
+    "remotePipeClient": "not_run",
+    "customerAcceptance": "not_run",
+    "result": "passed"
+  },
+  "releaseSupport": {
+    "engineeringTarget": "Windows11 x64 / Scheduled CSV Export Folder v1 / local NTFS / one direct merchant source",
+    "qualifiedCustomerSource": null,
+    "signedRelease": null,
+    "deployedBackend": null,
+    "deployedPortal": null
   }
 }

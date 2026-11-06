@@ -1,14 +1,16 @@
 # Windows Connect blocker register
 
-Date: 2026-11-06. Continue independent implementation when a downstream prerequisite is missing. Do not repeatedly retry an unchanged external failure.
+Date: 2026-11-06. G0 internal engineering foundation passed. G1–G4 remain incomplete; implementation and release are authorized, and their required evidence is still necessary.
 
-| ID | Evidence / last verified state | Affected gate | Required resolution |
+| ID | Last verified state | Gate | Required resolution |
 | --- | --- | --- | --- |
-| B01 | The base host had no SDK. A scratch .NET 10.0.403 SDK now compiles the service and bridge. This host is Linux, so actual Windows service/ACL/logoff/reboot behavior requires Windows evidence. | G0–G2 | Run the exact-source Windows candidate workflow and native acceptance on Windows 11 x64. |
-| B02 | `git push --dry-run origin HEAD` failed: could not read Username for https://github.com. Connected GitHub account does have repository write permission. | Source publication / native CI | Resolved for source publication: connected GitHub API created PR 147 and exact tree 82f8c7ea3acd00fb5fefbd0c139557ed7bd0ee3a. No personal token is needed. |
-| B03 | No named approved nonproduction organization, eligible administrator session and current import capability were supplied. Source code supports the routes; that does not establish deployment. | G1 | Select an authorized sandbox organization and apply reviewed migration/role changes through the existing release channel; perform the actual Windows export-to-record test. |
-| B04 | No Connect signed candidate, signing receipt or publisher validation has been produced. Existing Desktop signing channels are patterns, not a Connect acceptance result. | G2 / G4 | Build with the existing protected signing identity, verify every shipped executable and test the actual signed candidate. |
-| B05 | No named exporter/version, customer-authorized original, source owner, Windows permissions or observed first-time users were supplied. | G3 | Validate the immutable local CSV producer contract, reconcile an authorized dataset and observe at least five representative first-time users. |
-| B06 | No accepted source/cohort or exact signed package exists yet. | G4 | Complete G1–G3 and the fresh-download production canary before public distribution. |
+| B01 | Exact internal package and eight real LocalService foundation cases passed on hosted Windows Server 2025. Windows 11, NSIS/UAC, logoff/reboot and adversarial local/remote pipe acceptance have not run. | G2 | Test the actual signed package on Windows 11 x64, including lifecycle, security, accessibility and resource cases. |
+| B02 | Direct shell Git push lacked authentication; connected GitHub publication created PR 147 and verified matching trees. | Resolved | No owner action needed for source publication or native candidate CI. |
+| B03 | No named approved hosted sandbox organization, current eligible administrator session and deployed import capability were established. Source and synthetic API fixtures are not deployment evidence. | G1 | Select the authorized nonproduction workspace and run the reviewed migration/role release, then verify the actual Windows export-to-visible-record flow. |
+| B04 | No signed Connect candidate, timestamped publisher receipt or signed update chain has been produced. Existing Desktop signing patterns were reused. | G2 / G4 | Execute the protected signing channel with the existing authorized identity and verify every shipped executable and actual lifecycle. |
+| B05 | No named exporter/version, source owner, authorized customer original, pilot permissions or novice observations were supplied. | G3 | Qualify the immutable CSV contract, reconcile an approved dataset and observe at least five first-time users through a representative pilot cycle. |
+| B06 | No accepted customer cohort, exact signed supported package or production canary exists. | G4 | Complete G1–G3, publish only the accepted scope/cohort and verify a fresh download/install/import canary. |
 
-The user authorized implementation and release within this plan. Release remains dependent on the plan's actual acceptance gates, customer data consent and configured release identity. Passing an internal build does not establish those facts or permit weakening signing, authorization or retention controls.
+Internal build: https://github.com/thepackproof/packproof-v2/actions/runs/42278979178/artifacts/13534087775. It is unsigned and is not a customer release. No named WMS/exporter/customer is qualified.
+
+These prerequisites are evidence and access requirements, not a request to repeat implementation approval. Do not weaken signatures, authorization, privacy, historical migration receipts or retention controls to pass them. Deferred SQL, network-share, camera, robotics, fleet and cross-platform work remains out of scope.
