@@ -5,8 +5,9 @@ import {loadConfig} from '/app/backend/dist/config.js';
 import {createPgDatabase} from '/app/backend/dist/db/postgres.js';
 import {assertSchemaCurrent} from '/app/backend/dist/db/migrate.js';
 import {newId} from '/app/backend/dist/ids.js';
-const SOURCE='65700aac0d8d3d0640b13469a2d508d86efcc318';
-const IMAGE='784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:6a396f672e62636a6fb603b7e922afadeed0070183d319e3ef335e9ac4274d6f';
+const SOURCE=process.env.PACKPROOF_ACCEPTANCE_SOURCE;
+const VERSION=process.env.PACKPROOF_ACCEPTANCE_VERSION;
+const IMAGE=process.env.PACKPROOF_ACCEPTANCE_IMAGE;
 const BASE='https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws';
 const origin='https://thepackproof.com',run=newId('release_synthetic'),checks=[],fixtures=[];
 const sha=v=>createHash('sha256').update(v).digest('hex');
@@ -22,9 +23,9 @@ async function request(name,path,{token,body,method='GET',key,headers={},status=
  return {data,replayed:response.headers.get('idempotency-replayed')};
 }
 try{
- check(process.env.PACKPROOF_RELEASE_SHA===SOURCE&&process.env.PACKPROOF_DB_USER==='packproof'&&process.env.PACKPROOF_OPERATOR_PURPOSE==='records-production-synthetic-acceptance','SYNTHETIC_OPERATOR_BINDING_REQUIRED');
+ check(/^[a-f0-9]{40}$/.test(SOURCE??'')&&/^784514617543\.dkr\.ecr\.us-east-1\.amazonaws\.com\/packproof-v2-staging-api@sha256:[a-f0-9]{64}$/.test(IMAGE??'')&&VERSION==='records-api-2026.11.05-'+SOURCE.slice(0,8)&&process.env.PACKPROOF_RELEASE_SHA===SOURCE&&process.env.PACKPROOF_DB_USER==='packproof'&&process.env.PACKPROOF_OPERATOR_PURPOSE==='records-production-synthetic-acceptance','SYNTHETIC_OPERATOR_BINDING_REQUIRED');
  const meta=(await request('release-identity','/meta')).data;
- check(meta.commit===SOURCE&&meta.image===IMAGE&&meta.version==='records-api-2026.11.05-65700aac','SYNTHETIC_LIVE_RELEASE_MISMATCH');
+ check(meta.commit===SOURCE&&meta.image===IMAGE&&meta.version===VERSION,'SYNTHETIC_LIVE_RELEASE_MISMATCH');
  await request('health','/health');await request('ready','/ready');
  await request('unauthenticated-partner','/v1/partner/limits',{status:401});
  const env=process.env,cfg=loadConfig({...env,DATABASE_URL:'',PACKPROOF_DB_SECRET_ARN:''}),url=new URL(cfg.databaseUrl);
