@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "date": "2026-11-06",
+  "date": "2026-11-07",
   "baselineCommit": "a42c10653258b63217043f8670b94ca87a233684",
   "implementationBranch": "feature/packproof-connect-windows",
-  "testedCommit": "328b529b85f0c4559f00355776acfa32b897e68d",
+  "testedCommit": "87134350256790a525eb271a84981e8d4c9c50f3",
   "gates": {
     "G0": "passed_internal_foundation_on_hosted_windows_server",
     "G1": "blocked_approved_nonproduction_end_to_end",
@@ -160,6 +160,31 @@
         "integrity": 42278979251
       },
       "notes": "Later ordinary CI reruns can continue after documentation receipts; no complete latest-head CI claim is made beyond the named runs."
+    },
+    {
+      "name": "hosted_readiness_backend",
+      "result": "passed_with_existing_skips",
+      "sourceHead": "87134350256790a525eb271a84981e8d4c9c50f3",
+      "testedMergeCommit": "87836af1eb2ca289cbabe1f388da358db6f155ec",
+      "passed": 1763,
+      "skipped": 17,
+      "failed": 0,
+      "filesPassed": 228,
+      "filesSkipped": 6,
+      "runId": 42346847098,
+      "notes": "New operator tests passed in full backend PGlite selection; dedicated real PostgreSQL108 selection is added in follow-up and not yet claimed."
+    },
+    {
+      "name": "hosted_native_access_acceptance",
+      "result": "passed",
+      "runId": 42346847313,
+      "sourceCommit": "87836af1eb2ca289cbabe1f388da358db6f155ec",
+      "passed": 36,
+      "skipped": 0,
+      "failed": 0,
+      "uiCasesPassed": 12,
+      "nativeFoundationCasesPassed": 13,
+      "scope": "Hosted Windows Server2025; NETWORK-token policy exercised locally; no actual remote machine or Windows11 qualification"
     }
   ],
   "artifacts": [
@@ -186,6 +211,19 @@
       "signed": false,
       "status": "validated_internal_foundation",
       "zipSha256": "c0c1d84383a126714cf723c367a25f1b66c08ba0fb9d6ffccd273fcc65cccf40",
+      "publicDistributionAllowed": false
+    },
+    {
+      "file": "PackProof-Connect-development-Setup-0.1.0.exe",
+      "bytes": 167269137,
+      "sha256": "93c45e3bf0c14263fb8f35b66299b57c5f62d466fb213d6decdd60b4c72b3377",
+      "runId": 42346847313,
+      "artifactId": 13564460154,
+      "artifactURL": "https://github.com/thepackproof/packproof-v2/actions/runs/42346847313/artifacts/13564460154",
+      "sourceCommit": "87836af1eb2ca289cbabe1f388da358db6f155ec",
+      "signed": false,
+      "status": "validated_internal_foundation_and_local_negative_access",
+      "zipSha256": "07d8153bfcb72d9e5e5b5b856172a99231c0eb711dc0a6a62ddcedfb8a80fcf8",
       "publicDistributionAllowed": false
     }
   ],
@@ -406,5 +444,93 @@
     "signedRelease": null,
     "deployedBackend": null,
     "deployedPortal": null
+  },
+  "mergedImplementationCommit": "531c13025f7ed87fdd6557f6a64377dc32985d61",
+  "mergedReadinessCommit": "bfd781f08c939a5ca4bfbfc4cbf69ee02a6cabcd",
+  "nativeFoundationSmoke": {
+    "schemaVersion": 1,
+    "sourceCommit": "87836af1eb2ca289cbabe1f388da358db6f155ec",
+    "scope": "Native service foundation on the hosted Windows Server runner; not Windows 11/customer/installer acceptance",
+    "osBuild": "10.0.26100.0",
+    "tests": [
+      {
+        "name": "service starts under LocalService independently of Electron",
+        "result": "passed"
+      },
+      {
+        "name": "verified expected-service peer bridge returns bounded setup-only state",
+        "result": "passed"
+      },
+      {
+        "name": "actual LocalService identity DPAPI round trip and disk reserve",
+        "result": "passed"
+      },
+      {
+        "name": "actual service read-only immutable CSV local preview preserves leading zeros",
+        "result": "passed"
+      },
+      {
+        "name": "service restart recovers identity-protected configuration without an interactive UI",
+        "result": "passed"
+      },
+      {
+        "name": "same-source service repair preserves protected state",
+        "result": "passed"
+      },
+      {
+        "name": "repair without an override preserves the approved operator SID",
+        "result": "passed"
+      },
+      {
+        "name": "unapproved standard-user token denied pipe access and protected state bytes",
+        "result": "passed"
+      },
+      {
+        "name": "explicitly approved standard user reads bounded service status without direct protected-file access",
+        "result": "passed"
+      },
+      {
+        "name": "NETWORK token is denied even when the same standard identity is approved interactively",
+        "result": "passed"
+      },
+      {
+        "name": "counterfeit pipe with stopped registered service receives zero helper request bytes",
+        "result": "passed"
+      },
+      {
+        "name": "captured bounded real service idle memory and normalized CPU observation",
+        "result": "passed"
+      },
+      {
+        "name": "service removal preserves encrypted data keys and source original",
+        "result": "passed"
+      }
+    ],
+    "windows11Acceptance": "not_run",
+    "installerAcceptance": "not_run",
+    "remotePipeClient": "not_run",
+    "customerAcceptance": "not_run",
+    "networkTokenPolicy": "passed; actual remote-machine transport not exercised",
+    "idleObservation": {
+      "workingSetBytes": 53620736,
+      "normalizedCpuPercent": 0.845651373998116,
+      "logicalProcessors": 4,
+      "processorMilliseconds": 203.125,
+      "scope": "Single service-idle observation on hosted Windows Server; no load or reference-PC qualification",
+      "elapsedSeconds": 6.0049864
+    },
+    "result": "passed"
+  },
+  "continuation": {
+    "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/148",
+    "merged": true,
+    "nativeRun": 42346847313,
+    "ciRun": 42346847098,
+    "rollbackBridgeSource": "7e4cf9ed7635a0104d6a8a1b2ba93334c8e61184",
+    "rollbackBridgeImage": null,
+    "cloudMutationsPerformed": false,
+    "signing": "GitHub browser remains signed out; secure sign-in request cancelled",
+    "isolatedRuntime": "M1 tagged synthetic-only; no NAT/default route or VPC endpoints for private Fargate bootstrap; schema ledger not inspected",
+    "cloudMetadataRefresh": "Later AWS metadata request cancelled; no build or deploy result received"
   }
 }
