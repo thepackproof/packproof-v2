@@ -75,7 +75,7 @@ try {
  try { $disposableUser=New-LocalUser -Name $probeName -Password $secureProbePassword -Description 'Isolated Connect CI access probe' -AccountNeverExpires -PasswordNeverExpires }
  finally { $secureProbePassword.Dispose() }
  $usersGroup=Get-LocalGroup -SID ([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'))
- if (-not (Get-LocalGroupMember -Group $usersGroup.Name | Where-Object { $_.SID.Value -eq $disposableUser.SID.Value })) { Add-LocalGroupMember -Group $usersGroup.Name -Member $disposableUser.SID }
+ if (-not (Get-LocalGroupMember -Group $usersGroup.Name | Where-Object { $_.SID.Value -eq $disposableUser.SID.Value })) { Add-LocalGroupMember -Group $usersGroup.Name -Member $disposableUser }
  $denied=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
  if ($denied.PipeAccess -ne 'denied' -or $denied.ProtectedFileAccess -ne 'denied') { throw 'An unapproved standard user reached the service pipe or protected state.' }
  [void](Invoke-Bridge status)
