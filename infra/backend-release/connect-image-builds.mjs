@@ -76,6 +76,7 @@ JS`;
   `ECR=${repository}`,'export ECR',
   retention,
   'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 784514617543.dkr.ecr.us-east-1.amazonaws.com',
+  ...(rollback?[`docker pull '${CONNECT_IMAGE_BASE.image}'`]:[]),
  ]},build:{'on-failure':'ABORT',commands},post_build:{'on-failure':'ABORT',commands:[
   'test "$CODEBUILD_BUILD_SUCCEEDING" = 1',
   'docker push "$ECR:$IMAGE_TAG"',

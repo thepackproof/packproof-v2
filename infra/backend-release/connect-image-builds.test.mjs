@@ -28,6 +28,11 @@ test('rollback preserves actual immutable base and copies only the exact compile
  const request=connectImageBuildRequest({profile:'rollback',sourceSha,zipSha256});
  assert.equal(request.environmentVariablesOverride[1].value,`connect-rollback-${sourceSha}`);
  const build=JSON.parse(request.buildspecOverride),commands=build.phases.build.commands.join('\n');
+ const preparation=build.phases.pre_build.commands;
+ const pull=preparation.indexOf(`docker pull '${CONNECT_IMAGE_BASE.image}'`);
+ const login=preparation.findIndex(command=>command.includes('docker login'));
+ assert.ok(login>=0&&pull>login);
+ assert.equal(preparation.filter(command=>command.startsWith('docker pull ')).length,1);
  assert.match(commands,/rows.length!==106/);
  assert.match(commands,/checksum:null/);
  assert.match(commands,/109_unreviewed/);
