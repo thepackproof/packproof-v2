@@ -1,0 +1,634 @@
+{
+  "schema": "packproof.record-agent-schema-manifest/v1",
+  "migrationChecksum": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f",
+  "catalog": {
+    "columns": [
+      {
+        "table_name": "partner_import_jobs",
+        "name": "agent_installation_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "partner_import_jobs",
+        "name": "agent_config_revision",
+        "type": "integer",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "secret_hash",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "comparison_code",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "device_name",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "device_hash",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "version",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "state",
+        "type": "text",
+        "not_null": true,
+        "default_value": "'pending'::text"
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "last_poll_at",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "installation_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "credential_response",
+        "type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "organization_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "environment",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "principal_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "credential_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "integration_account_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "operator_membership_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "location_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "source_name",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "device_name",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "version",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "status",
+        "type": "text",
+        "not_null": true,
+        "default_value": "'setup'::text"
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "config_revision",
+        "type": "integer",
+        "not_null": true,
+        "default_value": "0"
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "approved_config",
+        "type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "config_sha256",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "pending_proposal",
+        "type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "pending_proposal_sha256",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "test_import_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "verified_import_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "approval_user_id",
+        "type": "text",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "enrollment_expires_at",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "enrollment_acknowledged_at",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "not_null": true,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "last_seen_at",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "heartbeat",
+        "type": "jsonb",
+        "not_null": true,
+        "default_value": "'{}'::jsonb"
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "renewal_credential_id",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "renewal_response",
+        "type": "jsonb",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "renewal_expires_at",
+        "type": "timestamp with time zone",
+        "not_null": false,
+        "default_value": null
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "renewal_key_hash",
+        "type": "text",
+        "not_null": false,
+        "default_value": null
+      }
+    ],
+    "constraints": [
+      {
+        "table_name": "partner_import_jobs",
+        "name": "partner_import_agent_revision",
+        "type": "c",
+        "definition": "CHECK (((agent_installation_id IS NULL) = (agent_config_revision IS NULL)))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "partner_import_jobs",
+        "name": "partner_import_jobs_agent_config_revision_check",
+        "type": "c",
+        "definition": "CHECK ((agent_config_revision > 0))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "partner_import_jobs",
+        "name": "partner_import_jobs_agent_installation_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (agent_installation_id) REFERENCES record_agent_installations(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_installation_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (installation_id) REFERENCES record_agent_installations(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_installation_id_key",
+        "type": "u",
+        "definition": "UNIQUE (installation_id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_pkey",
+        "type": "p",
+        "definition": "PRIMARY KEY (id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_secret_hash_key",
+        "type": "u",
+        "definition": "UNIQUE (secret_hash)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_state_check",
+        "type": "c",
+        "definition": "CHECK ((state = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text, 'expired'::text, 'acknowledged'::text])))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_approval_user_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (approval_user_id) REFERENCES users(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_check",
+        "type": "c",
+        "definition": "CHECK ((((approved_config IS NULL) AND (config_sha256 IS NULL)) OR ((approved_config IS NOT NULL) AND (config_sha256 ~ '^[a-f0-9]{64}$'::text))))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_config_revision_check",
+        "type": "c",
+        "definition": "CHECK ((config_revision >= 0))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_credential_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (credential_id) REFERENCES platform_credentials(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_credential_id_key",
+        "type": "u",
+        "definition": "UNIQUE (credential_id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_environment_check",
+        "type": "c",
+        "definition": "CHECK ((environment = ANY (ARRAY['sandbox'::text, 'live'::text])))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_integration_account_id_organiza_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (integration_account_id, organization_id, environment) REFERENCES platform_integration_accounts(id, merchant_id, environment)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_location_id_organization_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (location_id, organization_id) REFERENCES record_locations(id, organization_id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_operator_membership_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (operator_membership_id) REFERENCES platform_memberships(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_organization_id_environment_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (organization_id, environment) REFERENCES platform_organizations(id, environment)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_pkey",
+        "type": "p",
+        "definition": "PRIMARY KEY (id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_principal_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (principal_id) REFERENCES platform_principals(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_principal_id_key",
+        "type": "u",
+        "definition": "UNIQUE (principal_id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_renewal_credential_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (renewal_credential_id) REFERENCES platform_credentials(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_renewal_credential_id_key",
+        "type": "u",
+        "definition": "UNIQUE (renewal_credential_id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_status_check",
+        "type": "c",
+        "definition": "CHECK ((status = ANY (ARRAY['setup'::text, 'ready'::text, 'active'::text, 'paused'::text, 'revoked'::text])))",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_test_import_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (test_import_id) REFERENCES partner_import_jobs(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_verified_import_id_fkey",
+        "type": "f",
+        "definition": "FOREIGN KEY (verified_import_id) REFERENCES partner_import_jobs(id)",
+        "validated": true,
+        "deferrable": false,
+        "deferred": false
+      }
+    ],
+    "indexes": [
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_installation_id_key",
+        "definition": "CREATE UNIQUE INDEX record_agent_enrollments_installation_id_key ON record_agent_enrollments USING btree (installation_id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_pkey",
+        "definition": "CREATE UNIQUE INDEX record_agent_enrollments_pkey ON record_agent_enrollments USING btree (id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_enrollments_secret_hash_key",
+        "definition": "CREATE UNIQUE INDEX record_agent_enrollments_secret_hash_key ON record_agent_enrollments USING btree (secret_hash)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_enrollments",
+        "name": "record_agent_pending",
+        "definition": "CREATE INDEX record_agent_pending ON record_agent_enrollments USING btree (device_hash, expires_at) WHERE (state = 'pending'::text)",
+        "valid": true,
+        "ready": true,
+        "unique_index": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_credential_id_key",
+        "definition": "CREATE UNIQUE INDEX record_agent_installations_credential_id_key ON record_agent_installations USING btree (credential_id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_pkey",
+        "definition": "CREATE UNIQUE INDEX record_agent_installations_pkey ON record_agent_installations USING btree (id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_principal_id_key",
+        "definition": "CREATE UNIQUE INDEX record_agent_installations_principal_id_key ON record_agent_installations USING btree (principal_id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_installations_renewal_credential_id_key",
+        "definition": "CREATE UNIQUE INDEX record_agent_installations_renewal_credential_id_key ON record_agent_installations USING btree (renewal_credential_id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_inventory",
+        "definition": "CREATE INDEX record_agent_inventory ON record_agent_installations USING btree (organization_id, environment, id)",
+        "valid": true,
+        "ready": true,
+        "unique_index": false
+      },
+      {
+        "table_name": "record_agent_installations",
+        "name": "record_agent_one_active_source",
+        "definition": "CREATE UNIQUE INDEX record_agent_one_active_source ON record_agent_installations USING btree (organization_id, environment, integration_account_id) WHERE (status <> 'revoked'::text)",
+        "valid": true,
+        "ready": true,
+        "unique_index": true
+      }
+    ]
+  }
+}

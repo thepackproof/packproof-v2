@@ -10,6 +10,10 @@ $data=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PackPro
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PackProof\Exports\development'
 $operatorSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $evidence=[ordered]@{schemaVersion=1;sourceCommit=(& git -C $root rev-parse HEAD).Trim();scope='Native service foundation on the hosted Windows Server runner; not Windows 11/customer/installer acceptance';osBuild=[Environment]::OSVersion.Version.ToString();tests=@();windows11Acceptance='not_run';installerAcceptance='not_run';remotePipeClient='not_run';customerAcceptance='not_run'}
+$pipeName='PackProofConnect-development-v1'
+$disposableUser=$null
+$operatorTemporarilyChanged=$false
+$plainProbePassword=$null
 function Record-Pass([string]$Name) { $evidence.tests+=@{name=$Name;result='passed'} }
 function Invoke-Bridge([string]$Operation,[object]$Payload=$null) {
  $request=@{version=1;id=[Guid]::NewGuid().ToString();operation=$Operation}
@@ -26,6 +30,7 @@ function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator) {
  & (Join-Path $install 'resources\installer\lifecycle.ps1') @parameters
 }
 try {
+ Add-Type -Path (Join-Path $root 'tests\native-security-probes.cs')
  if (Test-Path -LiteralPath $install) { throw 'The isolated Connect foundation smoke directory already exists.' }
  New-Item -Path $install -ItemType Directory | Out-Null
  Copy-Item -Path (Join-Path $unpacked '*') -Destination $install -Recurse -Force
@@ -62,12 +67,63 @@ try {
  if ($repairedConfig.operatorsSid -ne $operatorSid -or (Get-Item -LiteralPath 'HKLM:\SOFTWARE\PackProofConnect\development').GetValue('OperatorsSid') -ne $operatorSid) { throw 'Repair replaced the originally approved local operator.' }
  Record-Pass 'same-source service repair preserves protected state'
  Record-Pass 'repair without an override preserves the approved operator SID'
+ # These are real Windows token/ACL checks against the running packaged service.
+ # Passwords stay in this process and are never written to a script, log or bundle.
+ $probeName='ppconnect'+[Guid]::NewGuid().ToString('N').Substring(0,10)
+ $plainProbePassword='Aa1!'+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(24))
+ $secureProbePassword=ConvertTo-SecureString $plainProbePassword -AsPlainText -Force
+ try { $disposableUser=New-LocalUser -Name $probeName -Password $secureProbePassword -Description 'Isolated Connect CI access probe' -AccountNeverExpires -PasswordNeverExpires }
+ finally { $secureProbePassword.Dispose() }
+ $usersGroup=Get-LocalGroup -SID ([Security.Principal.SecurityIdentifier]::new('S-1-5-32-545'))
+ if (-not (Get-LocalGroupMember -Group $usersGroup.Name | Where-Object { $_.SID.Value -eq $disposableUser.SID.Value })) { Add-LocalGroupMember -Group $usersGroup.Name -Member $disposableUser.SID }
+ $denied=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
+ if ($denied.PipeAccess -ne 'denied' -or $denied.ProtectedFileAccess -ne 'denied') { throw 'An unapproved standard user reached the service pipe or protected state.' }
+ [void](Invoke-Bridge status)
+ Record-Pass 'unapproved standard-user token denied pipe access and protected state bytes'
+ $operatorTemporarilyChanged=$true
+ try {
+  & (Join-Path $install 'resources\installer\lifecycle.ps1') -Action Install -InstallRoot $install -OperatorSid $disposableUser.SID.Value -AllowUnsupportedDevelopmentHost
+  $approved=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
+  if ($approved.PipeAccess -ne 'allowed_status' -or $approved.ProtectedFileAccess -ne 'denied') { throw 'The explicitly approved standard user did not receive bounded status while protected files remained denied.' }
+  Record-Pass 'explicitly approved standard user reads bounded service status without direct protected-file access'
+  $network=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,3,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
+  if (-not $network.IsNetworkLogon -or $network.PipeAccess -ne 'denied' -or $network.ProtectedFileAccess -ne 'denied') { throw 'The approved identity network-logon token was not denied by the local pipe policy.' }
+  $evidence.networkTokenPolicy='passed; actual remote-machine transport not exercised'
+  Record-Pass 'NETWORK token is denied even when the same standard identity is approved interactively'
+ } finally { Run-Lifecycle Install; $operatorTemporarilyChanged=$false }
+ [void](Invoke-Bridge status)
+ Remove-LocalUser -SID $disposableUser.SID
+ $disposableUser=$null
+ $plainProbePassword=$null
+ # SCM must be stopped and its old process gone before the counterfeit fixture
+ # can own the name. The fake must accept the actual helper and receive zero bytes.
+ $oldServicePid=(Get-CimInstance Win32_Service -Filter "Name='$serviceName'").ProcessId
+ Run-Lifecycle Stop
+ $oldProcess=Get-Process -Id $oldServicePid -ErrorAction SilentlyContinue
+ if ($null -ne $oldProcess -and -not $oldProcess.WaitForExit(5000)) { throw 'The stopped service process did not exit before peer-impersonation testing.' }
+ [ConnectNativeSecurityProbe]::AssertCounterfeitPeerRejected($pipeName,(Join-Path $install 'resources\bridge\PackProof.Connect.Bridge.exe'))
+ Record-Pass 'counterfeit pipe with stopped registered service receives zero helper request bytes'
+ Start-Service -Name $serviceName
+ (Get-Service -Name $serviceName).WaitForStatus('Running',[TimeSpan]::FromSeconds(30))
+ [void](Invoke-Bridge status)
+ # Record an observed idle interval, not a reference-PC budget or percentile claim.
+ $process=Get-Process -Id ((Get-CimInstance Win32_Service -Filter "Name='$serviceName'").ProcessId)
+ $cpuBefore=$process.TotalProcessorTime.TotalMilliseconds
+ $watch=[Diagnostics.Stopwatch]::StartNew()
+ Start-Sleep -Seconds 6
+ $process.Refresh(); $watch.Stop()
+ $evidence.idleObservation=@{elapsedSeconds=$watch.Elapsed.TotalSeconds;logicalProcessors=[Environment]::ProcessorCount;workingSetBytes=$process.WorkingSet64;processorMilliseconds=$process.TotalProcessorTime.TotalMilliseconds-$cpuBefore;normalizedCpuPercent=100*($process.TotalProcessorTime.TotalMilliseconds-$cpuBefore)/$watch.Elapsed.TotalMilliseconds/[Environment]::ProcessorCount;scope='Single service-idle observation on hosted Windows Server; no load or reference-PC qualification'}
+ [void](Invoke-Bridge status)
+ Record-Pass 'captured bounded real service idle memory and normalized CPU observation'
  Run-Lifecycle Remove
  if (-not (Test-Path -LiteralPath (Join-Path $data 'state.bin')) -or -not (Test-Path -LiteralPath (Join-Path $data 'spool-key.bin')) -or -not (Test-Path -LiteralPath (Join-Path $exports 'setup.csv'))) { throw 'Removal discarded protected state, encryption key or source export.' }
  Record-Pass 'service removal preserves encrypted data keys and source original'
  $evidence.result='passed'
 } catch { $evidence.result='failed';$evidence.failureCategory='native_foundation';throw }
 finally {
+ if ($operatorTemporarilyChanged -and (Test-Path -LiteralPath $install)) { try { Run-Lifecycle Install } catch {} }
+ if ($null -ne $disposableUser) { try { Remove-LocalUser -SID $disposableUser.SID } catch {} }
+ $plainProbePassword=$null
  if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) { try { Run-Lifecycle Remove } catch {} }
  $evidence|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $output 'native-foundation-smoke.json') -Encoding utf8NoBOM
 }

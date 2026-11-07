@@ -1,19 +1,19 @@
 # Windows Connect implementation status
 
-Date: 2026-11-06. Source implementation, verification, deployment and customer acceptance are separate states.
+Date: 2026-11-07. Source implementation, verification, deployment and customer acceptance are separate states.
 
 ## Baseline and source
 
 Repository: `thepackproof/packproof-v2`. Branch: `feature/packproof-connect-windows`. Starting main commit: `a42c10653258b63217043f8670b94ca87a233684`. Implementation PR: https://github.com/thepackproof/packproof-v2/pull/147. RFC PR 146 remains unchanged.
 
-Reused Electron/NSIS patterns, organization principals and encrypted command replay, partner CSV preview/commit/status, canonical source bindings and the existing records portal. No existing unattended service was present. The new .NET worker is a bounded client; the API remains hosted. The source is not merged or deployed.
+Reused Electron/NSIS patterns, organization principals and encrypted command replay, partner CSV preview/commit/status, canonical source bindings and the existing records portal. No existing unattended service was present. The new .NET worker is a bounded client; the API remains hosted. PR 147 is merged into main at `531c13025f7ed87fdd6557f6a64377dc32985d61`; all checks on its final head passed. The Windows Connect API and portal changes are not deployed.
 
 ## Work packages
 
 | Package | Source and observed verification | Remaining acceptance |
 | --- | --- | --- |
 | W01 baseline/native build | Implemented; exact-source installer and executable inventory verified | Internal artifact only |
-| W02 service/bridge | Implemented; actual LocalService, protected storage, expected-service peer, source read and restart passed | Windows 11 logoff/reboot and adversarial pipe tests |
+| W02 service/bridge | Implemented; actual LocalService, protected storage, expected-service peer, source read and restart passed | Windows 11 logoff/reboot; additional real-token and counterfeit-peer CI checks prepared |
 | W03 enrollment/restrictions | Implemented; focused policy and full backend tests passed; contract checked | Deployed administrator enrollment |
 | W04 queue/spool | Implemented; encrypted persistence, stable operations, recovery, quotas and original cleanup tested | Real Windows full-disk/interruption exercises |
 | W05 CSV vertical slice | Implemented; server/worker, original digest, replay and duplicate contracts tested | Real Windows service to approved hosted sandbox record |
@@ -48,3 +48,11 @@ Full backend CI passed 1,753 cases with 17 existing opt-in skips and no failures
 Initial native and packaging failures were corrected without removing assertions or rewriting historical migrations: Windows live SQLite sharing, additive schema inventory, migration file count, local-group description and registry ACL application. Source publication used connected GitHub APIs because direct shell Git authentication was unavailable; published trees matched local Git exactly.
 
 No production migration, API/portal deployment, signed release, named exporter qualification, user study or customer/live canary is claimed. Engineering target: Windows 11 x64, Scheduled CSV Export Folder v1, one local NTFS folder and one direct merchant source. Exact evidence is in EVIDENCE.json; owner prerequisites are in BLOCKERS.md.
+
+## Release preparation continuation
+
+A separate additive migration-108 operator now prepares an explicitly reviewed nonproduction target without altering the frozen095→107 operators. It requires preserved historical data/catalog/ACLs, an independently qualified previous-image rehearsal on a distinct restored endpoint, actual ECS/image binding and runtime-login checks. The current107 rollback image needs a checksum-pinned108 compatibility bridge before that rehearsal can qualify. The operator does not provision roles, activate organizations or deploy a service. Ten targeted migration tests and inventory checks passed locally; hosted PostgreSQL and current-head CI remain required.
+
+The native smoke now includes disposable standard-user ACL probes, same-identity NETWORK-token denial, counterfeit pipe-peer refusal before any request bytes, and an actual bounded idle resource observation. These are prepared checks until the new hosted Windows run completes; they do not establish a remote-machine transport test or Windows11 acceptance.
+
+Read-only AWS inspection confirmed the public API still runs source `e346452ade2744820fb2f429d7aeb94fef376419` and immutable image `sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0`. Its resource name contains staging but its environment is production. The separate `packproof-m1-20261020` database is tagged isolated-m1-test and synthetic-only; its ledger and current-schema eligibility remain to be inspected. No cloud data, roles, secrets, service configuration or feature activation has been changed.

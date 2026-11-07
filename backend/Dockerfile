@@ -40,6 +40,14 @@ COPY backend/scripts/records-runtime-privileges.mjs ./scripts/records-runtime-pr
 COPY backend/scripts/records-migrate.mjs ./scripts/records-migrate.mjs
 COPY backend/scripts/records-migrate-cli.mjs ./scripts/records-migrate-cli.mjs
 COPY backend/scripts/records-migration-manifest.json ./scripts/records-migration-manifest.json
+COPY backend/scripts/record-agent-migration-inventory.mjs ./scripts/record-agent-migration-inventory.mjs
+COPY backend/scripts/record-agent-migration-manifest.json ./scripts/record-agent-migration-manifest.json
+COPY backend/scripts/record-agent-migrate.mjs ./scripts/record-agent-migrate.mjs
+COPY backend/scripts/record-agent-migrate-cli.mjs ./scripts/record-agent-migrate-cli.mjs
+COPY backend/scripts/record-agent-schema.mjs ./scripts/record-agent-schema.mjs
+COPY backend/scripts/record-agent-schema-manifest.json ./scripts/record-agent-schema-manifest.json
+COPY infra/backend-release/record-agent-database-preflight.mjs /release/record-agent-database-preflight.mjs
+COPY infra/backend-release/record-agent-previous-image-probe.mjs /release/record-agent-previous-image-probe.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs
 COPY backend/scripts/isolated-runtime-queued-revocation.mjs ./scripts/isolated-runtime-queued-revocation.mjs
