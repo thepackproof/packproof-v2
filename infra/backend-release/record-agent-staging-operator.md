@@ -46,3 +46,9 @@ node --input-type=module -e 'import {readFileSync} from "node:fs"; const script=
 ```
 
 The generated JSON contains public reviewed code only; keep secret references in the task definition's `secrets` bindings. Preserve the reviewed previous image digest, separate API task role, execution role and isolated network; remove application health checks and restart policies from this one-shot probe task. The candidate image packages the actual-login probe at `/release/record-agent-database-preflight.mjs`; the offline receipt combiner runs from the checkout and is not a container entry point.
+
+## Exact image preparation
+
+Use `connectImageBuildRequest` from `connect-image-builds.mjs` for a candidate or the narrowly patched rollback source. For the candidate, create and verify `backend-source-archive.py <reviewed-sha> <new-zip> connect-v1`; the older records-v1 profile intentionally omits the two new runtime probes. For the rollback source, use the unchanged records-v1 profile. Upload only the verified Git-blob ZIP to the request's content-addressed S3 key and bind its actual S3 version. Submit the generated StartBuild request to the existing project. These image requests neither deploy nor prepare a database.
+
+The rollback branch `feature/connect-schema108-rollback-bridge` at7e4cf9ed7635a0104d6a8a1b2ba93334c8e61184 is the actual production source plus the exact108 allowlist entry and regression case. Its recipe preserves the actual immutable production image and adds only the compiled migration guard as one filesystem layer. Do not call it a qualified rollback image until the real restored-database probe succeeds.

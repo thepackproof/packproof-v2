@@ -292,7 +292,7 @@ jobs:
           PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
-        run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts tests/records-migrate.test.ts tests/records-runtime-privileges.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
+        run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts tests/records-migrate.test.ts tests/records-runtime-privileges.test.ts tests/record-agent-migrate.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
