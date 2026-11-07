@@ -4,6 +4,13 @@
  * to apply a migration or accept arbitrary future schema.
  */
 export const FORWARD_COMPATIBLE_MIGRATIONS = Object.freeze([
+  // Windows Connect adds two independent tables and nullable import bindings.
+  // Existing import writers keep both bindings NULL; the new immutability
+  // trigger permits their ordinary updates. No existing receipt is rewritten.
+  Object.freeze({
+    id: '108_record_agents',
+    checksum: '65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f',
+  }),
   Object.freeze({
     id: '076_first_experience_measurement',
     // Frozen SQL from 0ecae87: nullable study metadata, expanded opt-in event

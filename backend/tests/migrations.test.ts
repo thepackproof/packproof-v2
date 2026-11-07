@@ -27,6 +27,30 @@ async function checkConcurrentMigrations(first: Database, second: Database) {
 }
 
 describe("concurrent application startup migrations", () => {
+  it("admits the reviewed Connect108 receipt without admitting a missing checksum or later schema", async () => {
+    const opened = await createPgliteDatabase();
+    try {
+      await migrate(opened.db);
+      // This rollback image keeps its original migration inventory through107.
+      expect((await migrationInventory()).some(row => row.id === "108_record_agents")).toBe(false);
+      await opened.db.query(
+        "INSERT INTO schema_migrations(id,applied_at,checksum,checksum_provenance) VALUES('108_record_agents',NOW(),$1,'EXECUTED_BYTES')",
+        ["65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f"],
+      );
+      await expect(assertSchemaCurrent(opened.db)).resolves.toBeUndefined();
+      await opened.db.query("UPDATE schema_migrations SET checksum=NULL WHERE id='108_record_agents'");
+      await expect(assertSchemaCurrent(opened.db)).rejects.toThrow("outside this release compatibility envelope");
+      await opened.db.query(
+        "UPDATE schema_migrations SET checksum=$1 WHERE id='108_record_agents'",
+        ["65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f"],
+      );
+      await opened.db.query("INSERT INTO schema_migrations(id,applied_at,checksum) VALUES('109_unreviewed',NOW(),$1)", ["a".repeat(64)]);
+      await expect(assertSchemaCurrent(opened.db)).rejects.toThrow("outside this release compatibility envelope");
+    } finally {
+      await opened.close();
+    }
+  });
+
   it("remains ready across only exact reviewed additive receipts", async () => {
     const opened = await createPgliteDatabase();
     try {
