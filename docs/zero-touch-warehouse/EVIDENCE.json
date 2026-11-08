@@ -2,7 +2,7 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T01:15:04.405217+00:00",
+  "checkedAt": "2026-11-08T01:20:33.936922+00:00",
   "deployment": {
     "backend": null,
     "portal": null,
@@ -163,7 +163,7 @@
         128584922567,
         128584922702
       ],
-      "note": "Backend jobs all passed. Overall run had the separately repaired 500-issue UI timeout. Backend subtree remains unchanged by the subsequent portal-only fix."
+      "note": "Backend jobs all passed at the named source. The overall run had the repaired500-issue UI timeout. Later stricter original-input guards have17 passing local source cases; current exact-head CI is separately required."
     },
     {
       "name": "hosted_postgres_current",
@@ -187,6 +187,15 @@
       "focusedPassed": 33,
       "linkChecksPassed": 12,
       "note": "Summary renders unresolved issues; review history is25 rows per page. The500-row regression verifies later pages without a larger timeout."
+    },
+    {
+      "name": "final_original_validation_guard",
+      "result": "passed",
+      "command": "npm --prefix backend run typecheck; npm --prefix backend test -- --run tests/source-associations.test.ts --maxWorkers=1",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "scope": "Final parser guard confirms hidden credentials reject with INGESTION_SECRET_FIELD and create no durable receipt; untouched inputs validated before enrichment."
     }
   ],
   "customerReconciliation": null,
@@ -195,13 +204,15 @@
   "apiImage": null,
   "assurance": "Organization-submitted unsigned operational additions; prior frozen manifests and original signing scopes unchanged.",
   "securityReview": {
-    "result": "findings_fixed_independent_read_only_review",
+    "result": "findings_fixed_final_confirmation_no_residual_defect",
     "findingsAddressed": [
       "generated-key identity collision including null-location move",
       "manual entity attribution cannot invent a source child",
       "exact locked location equality",
       "duplicate entity whitespace normalization",
-      "downstream canonical conflict prevents entity facts"
+      "downstream canonical conflict prevents entity facts",
+      "original caller objects are validated before provenance enrichment; reserved provenance keys reject hidden secrets",
+      "scalar or array event.data cannot be silently coerced by an object spread"
     ],
     "limits": [
       "No actual customer data, live role grants or restored-database run",
@@ -324,7 +335,7 @@
     "postgresRun": 42432698615,
     "ciRun": 42432698507,
     "latestStatusUrl": "https://github.com/thepackproof/packproof-v2/pull/150/checks",
-    "currentHeadQualification": "Backend/source checks passed on the frozen e1147240 backend subtree. Final portal-only pagination fix has453 passing local web cases; current exact-head hosted state is at latestStatusUrl. No deployment claim."
+    "currentHeadQualification": "Full e1147240 backend snapshot passed; final stricter original-input validation has17 local source cases passed and portal pagination has453 local web cases passed. Current exact-head hosted state is at latestStatusUrl. No deployment claim."
   },
   "testedCodeFiles": [
     {
@@ -397,7 +408,7 @@
     },
     {
       "path": "backend/src/records/source-associations.ts",
-      "sha256": "5b2228b7b6d9822297f69944daddbd68801da49a375244f25e2f6ac166677551"
+      "sha256": "59bb7477be758aa7cb53d7edb1edc8f669694f2c9bdbdc8af7a6375c3f487f2d"
     },
     {
       "path": "backend/src/records/source-reference.ts",
@@ -441,7 +452,7 @@
     },
     {
       "path": "backend/tests/source-associations.test.ts",
-      "sha256": "59525be91ac3dcac4e82e8688d1da34fd4630928b3db0827605b912c3695e24c"
+      "sha256": "d207f30c1638b78cb9938e2134d8781fd980c4b95cdd134929b02e813ab4fb3f"
     },
     {
       "path": "connect-windows/main/security.ts",
@@ -568,7 +579,7 @@
       "sha256": "dc5b8131d20a3e2785035c3aeed1b23c2c102fe0cacf051555808ea1722cbc8b"
     }
   ],
-  "codeFilesSha256": "124cd924d494e77b2b0832924115bcb420edc79d6aa06713565bc3a36475c285",
+  "codeFilesSha256": "5a15e6d887de62ca3aa8ae3900fb71baff641e8112c28551a1b3aaafd97ef151",
   "priorInternalWindowsArtifacts": [
     {
       "name": "packproof-connect-DEVELOPMENT-win32-x64-fe0e48347d1782d533a159c7034f6ed36f63e791",

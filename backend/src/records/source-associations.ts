@@ -74,6 +74,7 @@ export function parseReferenceObservation(input:unknown) {
  const s=scope({connectionId:b.connectionId,locationId:b.locationId,reference:b.reference});
  const source={sourceKind:textField(b.sourceKind,'sourceKind',80),sourceSchemaVersion:textField(b.sourceSchemaVersion,'sourceSchemaVersion',80),mappingVersion:textField(b.mappingVersion,'mappingVersion',80)};
  const e=strictBody(b.event,['sourceEventId','eventType','reportedAt','carrier','location','data']);
+ if(e.data!=null&&(typeof e.data!=='object'||Array.isArray(e.data)))fail('INVALID_INGESTION','Event data must be a JSON object',400);
  const facts=b.facts??[];
  if(!Array.isArray(facts)||facts.length>25)fail('INVALID_SOURCE_FACTS','Supply at most 25 bounded entity facts',400);
  const identities=new Set<string>();
@@ -83,6 +84,15 @@ export function parseReferenceObservation(input:unknown) {
  // Event data and each entity use the existing 8 KiB/depth contract separately.
  // Nesting all entity facts inside event.data would incorrectly reject valid
  // typed decimal comparisons and allocation structures.
+ // Validate untouched caller objects before adding metadata: a spread must
+ // never hide a prohibited secret in a field replaced by server provenance.
+ parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:e.data??{}}]});
+ if(Object.hasOwn(e.data??{},'sourceObservation'))fail('INGESTION_SECRET_FIELD','Source provenance fields are reserved for PackProof',400);
+ for(const fact of facts as Record<string,unknown>[]){
+  const attributes=fact.attributes??{};
+  parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:attributes}]});
+  if(['sourceConnectionId','sourceReceiptId','sourceSchemaVersion','mappingVersion','sourceReportedAt'].some(key=>Object.hasOwn(attributes,key)))fail('INGESTION_SECRET_FIELD','Source provenance fields are reserved for PackProof',400);
+ }
  const validated=parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:{...(e.data as object??{}),sourceObservation:{...source,reference:s.reference,receiptId:'association_'+'0'.repeat(26),sourceEventId:e.sourceEventId,reportedAt:e.reportedAt,receivedAt:'2000-01-01T00:00:00.000Z',payloadSha256:'0'.repeat(64),ruleVersion:SOURCE_REFERENCE_RULE}}}]});
  for(const fact of facts as Record<string,unknown>[])parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:{attributes:{...(fact.attributes as object??{}),sourceConnectionId:s.connectionId,sourceReceiptId:'association_'+'0'.repeat(26),sourceSchemaVersion:source.sourceSchemaVersion,mappingVersion:source.mappingVersion,sourceReportedAt:e.reportedAt}}}]});
  if(e.sourceEventId!==validated.events[0].sourceEventId)fail('INVALID_SOURCE_REFERENCE','Use the exact source event identifier without surrounding whitespace',400);
