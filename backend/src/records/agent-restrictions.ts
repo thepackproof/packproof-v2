@@ -4,6 +4,48 @@ import type { PartnerActor, PartnerScope } from '../platform/organizations.js';
 import type { CsvMapping, ShipmentCsvRow } from './csv.js';
 import { DomainError } from '../domain/errors.js';
 import { canonicalize } from '../canonical.js';
+import { strictBody } from '../platform/organizations.js';
+import { textField } from '../platform/tenants.js';
+
+export interface ScheduledCsvSourceContract {
+  schema: 'packproof.scheduled-csv/v1';
+  exporterName: string;
+  exporterVersion: string;
+  expectedHeaders: string[];
+  expectedIntervalSeconds: number;
+  backfillFrom: string;
+}
+function explicitTimestamp(value:string):number|null {
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value))return null;
+  const parsed=Date.parse(value),day=Date.parse(`${value.slice(0,10)}T00:00:00Z`);
+  return Number.isFinite(parsed)&&Number.isFinite(day)&&new Date(day).toISOString().slice(0,10)===value.slice(0,10)&&Number(value.slice(11,13))<24?parsed:null;
+}
+export function validateScheduledCsvSourceContract(input:unknown):ScheduledCsvSourceContract {
+  const b=strictBody(input,['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom']);
+  if(b.schema!=='packproof.scheduled-csv/v1')throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose the scheduled CSV v1 source contract',400);
+  const exporterName=textField(b.exporterName,'exporterName',100),exporterVersion=textField(b.exporterVersion,'exporterVersion',80);
+  if(!Array.isArray(b.expectedHeaders)||!b.expectedHeaders.length||b.expectedHeaders.length>50||b.expectedHeaders.some(h=>typeof h!=='string'||!h.trim()||h!==h.trim()||h.length>200)||new Set(b.expectedHeaders).size!==b.expectedHeaders.length)throw new DomainError('INVALID_SOURCE_HEADERS','Confirm at most 50 exact, unique CSV headers',400);
+  if(!Number.isInteger(b.expectedIntervalSeconds)||Number(b.expectedIntervalSeconds)<60||Number(b.expectedIntervalSeconds)>604800)throw new DomainError('INVALID_SOURCE_CADENCE','Choose a source cadence from one minute to seven days',400);
+  const backfillFrom=textField(b.backfillFrom,'backfillFrom',64);
+  if(explicitTimestamp(backfillFrom)===null)throw new DomainError('INVALID_BACKFILL_BOUNDARY','Set a valid backfill cutoff with an explicit UTC offset',400);
+  return {schema:'packproof.scheduled-csv/v1',exporterName,exporterVersion,expectedHeaders:b.expectedHeaders as string[],expectedIntervalSeconds:Number(b.expectedIntervalSeconds),backfillFrom};
+}
+export function validateScheduledCsvRows(config:AgentApprovedConfig,rows:readonly Pick<ShipmentCsvRow,'values'|'normalized'>[],headers:readonly string[]=Object.keys(rows[0]?.values??{})) {
+  const contract=config.sourceContract;
+  if(!contract)return;
+  const approved=validateScheduledCsvSourceContract(contract);
+  if(!config.mapping.shippedAt)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires its reported shipment timestamp column',409);
+  if(canonicalize(headers)!==canonicalize(approved.expectedHeaders))throw new DomainError('MAPPING_NEEDS_REVIEW','The CSV headers differ from the administrator-approved source version',409);
+  for(const row of rows){
+    // JSONB objects reorder keys. The original header array above carries the
+    // ordered schema; persisted row values must carry the same complete set.
+    if(canonicalize(Object.keys(row.values).sort())!==canonicalize([...approved.expectedHeaders].sort()))throw new DomainError('MAPPING_NEEDS_REVIEW','The CSV headers differ from the administrator-approved source version',409);
+    const reported=(row.values[config.mapping.shippedAt]??'').trim();
+    const at=explicitTimestamp(reported);
+    if(at===null)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires valid explicit-offset shipment timestamps',409);
+    if(at<Date.parse(approved.backfillFrom))throw new DomainError('SOURCE_BACKFILL_BOUNDARY','This export includes rows before the administrator-approved backfill cutoff',409);
+  }
+}
 
 /** A restriction belongs to the principal, so issuing another credential cannot
  * turn an installation principal into an unrestricted organization service. */
@@ -17,6 +59,7 @@ export interface AgentApprovedConfig {
   timeZone: string;
   importValidRows: boolean;
   offlineWindowHours: number;
+  sourceContract?: ScheduledCsvSourceContract;
 }
 export interface AgentRestriction {
   id: string;
@@ -107,6 +150,7 @@ interface ImportIdentity {
   sourceName: string;
   mapping: CsvMapping;
   timeZone: string;
+  headers?: readonly string[];
 }
 function exactConfig(row: AgentRestriction, input: ImportIdentity) {
   const c = row.approved_config;
@@ -131,6 +175,7 @@ export async function authorizeAgentPreview(db: Database, clock: Clock, actor: P
   await binding(db, row, actor, clock); dataCredential(row, actor);
   if (!['ready', 'active'].includes(row.status) || !exactConfig(row, input)) throw unavailable();
   rowLocations(row, input.mapping, rows);
+  validateScheduledCsvRows(row.approved_config!, rows, input.headers);
   return row;
 }
 
@@ -145,6 +190,7 @@ export interface AgentImportIdentity {
   time_zone: string;
   import_valid_rows: boolean;
   state: string;
+  headers?: readonly string[];
 }
 /** The receipt's original metadata must still match the current approved
  * revision. Reconfiguration cannot reuse an old successful setup receipt. */
@@ -158,6 +204,7 @@ export async function authorizeAgentImport(db: Database, clock: Clock, actor: Pa
     throw unavailable();
   }
   rowLocations(row, job.mapping, rows);
+  validateScheduledCsvRows(row.approved_config!, rows, job.headers);
   if (mode === 'read') return;
   if (row.status === 'setup' || row.status === 'revoked' || (row.status === 'paused' && mode !== 'process')) throw unavailable();
   const continuous = row.status === 'active' || (row.status === 'paused' && mode === 'process' && !!row.verified_import_id);

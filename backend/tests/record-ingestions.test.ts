@@ -148,6 +148,13 @@ describe('durable normalized partner source ingestion',()=>{
   const headers={Authorization:`Bearer ${token}`,'PackProof-Merchant-Id':org};
   const response=await request(app).post('/v1/partner/ingestions').set(headers).set('Idempotency-Key','http-source').send(body('HTTP-SOURCE-1'));expect(response.status,response.text).toBe(202);expect(response.headers.location).toBe(response.body.links.self);
   const read=await request(app).get(response.body.links.self).set(headers);expect(read.status,read.text).toBe(200);expect(read.body.items[0].status).toBe('queued');
+  const ref={connectionId:account,locationId:null,reference:{type:'ORDER',externalId:'SOURCE-1'}};
+  const resolved=await request(app).post('/v1/partner/source-references/resolve').set(headers).send(ref);expect(resolved.status,resolved.text).toBe(200);expect(resolved.body.proofId).toBe(proof);
+  const retained=await request(app).post('/v1/partner/source-observations').set(headers).set('Idempotency-Key','http-reference').send({...ref,sourceKind:'synthetic',sourceSchemaVersion:'1',mappingVersion:'1',event:{sourceEventId:'http-ref-event',eventType:'DELIVERED',reportedAt:'2026-11-07T00:00:00Z'}});expect(retained.status,retained.text).toBe(202);
+  const retainedRead=await request(app).get(retained.headers.location).set(headers);expect(retainedRead.status,retainedRead.text).toBe(200);expect(retainedRead.body.resourceType).toBe('source_association');
+  const scope=`?organizationId=${org}&environment=sandbox`;
+  const queue=await request(app).get('/me/records/source-associations'+scope).set('Authorization',`Bearer ${owner}`);expect(queue.status,queue.text).toBe(200);expect(queue.body.items.some((item:any)=>item.id===retained.body.id)).toBe(true);
+  const denied=await request(app).post('/me/records/source-crosswalks'+scope).set(headers).set('Idempotency-Key','service-cannot-map').send({organizationId:org,environment:'sandbox',connectionId:account,locationId:null,reference:{type:'ORDER',externalId:'forged'},proofId:proof,ruleVersion:'1',reason:'No personal authorization'});expect([401,403]).toContain(denied.status);
   await expect(opened.db.query("UPDATE record_source_receipts SET payload_canonical='{}' WHERE operation_id=$1",[response.body.operationId])).rejects.toThrow(/immutable/);
  });
 });

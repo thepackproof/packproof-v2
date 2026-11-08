@@ -58,7 +58,7 @@ describe('records source-bound API and worker privileges',()=>{
  });
  it('pins source SQL receipts, plans only scoped grants, and verifies under both actual callers',async()=>{
   const plan=await planRecordsRuntimePrivileges(opened.db,options);
-  expect(Object.keys(plan.migrations)).toHaveLength(13);
+  expect(Object.keys(plan.migrations)).toHaveLength(14);
   expect(plan.statements.every(sql=>/^(GRANT|REVOKE) /.test(sql)&&!sql.includes('CREATE ROLE')&&!sql.includes('GRANT ALL'))).toBe(true);
   const before=await asRole(runtimeRole,db=>verifyRecordsRuntimePrivileges(db,options));
   expect(before.caller).toBe(runtimeRole);
@@ -80,7 +80,9 @@ describe('records source-bound API and worker privileges',()=>{
   await expect(asRole(workerRole,db=>db.query('UPDATE record_import_jobs SET original_sha256=original_sha256 WHERE false'))).rejects.toMatchObject({code:'42501'});
   await expect(asRole(runtimeRole,db=>db.query('UPDATE record_connection_state SET last_success_at=last_success_at WHERE false'))).rejects.toMatchObject({code:'42501'});
   await expect(asRole(workerRole,db=>db.query('INSERT INTO record_requirement_waivers SELECT * FROM record_requirement_waivers WHERE false'))).rejects.toMatchObject({code:'42501'});
-  await expect(asRole(workerRole,db=>db.query('INSERT INTO record_source_identities SELECT * FROM record_source_identities WHERE false'))).rejects.toMatchObject({code:'42501'});
+  // Reference assembly admits stored, reauthorized observations in the worker.
+  await asRole(workerRole,db=>db.query('INSERT INTO record_source_identities SELECT * FROM record_source_identities WHERE false'));
+  await expect(asRole(workerRole,db=>db.query('INSERT INTO record_source_crosswalks SELECT * FROM record_source_crosswalks WHERE false'))).rejects.toMatchObject({code:'42501'});
   await asRole(runtimeRole,db=>db.query('INSERT INTO record_source_identities SELECT * FROM record_source_identities WHERE false'));
   for(const role of [runtimeRole,workerRole])for(const table of ['record_entities','record_import_rows','record_source_receipts','record_workspace_requests']){
    await expect(asRole(role,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});

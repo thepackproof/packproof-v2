@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Win32.SafeHandles;
@@ -53,12 +54,20 @@ public static class FolderSource
         if (handle.IsInvalid || !GetFileInformationByHandle(handle, out var info) || (info.Attributes & (uint)(FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Offline)) != 0 || info.Links != 1 || !Final(handle).Equals(path, StringComparison.OrdinalIgnoreCase)) throw Error();
         using var stream = new FileStream(handle, FileAccess.Read); if (stream.Length == 0 || stream.Length > MaxCsvBytes) throw new ConnectException("CSV_SIZE_UNSUPPORTED", "Use a nonempty UTF-8 CSV export no larger than 2 MiB. The original will not be split.");
         var bytes = new byte[(int)stream.Length]; stream.ReadExactly(bytes); if (stream.ReadByte() != -1) throw new ConnectException("SOURCE_CHANGED", "The export changed during collection. The producer must publish complete immutable files.");
-        _ = new UTF8Encoding(false, true).GetString(bytes); return bytes;
+        return bytes;
     }
     private static string Display(string value, int max) => value.Length > max ? value[..max] + "…" : value;
+    internal static string[] ScanBatch(IEnumerable<string> paths,string? after)
+    {
+        var ordered=paths.OrderBy(path=>Path.GetFileName(path),StringComparer.OrdinalIgnoreCase).ToArray();
+        if(ordered.Length==0)return [];
+        var start=after is null?0:Array.FindIndex(ordered,path=>string.Compare(Path.GetFileName(path),after,StringComparison.OrdinalIgnoreCase)>0);
+        if(start<0)start=0;
+        return Enumerable.Range(0,Math.Min(100,ordered.Length)).Select(offset=>ordered[(start+offset)%ordered.Length]).ToArray();
+    }
     public static object Preview(byte[] bytes)
     {
-        var text = new UTF8Encoding(false, true).GetString(bytes); var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true, DetectDelimiter = true, DetectDelimiterValues = [",", ";", "\t"], MaxFieldSize = 10000, ExceptionMessagesContainRawData = false };
+        string text; try { text = new UTF8Encoding(false, true).GetString(bytes); } catch(DecoderFallbackException) { throw new ConnectException("CSV_ENCODING_UNSUPPORTED","Save the source export as UTF-8 CSV."); } var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true, DetectDelimiter = true, DetectDelimiterValues = [",", ";", "\t"], MaxFieldSize = 10000, ExceptionMessagesContainRawData = false };
         using var reader = new CsvReader(new StringReader(text.TrimStart('\uFEFF')), config);
         try
         {
@@ -75,4 +84,26 @@ public static class FolderSource
         }
         catch (CsvHelperException) { throw new ConnectException("INVALID_CSV", "The source is not a supported UTF-8 CSV export. Ask the source owner to correct its structure."); }
     }
+    public static void ValidateContract(byte[] bytes, JsonElement approved)
+    {
+        if(!approved.TryGetProperty("sourceContract",out var contract)||contract.ValueKind==JsonValueKind.Null)return;
+        if(contract.GetProperty("schema").GetString()!="packproof.scheduled-csv/v1")throw new ConnectException("MAPPING_NEEDS_REVIEW","The source contract is not supported by this service version.");
+        var preview=Json.Element(Preview(bytes));
+        var actual=preview.GetProperty("headers").EnumerateArray().Select(x=>x.GetString()).ToArray();
+        var expected=contract.GetProperty("expectedHeaders").EnumerateArray().Select(x=>x.GetString()).ToArray();
+        if(!actual.SequenceEqual(expected,StringComparer.Ordinal))throw new ConnectException("MAPPING_NEEDS_REVIEW","The export headers changed. Ask the source owner to review the version and mapping in PackProof.");
+        if(!approved.GetProperty("mapping").TryGetProperty("shippedAt",out var field))throw new ConnectException("MAPPING_NEEDS_REVIEW","This source needs an explicit-offset shipment timestamp column.");
+        var cutoff=DateTimeOffset.Parse(contract.GetProperty("backfillFrom").GetString()!,CultureInfo.InvariantCulture);
+        var config=new CsvConfiguration(CultureInfo.InvariantCulture){HasHeaderRecord=true,DetectDelimiter=true,DetectDelimiterValues=[",",";","\t"],MaxFieldSize=10000,ExceptionMessagesContainRawData=false};
+        using var reader=new CsvReader(new StringReader(new UTF8Encoding(false,true).GetString(bytes).TrimStart('\uFEFF')),config);
+        try {
+            reader.Read();reader.ReadHeader();
+            while(reader.Read()){
+                var reported=reader.GetField(field.GetString()!)??"";
+                if(!System.Text.RegularExpressions.Regex.IsMatch(reported,@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$")||!DateTimeOffset.TryParse(reported,CultureInfo.InvariantCulture,DateTimeStyles.None,out var at))throw new ConnectException("MAPPING_NEEDS_REVIEW","Use explicit-offset shipment timestamps in this source export.");
+                if(at<cutoff)throw new ConnectException("SOURCE_BACKFILL_BOUNDARY","This export includes rows before the approved backfill cutoff. Ask the source owner to provide an export within the approved window.");
+            }
+        } catch(CsvHelperException) {throw new ConnectException("MAPPING_NEEDS_REVIEW","The timestamp column no longer matches the approved source export.");}
+    }
+
 }

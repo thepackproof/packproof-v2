@@ -104,7 +104,7 @@ async function baseline(db,review){
 
 async function verifyAgentSchema(db,inventory){
  await verifyRecordAgentSchemaCatalog(db);
- const source=await recordsMigrationInventory();
+ const source=await recordsMigrationInventory(108);
  const columns=(await db.query(`SELECT c.relname AS name,a.attname AS column_name FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped WHERE c.relnamespace=current_schema()::regnamespace AND c.relname=ANY($1::text[]) ORDER BY c.relname,a.attnum`,[[...newTables,'partner_import_jobs']])).rows;
  for(const table of [...newTables,'partner_import_jobs'])if(agentDigest(columns.filter(row=>row.name===table).map(row=>row.column_name))!==agentDigest(source.tableColumns[table]))fail('AGENT_SCHEMA_COLUMNS_MISMATCH');
  const sql=inventory.find(row=>row.id==='108_record_agents').sql,body=sql.match(/CREATE FUNCTION preserve_partner_import_agent_revision\(\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/)?.[1];
@@ -147,8 +147,8 @@ export async function applyAgentInTransaction(tx,inventory,receipt,review,{split
 /** Plan only108 grants for already provisioned, separately qualified roles.
  * Never create roles, rewrite historical grants, or turn on feature flags. */
 export async function planAgentRuntimePrivilegeDelta(db,review){
- const reviewSha256=validateAgentReview(review),source=await recordsMigrationInventory();
- const plan=await planRecordsRuntimePrivileges(db,{runtimeRole:review.apiRole,workerRole:review.workerRole,schema:'public',reviewedSourceCommit:review.source,reviewedMigrationSha256:source.migrationSha256});
+ const reviewSha256=validateAgentReview(review),source=await recordsMigrationInventory(108);
+ const plan=await planRecordsRuntimePrivileges(db,{runtimeRole:review.apiRole,workerRole:review.workerRole,schema:'public',reviewedSourceCommit:review.source,reviewedMigrationSha256:source.migrationSha256,throughMigration:108});
  const statements=plan.statements.filter(sql=>newTables.some(table=>sql.includes(` ON TABLE "public"."${table}" `)));
  statements.push(`GRANT INSERT(${newColumns.map(quoteAgentIdentifier).join(',')}) ON TABLE "public"."partner_import_jobs" TO ${quoteAgentIdentifier(review.apiRole)}`);
  return {schema:'packproof.record-agent-runtime-delta/v1',reviewSha256,source:review.source,inventorySha256:review.inventorySha256,policySha256:plan.policySha256,statementsSha256:agentDigest(statements),statements};

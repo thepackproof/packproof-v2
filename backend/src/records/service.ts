@@ -105,7 +105,7 @@ export async function pageRecordEvidence(db:Database,clock:Clock,w:RecordWorkspa
   return {evidence,nextCursor:rows.length>limit&&last?encodeCursor(scope,{updatedAt:last.receivedAt,id:last.id},clock):null,hasMore:rows.length>limit};
 }
 export async function readRecordIssues(db:Database,proofId:string,issueIds:string[]|null=null):Promise<RecordIssue[]> {
-  const rows=(await db.query<any>('SELECT * FROM record_issues WHERE proof_id=$1 AND ($2::text[] IS NULL OR id=ANY($2)) ORDER BY created_at DESC,id DESC LIMIT 500',[proofId,issueIds])).rows;
+  const rows=(await db.query<any>(`SELECT * FROM record_issues WHERE proof_id=$1 AND ($2::text[] IS NULL OR id=ANY($2)) ORDER BY (COALESCE((SELECT a.action FROM record_issue_actions a WHERE a.issue_id=record_issues.id AND a.action<>'note' ORDER BY a.sequence DESC LIMIT 1),'reopen')<>'resolve') DESC,created_at DESC,id DESC LIMIT 500`,[proofId,issueIds])).rows;
   if(!rows.length)return [];
   const actions=(await db.query<any>('SELECT * FROM record_issue_actions WHERE issue_id=ANY($1::text[]) ORDER BY sequence',[rows.map(r=>r.id)])).rows;
   const assignments=(await db.query<any>('SELECT DISTINCT ON(a.issue_id) a.*, (m.id IS NOT NULL AND m.revoked_at IS NULL) AS membership_active FROM record_issue_assignments a LEFT JOIN platform_memberships m ON m.id=a.assignee_membership_id WHERE a.issue_id=ANY($1::text[]) ORDER BY a.issue_id,a.sequence DESC',[rows.map(r=>r.id)])).rows;
@@ -141,8 +141,8 @@ async function summarize(db:Database,clock:Clock,row:any):Promise<RecordSummary>
     checks={total:Number(row.required_count)+Number(row.waived_count),satisfied:Number(row.required_count)-Number(row.unsatisfied_count),waived:Number(row.waived_count),missing:Number(row.missing_count),notYetDue:Number(row.unsatisfied_count)-Number(row.missing_count)};
     issueCount=Number(row.issue_count);
   }else{
-    const [requirements,issues]=await Promise.all([readRecordRequirements(db,clock,row.id),readRecordIssues(db,row.id)]);
-    checks=coverage(requirements);issueCount=issues.filter(i=>i.status!=='resolved').length;
+    const [requirements,count]=await Promise.all([readRecordRequirements(db,clock,row.id),db.query<{n:number}>("SELECT COUNT(*)::integer AS n FROM record_issues i WHERE i.proof_id=$1 AND COALESCE((SELECT a.action FROM record_issue_actions a WHERE a.issue_id=i.id AND a.action<>'note' ORDER BY a.sequence DESC LIMIT 1),'reopen')<>'resolve'",[row.id])]);
+    checks=coverage(requirements);issueCount=count.rows[0].n;
   }
   return {id:row.id,proofId:row.id,organizationId:row.merchant_id,environment:row.environment,reference:row.reference,title:row.title,trackingNumber:row.tracking_number,carrier:row.carrier,
     createdAt:date(row.created_at)!,updatedAt:date(row.updated_at)!,revision:Number(row.revision),lifecycle:row.lifecycle,sample:false,locationId:row.location_id,sourceName:row.source_name,entityCounts:json(row.entity_counts??{}),

@@ -15,6 +15,20 @@ def response(value, status=200, **headers):
 
 
 class ClientTests(unittest.TestCase):
+    def test_source_reference_intake_preserves_exact_identity_and_receipt(self):
+        calls=[]
+        def transport(url, method, headers, body, timeout):
+            calls.append((url, method, headers, body))
+            return response({'outcome':'unresolved_no_match'} if url.endswith('/resolve') else {'id':'association_1','state':'pending'})
+        client=PackProofClient('https://api.example.test','fixture',transport=transport)
+        scope={'connectionId':'source_1','locationId':None,'reference':{'type':'SHIPMENT','externalId':'000045'}}
+        self.assertEqual(client.resolve_source_reference(scope).data['outcome'],'unresolved_no_match')
+        client.create_source_observation({**scope,'sourceKind':'fixture','sourceSchemaVersion':'1','mappingVersion':'1','event':{'sourceEventId':'e1','eventType':'DELIVERED','reportedAt':'2026-11-07T00:00:00Z'}},idempotency_key='stable-source-command')
+        self.assertEqual(json.loads(calls[1][3])['reference']['externalId'],'000045')
+        self.assertEqual(calls[1][2]['Idempotency-Key'],'stable-source-command')
+        client.get_source_observation('association_1')
+        self.assertTrue(calls[2][0].endswith('/operations/association_1'))
+
     def test_resume_skips_accepted_parts_and_retries_identical_bytes(self):
         data = b'\x01\x02\x03'
         value = {'proofId':'proof','connectionId':'source','filename':'a.png','contentType':'image/png','byteSize':3,'reportedAt':'2026-11-04T12:00:00Z'}

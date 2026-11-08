@@ -74,7 +74,7 @@ public sealed class RecoveryTests : IDisposable {
         using(var due=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}")){due.Open();using var command=due.CreateCommand();command.CommandText="UPDATE queue SET next_attempt_at=$now WHERE id=$id";command.Parameters.AddWithValue("$now",DateTimeOffset.UtcNow.AddSeconds(-1).ToString("O"));command.Parameters.AddWithValue("$id",id);command.ExecuteNonQuery();}
         await runtime.Tick(default);using(var inspect=new DurableQueue(Store()))Assert.Equal("complete",inspect.Find(id)!.State);Assert.Equal(1,commits);
     }
-    private static System.Text.Json.JsonElement Receipt(string state)=>Json.Element(new{id="import-a",state,previewVersion="preview-v1",counts=new{valid=state=="succeeded"?0:1,invalid=0,ambiguous=0,duplicate=0,imported=state=="succeeded"?1:0,failed=0},original=new{sha256=Convert.ToHexStringLower(SHA256.HashData(Original)),byteSize=Original.Length},rows=Array.Empty<object>(),recordIds=Array.Empty<string>()});
+    private static System.Text.Json.JsonElement Receipt(string state)=>Json.Element(new{id="import-a",state,previewVersion="preview-v1",counts=new{valid=state=="succeeded"?0:1,invalid=0,ambiguous=0,duplicate=0,imported=state=="succeeded"?1:0,failed=0},original=new{sha256=Convert.ToHexStringLower(SHA256.HashData(Original)),byteSize=Original.Length},rows=new[]{new {rowNumber=2,status=state=="succeeded"?"imported":"valid",proofId=state=="succeeded"?"proof-fixture":null}},recordIds=state=="succeeded"?new[]{"proof-fixture"}:Array.Empty<string>()});
     [Fact] public async Task Identical_configuration_reapproval_invalidates_old_preview_and_verification(){
         var config=Json.Element(new{folderDigest="folder",integrationAccountId="integration",operatorMembershipId="operator",sourceName="Fixture",mapping=new{shipmentReference="Shipment reference",itemTitle="Description",quantity="Quantity"},timeZone="UTC",locationId=(string?)null,importValidRows=false,offlineWindowHours=24});
         object Policy(int revision)=>new{state="active",config,configSha256="unchanged",configRevision=revision,pendingProposal=(object?)null,integrationAccountId="integration",operatorMembershipId="operator",sourceName="Fixture",locationId=(string?)null,credentialExpiresAt=DateTimeOffset.UtcNow.AddDays(20)};
@@ -114,6 +114,36 @@ public sealed class RecoveryTests : IDisposable {
     }
     [Theory][InlineData("//host/credentials")][InlineData("https://host/credentials")][InlineData("/proofs?token=secret")][InlineData("/proofs\\other")]
     public async Task Transport_rejects_arbitrary_targets_before_HTTP(string path){using var client=new PackProofClient(Host(),new FakeHandler(_=>throw new Exception("must not call")));await Assert.ThrowsAsync<ConnectException>(()=>client.Request("GET",path,null,"secret",null,default));}
+    [Fact] public void Malformed_UTF8_is_preserved_as_an_encrypted_quarantined_original_without_blocking_valid_work()
+    {
+        var malformed=new byte[]{0xff,0xfe,0x00,0x80}; using var queue=new DurableQueue(Store());
+        var rejected=queue.Quarantine(malformed,"malformed.csv","generation","config","CSV_ENCODING_UNSUPPORTED");
+        Assert.Equal("action_needed",rejected.State);Assert.Equal("CSV_ENCODING_UNSUPPORTED",rejected.ErrorCode);Assert.Equal(malformed,queue.Payload(rejected).QuarantinedOriginalBytes);
+        Assert.Equal(rejected.Id,queue.Quarantine(malformed,"renamed.csv","generation","config","CSV_ENCODING_UNSUPPORTED").Id);
+        var valid=queue.Stage(Original,"valid.csv",Body,"generation","config",true);Assert.Equal("staged",valid.State);Assert.Equal(2,queue.Entries().Count);
+    }
+    [Fact] public void Completed_import_reconciliation_requires_every_source_row_and_record_before_acknowledgement()
+    {
+        var valid=Receipt("succeeded");var digest=Convert.ToHexStringLower(SHA256.HashData(Original));AgentRuntime.ValidateReconciledReceipt(valid,digest);
+        Assert.Equal("ORIGINAL_DIGEST_MISMATCH",Assert.Throws<ConnectException>(()=>AgentRuntime.ValidateReconciledReceipt(valid,new string('0',64))).Code);
+        var missing=Json.Element(new{original=new{sha256=digest},counts=new{valid=0,imported=1,duplicate=0,invalid=0,ambiguous=0,failed=0},rows=Array.Empty<object>(),recordIds=new[]{"proof-fixture"}});
+        Assert.Equal("IMPORT_RECONCILIATION_FAILED",Assert.Throws<ConnectException>(()=>AgentRuntime.ValidateReconciledReceipt(missing,digest)).Code);
+        Assert.Equal("IMPORT_RECONCILIATION_FAILED",Assert.Throws<ConnectException>(()=>AgentRuntime.ValidateReconciledReceipt(Json.Element(new{state="succeeded"}),digest)).Code);
+    }
+    [Fact] public void Approved_source_contract_holds_schema_drift_and_ambiguous_or_pre_cutoff_timestamps()
+    {
+        var approved=Json.Element(new{mapping=new{shippedAt="Reported at"},sourceContract=new{schema="packproof.scheduled-csv/v1",expectedHeaders=new[]{"Reference","Reported at"},backfillFrom="2026-11-01T00:00:00Z"}});
+        FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-11-07T08:00:00-05:00\r\n"),approved);
+        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at,New field\r\n000045,2026-11-07T08:00:00Z,extra\r\n"),approved)).Code);
+        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-11-07\r\n"),approved)).Code);
+        Assert.Equal("SOURCE_BACKFILL_BOUNDARY",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-10-31T23:59:59Z\r\n"),approved)).Code);
+    }
+    [Fact] public void Bounded_backfill_scan_reaches_later_files_and_revisits_the_full_source_without_starvation()
+    {
+        var files=Enumerable.Range(0,205).Select(n=>$"shipment-{n:000}.csv").ToArray();var first=FolderSource.ScanBatch(files,null);
+        Assert.Equal(100,first.Length);var second=FolderSource.ScanBatch(files,Path.GetFileName(first[^1]));var third=FolderSource.ScanBatch(files,Path.GetFileName(second[^1]));
+        Assert.Equal(files.Length,first.Concat(second).Concat(third).Distinct().Count());Assert.Empty(FolderSource.ScanBatch([],null));
+    }
     private static HostConfiguration Host()=>new("development","https://api.thepackproof.com","https://thepackproof.com","S-1-5-32-544");
     public void Dispose(){Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();if(Directory.Exists(root))Directory.Delete(root,true);}
     private sealed class TestProtector:ISecretProtector{public byte[] Protect(byte[] data)=>data.Select(x=>(byte)(x^0xA6)).ToArray();public byte[] Unprotect(byte[] data)=>Protect(data);}

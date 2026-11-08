@@ -30,3 +30,12 @@ describe('setup trust boundaries', () => {
     expect(resumeStep({ ...status, preview })).toBe(5);
   });
 });
+
+it('invalidates first-record verification after the approved exporter or backfill contract changes',()=>{
+  const sourceContract={schema:'packproof.scheduled-csv/v1' as const,exporterName:'Fixture exporter',exporterVersion:'1',expectedHeaders:['Reference'],expectedIntervalSeconds:900,backfillFrom:'2026-11-01T00:00:00Z'};
+  const approved={...config,sourceContract},current={...status,config:approved};
+  expect(verificationCurrent(current,approved,false)).toBe(true);
+  const reordered=Object.fromEntries(Object.entries(sourceContract).reverse()) as typeof sourceContract;
+  expect(verificationCurrent(current,{...approved,sourceContract:reordered},false)).toBe(true);
+  for(const changed of [{exporterVersion:'2'},{expectedIntervalSeconds:3600},{backfillFrom:'2026-11-02T00:00:00Z'},{expectedHeaders:['Reference','Private extra']}])expect(verificationCurrent(current,{...approved,sourceContract:{...sourceContract,...changed}},false)).toBe(false);
+});

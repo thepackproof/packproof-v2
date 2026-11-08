@@ -3,11 +3,11 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     paths=['backend'] if profile=='bridge' else ['backend','packages/evidence-contracts','config/rnd/research-build.json','.dockerignore']
     probes=['infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']
-    if profile=='connect-v1':paths+=probes
+    if profile in ('connect-v1','zero-touch-v1'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -15,7 +15,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile=='connect-v1' and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -37,6 +37,12 @@ def archive(source,destination,profile,verify=False):
                 inventory.append({'id':name.rsplit('/',1)[1][:-4],'checksum':hashlib.sha256(raw).hexdigest()})
     if offset!=len(payload):raise ValueError('BLOB_TRAILING_BYTES')
     inventory.sort(key=lambda r:r['id'])
+    if profile in ('connect-v1','zero-touch-v1'):
+        filename='record-agent-migration-manifest.json' if profile=='connect-v1' else 'source-association-migration-manifest.json'
+        manifest=json.loads(subprocess.check_output(['git','show',source+':backend/scripts/'+filename]))
+        digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=manifest['sourceCount'] or digest!=manifest['inventorySha256']:
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':
     try: print(json.dumps(archive(*sys.argv[1:4],verify='--verify' in sys.argv[4:])))

@@ -46,6 +46,8 @@ COPY backend/scripts/record-agent-migrate.mjs ./scripts/record-agent-migrate.mjs
 COPY backend/scripts/record-agent-migrate-cli.mjs ./scripts/record-agent-migrate-cli.mjs
 COPY backend/scripts/record-agent-schema.mjs ./scripts/record-agent-schema.mjs
 COPY backend/scripts/record-agent-schema-manifest.json ./scripts/record-agent-schema-manifest.json
+COPY backend/scripts/source-association-migration-inventory.mjs ./scripts/source-association-migration-inventory.mjs
+COPY backend/scripts/source-association-migration-manifest.json ./scripts/source-association-migration-manifest.json
 COPY infra/backend-release/record-agent-database-preflight.mjs /release/record-agent-database-preflight.mjs
 COPY infra/backend-release/record-agent-previous-image-probe.mjs /release/record-agent-previous-image-probe.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs

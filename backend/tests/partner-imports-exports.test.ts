@@ -337,3 +337,13 @@ it('commits and retries with API column privileges while only the worker changes
         await opened.db.query('DROP ROLE '+quote(role));
     }
 });
+
+it('keeps the same padded shipment identifier at different locations in distinct canonical records',async()=>{
+ for(const id of ['csv-north','csv-south'])await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$1,$3)',[id,org,clock.now().toISOString()]);
+ const data='Shipment reference,Description,Quantity,Location\r\n000090,Fixture,1,csv-north\r\n000090,Fixture,1,csv-south\r\n';
+ const p=(await previewPartnerImport(deps,full,'scoped-export',input(data))).value;
+ expect(p.counts).toMatchObject({valid:2,ambiguous:0});
+ const done=await commit(p.id,p.previewVersion);expect(done.recordIds).toHaveLength(2);expect(done.state).toBe('succeeded');
+ const again=(await previewPartnerImport(deps,full,'scoped-export-again',input(data))).value;
+ expect(again.counts.duplicate).toBe(2);expect(again.recordIds.sort()).toEqual(done.recordIds.sort());
+});

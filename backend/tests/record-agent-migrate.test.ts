@@ -71,7 +71,7 @@ describe('additive108 explicit source, isolated target and receipt gates',()=>{
 describe('additive108 atomic preservation and narrow existing-role delta',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,directory:string,inventory:Awaited<ReturnType<typeof migrationInventory>>;
  beforeAll(async()=>{
-  opened=await openIsolatedTestDatabase();inventory=await migrationInventory();directory=await mkdtemp(path.join(os.tmpdir(),'agent-migrate-'));
+  opened=await openIsolatedTestDatabase();inventory=(await migrationInventory()).filter(row=>Number(row.id.slice(0,3))<=108);directory=await mkdtemp(path.join(os.tmpdir(),'agent-migrate-'));
   for(const item of inventory.filter(row=>row.id!=='108_record_agents'))await writeFile(path.join(directory,item.id+'.sql'),item.sql);
   await migrate(opened.db,directory);
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
