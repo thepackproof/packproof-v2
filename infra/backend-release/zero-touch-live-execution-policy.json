@@ -1,0 +1,74 @@
+{
+  "roleName": "packproof-zero-touch-live-execution",
+  "trust": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ecs-tasks.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole",
+        "Condition": {
+          "StringEquals": {
+            "aws:SourceAccount": "784514617543"
+          },
+          "ArnLike": {
+            "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+          }
+        }
+      }
+    ]
+  },
+  "policy": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": "ecr:GetAuthorizationToken",
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ],
+        "Resource": "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/ecs/packproof-v2-staging-api:log-stream:zero-touch-live/*"
+      },
+      {
+        "Effect": "Allow",
+        "Action": "secretsmanager:GetSecretValue",
+        "Resource": [
+          "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96",
+          "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-api-v1-20261105-h9stT0",
+          "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-worker-v1-20261105-9EhBXK"
+        ]
+      },
+      {
+        "Effect": "Allow",
+        "Action": "kms:Decrypt",
+        "Resource": "arn:aws:kms:us-east-1:784514617543:key/eea45321-ef8a-4cb4-a3a2-0688bb41186f",
+        "Condition": {
+          "StringEquals": {
+            "kms:ViaService": "secretsmanager.us-east-1.amazonaws.com",
+            "kms:EncryptionContext:SecretARN": [
+              "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-8f5824eb-60e0-4f3a-ac2c-630dbb0f734a-RjNM96",
+              "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-api-v1-20261105-h9stT0",
+              "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-worker-v1-20261105-9EhBXK"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
