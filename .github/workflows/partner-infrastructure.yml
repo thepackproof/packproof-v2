@@ -37,3 +37,4 @@ jobs:
           tar -xzf "$RUNNER_TEMP/cfn-guard.tar.gz" --strip-components=1 -C "$RUNNER_TEMP/cfn-guard"
           "$RUNNER_TEMP/cfn-guard/cfn-guard" validate --rules infra/partner-foundation/recipient-storage.guard --data infra/partner-foundation/recipient-storage-assets.json --output-format json --show-summary none
           "$RUNNER_TEMP/cfn-guard/cfn-guard" validate --rules infra/partner-foundation/recipient-flow.guard --data infra/partner-foundation/recipient-flow-assets.json --output-format json --show-summary none
+          "$RUNNER_TEMP/cfn-guard/cfn-guard" validate --rules infra/partner-foundation/zero-touch-bootstrap.guard --data infra/partner-foundation/zero-touch-bootstrap.json --output-format json --show-summary none

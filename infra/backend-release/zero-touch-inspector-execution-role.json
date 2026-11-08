@@ -1,0 +1,23 @@
+{
+  "createRole": {
+    "RoleName": "packproof-zero-touch-inspector-execution",
+    "Path": "/packproof/zero-touch/",
+    "Description": "Temporary execution-only role for read-only inspection of synthetic M1; no application task credentials",
+    "AssumeRolePolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ecs-tasks.amazonaws.com\"},\"Action\":\"sts:AssumeRole\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"784514617543\"},\"ArnLike\":{\"aws:SourceArn\":\"arn:aws:ecs:us-east-1:784514617543:*\"}}}]}",
+    "Tags": [
+      {
+        "Key": "Project",
+        "Value": "PackProof"
+      },
+      {
+        "Key": "Purpose",
+        "Value": "zero-touch-synthetic-readonly-inspection"
+      }
+    ]
+  },
+  "putRolePolicy": {
+    "RoleName": "packproof-zero-touch-inspector-execution",
+    "PolicyName": "ExecutionOnly",
+    "PolicyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"ExactSyntheticOwnerSecretInjection\",\"Effect\":\"Allow\",\"Action\":\"secretsmanager:GetSecretValue\",\"Resource\":\"arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r\"},{\"Sid\":\"RegistryAuthentication\",\"Effect\":\"Allow\",\"Action\":\"ecr:GetAuthorizationToken\",\"Resource\":\"*\"},{\"Sid\":\"ExactCandidateImagePull\",\"Effect\":\"Allow\",\"Action\":[\"ecr:BatchGetImage\",\"ecr:GetDownloadUrlForLayer\",\"ecr:BatchCheckLayerAvailability\"],\"Resource\":\"arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api\"},{\"Sid\":\"ExactSyntheticInspectionLogs\",\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":\"arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261021-runtime:log-stream:zero-touch-inspect/*\"}]}"
+  }
+}

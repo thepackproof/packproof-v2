@@ -1,0 +1,125 @@
+{
+  "event": "zero_touch_restored_rehearsal_complete",
+  "schema": "packproof.zero-touch-restored-rehearsal/v1",
+  "status": "PASSED",
+  "completedAt": "2026-11-08T03:33:10.630Z",
+  "reviewSha256": "56be0cf3bd2dbd7e1e6ce20a5249264fae8a767e67972b5206472a2f1cc2c922",
+  "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+  "imageDigest": "sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+  "target": {
+    "host": "packproof-zero-touch-3bff0173.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "database": "m1_service_20261021"
+  },
+  "snapshotArn": "arn:aws:rds:us-east-1:784514617543:snapshot:packproof-zero-touch-3bff0173",
+  "migration": {
+    "identity": {
+      "role": "packproof",
+      "login": "packproof",
+      "database": "m1_service_20261021"
+    },
+    "tls": {
+      "ssl": true,
+      "version": "TLSv1.3"
+    },
+    "originalData": {
+      "tables": 203,
+      "rows": 1927,
+      "sha256": "eb7f29ab4a75953c5e514af41c86b87ed297724a768d46a4083f3df3f2ea7000"
+    },
+    "originalDataReceiptSha256": "0925d7fd45eece46638b077cee3e21a467dacf0723cb9a8fbce8bb412c7ac184",
+    "originalMigrationCount": 91,
+    "predecessorMigrationCount": 107,
+    "appliedMigrationCount": 108,
+    "before109": {
+      "tables": 247,
+      "rows": 1841,
+      "sha256": "a1e23107abf868ece8123bd1dd0e8b8907f121bb283be9694312739ccbb53983"
+    },
+    "after109": {
+      "tables": 247,
+      "rows": 1841,
+      "sha256": "a1e23107abf868ece8123bd1dd0e8b8907f121bb283be9694312739ccbb53983"
+    },
+    "catalogBeforeSha256": "01127d12835e02037228a14d764cb402655a07c319d63b2946e237dd206600b1",
+    "catalogAfterSha256": "01127d12835e02037228a14d764cb402655a07c319d63b2946e237dd206600b1",
+    "preservedControlsSha256": "5f23431f56440e06f593623cd5fbdb5f9cbd3dd5c91afce91b6de8a6c2021f78",
+    "legacyDefaultGrantsRemoved": 0
+  },
+  "privilegePolicySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+  "actualLoginReceipts": [
+    {
+      "schema": "packproof.records-runtime-privileges/v1",
+      "sourceCommit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "databaseSchema": "public",
+      "caller": "zero_touch_api_3bff0173",
+      "runtimeRole": "zero_touch_api_3bff0173",
+      "workerRole": "zero_touch_worker_3bff0173",
+      "migrations": {
+        "096_records_portal": "e1e1e6cf708b1810598051c7eb00ebf36ee89aeb1628e04f90316b714ee17738",
+        "097_record_imports": "897afca84439849e4e27379e3855a86d1a3287242427ddd80b30c11852c0a437",
+        "098_record_connections": "50ae3bcd1d9d203fb29c5a250866c1019331c06f4c80fc003e087087bb21803c",
+        "099_workspace_requests": "b53dbb586e25c2e4dd53bfe658af50d206bdba946bd9300cf7db5822d6fab1c0",
+        "100_source_ingestions": "e8271a163324b120c263485966041a30b0925939234cb2f52c3dbf5ad46ff8b2",
+        "101_partner_imports_exports": "718840eb997eb7e1be4fb201fd1aac7994c6cb5653a70f9dd7a9d69cc90b1c91",
+        "102_source_artifacts": "6b3b810a98a1b9d447308649df241fb3327dab3de4a8542eafa078efa482b86a",
+        "103_operational_snapshots": "265f756242b969428caea0214155a8be90eaa23964b1e711c6067482c7d2980a",
+        "104_record_snapshot_shares": "1abd528f058f6ee69ca7b08d4846fb89e8f033875a1dad1423a11ead61dcc534",
+        "105_record_deletion_review": "2861536f40efa3ba4f241385d6053ccacf942118f50853e43185727ebda26ae3",
+        "106_requirement_templates": "fd238e239d76209eda950cabd6a2419a0fe183ecfea4decc9ed79adeb3e870ca",
+        "107_record_issue_assignments": "88eb3991374e37c2dc61b96abc374d92c2b6227d22be0b5af334c397a6098c76",
+        "108_record_agents": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f",
+        "109_source_associations": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+      },
+      "migrationSha256": "5148b9746d855d2b192dbc5ffa35b3c7802dbc2fa490bc82e9ebd82a85077168",
+      "policySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+      "effectivePrivilegesSha256": "8c8c2d3cc6e5b662ce586a982a888bb748f2f2f344e9bef25aec881160b744e7"
+    },
+    {
+      "schema": "packproof.records-runtime-privileges/v1",
+      "sourceCommit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "databaseSchema": "public",
+      "caller": "zero_touch_worker_3bff0173",
+      "runtimeRole": "zero_touch_api_3bff0173",
+      "workerRole": "zero_touch_worker_3bff0173",
+      "migrations": {
+        "096_records_portal": "e1e1e6cf708b1810598051c7eb00ebf36ee89aeb1628e04f90316b714ee17738",
+        "097_record_imports": "897afca84439849e4e27379e3855a86d1a3287242427ddd80b30c11852c0a437",
+        "098_record_connections": "50ae3bcd1d9d203fb29c5a250866c1019331c06f4c80fc003e087087bb21803c",
+        "099_workspace_requests": "b53dbb586e25c2e4dd53bfe658af50d206bdba946bd9300cf7db5822d6fab1c0",
+        "100_source_ingestions": "e8271a163324b120c263485966041a30b0925939234cb2f52c3dbf5ad46ff8b2",
+        "101_partner_imports_exports": "718840eb997eb7e1be4fb201fd1aac7994c6cb5653a70f9dd7a9d69cc90b1c91",
+        "102_source_artifacts": "6b3b810a98a1b9d447308649df241fb3327dab3de4a8542eafa078efa482b86a",
+        "103_operational_snapshots": "265f756242b969428caea0214155a8be90eaa23964b1e711c6067482c7d2980a",
+        "104_record_snapshot_shares": "1abd528f058f6ee69ca7b08d4846fb89e8f033875a1dad1423a11ead61dcc534",
+        "105_record_deletion_review": "2861536f40efa3ba4f241385d6053ccacf942118f50853e43185727ebda26ae3",
+        "106_requirement_templates": "fd238e239d76209eda950cabd6a2419a0fe183ecfea4decc9ed79adeb3e870ca",
+        "107_record_issue_assignments": "88eb3991374e37c2dc61b96abc374d92c2b6227d22be0b5af334c397a6098c76",
+        "108_record_agents": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f",
+        "109_source_associations": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+      },
+      "migrationSha256": "5148b9746d855d2b192dbc5ffa35b3c7802dbc2fa490bc82e9ebd82a85077168",
+      "policySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+      "effectivePrivilegesSha256": "8c8c2d3cc6e5b662ce586a982a888bb748f2f2f344e9bef25aec881160b744e7"
+    }
+  ],
+  "allowedSqlChecks": 4,
+  "deniedSqlChecks": 7,
+  "fullApplicationBaselineQualified": false,
+  "previousImageRehearsal": false,
+  "applicationStarted": false,
+  "originalInstanceChanged": false,
+  "customerQualification": false,
+  "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/1313ce6e3f8c4d25929d6d8b6f587e98",
+  "taskDefinitionArn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-restored-rehearsal:1",
+  "executionEnvironment": "AWS ECS Fargate Linux / RDS PostgreSQL 16.15",
+  "network": {
+    "taskSecurityGroup": "sg-0c13e28d437af3ab1",
+    "databaseSecurityGroup": "sg-0aed3d229be07a313",
+    "publiclyAccessible": false,
+    "originalDatabaseEgressAllowed": false
+  },
+  "operator": {
+    "path": "infra/backend-release/zero-touch-restored-rehearsal.mjs",
+    "sha256": "3ad5d10ca2707e066ab482ce4dc6c88d1b9d850261aef359a188b288b10772a7"
+  }
+}

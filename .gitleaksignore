@@ -60,3 +60,10 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # line contains prose about queue testing (crash/expiry/quota), no API credential.
 # Current wording is changed; all credential detection rules remain enabled.
 6d151adf9a211a0acad2b1655013a81cadb9300b:docs/windows-connect/IMPLEMENTATION_STATUS.md:generic-api-key:20
+
+# Reviewed PR 151 scan / job 128619824839. These two exact historical fields
+# identify the successful AWS CodeBuild execution, verified by BatchGetBuilds.
+# A project/build UUID cannot authenticate; no credential or signing secret is
+# present. Keep all default rules and all other historical findings scanned.
+76ef070d7204976f88824f4979f492625186fae0:docs/zero-touch-warehouse/EVIDENCE.json:generic-api-key:251
+76ef070d7204976f88824f4979f492625186fae0:docs/zero-touch-warehouse/RELEASE_PREPARATION.json:generic-api-key:20

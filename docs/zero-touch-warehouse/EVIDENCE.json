@@ -2,7 +2,7 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T01:29:47.014144+00:00",
+  "checkedAt": "2026-11-08T03:48:32.405455+00:00",
   "deployment": {
     "backend": null,
     "portal": null,
@@ -16,7 +16,7 @@
     "D2": "synthetic_local_and_hosted_fixtures_verified_external_acceptance_pending",
     "D3": "blocked_signed_windows11",
     "D4": "blocked_named_source_customer_novice",
-    "D5": "blocked_prerequisites_migration_roles_image_canary",
+    "D5": "blocked_signed_windows11_named_source_full_baseline_roles_previous_image_current_target_canary",
     "G0": "prior_internal_hosted_windows_server_only",
     "G1": "blocked_approved_hosted_native_path",
     "G2": "blocked_signed_windows11_lifecycle",
@@ -217,12 +217,42 @@
       "failed": 0,
       "skipped": 0,
       "note": "Removed the CodeQL-reported replace-with-itself call; drift mutation and rejection assertion are unchanged."
+    },
+    {
+      "name": "restored_aws_migration109_records_delta",
+      "result": "passed",
+      "sourceCommit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "restoredSourceTables": 203,
+      "restoredSourceRows": 1927,
+      "preservedExistingTablesAcross109": 247,
+      "preservedExistingRowsAcross109": 1841,
+      "actualLoginCount": 2,
+      "allowedSqlChecks": 4,
+      "deniedSqlChecks": 7,
+      "fullApplicationBaselineQualified": false,
+      "previousImageRehearsal": false,
+      "receipt": "RESTORED_REHEARSAL.json"
+    },
+    {
+      "name": "release_preparation_scripts",
+      "result": "passed",
+      "command": "node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs",
+      "passed": 130,
+      "failed": 0,
+      "skipped": 0
     }
   ],
   "customerReconciliation": null,
   "firstRunUsability": null,
   "signedArtifact": null,
-  "apiImage": null,
+  "apiImage": {
+    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "buildId": "packproof-v2-staging-api:0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
+    "scanStatus": "COMPLETE",
+    "scanFindingCount": 0,
+    "deployed": false
+  },
   "assurance": "Organization-submitted unsigned operational additions; prior frozen manifests and original signing scopes unchanged.",
   "securityReview": {
     "result": "findings_fixed_final_confirmation_no_residual_defect",
@@ -319,7 +349,8 @@
     "postgresSelectionCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
     "latestHead": "See current PR head; this ledger is part of its tree",
     "gitTreePublicationVerified": true,
-    "backendTestedCommit": "6f833e35a06d552bff09450fafd9e796210761c0"
+    "backendTestedCommit": "6f833e35a06d552bff09450fafd9e796210761c0",
+    "mergedImplementationCommit": "3bff0173c9d91fc11ae614d72872b877628c327d"
   },
   "internalWindowsArtifact": {
     "name": "packproof-connect-DEVELOPMENT-win32-x64-9b62131f820e5bf06a2d541471dda9bea37ca448",
@@ -614,5 +645,13 @@
       "installerSha256": null,
       "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists."
     }
-  ]
+  ],
+  "releasePreparationManifest": "RELEASE_PREPARATION.json",
+  "restoredRehearsalReceipt": "RESTORED_REHEARSAL.json",
+  "originalPreservationReceipt": "ORIGINAL_PRESERVATION.json",
+  "componentTrees": {
+    "backend": "5617e79bbb427719f245b8b9df2624c69c712ffb",
+    "web": "efcb9b7e421f5af674eb570ee8f9db6810e9d4c1",
+    "connect-windows": "c525f27f474b8602734cb9f620308cc89e85f0f4"
+  }
 }
