@@ -2,7 +2,7 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T01:04:39.826000+00:00",
+  "checkedAt": "2026-11-08T01:15:04.405217+00:00",
   "deployment": {
     "backend": null,
     "portal": null,
@@ -146,6 +146,47 @@
       "runId": 42432112980,
       "sourceCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
       "note": "Overall run failed later on two current-inventory packaging assertions. Assertions updated to108 while historical source/byte checks remain strict. Later decimal/pointer fixes require their current-head PostgreSQL run."
+    },
+    {
+      "name": "hosted_full_backend",
+      "result": "passed",
+      "sourceCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
+      "runId": 42432698507,
+      "passed": 1789,
+      "failed": 0,
+      "skipped": 17,
+      "filesPassed": 231,
+      "filesSkipped": 6,
+      "jobs": [
+        128584922514,
+        128584922528,
+        128584922567,
+        128584922702
+      ],
+      "note": "Backend jobs all passed. Overall run had the separately repaired 500-issue UI timeout. Backend subtree remains unchanged by the subsequent portal-only fix."
+    },
+    {
+      "name": "hosted_postgres_current",
+      "result": "passed",
+      "sourceCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
+      "runId": 42432698615,
+      "recordSourceCases": 114,
+      "foundationCases": 61,
+      "packagingCompatibilityCases": 25,
+      "historicalReceiptCases": 2,
+      "failed": 0,
+      "note": "Synthetic PostgreSQL16 CI instances; not a restored customer target or production-role qualification."
+    },
+    {
+      "name": "web_final_pagination",
+      "result": "passed",
+      "command": "Full web startVitest run=true with linked dependency realpath allowlist; npm --prefix web run build; focused portal/association/agent regression",
+      "passed": 453,
+      "failed": 0,
+      "skipped": 0,
+      "focusedPassed": 33,
+      "linkChecksPassed": 12,
+      "note": "Summary renders unresolved issues; review history is25 rows per page. The500-row regression verifies later pages without a larger timeout."
     }
   ],
   "customerReconciliation": null,
@@ -245,19 +286,22 @@
     "archiveProfileCommit": "674b7e35ced6e15342d6f2e35749c1f3d2dcb947",
     "postgresSelectionCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
     "latestHead": "See current PR head; this ledger is part of its tree",
-    "gitTreePublicationVerified": true
+    "gitTreePublicationVerified": true,
+    "backendTestedCommit": "e1147240b09d019289d92b00289384ec7ed1970f"
   },
   "internalWindowsArtifact": {
-    "name": "packproof-connect-DEVELOPMENT-win32-x64-fe0e48347d1782d533a159c7034f6ed36f63e791",
-    "runId": 42432113017,
-    "artifactId": 13597748823,
-    "archiveBytes": 167294277,
-    "archiveSha256": "2d9e32265e7fa364e8dd653ef21f0d7b74731675a83d1dae30cc91b634d05cb8",
-    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42432113017/artifacts/13597748823",
+    "name": "packproof-connect-DEVELOPMENT-win32-x64-cace6d95bc42a68ece960134fc6dbbeeb439bfd9",
+    "runId": 42432698543,
+    "artifactId": 13598083206,
+    "archiveBytes": 167293772,
+    "archiveSha256": "9bdc3ed1f662d2051e01d789001b8c2db0167ef72d8501dd0efca5614ff9bb7a",
+    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42432698543/artifacts/13598083206",
     "signed": false,
     "publicDistributionAllowed": false,
     "installerSha256": null,
-    "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists."
+    "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists.",
+    "headCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
+    "testedMergeCommit": "cace6d95bc42a68ece960134fc6dbbeeb439bfd9"
   },
   "liveInspection": {
     "apiMetaUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws/meta",
@@ -271,16 +315,16 @@
     "awsControlPlane": "Verification request cancelled; no mutation result"
   },
   "hostedChecks": {
-    "previousHead": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
-    "sourceCodeQLRun": 42432112940,
-    "contractRun": 42432113006,
-    "nativeMediaRun": 42432112964,
-    "integrityRun": 42432112939,
-    "nativeWindowsRun": 42432113017,
-    "postgresRun": 42432112980,
-    "ciRun": 42432112936,
+    "previousHead": "e1147240b09d019289d92b00289384ec7ed1970f",
+    "sourceCodeQLRun": 42432698511,
+    "contractRun": 42432698578,
+    "nativeMediaRun": 42432698592,
+    "integrityRun": 42432698487,
+    "nativeWindowsRun": 42432698543,
+    "postgresRun": 42432698615,
+    "ciRun": 42432698507,
     "latestStatusUrl": "https://github.com/thepackproof/packproof-v2/pull/150/checks",
-    "currentHeadQualification": "Pending final source changes; no all-head CI or deployment claim is made by this ledger."
+    "currentHeadQualification": "Backend/source checks passed on the frozen e1147240 backend subtree. Final portal-only pagination fix has453 passing local web cases; current exact-head hosted state is at latestStatusUrl. No deployment claim."
   },
   "testedCodeFiles": [
     {
@@ -489,7 +533,7 @@
     },
     {
       "path": "web/src/records/RecordsPortal.tsx",
-      "sha256": "902c7d299411ea6d88f93ab0670de8f013682ad48acbd3065aa65dbd1a1f8961"
+      "sha256": "a228e1bca6671f81f39acc6b9a456b637ce1a7905841f8f87d8aca890f39127f"
     },
     {
       "path": "web/src/records/SourceAssociations.tsx",
@@ -517,12 +561,26 @@
     },
     {
       "path": "web/src/tests/records-portal.test.tsx",
-      "sha256": "83a55165936941cc2f744030ad9fb326223c49e7c2cfaf37880ed8bb55b8c84a"
+      "sha256": "ea5b66c5843cec6f5106415f94500a8a02e97ad7095e712a21889fb7d8818978"
     },
     {
       "path": "web/src/tests/source-associations.test.tsx",
       "sha256": "dc5b8131d20a3e2785035c3aeed1b23c2c102fe0cacf051555808ea1722cbc8b"
     }
   ],
-  "codeFilesSha256": "f1e2c4812d9e54048dd54e9d0907c86519335c2a43f34d1e438b73ba281a057c"
+  "codeFilesSha256": "124cd924d494e77b2b0832924115bcb420edc79d6aa06713565bc3a36475c285",
+  "priorInternalWindowsArtifacts": [
+    {
+      "name": "packproof-connect-DEVELOPMENT-win32-x64-fe0e48347d1782d533a159c7034f6ed36f63e791",
+      "runId": 42432113017,
+      "artifactId": 13597748823,
+      "archiveBytes": 167294277,
+      "archiveSha256": "2d9e32265e7fa364e8dd653ef21f0d7b74731675a83d1dae30cc91b634d05cb8",
+      "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42432113017/artifacts/13597748823",
+      "signed": false,
+      "publicDistributionAllowed": false,
+      "installerSha256": null,
+      "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists."
+    }
+  ]
 }

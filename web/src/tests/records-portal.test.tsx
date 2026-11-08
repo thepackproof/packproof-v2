@@ -85,10 +85,16 @@ it('labels bounded evidence counts and applies the selected entity to requiremen
 it('retains the authoritative unresolved count when 500 newer resolved issues fill the detail response', async () => {
   const issues = Array.from({ length: 500 }, (_, index) => ({ id: `resolved-${index}`, state: 'resolved', title: `Resolved issue ${index}` }));
   const detail = { record: { ...record, issueCount: 1 }, timeline: [], evidence: [], requirements: [], issues, relationships: [], sourceHealth: { state: 'unknown' }, capabilities: {} };
-  const request = vi.fn(async (path: string) => path.startsWith('/context') ? context : detail);
+  const request = vi.fn(async (path: string) => path.startsWith('/context') ? context : detail),user=userEvent.setup();
   render(portal({ recordsRequest: request } as unknown as PackProofApi, '/app/records/proof-a?organizationId=org-a&environment=live'));
   expect(await screen.findByText('1 issue(s) need review')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Review issues' })).toBeVisible();
+  expect(screen.queryByText('Resolved issue 0')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Review issues' }));
+  expect(screen.getByText('Resolved issue 24')).toBeVisible();
+  expect(screen.queryByText('Resolved issue 25')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Next issue page' }));
+  expect(screen.getByText('Resolved issue 25')).toBeVisible();
+  expect(screen.queryByText('Resolved issue 0')).not.toBeInTheDocument();
 });
 it('explains an assembled source event with its original receipt, interpretation and separate record commit time', async () => {
   const sourceObservation = { receiptId: 'source-receipt-a', sourceEventId: '000099', sourceKind: 'Customer dispatch', sourceSchemaVersion: '2026.1', mappingVersion: 'dispatch/v1', ruleVersion: 'packproof.source-reference/v1', reference: { type: 'SHIPMENT', externalId: '000123' }, receivedAt: '2026-11-04T10:00:00Z', payloadSha256: 'a'.repeat(64) };
