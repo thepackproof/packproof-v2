@@ -1,0 +1,760 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Temporary private isolated restore of the deployed database for zero-touch migration and full runtime qualification. No production network access or application activation.",
+  "Parameters": {
+    "VpcId": {
+      "Type": "String",
+      "Description": "Existing synthetic-only M1 VPC",
+      "AllowedValues": [
+        "vpc-0c4f12c0ba9393ae3"
+      ]
+    },
+    "SubnetId": {
+      "Type": "String",
+      "Description": "One existing private M1 subnet for bounded rehearsal",
+      "AllowedValues": [
+        "subnet-00ce0618188c68de8"
+      ]
+    },
+    "RouteTableId": {
+      "Type": "String",
+      "Description": "Existing local-only M1 route table",
+      "AllowedValues": [
+        "rtb-05ee97c6869a5baab"
+      ]
+    },
+    "S3PrefixListId": {
+      "Type": "String",
+      "Description": "Inspected regional S3 gateway prefix, for ECR image layers only",
+      "AllowedValues": [
+        "pl-63a5400a"
+      ]
+    },
+    "RestoredOwnerSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^$|^arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-[A-Za-z0-9-]+$"
+    }
+  },
+  "Rules": {
+    "ExactAccountRegion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::AccountId"
+              },
+              "784514617543"
+            ]
+          },
+          "AssertDescription": "Only the inspected PackProof AWS account"
+        },
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::Region"
+              },
+              "us-east-1"
+            ]
+          },
+          "AssertDescription": "Only the inspected region"
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "EndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "TLS only from the two existing isolated M1 task groups",
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "EcrApiEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.api"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "ecr:GetAuthorizationToken",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "EcrDkrEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.dkr"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "SecretsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "secretsmanager:GetSecretValue",
+              "Resource": [
+                {
+                  "Ref": "RestoredOwnerSecretArn"
+                },
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-api-v1-20261105-h9stT0",
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-worker-v1-20261105-9EhBXK"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      },
+      "Condition": "OwnerSecretReady"
+    },
+    "LogsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261021-runtime:log-stream:*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "RouteTableId"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*"
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObjectVersion",
+              "Resource": "arn:aws:s3:::packproof-v2-evidence-staging-20260829-a7f3/proofs/system/readiness/proof-navigation-2026-09-08.txt",
+              "Condition": {
+                "StringEquals": {
+                  "s3:VersionId": "DBzaGdqzLTbDb_wfLgScCLbp1uhR9Y7v",
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "RestoredDatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "Temporary restored database; only the rehearsal task can connect",
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "RehearsalTaskSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "Only private bootstrap TLS and the separate restored database",
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "EndpointSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": {
+              "Ref": "RestoredDatabaseSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "S3PrefixListId"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-isolated-runtime-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "restored-production-confidential"
+          }
+        ]
+      }
+    },
+    "RestoredDatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RestoredDatabaseSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "RehearsalTaskSecurityGroup"
+        }
+      }
+    },
+    "RehearsalBootstrapIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "RehearsalTaskSecurityGroup"
+        }
+      }
+    },
+    "KmsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": "com.amazonaws.us-east-1.kms",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "kms:GetPublicKey",
+              "Resource": "arn:aws:kms:us-east-1:784514617543:key/fa043509-f86e-4bf5-a641-af31adf633f7",
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "OwnerSecretReady",
+      "Properties": {
+        "RoleName": "packproof-zero-touch-runtime-execution",
+        "Path": "/packproof/zero-touch/",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ExactRestoreInjection",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "ecr:GetAuthorizationToken",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261021-runtime:log-stream:zero-touch-runtime/*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "secretsmanager:GetSecretValue",
+                  "Resource": [
+                    {
+                      "Ref": "RestoredOwnerSecretArn"
+                    },
+                    "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-api-v1-20261105-h9stT0",
+                    "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-worker-v1-20261105-9EhBXK"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:Decrypt",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/eea45321-ef8a-4cb4-a3a2-0688bb41186f",
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": "secretsmanager.us-east-1.amazonaws.com",
+                      "kms:EncryptionContext:SecretARN": [
+                        {
+                          "Ref": "RestoredOwnerSecretArn"
+                        },
+                        "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-api-v1-20261105-h9stT0",
+                        "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof/production/database/records-worker-v1-20261105-9EhBXK"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ProbeTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "packproof-zero-touch-readonly-probe",
+        "Path": "/packproof/zero-touch/",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "784514617543"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:ecs:us-east-1:784514617543:*"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ReadOnlyStartupDependencies",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:GetPublicKey",
+                  "Resource": "arn:aws:kms:us-east-1:784514617543:key/fa043509-f86e-4bf5-a641-af31adf633f7"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:GetObjectVersion",
+                  "Resource": "arn:aws:s3:::packproof-v2-evidence-staging-20260829-a7f3/proofs/system/readiness/proof-navigation-2026-09-08.txt",
+                  "Condition": {
+                    "StringEquals": {
+                      "s3:VersionId": "DBzaGdqzLTbDb_wfLgScCLbp1uhR9Y7v"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "EndpointSecurityGroup": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EndpointSecurityGroup"
+      }
+    },
+    "EcrApiEndpoint": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EcrApiEndpoint"
+      }
+    },
+    "EcrDkrEndpoint": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EcrDkrEndpoint"
+      }
+    },
+    "SecretsEndpoint": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "SecretsEndpoint"
+      },
+      "Condition": "OwnerSecretReady"
+    },
+    "LogsEndpoint": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "LogsEndpoint"
+      }
+    },
+    "S3Endpoint": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "S3Endpoint"
+      }
+    },
+    "RestoredDatabaseSecurityGroup": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "RestoredDatabaseSecurityGroup"
+      }
+    },
+    "RehearsalTaskSecurityGroup": {
+      "Description": "Temporary isolated runtime rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "RehearsalTaskSecurityGroup"
+      }
+    },
+    "KmsEndpoint": {
+      "Value": {
+        "Ref": "KmsEndpoint"
+      }
+    },
+    "ProbeTaskRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ProbeTaskRole",
+          "Arn"
+        ]
+      }
+    },
+    "ExecutionRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ExecutionRole",
+          "Arn"
+        ]
+      },
+      "Condition": "OwnerSecretReady"
+    }
+  },
+  "Conditions": {
+    "OwnerSecretReady": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "RestoredOwnerSecretArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  }
+}
