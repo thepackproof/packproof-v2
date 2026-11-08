@@ -2,7 +2,7 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T01:20:33.936922+00:00",
+  "checkedAt": "2026-11-08T01:29:47.014144+00:00",
   "deployment": {
     "backend": null,
     "portal": null,
@@ -13,7 +13,7 @@
   "gates": {
     "D0": "engineering_baseline_only_named_source_missing",
     "D1": "local_fixture_only_native_hosted_blocked",
-    "D2": "local_fixture_verified_hosted_pending",
+    "D2": "synthetic_local_and_hosted_fixtures_verified_external_acceptance_pending",
     "D3": "blocked_signed_windows11",
     "D4": "blocked_named_source_customer_novice",
     "D5": "blocked_prerequisites_migration_roles_image_canary",
@@ -150,26 +150,26 @@
     {
       "name": "hosted_full_backend",
       "result": "passed",
-      "sourceCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
-      "runId": 42432698507,
+      "sourceCommit": "6f833e35a06d552bff09450fafd9e796210761c0",
+      "runId": 42433845530,
       "passed": 1789,
       "failed": 0,
       "skipped": 17,
       "filesPassed": 231,
       "filesSkipped": 6,
       "jobs": [
-        128584922514,
-        128584922528,
-        128584922567,
-        128584922702
+        128588428870,
+        128588428888,
+        128588428923,
+        128588428881
       ],
-      "note": "Backend jobs all passed at the named source. The overall run had the repaired500-issue UI timeout. Later stricter original-input guards have17 passing local source cases; current exact-head CI is separately required."
+      "note": "Full backend passed at the named source, including strict original-input validation. A later test-only no-op cleanup was verified separately; final PR checks remain authoritative."
     },
     {
       "name": "hosted_postgres_current",
       "result": "passed",
-      "sourceCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
-      "runId": 42432698615,
+      "sourceCommit": "6f833e35a06d552bff09450fafd9e796210761c0",
+      "runId": 42433845369,
       "recordSourceCases": 114,
       "foundationCases": 61,
       "packagingCompatibilityCases": 25,
@@ -196,6 +196,27 @@
       "failed": 0,
       "skipped": 0,
       "scope": "Final parser guard confirms hidden credentials reject with INGESTION_SECRET_FIELD and create no durable receipt; untouched inputs validated before enrichment."
+    },
+    {
+      "name": "hosted_exact_source_web",
+      "result": "passed",
+      "sourceCommit": "6f833e35a06d552bff09450fafd9e796210761c0",
+      "runId": 42433845530,
+      "jobId": 128588428589,
+      "passed": 453,
+      "failed": 0,
+      "skipped": 0,
+      "files": 74,
+      "linkChecksPassed": 12
+    },
+    {
+      "name": "final_review_test_cleanup",
+      "result": "passed",
+      "command": "npm --prefix backend test -- --run tests/record-agents.test.ts --maxWorkers=1",
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "note": "Removed the CodeQL-reported replace-with-itself call; drift mutation and rejection assertion are unchanged."
     }
   ],
   "customerReconciliation": null,
@@ -298,21 +319,21 @@
     "postgresSelectionCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
     "latestHead": "See current PR head; this ledger is part of its tree",
     "gitTreePublicationVerified": true,
-    "backendTestedCommit": "e1147240b09d019289d92b00289384ec7ed1970f"
+    "backendTestedCommit": "6f833e35a06d552bff09450fafd9e796210761c0"
   },
   "internalWindowsArtifact": {
-    "name": "packproof-connect-DEVELOPMENT-win32-x64-cace6d95bc42a68ece960134fc6dbbeeb439bfd9",
-    "runId": 42432698543,
-    "artifactId": 13598083206,
-    "archiveBytes": 167293772,
-    "archiveSha256": "9bdc3ed1f662d2051e01d789001b8c2db0167ef72d8501dd0efca5614ff9bb7a",
-    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42432698543/artifacts/13598083206",
+    "name": "packproof-connect-DEVELOPMENT-win32-x64-9b62131f820e5bf06a2d541471dda9bea37ca448",
+    "runId": 42433845373,
+    "artifactId": 13599170088,
+    "archiveBytes": 167293947,
+    "archiveSha256": "1c29345f14538930c485c7346493cce82554beabeb959b2b0bd424b248597cf4",
+    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42433845373/artifacts/13599170088",
     "signed": false,
     "publicDistributionAllowed": false,
     "installerSha256": null,
     "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists.",
-    "headCommit": "e1147240b09d019289d92b00289384ec7ed1970f",
-    "testedMergeCommit": "cace6d95bc42a68ece960134fc6dbbeeb439bfd9"
+    "headCommit": "6f833e35a06d552bff09450fafd9e796210761c0",
+    "testedMergeCommit": "9b62131f820e5bf06a2d541471dda9bea37ca448"
   },
   "liveInspection": {
     "apiMetaUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws/meta",
@@ -326,16 +347,16 @@
     "awsControlPlane": "Verification request cancelled; no mutation result"
   },
   "hostedChecks": {
-    "previousHead": "e1147240b09d019289d92b00289384ec7ed1970f",
-    "sourceCodeQLRun": 42432698511,
-    "contractRun": 42432698578,
-    "nativeMediaRun": 42432698592,
-    "integrityRun": 42432698487,
-    "nativeWindowsRun": 42432698543,
-    "postgresRun": 42432698615,
-    "ciRun": 42432698507,
+    "previousHead": "6f833e35a06d552bff09450fafd9e796210761c0",
+    "sourceCodeQLRun": 42433845326,
+    "contractRun": 42433845414,
+    "nativeMediaRun": 42433845351,
+    "integrityRun": 42433845504,
+    "nativeWindowsRun": 42433845373,
+    "postgresRun": 42433845369,
+    "ciRun": 42433845530,
     "latestStatusUrl": "https://github.com/thepackproof/packproof-v2/pull/150/checks",
-    "currentHeadQualification": "Full e1147240 backend snapshot passed; final stricter original-input validation has17 local source cases passed and portal pagination has453 local web cases passed. Current exact-head hosted state is at latestStatusUrl. No deployment claim."
+    "currentHeadQualification": "All 11 applicable workflows passed on6f833e35; three optional workflows were skipped. This ledger and a test-only redundant-call cleanup follow that receipt. Current exact-head status is at latestStatusUrl. No deployment claim."
   },
   "testedCodeFiles": [
     {
@@ -428,7 +449,7 @@
     },
     {
       "path": "backend/tests/record-agents.test.ts",
-      "sha256": "732af3f13a7fa20519d1ce8e5545c3a06d9f2f50ceb3ac9be219bdfa7da80c8f"
+      "sha256": "842fe9054766b2d35055385a4a06c724abfefaa45b59d489d876fbbda08660a8"
     },
     {
       "path": "backend/tests/record-ingestions.test.ts",

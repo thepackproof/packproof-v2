@@ -154,7 +154,7 @@ it('reconciles a versioned scheduled source and never treats healthy scans or la
  await commitPartnerImport(deps,a.actor,late.id,'versioned-late-commit',{previewVersion:late.previewVersion,importValidRows:false});await processPendingPartnerImports(deps);
  const afterBackfill=await heartbeatAgent(deps,a.actor,{version:'0.1.0',queueCount:0});expect(afterBackfill.health.sourceFreshness).toBe('delayed');expect(afterBackfill.health.sourceAccounting).toMatchObject({receivedExports:2,acceptedRows:2,linkedProofs:2});
  const before=Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows[0].n);
- await expect(previewPartnerImport(deps,a.actor,'versioned-drift',{...input,csv:input.csv.replace('Reported at\r\n','Reported at,Private extra\r\n').replace(',Parcel,1,',',Parcel,1,')})).rejects.toMatchObject({code:'MAPPING_NEEDS_REVIEW'});
+ await expect(previewPartnerImport(deps,a.actor,'versioned-drift',{...input,csv:input.csv.replace('Reported at\r\n','Reported at,Private extra\r\n')})).rejects.toMatchObject({code:'MAPPING_NEEDS_REVIEW'});
  expect(Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows[0].n)).toBe(before);
  for(let attempt=0;attempt<33;attempt++)await heartbeatAgent(deps,a.actor,{version:'0.1.0',queueCount:0,lastErrorCode:attempt%2?'MAPPING_NEEDS_REVIEW':'CSV_ENCODING_UNSUPPORTED'});
  const bounded=await heartbeatAgent(deps,a.actor,{version:'0.1.0',queueCount:0,lastErrorCode:'CSV_ENCODING_UNSUPPORTED'});expect(bounded.health.history).toHaveLength(30);expect(bounded.health.history.every(event=>event.configRevision===1)).toBe(true);
