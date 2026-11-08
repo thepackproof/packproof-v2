@@ -2,7 +2,7 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T00:48:08.243699+00:00",
+  "checkedAt": "2026-11-08T01:04:39.826000+00:00",
   "deployment": {
     "backend": null,
     "portal": null,
@@ -91,20 +91,61 @@
       "name": "source_association_adversarial",
       "command": "npm --prefix backend test -- --run tests/source-associations.test.ts --maxWorkers=1",
       "result": "passed",
-      "passed": 16,
+      "passed": 17,
       "failed": 0,
       "scope": "Local PGlite; not actual hosted PostgreSQL/native/customer acceptance"
     },
     {
       "name": "full_backend",
       "command": "npm --prefix backend test -- --maxWorkers=2 --reporter=json",
-      "result": "running"
+      "result": "cancelled_local_environment_incomplete",
+      "reason": "Local PowerShell and research Python environments are absent; current-source affected suite passed and hosted CI provides the complete toolchain. Cancelled with exit130 after diagnosis; no full-suite pass claim."
     },
     {
       "name": "native_windows",
       "command": "dotnet test connect-windows/service-tests/PackProof.Connect.Service.Tests.csproj -c Release",
-      "result": "not_run_locally",
-      "reason": ".NET/Windows runtime unavailable; exact-commit hosted native CI required"
+      "result": "passed_hosted_internal_candidate",
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0,
+      "runId": 42432113017,
+      "headCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
+      "testedMergeCommit": "fe0e48347d1782d533a159c7034f6ed36f63e791",
+      "scope": "Windows Server2025; native subtree unchanged in subsequent backend-only fixes. Not Windows11 or signed qualification."
+    },
+    {
+      "name": "affected_backend_final",
+      "command": "npm test -- --run tests/source-associations.test.ts tests/source-association-migration-inventory.test.ts tests/scheduled-csv-source.test.ts tests/record-agents.test.ts tests/agent-restrictions.test.ts tests/partner-imports-exports.test.ts tests/records-api.test.ts tests/records-app-integration.test.ts tests/record-ingestions.test.ts tests/records-runtime-privileges.test.ts tests/record-agent-migrate.test.ts tests/record-agent-migration-inventory.test.ts tests/record-connections.test.ts tests/record-connection-operations.test.ts tests/source-artifacts.test.ts tests/source-artifacts-http.test.ts tests/source-artifact-storage.test.ts tests/source-artifact-requirements.test.ts tests/record-imports.test.ts tests/records-migrate.test.ts --maxWorkers=1",
+      "result": "passed",
+      "files": 20,
+      "passed": 173,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "deployment_scripts",
+      "command": "node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs",
+      "result": "passed",
+      "passed": 124,
+      "failed": 0
+    },
+    {
+      "name": "packaging_local",
+      "command": "npm --prefix backend test -- --run tests/rnd-production-packaging.test.ts --maxWorkers=1",
+      "result": "environment_incomplete",
+      "passed": 3,
+      "failed": 1,
+      "reason": "Remaining assertion requires pwsh, which is absent locally; do not weaken the assertion. Current108 inventory and compiled layout checks passed; full file must pass hosted."
+    },
+    {
+      "name": "hosted_postgres_source_subset",
+      "result": "passed",
+      "files": 14,
+      "passed": 113,
+      "failed": 0,
+      "runId": 42432112980,
+      "sourceCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
+      "note": "Overall run failed later on two current-inventory packaging assertions. Assertions updated to108 while historical source/byte checks remain strict. Later decimal/pointer fixes require their current-head PostgreSQL run."
     }
   ],
   "customerReconciliation": null,
@@ -133,11 +174,15 @@
     "historicalMigrationBytesChanged": false
   },
   "changedPaths": [
+    ".github/workflows/partner-foundation.yml",
+    "backend/Dockerfile",
     "backend/migrations/109_source_associations.sql",
     "backend/partner-openapi.json",
     "backend/scripts/record-agent-migrate.mjs",
     "backend/scripts/records-runtime-privileges.d.mts",
     "backend/scripts/records-runtime-privileges.mjs",
+    "backend/scripts/source-association-migration-inventory.mjs",
+    "backend/scripts/source-association-migration-manifest.json",
     "backend/src/index.ts",
     "backend/src/records/agent-enrollments.ts",
     "backend/src/records/agent-restrictions.ts",
@@ -154,7 +199,9 @@
     "backend/tests/record-agents.test.ts",
     "backend/tests/record-ingestions.test.ts",
     "backend/tests/records-runtime-privileges.test.ts",
+    "backend/tests/rnd-production-packaging.test.ts",
     "backend/tests/scheduled-csv-source.test.ts",
+    "backend/tests/source-association-migration-inventory.test.ts",
     "backend/tests/source-associations.test.ts",
     "connect-windows/main/security.ts",
     "connect-windows/service-tests/RecoveryTests.cs",
@@ -172,6 +219,8 @@
     "docs/zero-touch-warehouse/DEVELOPMENT_PLAN.md",
     "docs/zero-touch-warehouse/EVIDENCE.json",
     "docs/zero-touch-warehouse/IMPLEMENTATION_STATUS.md",
+    "infra/backend-release/backend-source-archive.py",
+    "infra/backend-release/connect-image-builds.test.mjs",
     "packages/partner-sdk-python/packproof/client.py",
     "packages/partner-sdk-python/tests/test_client.py",
     "packages/partner-sdk-typescript/index.d.ts",
@@ -189,5 +238,291 @@
     "web/src/tests/agent-connections.test.tsx",
     "web/src/tests/records-portal.test.tsx",
     "web/src/tests/source-associations.test.tsx"
-  ]
+  ],
+  "sourcePublication": {
+    "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/150",
+    "implementationCommit": "f4bde7e9cfab05eb4c0863676b5e0956790d6143",
+    "archiveProfileCommit": "674b7e35ced6e15342d6f2e35749c1f3d2dcb947",
+    "postgresSelectionCommit": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
+    "latestHead": "See current PR head; this ledger is part of its tree",
+    "gitTreePublicationVerified": true
+  },
+  "internalWindowsArtifact": {
+    "name": "packproof-connect-DEVELOPMENT-win32-x64-fe0e48347d1782d533a159c7034f6ed36f63e791",
+    "runId": 42432113017,
+    "artifactId": 13597748823,
+    "archiveBytes": 167294277,
+    "archiveSha256": "2d9e32265e7fa364e8dd653ef21f0d7b74731675a83d1dae30cc91b634d05cb8",
+    "url": "https://github.com/thepackproof/packproof-v2/actions/runs/42432113017/artifacts/13597748823",
+    "signed": false,
+    "publicDistributionAllowed": false,
+    "installerSha256": null,
+    "note": "Digest above identifies the artifact ZIP, not the installer executable; no signed artifact exists."
+  },
+  "liveInspection": {
+    "apiMetaUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws/meta",
+    "environment": "production",
+    "commit": "e346452ade2744820fb2f429d7aeb94fef376419",
+    "version": "records-api-2026.11.05-e346452a",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0",
+    "siteUrl": "https://thepackproof.com",
+    "siteVersion": 79,
+    "changed": false,
+    "awsControlPlane": "Verification request cancelled; no mutation result"
+  },
+  "hostedChecks": {
+    "previousHead": "b6f18ce3bc419ea81d24c95ff26cd5420580add3",
+    "sourceCodeQLRun": 42432112940,
+    "contractRun": 42432113006,
+    "nativeMediaRun": 42432112964,
+    "integrityRun": 42432112939,
+    "nativeWindowsRun": 42432113017,
+    "postgresRun": 42432112980,
+    "ciRun": 42432112936,
+    "latestStatusUrl": "https://github.com/thepackproof/packproof-v2/pull/150/checks",
+    "currentHeadQualification": "Pending final source changes; no all-head CI or deployment claim is made by this ledger."
+  },
+  "testedCodeFiles": [
+    {
+      "path": ".github/workflows/partner-foundation.yml",
+      "sha256": "a7d585dfded94f9951accae6e8971613a85841f70cd0332144d0e14c8fa99aff"
+    },
+    {
+      "path": "backend/Dockerfile",
+      "sha256": "fc7c5183970ddb88d1e1051311f117bd02425531ccce44a380e3de123147fafa"
+    },
+    {
+      "path": "backend/migrations/109_source_associations.sql",
+      "sha256": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+    },
+    {
+      "path": "backend/partner-openapi.json",
+      "sha256": "579fe06d4fd78d0ca6ebf61710c20a7dfb99a71f2a078e2d92f05afba64b761f"
+    },
+    {
+      "path": "backend/scripts/record-agent-migrate.mjs",
+      "sha256": "0b1d2a890096e8bba9b912c16053c27c6c17660ee90d5e7458d5408584cc934a"
+    },
+    {
+      "path": "backend/scripts/records-runtime-privileges.d.mts",
+      "sha256": "635da8a533ed8e49ed28d57cb4a9f63c78fcbc47a03833df5a53f81ce04848e2"
+    },
+    {
+      "path": "backend/scripts/records-runtime-privileges.mjs",
+      "sha256": "11300fc87f7538d9b23268337c11cc739b777349abb9641fb4b7b890949d0139"
+    },
+    {
+      "path": "backend/scripts/source-association-migration-inventory.mjs",
+      "sha256": "4db0a4c647593efbff64d8780485faa210ad5369d72a31dd4ac1ffe9f2eb7151"
+    },
+    {
+      "path": "backend/scripts/source-association-migration-manifest.json",
+      "sha256": "2eaeb654bc10cd9d7a439f09a71206bd5bec21eb1b3fc86b2a84feeae4042c3d"
+    },
+    {
+      "path": "backend/src/index.ts",
+      "sha256": "2906fea718cc411b277779b06f9a3269fd046a0b54eeb235c4f94f2ca86cc850"
+    },
+    {
+      "path": "backend/src/records/agent-enrollments.ts",
+      "sha256": "7533347fb1b5d1fa7aed2e82be6f94e4a686a875d60131a1595b9fa1a1f718d5"
+    },
+    {
+      "path": "backend/src/records/agent-restrictions.ts",
+      "sha256": "912e8fe7410195519165b609afe441bf459f601fc4e9f0b358263daeae914313"
+    },
+    {
+      "path": "backend/src/records/csv.ts",
+      "sha256": "3eba911d3696facaca4e9ea22d3e298b372fae801f10cc78c28de98a66d51674"
+    },
+    {
+      "path": "backend/src/records/ingestions-router.ts",
+      "sha256": "1f9a78a31fcd1f6217c5acf579caf132c3f6048a56bc3dded94534ebfc819430"
+    },
+    {
+      "path": "backend/src/records/partner-imports.ts",
+      "sha256": "9ff1c94c44f394d5a1b448fffe000f2b66324ecfadc773d3866464a4581e8884"
+    },
+    {
+      "path": "backend/src/records/router.ts",
+      "sha256": "071e4d34c30670380b2a829057ea0b6304eaca8805006910b03e6baff314e4e9"
+    },
+    {
+      "path": "backend/src/records/service.ts",
+      "sha256": "5e375ed1d1b1de82d5e30fa2dc207552c6417259fb9a220662f91cf0302388f6"
+    },
+    {
+      "path": "backend/src/records/source-associations.ts",
+      "sha256": "5b2228b7b6d9822297f69944daddbd68801da49a375244f25e2f6ac166677551"
+    },
+    {
+      "path": "backend/src/records/source-reference.ts",
+      "sha256": "8e1229967112bd52d6b7cd2958c4fe02126fdf286b8dbb250e3936700a4ed588"
+    },
+    {
+      "path": "backend/tests/partner-imports-exports.test.ts",
+      "sha256": "659603ff8e55a52d81866047f928e4c8ecdd973450de54c8b709cf7ff4306cda"
+    },
+    {
+      "path": "backend/tests/record-agent-migrate.test.ts",
+      "sha256": "f1a016a38f47e34d56d07d6d15255ef807ce7183a083a481f576a515756e4fd7"
+    },
+    {
+      "path": "backend/tests/record-agent-migration-inventory.test.ts",
+      "sha256": "af27f86dec9e1d31153ca066b859229a8a7051d8da2f0b752bc4387e6e74d893"
+    },
+    {
+      "path": "backend/tests/record-agents.test.ts",
+      "sha256": "732af3f13a7fa20519d1ce8e5545c3a06d9f2f50ceb3ac9be219bdfa7da80c8f"
+    },
+    {
+      "path": "backend/tests/record-ingestions.test.ts",
+      "sha256": "64cde650547937b8bc009310d2c07bcb27777887d41ec5f36179d4232e7e532e"
+    },
+    {
+      "path": "backend/tests/records-runtime-privileges.test.ts",
+      "sha256": "a61f99ac97a2a9d9c7f98f2580501f3f1d7eccfebd36eb6415327d625e1378c0"
+    },
+    {
+      "path": "backend/tests/rnd-production-packaging.test.ts",
+      "sha256": "91f048433399d225e94f132ca522b0a3c97c29b1af4add9583020ccc174ad316"
+    },
+    {
+      "path": "backend/tests/scheduled-csv-source.test.ts",
+      "sha256": "743b15cd9e5ed3ea75e6d1f6a7260bfbabca192e259836c1a1b90de949fd51cc"
+    },
+    {
+      "path": "backend/tests/source-association-migration-inventory.test.ts",
+      "sha256": "82ff6b24df74d8bcf919a03b293e82b1b6bf0cd55103e4063db9b084724c3f7e"
+    },
+    {
+      "path": "backend/tests/source-associations.test.ts",
+      "sha256": "59525be91ac3dcac4e82e8688d1da34fd4630928b3db0827605b912c3695e24c"
+    },
+    {
+      "path": "connect-windows/main/security.ts",
+      "sha256": "1ff0c5b023559bb56f412c394693608631ee2315510ba62e314bc22f6910f552"
+    },
+    {
+      "path": "connect-windows/service-tests/RecoveryTests.cs",
+      "sha256": "5d332a5198a33d32f6738f4f1f68f90dc0ee6d4c3af2b0e965964d148fa8a574"
+    },
+    {
+      "path": "connect-windows/service/AgentRuntime.cs",
+      "sha256": "fdb6e6c27b636d99fa1badefd0311c801600128f7e53a83ad179df210912ef8e"
+    },
+    {
+      "path": "connect-windows/service/DurableQueue.cs",
+      "sha256": "11f65d665c8dafcf6a5196668a72160256e9abdefb2d039612942f23dd4ff7cd"
+    },
+    {
+      "path": "connect-windows/service/FolderSource.cs",
+      "sha256": "05aacb7fadf30bb2f02d7658d01492a48c15aafce6b63f8d7293e4d9380fae40"
+    },
+    {
+      "path": "connect-windows/service/Models.cs",
+      "sha256": "9dc6ca6e4d3d4f9201b3e04581a63c5ad19f6e762c8f637743dadf2800fcf5fa"
+    },
+    {
+      "path": "connect-windows/tests/security.test.ts",
+      "sha256": "546a0bdcf0f2956d1cade036429880cd268c0e3649806bf315bfdf4b2cde9536"
+    },
+    {
+      "path": "connect-windows/ui/ConnectApp.test.tsx",
+      "sha256": "cd5325026d452a65db49721cb51613ed7de84f6d1fce636192925e083da1e7ad"
+    },
+    {
+      "path": "connect-windows/ui/ConnectApp.tsx",
+      "sha256": "0d269056f866a3adc07783bf84b2919aad9bb049824c40df77f3df60f48e67c7"
+    },
+    {
+      "path": "connect-windows/ui/state.test.ts",
+      "sha256": "ec32eb5bc08c8b23fc26c9f56b9dbce44d70bcc989bd5d5a6ad508c902e9a127"
+    },
+    {
+      "path": "connect-windows/ui/state.ts",
+      "sha256": "1a534b6327ecb962934749e74319a1089d2475d8fe33adf1a1933e96a4781709"
+    },
+    {
+      "path": "connect-windows/ui/types.ts",
+      "sha256": "b7c23f67ef9111c0cda739ece6891818c800a6d052d5c113d3e5a6707332ee8e"
+    },
+    {
+      "path": "infra/backend-release/backend-source-archive.py",
+      "sha256": "703437b88bd0a002f54ec04de1de5fed0474f273f90f220a40940aea05e35327"
+    },
+    {
+      "path": "infra/backend-release/connect-image-builds.test.mjs",
+      "sha256": "afa6b4b8088f6e784d343a7b286fd68446f22a307edd2d04ce62f4559a720171"
+    },
+    {
+      "path": "packages/partner-sdk-python/packproof/client.py",
+      "sha256": "6fa7b38d19f35a86630643baa7d1c493152ac96ac53f5e96f44a9a9e891be5a1"
+    },
+    {
+      "path": "packages/partner-sdk-python/tests/test_client.py",
+      "sha256": "be80e974814d18319befdad2ee329a81acc302f2ac1b1a9bdae60ce4a8bf7c4a"
+    },
+    {
+      "path": "packages/partner-sdk-typescript/index.d.ts",
+      "sha256": "204eda7a59686b6e0f7e6837c65a6062637d6adb7c503e91c0ffdbcb9e86fade"
+    },
+    {
+      "path": "packages/partner-sdk-typescript/index.mjs",
+      "sha256": "e992ef4d09c536a3460707533b34c979e973fa800dacc2ce74de86c5aa6d4a02"
+    },
+    {
+      "path": "packages/partner-sdk-typescript/test/client.test.mjs",
+      "sha256": "fdbfe925de8d1b9bd34335a596116ef7e78bd3473cd1e69683b3e2f83cb315ef"
+    },
+    {
+      "path": "packages/partner-sdk-typescript/test/types.ts",
+      "sha256": "0defa3786f4fe27194dca65594c239b1ca0e646d6bcca0dd6a0605214eb28cb4"
+    },
+    {
+      "path": "scripts/generate-records-openapi.mjs",
+      "sha256": "f2520f642626ec4aacd7e5f62f163d5451a8ae8e4580af153e1c6e71fc575ed6"
+    },
+    {
+      "path": "web/src/records/AgentConnections.tsx",
+      "sha256": "5db1b55afae2347df8cace81c184c4c8f86cf4044104133b9cdb7c14a8b60855"
+    },
+    {
+      "path": "web/src/records/RecordsPortal.tsx",
+      "sha256": "902c7d299411ea6d88f93ab0670de8f013682ad48acbd3065aa65dbd1a1f8961"
+    },
+    {
+      "path": "web/src/records/SourceAssociations.tsx",
+      "sha256": "bec9b9797c0bd99e28fd9ff23feffab4993ecd28c908020bcc4629a762e529a0"
+    },
+    {
+      "path": "web/src/records/SourceLineage.tsx",
+      "sha256": "0b3ce944515c31f5c0ad7b98280d8751c62e62617841634e4235512650d337cd"
+    },
+    {
+      "path": "web/src/records/model.ts",
+      "sha256": "b26dd8bba9b4abd0863110f59401e973c20aa1db546b813678b887f4122e30c3"
+    },
+    {
+      "path": "web/src/records/records.css",
+      "sha256": "2c80d9813ddc69d054e5f345166b365b298c170eb38be95ff4461eda2172f54d"
+    },
+    {
+      "path": "web/src/records/types.ts",
+      "sha256": "762d2f3aeb2f7cfb037bdadb5eae82b0d74d0c29a0113631f862ac81da265576"
+    },
+    {
+      "path": "web/src/tests/agent-connections.test.tsx",
+      "sha256": "83d00c3a4166edd292feb65d958fdc30df4b939133f5f0b609d914fb0becd4f6"
+    },
+    {
+      "path": "web/src/tests/records-portal.test.tsx",
+      "sha256": "83a55165936941cc2f744030ad9fb326223c49e7c2cfaf37880ed8bb55b8c84a"
+    },
+    {
+      "path": "web/src/tests/source-associations.test.tsx",
+      "sha256": "dc5b8131d20a3e2785035c3aeed1b23c2c102fe0cacf051555808ea1722cbc8b"
+    }
+  ],
+  "codeFilesSha256": "f1e2c4812d9e54048dd54e9d0907c86519335c2a43f34d1e438b73ba281a057c"
 }

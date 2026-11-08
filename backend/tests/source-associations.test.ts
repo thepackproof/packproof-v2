@@ -97,6 +97,16 @@ describe('source reference resolution and durable unattended assembly',()=>{
   await acceptReferenceObservation(opened.db,clock,actor,envelope('package-ambiguous','ANOTHER-PACKAGE',{facts:[{kind:'package',externalReference:'PKG-0001',attributes:{}}]}),'package-ambiguous');await processSourceAssociations(opened.db,clock);
   expect(await resolveSourceReference(opened.db,clock,actor,{connectionId:account,locationId:null,reference:{type:'package',externalId:'PKG-0001'}})).toMatchObject({outcome:'unresolved_ambiguous',proofId:null});
  });
+ it('uses exact decimal quantity comparisons and flags unknown pack units without guessing conversions',async()=>{
+  const assertion=(amount:string,unit:string)=>({quantity:{amount,unit},source:{system:'fixture',reference:'quantity-source',reportedAt:'2026-11-07T00:00:00Z'}});
+  const comparison={schema:'packproof.quantity-comparison/v1',expected:assertion('1.000','kg'),observed:assertion('1000','g')};
+  const first=await acceptReferenceObservation(opened.db,clock,actor,envelope('decimal-quantity','000045',{facts:[{kind:'item',externalReference:'DECIMAL-ITEM',attributes:{quantityComparison:comparison}}]}),'decimal-quantity');await processSourceAssociations(opened.db,clock,50);
+  expect(await readReferenceObservation(opened.db,clock,actor,first.id)).toMatchObject({state:'submitted'});
+  const attributes=(await opened.db.query<{attributes:{quantityComparison:{evaluation:{outcome:string}}}}>("SELECT attributes FROM record_entities WHERE external_reference='DECIMAL-ITEM'")).rows[0].attributes;expect(attributes.quantityComparison.evaluation.outcome).toBe('within_tolerance');
+  const unknown=await acceptReferenceObservation(opened.db,clock,actor,envelope('unknown-pack','000045',{facts:[{kind:'item',externalReference:'UNKNOWN-PACK',attributes:{quantityComparison:{...comparison,observed:assertion('1','case')}}}]}),'unknown-pack');await processSourceAssociations(opened.db,clock,50);
+  expect(await readReferenceObservation(opened.db,clock,actor,unknown.id)).toMatchObject({state:'submitted'});
+  expect((await readRecordIssues(opened.db,proof)).some(i=>i.category==='quantity_not_comparable')).toBe(true);
+ });
  it('does not confuse literal exporter IDs with generated location binding keys',async()=>{
   await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',['binding-north',org,'Binding north',clock.now().toISOString()]);
   await opened.db.query('UPDATE record_state SET location_id=$2 WHERE proof_id=$1',[proof,'binding-north']);
@@ -156,14 +166,14 @@ describe('source reference resolution and durable unattended assembly',()=>{
   expect((await opened.db.query("SELECT 1 FROM record_entities WHERE external_reference='CRASH-PKG'")).rows).toHaveLength(1);
  });
  it('rejects source secrets, ambiguous timestamps, forged authority and extra commands before acceptance',()=>{
-  for(const extra of [{event:{sourceEventId:'secret',eventType:'DELIVERED',reportedAt:'2026-11-03T17:00:00Z',data:{apiKey:'secret'}}},{attest:true},{event:{sourceEventId:'clock',eventType:'DELIVERED',reportedAt:'2026-11-03T01:30:00'}},{facts:[{kind:'human-review',externalReference:'bad'}]},{facts:[{kind:'package',externalReference:' PKG-1 '}]},{facts:[{kind:'package',externalReference:'PKG-1',parentReference:' parent '}]}])expect(()=>parseReferenceObservation(envelope('bad','000045',extra))).toThrow();
+  for(const extra of [{event:{sourceEventId:'secret',eventType:'DELIVERED',reportedAt:'2026-11-03T17:00:00Z',data:{apiKey:'secret'}}},{facts:[{kind:'package',externalReference:'private',attributes:{objectKey:'private/key'}}]},{facts:[{kind:'package',externalReference:'private-url',attributes:{note:'https://private.example/file'}}]},{attest:true},{event:{sourceEventId:'clock',eventType:'DELIVERED',reportedAt:'2026-11-03T01:30:00'}},{facts:[{kind:'human-review',externalReference:'bad'}]},{facts:[{kind:'package',externalReference:' PKG-1 '}]},{facts:[{kind:'package',externalReference:'PKG-1',parentReference:' parent '}]}])expect(()=>parseReferenceObservation(envelope('bad','000045',extra))).toThrow();
  });
  it('keeps an older open issue visible and blocks closing a record behind 500 newer resolved issues',async()=>{
   const at=clock.now().toISOString();
   await opened.db.query("INSERT INTO record_issues(id,proof_id,category,severity,title,subject_id,rule_version,compared_sources,created_at) SELECT 'regression-issue-'||i,$1,'fixture','warning','Regression issue',$1,'fixture/v1','{}',$2::timestamptz+make_interval(secs=>i) FROM generate_series(0,500) i",[proof,at]);
   await opened.db.query("INSERT INTO record_issue_actions(id,issue_id,action,reason,actor_user_id,created_at) SELECT 'regression-action-'||i,'regression-issue-'||i,'resolve','Fixture resolved',$1,$2 FROM generate_series(1,500) i",[owner,at]);
   const issues=await readRecordIssues(opened.db,proof);expect(issues.some(i=>i.id==='regression-issue-0'&&i.status==='open')).toBe(true);
-  const detail=await getRecord(opened.db,clock,await workspace(),proof);expect(detail.record.issueCount).toBe(2);
+  const detail=await getRecord(opened.db,clock,await workspace(),proof);expect(detail.record.issueCount).toBe(3);
   await expect(changeRecordLifecycle(opened.db,clock,await workspace(),proof,'close',{reason:'Should fail with old issue'})).rejects.toMatchObject({code:'RECORD_HAS_OPEN_REQUIREMENTS'});
  });
 });

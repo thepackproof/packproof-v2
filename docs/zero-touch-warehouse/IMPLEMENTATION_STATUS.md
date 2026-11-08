@@ -18,7 +18,7 @@ This is the primary ledger for the November 7 development plan. Source implement
 
 `109_source_associations.sql` adds `record_source_crosswalks`, `record_source_pending`, append-only `record_source_resolution_attempts`, and a frozen source-control revision on partner import jobs. Original bytes/identity and submitted associations are immutable. Replay may record a newer explicitly approved control revision without changing the original revision or payload.
 
-Current runtime privilege planning includes 109. Worker permissions permit only the receipt admissions and append-only entity/issue writes required by stored source assembly; approval, crosswalk, replay, human review, waivers and installation configuration remain API/human responsibilities. API roles cannot write event-processing results or preserved artifact results. Historical 096–107 and 108 operators keep their exact frozen source envelopes; they must not be used to install 109. A new restored-database/role/image qualification is required before deploying this schema.
+Current runtime privilege planning includes 109. Worker permissions permit only the receipt admissions and append-only entity/issue writes required by stored source assembly; approval, crosswalk, replay, human review, waivers and installation configuration remain API/human responsibilities. API roles cannot write event-processing results or preserved artifact results. Historical 096–107 and 108 operators keep their exact frozen source envelopes; they must not be used to install 109. A new restored-database/role/image qualification is required before deploying this schema. The `zero-touch-v1` exact Git archive and new read-only109 inventory manifest/preparation are available; the frozen `connect-v1` profile rejects109 source instead of relaxing its107-file guard.
 
 ## Work package and gate disposition
 
@@ -51,11 +51,21 @@ Current runtime privilege planning includes 109. Worker permissions permit only 
 
 ## Deployment and ownership
 
-No production schema, roles, source cohort, API image, website version or signed client is claimed deployed by this change. The AWS account verification was cancelled without a new result. The GitHub connector can publish source/PRs and inspect CI but cannot dispatch the protected signing workflow. The last repository receipt reports production source `e346452ade2744820fb2f429d7aeb94fef376419` and image `sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0`; this is historical evidence, not a fresh live inspection.
+No production schema, roles, source cohort, API image, website version or signed client is claimed deployed by this change. The AWS account verification was cancelled without a new result. The GitHub connector can publish source/PRs and inspect CI but cannot dispatch the protected signing workflow. A fresh read of the public API metadata confirmed production source `e346452ade2744820fb2f429d7aeb94fef376419` and image `sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0`; the live website remains version 79. These reads confirm the candidate is not deployed; they do not establish current database/control-plane eligibility.
 
 Required owners: source/customer owner supplies exact exporter/version, authorized originals, locations/cadence/retention and pilot contact; release administrator supplies approved restored/nonproduction target and protected signing execution; Windows tester supplies an actual Windows11 x64 lifecycle run; operational testers supply five observed onboarding attempts and a representative live window. These are missing evidence/access, not a request to repeat implementation authorization.
 
 The first source remains **Scheduled CSV Export Folder v1 — synthetic engineering fixtures only**. No named WMS, ERP, camera, customer or exporter edition is qualified. Source reconciliation demonstrated in tests is fixture-specific; real source shipment counts, P95 latency, cost, five-user success and retrieval-time improvement are unmeasured. No new preservation SLA is claimed.
+
+## Current verification
+
+The affected backend selection passed **173 tests across 20 files**, and the full web selection passed **453 tests** plus 12 link checks. Backend/web builds, 15 Connect UI/security tests, three release-policy tests, 15 tests in each SDK, strict SDK declarations, 135 documented record operations and 124 deployment-script checks passed. The local full backend run was cancelled after identifying missing PowerShell/research Python dependencies; no full local pass is claimed. Three local packaging cases passed; the PowerShell assertion remains unchanged and requires hosted verification.
+
+Hosted Windows run 42432113017 at source `b6f18ce3bc419ea81d24c95ff26cd5420580add3` passed 40 native tests and the actual LocalService foundation smoke, and produced an **unsigned internal** artifact. Its ZIP SHA-256 is `2d9e32265e7fa364e8dd653ef21f0d7b74731675a83d1dae30cc91b634d05cb8`; this is not the installer executable digest or a signed publisher receipt. The native subtree is unchanged by subsequent backend fixes.
+
+The same source's PostgreSQL record/source subset passed 113 cases. The overall job then failed on two current-inventory packaging assertions; those now require 108 files and still compare every migration byte against Git. Historical107/108 release envelopes remain frozen. Later decimal-quantity and private-pointer rejection checks passed locally and require the final current-head hosted run. Current CodeQL, contract, integrity and media receipts are linked in the evidence manifest; do not promote prior-head receipts into an all-head deployment claim.
+
+Mobile secure-token-storage remediation remains a separate prerequisite before broad promotion of workflows dependent on mobile credentials. No mobile behavior was changed here.
 
 ## Exact verification receipts
 

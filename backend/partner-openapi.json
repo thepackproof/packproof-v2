@@ -40007,7 +40007,7 @@
       "post": {
         "operationId": "post__v1_partner_source_observations",
         "summary": "Retain a source observation before its canonical Proof is known",
-        "description": "Direct merchant proofs:write plus Idempotency-Key. Up to 25 facts and bounded 8 KiB validated source data. Complete logical source envelope and digest commit before 202. Pending means preserved, not applied. Unmatched items retry at five-minute intervals; changed source event identities are conflicts. A submitted receipt points to the separate existing event operation, which must also succeed. No human review, waiver, signature or physical condition is established.",
+        "description": "Direct merchant proofs:write plus Idempotency-Key. Up to 25 facts; event data and each entity attributes object use the existing 8 KiB bound, including source metadata. Private URLs and external object keys are rejected. Complete logical source envelope and digest commit before 202. Pending means preserved, not applied. Unmatched items retry at five-minute intervals; changed source event identities are conflicts. A submitted receipt points to the separate existing event operation, which must also succeed. No human review, waiver, signature or physical condition is established.",
         "x-packproof-generated-records": true,
         "security": [
           {

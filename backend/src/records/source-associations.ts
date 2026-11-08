@@ -21,6 +21,15 @@ function reference(input:unknown):SourceReference {
  if(externalId!==b.externalId)fail('INVALID_SOURCE_REFERENCE','Source references must use their exact nonempty representation',400);
  return {type:b.type as SourceReference['type'],externalId};
 }
+function rejectSourcePointers(value:unknown,depth=0):void {
+ if(depth>10)fail('INVALID_SOURCE_FACTS','Source data nesting exceeds the supported contract',400);
+ if(typeof value==='string'&&/(?:https?|s3):\/\//i.test(value))fail('INGESTION_SECRET_FIELD','Source metadata cannot contain private URLs or external storage pointers',400);
+ if(Array.isArray(value)){for(const item of value)rejectSourcePointers(item,depth+1);return;}
+ if(value&&typeof value==='object')for(const [key,item]of Object.entries(value)){
+  if(/object.?key|storage.?key|private.?url|download.?url|presigned/i.test(key))fail('INGESTION_SECRET_FIELD','Source metadata cannot contain private URLs or external storage pointers',400);
+  rejectSourcePointers(item,depth+1);
+ }
+}
 function scope(input:unknown) {
  const b=strictBody(input,['connectionId','locationId','reference']);
  if(b.locationId!==null&&typeof b.locationId!=='string')fail('SOURCE_LOCATION_REQUIRED','Supply the exact authorized locationId, or explicit null for an unlocated source',400);
@@ -61,6 +70,7 @@ export async function resolveSourceReference(db:Database,clock:Clock,a:PartnerAc
 }
 export function parseReferenceObservation(input:unknown) {
  const b=strictBody(input,['connectionId','locationId','reference','sourceKind','sourceSchemaVersion','mappingVersion','event','facts']);
+ rejectSourcePointers(b);
  const s=scope({connectionId:b.connectionId,locationId:b.locationId,reference:b.reference});
  const source={sourceKind:textField(b.sourceKind,'sourceKind',80),sourceSchemaVersion:textField(b.sourceSchemaVersion,'sourceSchemaVersion',80),mappingVersion:textField(b.mappingVersion,'mappingVersion',80)};
  const e=strictBody(b.event,['sourceEventId','eventType','reportedAt','carrier','location','data']);
@@ -70,7 +80,11 @@ export function parseReferenceObservation(input:unknown) {
  for(const fact of facts as unknown[]){const f=strictBody(fact,['kind','externalReference','parentReference','attributes']);if(!['shipment','stop','package','pallet','item','return'].includes(String(f.kind)))fail('INVALID_SOURCE_FACTS','Unsupported entity kind',400);if(textField(f.externalReference,'externalReference')!==f.externalReference)fail('INVALID_SOURCE_FACTS','Entity references must not contain surrounding whitespace',400);const identity=canonicalize([f.kind,f.externalReference]);if(identities.has(identity))fail('INVALID_SOURCE_FACTS','One observation cannot repeat the same entity identity',400);identities.add(identity);if(f.parentReference!=null&&textField(f.parentReference,'parentReference')!==f.parentReference)fail('INVALID_SOURCE_FACTS','Parent references must not contain surrounding whitespace',400);if(f.attributes!=null&&(!f.attributes||typeof f.attributes!=='object'||Array.isArray(f.attributes)))fail('INVALID_SOURCE_FACTS','Entity attributes must be an object',400);}
  // Reuse the existing size, clock, secret and authority validation before any
  // durable acknowledgement. Preserve the complete original envelope separately.
- const validated=parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:{source,reference:s.reference,eventData:e.data??{},facts}}]});
+ // Event data and each entity use the existing 8 KiB/depth contract separately.
+ // Nesting all entity facts inside event.data would incorrectly reject valid
+ // typed decimal comparisons and allocation structures.
+ const validated=parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:{...(e.data as object??{}),sourceObservation:{...source,reference:s.reference,receiptId:'association_'+'0'.repeat(26),sourceEventId:e.sourceEventId,reportedAt:e.reportedAt,receivedAt:'2000-01-01T00:00:00.000Z',payloadSha256:'0'.repeat(64),ruleVersion:SOURCE_REFERENCE_RULE}}}]});
+ for(const fact of facts as Record<string,unknown>[])parseSourceIngestion({connectionId:s.connectionId,events:[{...e,proofId:'validation-only',data:{attributes:{...(fact.attributes as object??{}),sourceConnectionId:s.connectionId,sourceReceiptId:'association_'+'0'.repeat(26),sourceSchemaVersion:source.sourceSchemaVersion,mappingVersion:source.mappingVersion,sourceReportedAt:e.reportedAt}}}]});
  if(e.sourceEventId!==validated.events[0].sourceEventId)fail('INVALID_SOURCE_REFERENCE','Use the exact source event identifier without surrounding whitespace',400);
  if(Buffer.byteLength(canonicalize(b))>256*1024)fail('INGESTION_TOO_LARGE','Use at most 256 KiB per source observation',413);
  return {...s,...source,event:e as Record<string,unknown>&{sourceEventId:string},facts:facts as Array<Record<string,unknown>>};
