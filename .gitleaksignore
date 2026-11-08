@@ -67,3 +67,10 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # present. Keep all default rules and all other historical findings scanned.
 76ef070d7204976f88824f4979f492625186fae0:docs/zero-touch-warehouse/EVIDENCE.json:generic-api-key:251
 76ef070d7204976f88824f4979f492625186fae0:docs/zero-touch-warehouse/RELEASE_PREPARATION.json:generic-api-key:20
+
+# Reviewed PR 152 / Source secrets job 128813720830. Both exact JSON fields
+# are successful AWS CodeBuild execution locators verified with BatchGetBuilds
+# and their provider log receipts. The project/build UUIDs cannot authenticate.
+# Keep every scanner rule and every other historical location enabled.
+8231ac733979d2f49a10056b4e62be5fa8337529:docs/zero-touch-warehouse/RUNTIME_QUALIFICATION.json:generic-api-key:332
+8231ac733979d2f49a10056b4e62be5fa8337529:docs/zero-touch-warehouse/RUNTIME_QUALIFICATION.json:generic-api-key:472
