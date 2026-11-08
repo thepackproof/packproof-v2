@@ -9,7 +9,7 @@ const quote=value=>{if(typeof value!=='string'||!/^[a-z][a-z0-9_]{0,62}$/.test(v
 const select={select:true};
 // Baseline canonical/platform permissions are deliberately outside this policy.
 // Every write is column scoped; append-only data receives no UPDATE/DELETE.
-const policy={
+const policy108={
  record_locations:{api:select,worker:select},
  record_membership_locations:{api:select,worker:select},
  record_state:{api:{...select,insert:['proof_id','organization_id','environment','revision','title','reference','location_id','updated_at'],update:['revision','lifecycle','review_state','title','reference','location_id','updated_at']},worker:{...select,insert:['proof_id','organization_id','environment','revision','title','reference','location_id','updated_at'],update:['revision','updated_at']}},
@@ -53,12 +53,24 @@ const policy={
  record_agent_enrollments:{api:{...select,insert:['id','secret_hash','comparison_code','device_name','device_hash','version','created_at','expires_at'],update:['state','last_poll_at','installation_id','credential_response']},worker:{}},
  record_agent_installations:{api:{...select,insert:['id','organization_id','environment','principal_id','credential_id','integration_account_id','operator_membership_id','location_id','source_name','device_name','version','approval_user_id','enrollment_expires_at','created_at','updated_at'],update:['credential_id','status','config_revision','approved_config','config_sha256','pending_proposal','pending_proposal_sha256','test_import_id','verified_import_id','approval_user_id','enrollment_acknowledged_at','updated_at','last_seen_at','version','heartbeat','renewal_credential_id','renewal_response','renewal_expires_at','renewal_key_hash']},worker:select},
 };
+// The 108 operator remains pinned to its exact predecessor policy. Current
+// admission adds only reference intake / assembly authority, never approvals.
+const policy={...policy108,
+ record_source_crosswalks:{api:{...select,insert:'*'},worker:select},
+ record_source_pending:{api:{...select,insert:'*',update:['state','next_attempt_at','updated_at','error_code','replay_revision']},worker:{...select,update:['state','operation_id','proof_id','attempts','next_attempt_at','updated_at','error_code','resolution']}},
+ record_source_resolution_attempts:{api:{...select,insert:'*'},worker:{...select,insert:'*'}},
+ record_ingestion_operations:{...policy108.record_ingestion_operations,worker:{...policy108.record_ingestion_operations.worker,insert:policy108.record_ingestion_operations.api.insert}},
+ record_source_receipts:{...policy108.record_source_receipts,worker:{...policy108.record_source_receipts.worker,insert:policy108.record_source_receipts.api.insert}},
+ record_source_identities:{...policy108.record_source_identities,worker:{...select,insert:'*'}},
+ record_issues:{...policy108.record_issues,worker:{...select,insert:'*'}},
+};
+
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
 const sequenceName='record_issue_actions_sequence_seq';
 const sequencePrivileges=['SELECT','UPDATE','USAGE'];
 const authorityFunction='lock_operational_snapshot_authority(text,text,text,text,text)';
-const policyDigest=()=>sha({tables:policy,authorityFunction});
+const policyDigest=policy=>sha({tables:policy,authorityFunction});
 
 function sourceColumns(sql,existing={}){
  const tables=Object.fromEntries(Object.entries(existing).map(([table,columns])=>[table,[...columns]]));
@@ -92,23 +104,25 @@ function sourceColumns(sql,existing={}){
  return tables;
 }
 
-export async function recordsMigrationInventory(){
+export async function recordsMigrationInventory(throughMigration=109){
+ if(![108,109].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ const selectedPolicy=throughMigration===108?policy108:policy;
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-8])_[a-z0-9_]+\.sql$/.test(name)).sort();
- if(files.length!==13||new Set(files.map(f=>f.slice(0,3))).size!==13)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
+ if(files.length!==throughMigration-95||new Set(files.map(f=>f.slice(0,3))).size!==throughMigration-95)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={};let tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);tableColumns=sourceColumns(sql,tableColumns);}
- if(Object.keys(policy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!policy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
+ if(Object.keys(selectedPolicy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!selectedPolicy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
  return {migrations,migrationSha256:sha(migrations),tableColumns};
 }
 async function options(input){
- if(!input||Object.keys(input).some(k=>!['runtimeRole','workerRole','schema','reviewedSourceCommit','reviewedMigrationSha256'].includes(k)))fail('RECORDS_REVIEW_OPTIONS_INVALID');
+ if(!input||Object.keys(input).some(k=>!['runtimeRole','workerRole','schema','reviewedSourceCommit','reviewedMigrationSha256','throughMigration'].includes(k)))fail('RECORDS_REVIEW_OPTIONS_INVALID');
  const {runtimeRole,workerRole,schema,reviewedSourceCommit,reviewedMigrationSha256}=input;
  [runtimeRole,workerRole,schema].forEach(quote);
  if(runtimeRole===workerRole)fail('RECORDS_SEPARATE_ROLES_REQUIRED');
  if(!/^[a-f0-9]{40}$/.test(reviewedSourceCommit??''))fail('RECORDS_REVIEWED_SOURCE_REQUIRED');
- const source=await recordsMigrationInventory();
+ const source=await recordsMigrationInventory(input.throughMigration??109);
  if(!/^[a-f0-9]{64}$/.test(reviewedMigrationSha256??'')||reviewedMigrationSha256!==source.migrationSha256)fail('RECORDS_SOURCE_REVIEW_MISMATCH');
- return {...input,...source,roles:{api:runtimeRole,worker:workerRole}};
+ return {...input,...source,policy:input.throughMigration===108?policy108:policy,roles:{api:runtimeRole,worker:workerRole}};
 }
 async function inspect(db,o,actualCaller){
  const identity=(await db.query('SELECT current_user AS caller,session_user AS session_caller,current_schema() AS schema')).rows[0];
@@ -116,7 +130,7 @@ async function inspect(db,o,actualCaller){
  if(actualCaller&&(!Object.values(o.roles).includes(identity.caller)||identity.session_caller!==identity.caller))fail('RECORDS_RUNTIME_CALLER_REQUIRED');
  const receipts=(await db.query(`SELECT id,checksum FROM ${quote(o.schema)}.schema_migrations WHERE id=ANY($1::text[]) ORDER BY id`,[Object.keys(o.migrations)])).rows;
  if(receipts.length!==Object.keys(o.migrations).length||receipts.some(row=>o.migrations[row.id]!==row.checksum))fail('RECORDS_MIGRATION_RECEIPTS_MISMATCH');
- const names=Object.keys(policy),roles=Object.values(o.roles);
+ const policy=o.policy,names=Object.keys(policy),roles=Object.values(o.roles);
  const columns=(await db.query(`SELECT c.relname AS name,a.attname AS column_name,c.relowner FROM pg_class c
  JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
  WHERE n.nspname=$1 AND c.relkind='r' AND c.relname=ANY($2::text[]) ORDER BY c.relname,a.attnum`,[o.schema,names])).rows;
@@ -160,8 +174,8 @@ async function inspect(db,o,actualCaller){
 function verify(state,o){
  if([...state.tables,...state.fields,...state.sequences,...state.functions].some(row=>row.grantable))fail('RECORDS_DELEGABLE_PRIVILEGES_UNSAFE');
  const kind=Object.fromEntries(Object.entries(o.roles).map(([k,v])=>[v,k]));
- for(const row of state.tables){const rule=policy[row.name][kind[row.role]],expected=row.privilege==='SELECT'&&!!rule.select;if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');}
- for(const row of state.fields){const rule=policy[row.name][kind[row.role]],grant=rule[row.privilege.toLowerCase()],expected=row.privilege==='SELECT'?!!rule.select:grant==='*'||Array.isArray(grant)&&grant.includes(row.column_name);if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_COLUMN_PRIVILEGES_MISMATCH');}
+ for(const row of state.tables){const rule=o.policy[row.name][kind[row.role]],expected=row.privilege==='SELECT'&&!!rule.select;if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_TABLE_PRIVILEGES_MISMATCH');}
+ for(const row of state.fields){const rule=o.policy[row.name][kind[row.role]],grant=rule[row.privilege.toLowerCase()],expected=row.privilege==='SELECT'?!!rule.select:grant==='*'||Array.isArray(grant)&&grant.includes(row.column_name);if(row.allowed!==expected)fail('RECORDS_EFFECTIVE_COLUMN_PRIVILEGES_MISMATCH');}
  for(const row of state.sequences)if(row.allowed!==(row.role===o.runtimeRole&&row.privilege==='USAGE'))fail('RECORDS_EFFECTIVE_SEQUENCE_PRIVILEGES_MISMATCH');
  if(state.functions.length!==2||state.functions.some(row=>!row.allowed))fail('RECORDS_AUTHORITY_LOCK_PRIVILEGES_MISMATCH');
 }
@@ -171,14 +185,14 @@ export async function verifyRecordsRuntimePrivileges(db,input){
  if(process.env.PACKPROOF_RELEASE_SHA!==o.reviewedSourceCommit)fail('RECORDS_RUNTIME_SOURCE_MISMATCH');
  const state=await inspect(db,o,true);verify(state,o);
  return {schema:'packproof.records-runtime-privileges/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,caller:state.identity.caller,
-  runtimeRole:o.runtimeRole,workerRole:o.workerRole,migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(),effectivePrivilegesSha256:sha({tables:state.tables,fields:state.fields,sequences:state.sequences,functions:state.functions})};
+  runtimeRole:o.runtimeRole,workerRole:o.workerRole,migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(o.policy),effectivePrivilegesSha256:sha({tables:state.tables,fields:state.fields,sequences:state.sequences,functions:state.functions})};
 }
 /** Owner-operated planning only. Caller must execute the reviewed statements in
  * one transaction, rerun actual-role preflight, and separately verify baseline
  * domain permissions. Excess inherited/PUBLIC grants must be fixed by their owner. */
 export async function planRecordsRuntimePrivileges(db,input){
  const o=await options(input),state=await inspect(db,o,false),statements=[];
- for(const [table,rules] of Object.entries(policy))for(const [kind,role] of Object.entries(o.roles)){
+ for(const [table,rules] of Object.entries(o.policy))for(const [kind,role] of Object.entries(o.roles)){
   const target=`${quote(o.schema)}.${quote(table)}`,who=quote(role),columns=state.columns.filter(c=>c.name===table).map(c=>quote(c.column_name)).join(','),rule=rules[kind];
   statements.push(`REVOKE ALL PRIVILEGES ON TABLE ${target} FROM ${who}`,`REVOKE ALL PRIVILEGES (${columns}) ON TABLE ${target} FROM ${who}`);
   if(rule.select)statements.push(`GRANT SELECT ON TABLE ${target} TO ${who}`);
@@ -190,5 +204,5 @@ export async function planRecordsRuntimePrivileges(db,input){
  for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON FUNCTION ${quote(o.schema)}.${authorityFunction} FROM ${quote(role)}`,
   `GRANT EXECUTE ON FUNCTION ${quote(o.schema)}.${authorityFunction} TO ${quote(role)}`);
  return {schema:'packproof.records-privilege-plan/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,runtimeRole:o.runtimeRole,workerRole:o.workerRole,
-  migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(),statementsSha256:sha(statements),statements};
+  migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(o.policy),statementsSha256:sha(statements),statements};
 }

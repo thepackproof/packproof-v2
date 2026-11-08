@@ -47,8 +47,10 @@ public sealed class LocalState
     public JsonElement? ServerConfig { get; set; }
     public DateTimeOffset? LastPolicyCheckAt { get; set; }
     public DateTimeOffset? LastScanAt { get; set; }
+    public string? ScanCursorFileName { get; set; }
     public DateTimeOffset? LastExportAt { get; set; }
     public DateTimeOffset? LastCompletedImportAt { get; set; }
+    public DateTimeOffset? LastReceiptReconciledAt { get; set; }
     public string? LastErrorCode { get; set; }
     public string? SetupQueueId { get; set; }
     public string? VerifiedRecordId { get; set; }
@@ -76,6 +78,7 @@ public sealed class QueuePayload
     public bool CommitApproved { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public bool OriginalCompacted { get; set; }
+    public byte[]? QuarantinedOriginalBytes { get; set; }
 }
 public sealed record PipeRequest(int Version, string Id, string Operation, JsonElement? Payload);
 

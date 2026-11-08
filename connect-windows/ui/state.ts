@@ -14,7 +14,7 @@ export function suggestMapping(headers: string[]): Record<string, string> {
   }
   return mapping;
 }
-export function configKey(config: Configuration | undefined): string { return config ? JSON.stringify([config.folderDigest, config.sourceName, config.integrationAccountId, config.operatorMembershipId, config.locationId, config.timeZone, config.importValidRows, config.offlineWindowHours, Object.entries(config.mapping).sort(([a], [b]) => a.localeCompare(b))]) : ''; }
+export function configKey(config: Configuration | undefined): string { const source=config?.sourceContract; return config ? JSON.stringify([config.folderDigest, config.sourceName, config.integrationAccountId, config.operatorMembershipId, config.locationId, config.timeZone, config.importValidRows, config.offlineWindowHours, source ? [source.schema,source.exporterName,source.exporterVersion,source.expectedHeaders,source.expectedIntervalSeconds,source.backfillFrom] : null, Object.entries(config.mapping).sort(([a], [b]) => a.localeCompare(b))]) : ''; }
 export function previewValid(status: ConnectStatus): boolean {
   const counts = status.preview?.counts;
   return !!counts && (counts.valid > 0) && !counts.duplicate && !counts.invalid && !counts.ambiguous && !counts.failed;

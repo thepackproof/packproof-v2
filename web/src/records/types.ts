@@ -17,4 +17,13 @@ export interface RecordRequirement { id?: string; requirementId?: string; title?
 export interface RecordRelationship { id: string; type?: string; label?: string; reference?: string; [key: string]: unknown }
 export interface RecordDetail { record: RecordSummary; timeline: RecordTimelineEntry[]; evidence: RecordEvidence[]; requirements: RecordRequirement[]; issues: RecordIssue[]; relationships: RecordRelationship[]; evidenceNextCursor?: string | null; timelineNextCursor?: string | null; assurance?: { coreManifest: 'present' | 'absent'; operationalView: 'not_a_signed_snapshot'; physicalCondition: 'not_established'; explanation: string }; sourceHealth: { state: string; [key: string]: unknown }; capabilities: { [key: string]: boolean } }
 export interface RecordConnection { id?: string; connectionId?: string; name?: string; provider?: string; accountName?: string; state?: string; status?: string; health?: string | { state?: string }; environment?: string; locationIds?: string[]; lastSuccessfulContactAt?: string | null; lastUsableEventAt?: string | null; lastReconciliationAt?: string | null; oldestQueuedAt?: string | null; owner?: string | null; availableData?: string[]; reason?: string; [key: string]: unknown }
+export interface SourceAssociation {
+  id: string; connectionId: string; locationId: string | null; sourceEventId: string;
+  reference: { type: 'SHIPMENT' | 'ORDER' | 'RETURN' | 'package' | 'pallet' | 'item'; externalId: string };
+  sourceKind: string; sourceSchemaVersion: string; mappingVersion: string;
+  state: 'pending' | 'submitted' | 'conflict' | 'blocked_policy' | 'retryable_error';
+  operationId: string | null; proofId: string | null; attempts: number; errorCode: string | null;
+  resolution: { outcome?: string; proofId?: string | null; candidates?: string[]; ruleVersion?: string; basis?: string };
+  reportedAt?: string | null; receivedAt: string; updatedAt: string; sourceAssurance: 'organization_submitted';
+}
 export interface RecordExport { id?: string; exportId?: string; proofId?: string; recordId?: string; reference?: string; state?: string; status?: string; createdAt?: string; downloadAvailableUntil?: string | null; expiresAt?: string | null; downloadUrl?: string | null; omissions?: string[]; [key: string]: unknown }

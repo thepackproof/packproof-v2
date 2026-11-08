@@ -18,6 +18,7 @@ import { processEnvelopeJob } from "./integrity/envelope-jobs.js";
 import { processPendingRecordImports } from './records/imports.js';
 import { processRecordConnectionOperations } from './records/connections.js';
 import { processSourceIngestions } from './records/ingestions.js';
+import { processSourceAssociations } from './records/source-associations.js';
 import { processPendingPartnerImports } from './records/partner-imports.js';
 import { processPendingCanonicalExports } from './records/partner-exports.js';
 import { processSourceArtifactCompletions } from './records/source-artifacts.js';
@@ -187,6 +188,7 @@ if(process.env.PACKPROOF_ORGANIZATIONS_ENABLED==='true'){
   jobs.push({name:'record-imports',intervalMs:5000,run:()=>processPendingRecordImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-connections',intervalMs:5000,run:()=>processRecordConnectionOperations(opened.db,systemClock)});
   jobs.push({name:'source-ingestions',intervalMs:5000,run:()=>processSourceIngestions(opened.db,systemClock)});
+  jobs.push({name:'source-associations',intervalMs:5000,run:()=>processSourceAssociations(opened.db,systemClock)});
   jobs.push({name:'partner-record-imports',intervalMs:5000,run:()=>processPendingPartnerImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-canonical-exports',intervalMs:5000,run:()=>processPendingCanonicalExports({db:opened.db,clock:systemClock,objectStore,envelopes:envelopes?.access,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-source-artifacts',intervalMs:5000,run:()=>processSourceArtifactCompletions(opened.db,systemClock,objectStore)});

@@ -1,0 +1,193 @@
+{
+  "schema": "packproof.zero-touch-evidence/v1",
+  "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
+  "sourceBranch": "feature/zero-touch-warehouse",
+  "checkedAt": "2026-11-08T00:48:08.243699+00:00",
+  "deployment": {
+    "backend": null,
+    "portal": null,
+    "windowsSigned": null,
+    "cohort": null,
+    "supportedExporter": null
+  },
+  "gates": {
+    "D0": "engineering_baseline_only_named_source_missing",
+    "D1": "local_fixture_only_native_hosted_blocked",
+    "D2": "local_fixture_verified_hosted_pending",
+    "D3": "blocked_signed_windows11",
+    "D4": "blocked_named_source_customer_novice",
+    "D5": "blocked_prerequisites_migration_roles_image_canary",
+    "G0": "prior_internal_hosted_windows_server_only",
+    "G1": "blocked_approved_hosted_native_path",
+    "G2": "blocked_signed_windows11_lifecycle",
+    "G3": "blocked_named_source_customer_novice",
+    "G4": "blocked_release_canary"
+  },
+  "tests": [
+    {
+      "name": "backend_build",
+      "command": "npm --prefix backend run build",
+      "result": "passed"
+    },
+    {
+      "name": "web_build",
+      "command": "npm --prefix web run build",
+      "result": "passed"
+    },
+    {
+      "name": "web_full",
+      "command": "startVitest(test, run=true, maxWorkers=1; server.fs.allow includes linked dependency realpaths)",
+      "result": "passed",
+      "passed": 453,
+      "failed": 0,
+      "skipped": 0,
+      "files": 74,
+      "note": "Workspace-only linked dependency allowlist; no production source change required."
+    },
+    {
+      "name": "web_links",
+      "command": "npm --prefix web run test:links",
+      "result": "passed",
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "name": "connect_ui_security",
+      "command": "npm --prefix connect-windows test && npm --prefix connect-windows run typecheck",
+      "result": "passed",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "connect_release_policy",
+      "command": "npm --prefix connect-windows run test:release",
+      "result": "passed",
+      "passed": 3,
+      "failed": 0
+    },
+    {
+      "name": "typescript_sdk",
+      "command": "node --test packages/partner-sdk-typescript/test/*.test.mjs; tsc SDK test/types.ts strict nodenext",
+      "result": "passed",
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "python_sdk",
+      "command": "python -m unittest discover -s packages/partner-sdk-python/tests",
+      "result": "passed",
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "name": "contract",
+      "command": "node scripts/check-records-api-readiness.mjs",
+      "result": "passed",
+      "documentedRecordOperations": 135,
+      "totalOpenApiOperations": 161
+    },
+    {
+      "name": "source_association_adversarial",
+      "command": "npm --prefix backend test -- --run tests/source-associations.test.ts --maxWorkers=1",
+      "result": "passed",
+      "passed": 16,
+      "failed": 0,
+      "scope": "Local PGlite; not actual hosted PostgreSQL/native/customer acceptance"
+    },
+    {
+      "name": "full_backend",
+      "command": "npm --prefix backend test -- --maxWorkers=2 --reporter=json",
+      "result": "running"
+    },
+    {
+      "name": "native_windows",
+      "command": "dotnet test connect-windows/service-tests/PackProof.Connect.Service.Tests.csproj -c Release",
+      "result": "not_run_locally",
+      "reason": ".NET/Windows runtime unavailable; exact-commit hosted native CI required"
+    }
+  ],
+  "customerReconciliation": null,
+  "firstRunUsability": null,
+  "signedArtifact": null,
+  "apiImage": null,
+  "assurance": "Organization-submitted unsigned operational additions; prior frozen manifests and original signing scopes unchanged.",
+  "securityReview": {
+    "result": "findings_fixed_independent_read_only_review",
+    "findingsAddressed": [
+      "generated-key identity collision including null-location move",
+      "manual entity attribution cannot invent a source child",
+      "exact locked location equality",
+      "duplicate entity whitespace normalization",
+      "downstream canonical conflict prevents entity facts"
+    ],
+    "limits": [
+      "No actual customer data, live role grants or restored-database run",
+      "No physical Windows11 or protected signing execution"
+    ]
+  },
+  "migration": {
+    "id": "109_source_associations",
+    "sha256": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9",
+    "deployed": false,
+    "historicalMigrationBytesChanged": false
+  },
+  "changedPaths": [
+    "backend/migrations/109_source_associations.sql",
+    "backend/partner-openapi.json",
+    "backend/scripts/record-agent-migrate.mjs",
+    "backend/scripts/records-runtime-privileges.d.mts",
+    "backend/scripts/records-runtime-privileges.mjs",
+    "backend/src/index.ts",
+    "backend/src/records/agent-enrollments.ts",
+    "backend/src/records/agent-restrictions.ts",
+    "backend/src/records/csv.ts",
+    "backend/src/records/ingestions-router.ts",
+    "backend/src/records/partner-imports.ts",
+    "backend/src/records/router.ts",
+    "backend/src/records/service.ts",
+    "backend/src/records/source-associations.ts",
+    "backend/src/records/source-reference.ts",
+    "backend/tests/partner-imports-exports.test.ts",
+    "backend/tests/record-agent-migrate.test.ts",
+    "backend/tests/record-agent-migration-inventory.test.ts",
+    "backend/tests/record-agents.test.ts",
+    "backend/tests/record-ingestions.test.ts",
+    "backend/tests/records-runtime-privileges.test.ts",
+    "backend/tests/scheduled-csv-source.test.ts",
+    "backend/tests/source-associations.test.ts",
+    "connect-windows/main/security.ts",
+    "connect-windows/service-tests/RecoveryTests.cs",
+    "connect-windows/service/AgentRuntime.cs",
+    "connect-windows/service/DurableQueue.cs",
+    "connect-windows/service/FolderSource.cs",
+    "connect-windows/service/Models.cs",
+    "connect-windows/tests/security.test.ts",
+    "connect-windows/ui/ConnectApp.test.tsx",
+    "connect-windows/ui/ConnectApp.tsx",
+    "connect-windows/ui/state.test.ts",
+    "connect-windows/ui/state.ts",
+    "connect-windows/ui/types.ts",
+    "docs/api-portal-v1/SOURCE_INGESTIONS.md",
+    "docs/zero-touch-warehouse/DEVELOPMENT_PLAN.md",
+    "docs/zero-touch-warehouse/EVIDENCE.json",
+    "docs/zero-touch-warehouse/IMPLEMENTATION_STATUS.md",
+    "packages/partner-sdk-python/packproof/client.py",
+    "packages/partner-sdk-python/tests/test_client.py",
+    "packages/partner-sdk-typescript/index.d.ts",
+    "packages/partner-sdk-typescript/index.mjs",
+    "packages/partner-sdk-typescript/test/client.test.mjs",
+    "packages/partner-sdk-typescript/test/types.ts",
+    "scripts/generate-records-openapi.mjs",
+    "web/src/records/AgentConnections.tsx",
+    "web/src/records/RecordsPortal.tsx",
+    "web/src/records/SourceAssociations.tsx",
+    "web/src/records/SourceLineage.tsx",
+    "web/src/records/model.ts",
+    "web/src/records/records.css",
+    "web/src/records/types.ts",
+    "web/src/tests/agent-connections.test.tsx",
+    "web/src/tests/records-portal.test.tsx",
+    "web/src/tests/source-associations.test.tsx"
+  ]
+}

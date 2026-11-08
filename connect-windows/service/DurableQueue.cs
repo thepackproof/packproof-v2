@@ -42,7 +42,18 @@ public sealed class DurableQueue : IDisposable
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(bytes)); var existing = Entries().FirstOrDefault(x => x.Digest == digest && x.ConfigDigest == configDigest); if (existing is not null) return existing;
         var utf8 = new System.Text.UTF8Encoding(false, true); string csv; try { csv = utf8.GetString(bytes); } catch (System.Text.DecoderFallbackException) { throw new ConnectException("CSV_ENCODING_UNSUPPORTED", "Save the source export as UTF-8 CSV."); }
-        var payload = new QueuePayload { FileName = fileName, Csv = csv, PreviewBody = body.Build(csv), CommitApproved = commitApproved }; payload.PreviewWireBody = Json.Bytes(payload.PreviewBody); payload.PreviewBodySha256 = Convert.ToHexStringLower(SHA256.HashData(payload.PreviewWireBody)); var id = Guid.NewGuid().ToString("N"); var path = id + ".bin"; var encrypted = encryption.Encrypt(Json.Bytes(payload), id);
+        var payload = new QueuePayload { FileName = fileName, Csv = csv, PreviewBody = body.Build(csv), CommitApproved = commitApproved }; payload.PreviewWireBody = Json.Bytes(payload.PreviewBody); payload.PreviewBodySha256 = Convert.ToHexStringLower(SHA256.HashData(payload.PreviewWireBody)); return StagePayload(bytes, payload, generation, configDigest);
+    }
+    public QueueEntry Quarantine(byte[] bytes, string fileName, string generation, string configDigest, string errorCode)
+    {
+        var entry=StagePayload(bytes,new QueuePayload { FileName=fileName, Csv="", PreviewBody=Json.Element(new {}), CommitApproved=false, QuarantinedOriginalBytes=bytes },generation,configDigest);
+        if(entry.State=="staged")Save(entry,Payload(entry),"action_needed",error:errorCode);
+        return Find(entry.Id)!;
+    }
+    private QueueEntry StagePayload(byte[] bytes, QueuePayload payload, string generation, string configDigest)
+    {
+        var digest=Convert.ToHexStringLower(SHA256.HashData(bytes)); var existing=Entries().FirstOrDefault(x=>x.Digest==digest&&x.ConfigDigest==configDigest); if(existing is not null)return existing;
+        var id = Guid.NewGuid().ToString("N"); var path = id + ".bin"; var encrypted = encryption.Encrypt(Json.Bytes(payload), id);
         var files = Directory.EnumerateFiles(spoolRoot).Select(x => new FileInfo(x)).ToArray(); var free = new DriveInfo(Path.GetPathRoot(spoolRoot)!).AvailableFreeSpace;
         var references = Entries().ToDictionary(x => x.PayloadPath, StringComparer.OrdinalIgnoreCase);
         // Retained terminal summaries are small protected metadata, not pending

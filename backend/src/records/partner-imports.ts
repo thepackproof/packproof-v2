@@ -12,12 +12,14 @@ import { idempotent } from '../platform/idempotency.js';
 import { textField } from '../platform/tenants.js';
 import { parseShipmentCsv, correctionCsv, type ShipmentCsvRow, type CsvMapping } from './csv.js';
 import { authorizeAgentPreview, authorizeAgentImport } from './agent-restrictions.js';
+import {shipmentBindingKey} from './source-reference.js';
 type Deps = Pick<AppDependencies, 'db' | 'clock' | 'objectStore' | 'devAuth'>;
 type State = 'previewed' | 'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed' | 'action_needed';
 interface Job {
     id: string;
     agent_installation_id: string | null;
     agent_config_revision: number | null;
+    source_control_revision: number | string;
     organization_id: string;
     environment: 'sandbox' | 'live';
     actor: PartnerActor;
@@ -101,6 +103,11 @@ async function authorize(deps: Deps, db: Database, a: PartnerActor, j: Job, writ
     await reauthorizePartner(db, deps.clock, a, write ? 'imports:write' : 'imports:read');
     if (write)
         await reauthorizePartner(db, deps.clock, a, 'proofs:write');
+    if (write) {
+        const state=(await db.query<{paused:boolean;control_revision:string|number}>('SELECT paused,control_revision FROM record_connection_state WHERE connection_id=$1',[j.integration_account_id])).rows[0];
+        if(state?.paused)throw new DomainError('CONNECTION_PAUSED','This source connection is paused',409);
+        if(String(state?.control_revision??0)!==String(j.source_control_revision))throw new DomainError('CONNECTION_CHANGED','This original was accepted under earlier source settings. Review it and create a new authorized preview.',409);
+    }
     await reauthorizePartner(db, deps.clock, a, 'proofs:read');
     await requireOperator(db, a, j.operator_membership_id, undefined);
     const rs = inspectRows ? await rows(db, j.id) : [];
@@ -132,7 +139,7 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:write');
     await reauthorizePartner(deps.db, deps.clock, a, 'imports:read');
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:read');
-    const approvedInput = {integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone};
+    const approvedInput = {integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone,headers:parsed.headers};
     await authorizeAgentPreview(deps.db,deps.clock,a,approvedInput,parsed.rows);
     const result = await idempotent(deps.db, deps.clock, a.tenantId, `service-import-preview:${a.principalId}:${a.credentialId}:${a.delegationGrantId ?? ''}`, key, b, async (tx) => {
         await reauthorizePartner(tx, deps.clock, a, 'imports:write');
@@ -141,6 +148,9 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
         const source = await tx.query('SELECT 1 FROM platform_integration_accounts WHERE id=$1 AND merchant_id=$2 AND environment=$3', [account, a.merchantId, a.environment]);
         if (!source.rows[0])
             throw new DomainError('INTEGRATION_NOT_FOUND', 'Integration account not found', 404);
+        await tx.query('SELECT pg_advisory_xact_lock(1347438148,hashtext($1))',[`${a.merchantId}:${account}`]);
+        const control=(await tx.query<{paused:boolean;control_revision:string|number}>('SELECT paused,control_revision FROM record_connection_state WHERE connection_id=$1',[account])).rows[0];
+        if(control?.paused)throw new DomainError('CONNECTION_PAUSED','This source connection is paused',409);
         const active = (await tx.query<{
             n: string;
         }>("SELECT COUNT(*)::text n FROM partner_import_jobs WHERE organization_id=$1 AND environment=$2 AND (state IN ('queued','running') OR (state='previewed' AND received_at>$3))", [a.merchantId, a.environment,new Date(deps.clock.now().getTime()-86400000).toISOString()])).rows[0];
@@ -152,7 +162,7 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
                 const old = (await tx.query<{
                     proof_id: string;
                     snapshot_sha256: string;
-                }>("SELECT proof_id,snapshot_sha256 FROM platform_external_bindings WHERE merchant_id=$1 AND environment=$2 AND integration_account_id=$3 AND resource_type='SHIPMENT' AND external_id=$4", [a.merchantId, a.environment, account, r.normalized.shipmentReference])).rows[0];
+                }>("SELECT b.proof_id,b.snapshot_sha256 FROM platform_external_bindings b LEFT JOIN record_state s ON s.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id IN ($4,$5) AND s.location_id IS NOT DISTINCT FROM $6", [a.merchantId, a.environment, account, shipmentBindingKey(r.normalized.shipmentReference,r.normalized.locationId),r.normalized.shipmentReference,r.normalized.locationId])).rows[0];
                 if (old) {
                     await authorizePartnerProof(tx, deps.clock, a, old.proof_id, 'proofs:read');
                     const assignment = (await tx.query<{
@@ -180,7 +190,7 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
                 await requireOperator(tx, a, operator, r.normalized.locationId);
         const installation = await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
         const now = deps.clock.now().toISOString(), version = sha256Hex(canonicalize({ schema: MAPPING_VERSION, sha256: digest, mapping: parsed.mapping, timeZone: parsed.timeZone, account, operator, sourceName: name }));
-        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null]);
+        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision,source_control_revision) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23,$24)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null,control?.control_revision??0]);
         for (const r of parsed.rows)
             await tx.query('INSERT INTO partner_import_rows(import_id,row_number,status,source_values,normalized,payload_sha256,errors,proof_id) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7::jsonb,$8)', [id, r.rowNumber, r.status, JSON.stringify(r.values), JSON.stringify(r.normalized), r.payloadSha256, JSON.stringify(r.errors), r.proofId ?? null]);
         await auditOrganization(tx, deps.clock, { actor: a, requestId: a.requestId, operation: 'SERVICE_CSV_PREVIEWED', resourceId: id });
@@ -247,6 +257,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                         await deps.db.transaction(async (tx) => {
                             const active = await job(tx, j.id, true);
                             lease(active, token, deps);
+                            await tx.query('SELECT pg_advisory_xact_lock(1347438148,hashtext($1))',[`${j.organization_id}:${j.integration_account_id}`]);
                             await authorize(deps, tx, j.actor, j, true, false, true);
                             const r = (await tx.query<Row>('SELECT * FROM partner_import_rows WHERE import_id=$1 AND row_number=$2 FOR UPDATE', [j.id, source.row_number])).rows[0];
                             if (r.status !== 'valid' || !r.normalized)
@@ -258,7 +269,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                             const old = (await tx.query<{
                                 proof_id: string;
                                 snapshot_sha256: string;
-                            }>("SELECT proof_id,snapshot_sha256 FROM platform_external_bindings WHERE merchant_id=$1 AND environment=$2 AND integration_account_id=$3 AND resource_type='SHIPMENT' AND external_id=$4", [j.organization_id, j.environment, j.integration_account_id, n.shipmentReference])).rows[0];
+                            }>("SELECT b.proof_id,b.snapshot_sha256 FROM platform_external_bindings b LEFT JOIN record_state s ON s.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id IN ($4,$5) AND s.location_id IS NOT DISTINCT FROM $6", [j.organization_id, j.environment, j.integration_account_id, shipmentBindingKey(n.shipmentReference,n.locationId),n.shipmentReference,n.locationId])).rows[0];
                             let proofId: string, duplicate = false;
                             if (old) {
                                 await authorizePartnerProof(tx, deps.clock, j.actor, old.proof_id, 'proofs:read');
@@ -271,10 +282,10 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                                 duplicate = true;
                             }
                             else {
-                                const created = await importPartnerOrder(tx, deps.clock, j.actor, { integrationAccountId: j.integration_account_id, externalId: `csv:${sha256Hex(canonicalize({ source: j.integration_account_id, reference: n.shipmentReference }))}`, operatorMembershipId: j.operator_membership_id, transaction: { itemTitle: n.itemTitle, quantity: n.quantity, shipping: { carrier: n.carrier, trackingNumber: n.trackingNumber, shipmentDate: n.shipmentDate } } });
+                                const created = await importPartnerOrder(tx, deps.clock, j.actor, { integrationAccountId: j.integration_account_id, externalId: `csv:${sha256Hex(canonicalize({ source: j.integration_account_id, reference: shipmentBindingKey(n.shipmentReference,n.locationId) }))}`, operatorMembershipId: j.operator_membership_id, transaction: { itemTitle: n.itemTitle, quantity: n.quantity, shipping: { carrier: n.carrier, trackingNumber: n.trackingNumber, shipmentDate: n.shipmentDate } } });
                                 proofId = created.proofId;
                                 const at = deps.clock.now().toISOString();
-                                await tx.query("INSERT INTO platform_external_bindings(merchant_id,environment,integration_account_id,resource_type,external_id,proof_id,snapshot_sha256,created_at) VALUES($1,$2,$3,'SHIPMENT',$4,$5,$6,$7)", [j.organization_id, j.environment, j.integration_account_id, n.shipmentReference, proofId, r.payload_sha256, at]);
+                                await tx.query("INSERT INTO platform_external_bindings(merchant_id,environment,integration_account_id,resource_type,external_id,proof_id,snapshot_sha256,created_at) VALUES($1,$2,$3,'SHIPMENT',$4,$5,$6,$7)", [j.organization_id, j.environment, j.integration_account_id, shipmentBindingKey(n.shipmentReference,n.locationId), proofId, r.payload_sha256, at]);
                                 await tx.query('INSERT INTO record_state(proof_id,organization_id,environment,title,reference,location_id,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7)', [proofId, j.organization_id, j.environment, n.itemTitle, n.shipmentReference, n.locationId, at]);
                                 await tx.query("INSERT INTO record_entities(id,proof_id,kind,external_reference,attributes,actor_user_id,created_at) VALUES($1,$2,'shipment',$3,$4::jsonb,$5,$6)", [newId('shipment'), proofId, n.shipmentReference, JSON.stringify({ quantity: n.quantity, trackingNumber: n.trackingNumber, carrier: n.carrier, sourceReportedAt: n.shippedAt, sourceTimeZone: j.time_zone, importId: j.id }), j.actor.actorUserId, at]);
                                 await appendAudit(tx, { proofId, actorUserId: j.actor.actorUserId, eventType: 'SERVICE_CSV_SHIPMENT_IMPORTED', eventData: { importId: j.id, rowNumber: r.row_number, sourceName: j.source_name, originalSha256: j.original_sha256, payloadSha256: r.payload_sha256, sourceReportedAt: n.shippedAt, timeZone: j.time_zone, mappingVersion: j.mapping_version }, at: deps.clock.now() });
@@ -299,7 +310,7 @@ export async function processPendingPartnerImports(deps: Deps, limit = 2) {
                 // A duplicate inside the same CSV points to the accepted first
                 // occurrence, rather than claiming success without a Proof ID.
                 for(const r of await rows(tx,j.id))if(r.status==='duplicate'&&!r.proof_id&&r.normalized){
-                    const binding=(await tx.query<{proof_id:string;snapshot_sha256:string;operator_membership_id:string}>("SELECT b.proof_id,b.snapshot_sha256,o.operator_membership_id FROM platform_external_bindings b JOIN platform_proof_ownership o ON o.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id=$4",[j.organization_id,j.environment,j.integration_account_id,r.normalized.shipmentReference])).rows[0];
+                    const binding=(await tx.query<{proof_id:string;snapshot_sha256:string;operator_membership_id:string}>("SELECT b.proof_id,b.snapshot_sha256,o.operator_membership_id FROM platform_external_bindings b JOIN platform_proof_ownership o ON o.proof_id=b.proof_id LEFT JOIN record_state s ON s.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id IN ($4,$5) AND s.location_id IS NOT DISTINCT FROM $6",[j.organization_id,j.environment,j.integration_account_id,shipmentBindingKey(r.normalized.shipmentReference,r.normalized.locationId),r.normalized.shipmentReference,r.normalized.locationId])).rows[0];
                     if(binding&&binding.snapshot_sha256===r.payload_sha256&&binding.operator_membership_id===j.operator_membership_id){
                         await authorizePartnerProof(tx,deps.clock,j.actor,binding.proof_id,'proofs:read');
                         await tx.query("UPDATE partner_import_rows SET proof_id=$3,errors='[]'::jsonb WHERE import_id=$1 AND row_number=$2",[j.id,r.row_number,binding.proof_id]);

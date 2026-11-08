@@ -9,6 +9,11 @@ async function contract() {
   const evidence = await client.getEvidence(detail.record.id);
   const original: true = evidence.data.evidence[0].original;
   const ingestion = await client.createIngestion({ connectionId: 'source_1', events: [{ sourceEventId: 'e_1', proofId: detail.record.id, eventType: 'CARRIER_ACCEPTED', reportedAt: '2026-11-04T12:00:00Z' }] }, { idempotencyKey: 'source_batch_1' });
+  const reference = {connectionId:'source_1',locationId:null,reference:{type:'SHIPMENT' as const,externalId:'000045'}};
+  const resolution = await client.resolveSourceReference(reference);
+  const observation = await client.createSourceObservation({...reference,sourceKind:'fixture',sourceSchemaVersion:'1',mappingVersion:'1',event:{sourceEventId:'early',eventType:'DELIVERED',reportedAt:'2026-11-07T00:00:00Z'}},{idempotencyKey:'early-event'});
+  const observationId:string=observation.data.id;
+  void resolution;void observationId;
   const operation = await client.getOperation(ingestion.data.operationId);
   const assurance: 'organization_submitted' = operation.data.sourceAssurance;
   // @ts-expect-error Mutations require a stable command key.

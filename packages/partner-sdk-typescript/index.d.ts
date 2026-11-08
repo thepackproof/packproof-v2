@@ -39,6 +39,10 @@ export interface WebhookReplay { replayId: string; deliveryId: string; webhookId
 export type ShipmentEventType = 'LABEL_CREATED' | 'CARRIER_ACCEPTED' | 'WEIGHT_RECORDED' | 'IN_TRANSIT' | 'ARRIVED_AT_FACILITY' | 'DEPARTED_FACILITY' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'DELIVERY_EXCEPTION' | 'RETURN_TO_SENDER' | 'RETURN_IN_TRANSIT' | 'RETURN_DELIVERED' | 'CARRIER_EVENT';
 export interface SourceObservationInput { sourceEventId: string; proofId: string; eventType: ShipmentEventType; reportedAt: string; carrier?: string | null; location?: string | null; data?: Record<string, unknown> }
 export interface SourceIngestionInput { connectionId: string; events: SourceObservationInput[] }
+export interface SourceReferenceInput {connectionId:string;locationId:string|null;reference:{type:'SHIPMENT'|'ORDER'|'RETURN'|'package'|'pallet'|'item';externalId:string};}
+export interface SourceReferenceResolution {outcome:'linked'|'unresolved_no_match'|'unresolved_ambiguous';proofId:string|null;candidates:string[];ruleVersion:string;basis:string;}
+export interface SourceReferenceObservation extends SourceReferenceInput {sourceKind:string;sourceSchemaVersion:string;mappingVersion:string;event:Omit<SourceObservationInput,'proofId'>;facts?:Array<{kind:'shipment'|'stop'|'package'|'pallet'|'item'|'return';externalReference:string;parentReference?:string;attributes?:Record<string,unknown>}>;}
+export interface SourceAssociationReceipt {id:string;state:OpenEnum<'pending'|'submitted'|'conflict'|'blocked_policy'|'retryable_error'>;operationId:string|null;proofId:string|null;receivedAt:string;reportedAt:string;resolution:SourceReferenceResolution;[key:string]:unknown;}
 export interface SourceIngestionReceipt { operationId: string; state: OpenEnum<'queued' | 'failed'>; receivedAt: string; itemCount: number; links: { self: string }; sourceAssurance: 'organization_submitted'; replayed: boolean; [key: string]: unknown }
 export interface SourceOperationItem { itemIndex: number; sourceEventId: string; proofId: string; reportedAt: string; receivedAt: string; status: OpenEnum<'queued' | 'imported' | 'duplicate' | 'conflict' | 'failed'>; eventId: string | null; errorCode: string | null; attempts: number; [key: string]: unknown }
 export interface SourceOperation { operationId: string; state: OpenEnum<'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed'>; receivedAt: string; updatedAt: string; itemCount: number; links: { self: string }; items: SourceOperationItem[]; sourceAssurance: 'organization_submitted'; [key: string]: unknown }
@@ -93,6 +97,9 @@ export declare class PackProofClient {
   listAuditEvents(options?: RecordChildPageOptions & { operation?: string; resourceId?: string; from?: string; to?: string }): Promise<ApiResponse<CursorPage<'events', PartnerAuditEvent>>>;
   listWebhookDeliveries(options?: RecordChildPageOptions & { state?: 'pending' | 'sending' | 'delivered' | 'dead'; webhookId?: string }): Promise<ApiResponse<CursorPage<'deliveries', WebhookDelivery>>>;
   replayWebhookDelivery(deliveryId: string, reason: string, options: MutationOptions): Promise<ApiResponse<WebhookReplay>>;
+  resolveSourceReference(input:SourceReferenceInput, options?:RequestOptions):Promise<ApiResponse<SourceReferenceResolution>>;
+  createSourceObservation(input:SourceReferenceObservation, options:MutationOptions):Promise<ApiResponse<SourceAssociationReceipt>>;
+  getSourceObservation(id:string, options?:RequestOptions):Promise<ApiResponse<SourceAssociationReceipt>>;
   createIngestion(input: SourceIngestionInput, options: MutationOptions): Promise<ApiResponse<SourceIngestionReceipt>>;
   getOperation(operationId: string, options?: RequestOptions): Promise<ApiResponse<SourceOperation>>;
   waitForOperation(operationId: string, options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal }): Promise<ApiResponse<SourceOperation>>;

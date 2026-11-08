@@ -133,7 +133,7 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
     return {rowNumber,status:errors.length ? (ambiguous || mappingProblems.length ? 'ambiguous' : 'invalid') : 'valid',values,errors,normalized,payloadSha256:normalized ? sha256Hex(canonicalize(normalized)) : null};
   });
   const identities = new Map<string, ShipmentCsvRow[]>();
-  for (const row of rows) if (row.normalized) { const ref = row.normalized.shipmentReference; identities.set(ref,[...(identities.get(ref) ?? []),row]); }
+  for (const row of rows) if (row.normalized) { const ref = canonicalize([row.normalized.locationId,row.normalized.shipmentReference]); identities.set(ref,[...(identities.get(ref) ?? []),row]); }
   for (const matches of identities.values()) if (matches.length > 1) {
     if (matches.some(row => row.payloadSha256 !== matches[0].payloadSha256)) {
       for (const row of matches) { row.status = 'ambiguous'; row.errors.push('This shipment reference appears more than once with different details. Resolve the conflicting rows before importing.'); }

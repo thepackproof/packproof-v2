@@ -6,6 +6,7 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { canonicalize } from '../canonical.js';
 import { CSV_MAPPING_FIELDS, type CsvMapping } from './csv.js';
+import {validateScheduledCsvSourceContract,type ScheduledCsvSourceContract} from './agent-restrictions.js';
 import { requireRecordWorkspace, requireRecordLocation, listRecordLocations, type RecordWorkspace } from './access.js';
 import { strictBody, organizationAdmin, createServicePrincipal, issuePartnerCredential, auditOrganization, reauthorizePartner, type PartnerActor } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
@@ -14,7 +15,7 @@ import { protectWebhookResponse, webhookConfigFromEnv } from '../platform/webhoo
 type Deps = Pick<AppDependencies, 'db'|'clock'|'auth'|'devAuth'|'testFixtures'|'webhookConfig'>;
 export interface AgentConfig {
  folderDigest:string; sourceName:string; integrationAccountId:string; operatorMembershipId:string;
- locationId:string|null; mapping:CsvMapping; timeZone:string; importValidRows:boolean; offlineWindowHours:number;
+ locationId:string|null; mapping:CsvMapping; timeZone:string; importValidRows:boolean; offlineWindowHours:number; sourceContract?:ScheduledCsvSourceContract;
 }
 export interface Installation {
  id:string; organization_id:string; environment:'sandbox'|'live'; principal_id:string; credential_id:string;
@@ -27,6 +28,11 @@ export interface Installation {
  renewal_credential_id:string|null; renewal_response:unknown; renewal_expires_at:string|null; renewal_key_hash:string|null;
 }
 interface Enrollment {id:string;secret_hash:string;comparison_code:string;device_name:string;version:string;state:string;created_at:string;expires_at:string;last_poll_at:string|null;installation_id:string|null;credential_response:unknown}
+interface AgentHealthHistoryEntry {observedAt:string;configRevision:number;codes:string[]}
+function healthHistory(i:Installation):AgentHealthHistoryEntry[]{
+ const history=i.heartbeat.healthHistory;
+ return Array.isArray(history)?history.filter((entry):entry is AgentHealthHistoryEntry=>!!entry&&typeof entry==='object'&&typeof entry.observedAt==='string'&&Number.isFinite(Date.parse(entry.observedAt))&&Number.isInteger(entry.configRevision)&&Array.isArray(entry.codes)&&entry.codes.length<=12&&entry.codes.every((code:unknown)=>typeof code==='string'&&/^[A-Z0-9_]{1,80}$/.test(code))).slice(-30):[];
+}
 const scopes=['imports:read','imports:write','proofs:read','proofs:write'];
 const iso=(x:string|Date|null)=>x?new Date(x).toISOString():null;
 const fail=(code:string,message:string,status=409):never=>{throw new DomainError(code,message,status);};
@@ -136,7 +142,27 @@ export async function decideEnrollment(deps:Deps,tx:Database,w:RecordWorkspace,i
 export async function agentView(deps:Deps,i:Installation,db=deps.db){
  const last=(await db.query<{completed_at:string|null;completed_imports:string}>(`SELECT MAX(updated_at) completed_at,COUNT(*)::text completed_imports FROM partner_import_jobs WHERE principal_id=$1 AND state='succeeded'`,[i.principal_id])).rows[0];
  const expiry=(await db.query<{expires_at:string}>('SELECT expires_at FROM platform_credentials WHERE id=$1',[i.credential_id])).rows[0];
- return {id:i.id,installationId:i.id,state:i.status,authorizationUpdatedAt:iso(i.updated_at),deviceName:i.device_name,version:i.version,integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name,organizationId:i.organization_id,environment:i.environment,configRevision:i.config_revision,configSha256:i.config_sha256,config:i.approved_config,pendingProposal:i.pending_proposal,pendingProposalSha256:i.pending_proposal_sha256,testImportId:i.test_import_id,verifiedImportId:i.verified_import_id,lastSeenAt:iso(i.last_seen_at),credentialExpiresAt:iso(expiry?.expires_at??null),health:{serviceOnline:!!i.last_seen_at&&deps.clock.now().getTime()-new Date(i.last_seen_at).getTime()<180000,lastFolderScanAt:i.heartbeat.lastScanAt??null,lastObservedExportAt:i.heartbeat.lastExportAt??null,lastCompletedImportAt:iso(last?.completed_at??null),completedImports:Number(last?.completed_imports??0),queueCount:i.heartbeat.queueCount??null,sourceFreshness:'unknown',lastErrorCode:i.heartbeat.lastErrorCode??null},limits:{maxCsvBytes:2097152,maxRows:1000,maxColumns:50,maxJsonBytes:6291456,scanIntervalSeconds:30,heartbeatIntervalSeconds:60,offlineWindowSeconds:(i.approved_config?.offlineWindowHours??0)*3600}};
+ const accounting=(await db.query<{received_exports:string;accepted_rows:string;duplicate_rows:string;rejected_rows:string;pending_rows:string;linked_proofs:string;last_received_at:string|null;source_watermark_at:string|null;oldest_pending_at:string|null}>(`SELECT
+  (SELECT COUNT(*)::text FROM partner_import_jobs WHERE principal_id=$1 AND agent_config_revision=$2) received_exports,
+  COUNT(*) FILTER(WHERE r.status='imported')::text accepted_rows,COUNT(*) FILTER(WHERE r.status='duplicate')::text duplicate_rows,
+  COUNT(*) FILTER(WHERE r.status IN ('invalid','ambiguous','failed'))::text rejected_rows,COUNT(*) FILTER(WHERE r.status='valid')::text pending_rows,
+  COUNT(DISTINCT r.proof_id)::text linked_proofs,
+  MIN(j.received_at) FILTER(WHERE r.status='valid') oldest_pending_at,
+  MAX(j.received_at) FILTER(WHERE j.state='succeeded') last_received_at,
+  MAX((r.normalized->>'shippedAt')::timestamptz) FILTER(WHERE j.state='succeeded') source_watermark_at
+  FROM partner_import_jobs j LEFT JOIN partner_import_rows r ON r.import_id=j.id WHERE j.principal_id=$1 AND j.agent_config_revision=$2`,[i.principal_id,i.config_revision])).rows[0];
+ const interval=i.approved_config?.sourceContract?.expectedIntervalSeconds??null;
+ const measuredAt=deps.clock.now().getTime(),received=accounting?.last_received_at?new Date(accounting.last_received_at).getTime():Number.NaN,watermark=accounting?.source_watermark_at?new Date(accounting.source_watermark_at).getTime():Number.NaN;
+ const sourceFreshness: 'unknown'|'current'|'delayed'=!interval||!Number.isFinite(received)||!Number.isFinite(watermark)||received>measuredAt||watermark>measuredAt?'unknown':measuredAt-Math.min(received,watermark)>interval*1000?'delayed':'current';
+ const conditions:{code:string;repair:string}[]=[];
+ if(i.last_seen_at&&measuredAt-new Date(i.last_seen_at).getTime()>=180000)conditions.push({code:'SERVICE_OFFLINE',repair:'Check that the approved computer is on, the PackProof service is running and its network can reach PackProof.'});
+ if(i.status==='active'&&(!i.heartbeat.lastScanAt||measuredAt-new Date(String(i.heartbeat.lastScanAt)).getTime()>=180000))conditions.push({code:'SCAN_STALLED',repair:'Check service read/list access to the approved local export folder and resume after repairing access.'});
+ if(sourceFreshness==='delayed')conditions.push({code:'SOURCE_DELAYED',repair:'Ask the source owner to check the scheduled exporter and publish a fresh immutable CSV within the approved cadence.'});
+ if(expiry?.expires_at&&new Date(expiry.expires_at).getTime()-measuredAt<7*86400000)conditions.push({code:'CREDENTIAL_EXPIRING',repair:'Keep the computer online so queued receipts finish and the approved service can renew its credential.'});
+ if(accounting?.oldest_pending_at&&measuredAt-new Date(accounting.oldest_pending_at).getTime()>=180000)conditions.push({code:'PROCESSING_DELAYED',repair:'Preserve queued originals and receipts; inspect the import worker before replaying an existing operation.'});
+ if(typeof i.heartbeat.lastErrorCode==='string'&&/^[A-Z0-9_]{1,80}$/.test(i.heartbeat.lastErrorCode)&&!conditions.some(condition=>condition.code===i.heartbeat.lastErrorCode))conditions.push({code:i.heartbeat.lastErrorCode,repair:'Review the affected files on this computer. Preserve originals and correct the exporter or approved configuration before resuming.'});
+
+ return {id:i.id,installationId:i.id,state:i.status,authorizationUpdatedAt:iso(i.updated_at),deviceName:i.device_name,version:i.version,integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name,organizationId:i.organization_id,environment:i.environment,configRevision:i.config_revision,configSha256:i.config_sha256,config:i.approved_config,pendingProposal:i.pending_proposal,pendingProposalSha256:i.pending_proposal_sha256,testImportId:i.test_import_id,verifiedImportId:i.verified_import_id,lastSeenAt:iso(i.last_seen_at),credentialExpiresAt:iso(expiry?.expires_at??null),health:{serviceOnline:!!i.last_seen_at&&deps.clock.now().getTime()-new Date(i.last_seen_at).getTime()<180000,lastFolderScanAt:i.heartbeat.lastScanAt??null,lastObservedExportAt:i.heartbeat.lastExportAt??null,lastCompletedImportAt:iso(last?.completed_at??null),completedImports:Number(last?.completed_imports??0),queueCount:i.heartbeat.queueCount??null,conditions,history:healthHistory(i),sourceFreshness,expectedIntervalSeconds:interval,sourceWatermarkAt:Number.isFinite(watermark)?new Date(watermark).toISOString():null,lastReceiptReconciledAt:i.heartbeat.lastReceiptReconciledAt??null,sourceAccounting:{receivedExports:Number(accounting?.received_exports??0),acceptedRows:Number(accounting?.accepted_rows??0),duplicateRows:Number(accounting?.duplicate_rows??0),rejectedRows:Number(accounting?.rejected_rows??0),pendingRows:Number(accounting?.pending_rows??0),linkedProofs:Number(accounting?.linked_proofs??0)},lastErrorCode:i.heartbeat.lastErrorCode??null},limits:{maxCsvBytes:2097152,maxRows:1000,maxColumns:50,maxJsonBytes:6291456,scanIntervalSeconds:30,heartbeatIntervalSeconds:60,offlineWindowSeconds:(i.approved_config?.offlineWindowHours??0)*3600}};
 }
 export async function readAgentInventory(deps:Deps,w:RecordWorkspace){
  const rs=(await deps.db.query<Installation>('SELECT * FROM record_agent_installations WHERE organization_id=$1 AND environment=$2 ORDER BY created_at DESC,id LIMIT 100',[w.organizationId,w.environment])).rows;
@@ -193,7 +219,7 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
  return agentView(deps,await loadInstallation(tx,id),tx);
 }
 export function validateAgentConfig(input:unknown,i:Installation):AgentConfig{
- const b=strictBody(input,['folderDigest','sourceName','integrationAccountId','operatorMembershipId','locationId','mapping','timeZone','importValidRows','offlineWindowHours']);
+ const b=strictBody(input,['folderDigest','sourceName','integrationAccountId','operatorMembershipId','locationId','mapping','timeZone','importValidRows','offlineWindowHours','sourceContract']);
  if(typeof b.folderDigest!=='string'||!/^[a-f0-9]{64}$/.test(b.folderDigest))fail('INVALID_REQUEST','Use the service-verified folder fingerprint',400);
  if(b.integrationAccountId!==i.integration_account_id||b.operatorMembershipId!==i.operator_membership_id||b.sourceName!==i.source_name||(b.locationId??null)!==i.location_id)fail('BINDING_CHANGED','A different source or teammate needs a new administrator-approved enrollment');
  if(typeof b.importValidRows!=='boolean'||typeof b.offlineWindowHours!=='number'||![0,24].includes(b.offlineWindowHours))fail('INVALID_REQUEST','Choose a supported row policy and offline collection window',400);
@@ -202,6 +228,11 @@ export function validateAgentConfig(input:unknown,i:Installation):AgentConfig{
  if(new Set(Object.values(mapping!)).size!==Object.values(mapping!).length)fail('INVALID_MAPPING','Each field must use a distinct exact column heading',400);
  if(typeof b.timeZone!=='string'||b.timeZone.length>100)fail('INVALID_TIME_ZONE','Choose an explicit source time zone',400);
  try{new Intl.DateTimeFormat('en-US',{timeZone:b.timeZone as string}).format();}catch{fail('INVALID_TIME_ZONE','Choose an IANA source time zone',400);}
+ if(b.sourceContract!==undefined){
+  b.sourceContract=validateScheduledCsvSourceContract(b.sourceContract);
+  const contract=b.sourceContract as ScheduledCsvSourceContract;
+  if(!mapping!.shippedAt||Object.values(mapping!).some(header=>!contract.expectedHeaders.includes(header as string)))fail('INVALID_MAPPING','The scheduled source must map its timestamp and exact approved headers',400);
+ }
  return b as unknown as AgentConfig;
 }
 export async function proposeAgentConfig(deps:Deps,a:PartnerActor,input:unknown){
@@ -214,9 +245,9 @@ export async function proposeAgentConfig(deps:Deps,a:PartnerActor,input:unknown)
  });
 }
 export async function heartbeatAgent(deps:Deps,a:PartnerActor,input:unknown){
- const b=strictBody(input,['enrollmentAcknowledged','renewalAcknowledged','version','queueCount','lastScanAt','lastExportAt','lastErrorCode']);
+ const b=strictBody(input,['enrollmentAcknowledged','renewalAcknowledged','version','queueCount','lastScanAt','lastExportAt','lastReceiptReconciledAt','lastErrorCode']);
  if(typeof b.version!=='string'||b.version.length>40||!Number.isInteger(b.queueCount)||Number(b.queueCount)<0||Number(b.queueCount)>10000)fail('INVALID_REQUEST','Send bounded service health measurements',400);
- for(const k of ['lastScanAt','lastExportAt'])if(b[k]!==undefined&&b[k]!==null&&(typeof b[k]!=='string'||!Number.isFinite(Date.parse(b[k] as string))||Date.parse(b[k] as string)>deps.clock.now().getTime()+60000))fail('INVALID_REQUEST','Send a valid observed timestamp',400);
+ for(const k of ['lastScanAt','lastExportAt','lastReceiptReconciledAt'])if(b[k]!==undefined&&b[k]!==null&&(typeof b[k]!=='string'||!Number.isFinite(Date.parse(b[k] as string))||Date.parse(b[k] as string)>deps.clock.now().getTime()+60000))fail('INVALID_REQUEST','Send a valid observed timestamp',400);
  if(b.lastErrorCode!==undefined&&b.lastErrorCode!==null&&(typeof b.lastErrorCode!=='string'||!/^[A-Z0-9_]{1,80}$/.test(b.lastErrorCode)))fail('INVALID_REQUEST','Send a safe diagnostic code',400);
  return deps.db.transaction(async tx=>{
   const i=await installationForActor(tx,a,true),now=deps.clock.now().toISOString();
@@ -233,8 +264,15 @@ export async function heartbeatAgent(deps:Deps,a:PartnerActor,input:unknown){
    await tx.query('UPDATE record_agent_installations SET credential_id=renewal_credential_id,renewal_credential_id=NULL,renewal_response=NULL,renewal_expires_at=NULL,renewal_key_hash=NULL WHERE id=$1',[i.id]);
   }
   const {enrollmentAcknowledged:_,renewalAcknowledged:__,...safe}=b;
-  await tx.query('UPDATE record_agent_installations SET last_seen_at=$2,version=$3,heartbeat=$4::jsonb WHERE id=$1',[i.id,now,b.version,JSON.stringify(safe)]);
-  return agentView(deps,await loadInstallation(tx,i.id),tx);
+  const history=healthHistory(i);
+  await tx.query('UPDATE record_agent_installations SET last_seen_at=$2,version=$3,heartbeat=$4::jsonb WHERE id=$1',[i.id,now,b.version,JSON.stringify({...safe,healthHistory:history})]);
+  const view=await agentView(deps,await loadInstallation(tx,i.id),tx),codes=[...new Set(view.health.conditions.map(condition=>condition.code))].sort(),previous=history.at(-1);
+  if(!previous||previous.configRevision!==i.config_revision||canonicalize(previous.codes)!==canonicalize(codes)){
+   history.push({observedAt:now,configRevision:i.config_revision,codes});
+   if(history.length>30)history.splice(0,history.length-30);
+   await tx.query('UPDATE record_agent_installations SET heartbeat=$2::jsonb WHERE id=$1',[i.id,JSON.stringify({...safe,healthHistory:history})]);
+  }
+  return {...view,health:{...view.health,history}};
  });
 }
 export async function renewAgentCredential(deps:Deps,a:PartnerActor,key:unknown,input:unknown){

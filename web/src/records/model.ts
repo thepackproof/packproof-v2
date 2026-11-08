@@ -19,8 +19,8 @@ export function displayState(value: unknown): string { return typeof value === '
 export function stateTone(value: unknown): 'neutral' | 'success' | 'warning' | 'error' {
   const state = String(value || '').toLowerCase();
   if (['up_to_date', 'complete', 'completed', 'succeeded', 'satisfied', 'sealed', 'reviewed', 'resolved', 'committed', 'available'].includes(state)) return 'success';
-  if (['failed', 'error', 'integrity_mismatch', 'rejected'].includes(state)) return 'error';
-  if (['needs_attention', 'action_needed', 'delayed', 'missing', 'reauthorization_required', 'conflict'].includes(state)) return 'warning';
+  if (['failed', 'error', 'integrity_mismatch', 'rejected', 'blocked_policy'].includes(state)) return 'error';
+  if (['needs_attention', 'action_needed', 'delayed', 'missing', 'reauthorization_required', 'conflict', 'retryable_error', 'unresolved_ambiguous'].includes(state)) return 'warning';
   return 'neutral';
 }
 export function sourceLabel(source: unknown): string { return typeof source === 'string' ? source : source && typeof source === 'object' && 'name' in source && typeof source.name === 'string' ? source.name : 'Source not specified'; }

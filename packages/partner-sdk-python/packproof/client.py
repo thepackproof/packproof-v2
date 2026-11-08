@@ -271,6 +271,15 @@ class PackProofClient:
         return self.request(f'/v1/partner/webhook-deliveries/{_segment(delivery_id)}/replay', method='POST', body={'reason': reason},
                             idempotency_key=_text(idempotency_key, 'idempotency_key'))
 
+    def resolve_source_reference(self, value: dict) -> ApiResponse:
+        return self.request('/v1/partner/source-references/resolve', method='POST', body=value)
+
+    def create_source_observation(self, value: dict, *, idempotency_key: str) -> ApiResponse:
+        return self.request('/v1/partner/source-observations', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
+
+    def get_source_observation(self, observation_id: str) -> ApiResponse:
+        return self.request(f'/v1/partner/operations/{_segment(observation_id)}')
+
     def create_ingestion(self, value: dict, *, idempotency_key: str) -> ApiResponse:
         return self.request('/v1/partner/ingestions', method='POST', body=value, idempotency_key=_text(idempotency_key, 'idempotency_key'))
 

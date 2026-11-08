@@ -37,6 +37,17 @@ it('a queued response never unlocks automatic collection', async () => {
   expect(screen.getByText(/Verification is incomplete/)).toBeVisible();
 });
 
+it('requires the named exporter, cadence and timestamp cutoff before requesting a new source approval',async()=>{
+  const current:ConnectStatus={...initial,config:undefined,configRevision:0,binding:{sourceName:config.sourceName,integrationAccountId:config.integrationAccountId,operatorMembershipId:config.operatorMembershipId,locationId:null},source:{...initial.source!,headers:['Shipment reference','Description','Quantity','Shipment date']}};
+  const proposeConfiguration=vi.fn(async()=>current);render(<ConnectApp bridge={{getStatus:vi.fn(async()=>current),proposeConfiguration} as unknown as ConnectBridge}/>);
+  await screen.findByRole('heading',{name:'Field mapping'});await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh status'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('checkbox',{name:/confirmed the identifiers/}));const approve=screen.getByRole('button',{name:'Request configuration approval'});expect(approve).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Exporter product'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Exporter version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Earliest approved shipment time'),{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Source time zone'),{target:{value:'UTC'}});
+  fireEvent.click(screen.getByRole('checkbox',{name:/confirmed the identifiers/}));expect(approve).toBeEnabled();fireEvent.click(approve);
+  await waitFor(()=>expect(proposeConfiguration).toHaveBeenCalledWith(expect.objectContaining({sourceContract:{schema:'packproof.scheduled-csv/v1',exporterName:'Synthetic exporter',exporterVersion:'fixture-1',expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:900,backfillFrom:'2026-11-01T00:00:00Z'}})));
+  expect(screen.getByRole('button',{name:'Create secure preview'})).toBeDisabled();
+});
+
 it('requires informed preservation consent before expired-installation recovery', async () => {
   const recoverEnrollment = vi.fn(async () => ({ state: 'needs_approval', environment: 'sandbox', enrollment: { id: 'enroll-new', comparisonCode: 'ABCD-EFGH', expiresAt: '2026-11-07T10:00:00Z', state: 'pending' }, health: { serviceOnline: true, queueCount: 0, preservedQueueCount: 2 } }));
   const current: ConnectStatus = { ...initial, state: 'revoked', recoveryAvailable: true };

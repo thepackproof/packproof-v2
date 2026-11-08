@@ -1,6 +1,10 @@
 /** Renderer-safe state only. Tokens and enrollment redemption secrets never cross this boundary. */
 export type CheckState = 'passed' | 'warning' | 'blocked' | 'not_checked';
 export interface ComputerCheck { id: string; label: string; state: CheckState; detail: string }
+export interface SourceContract {
+  schema: 'packproof.scheduled-csv/v1'; exporterName: string; exporterVersion: string;
+  expectedHeaders: string[]; expectedIntervalSeconds: number; backfillFrom: string;
+}
 export interface Configuration {
   sourceName: string;
   integrationAccountId?: string;
@@ -11,6 +15,7 @@ export interface Configuration {
   timeZone: string;
   importValidRows: boolean;
   offlineWindowHours: number;
+  sourceContract?: SourceContract;
 }
 export interface ConnectStatus {
   state: string;
@@ -32,7 +37,7 @@ export interface ConnectStatus {
   pendingProposal?: Configuration;
   preview?: { id: string; previewVersion: string; state: string; original: { sha256: string; byteSize: number }; counts: Record<string, number>; rows: Array<{ rowNumber: number; status: string; errors: string[]; normalized?: Record<string, unknown>; values?: Record<string, string> }>; recordIds: string[] };
   verification?: { complete: boolean; recordId?: string; recordUrl?: string; configRevision?: number; fileSha256?: string };
-  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; queueCount: number | null; preservedQueueCount?: number; lastErrorCode?: string };
+  health: { serviceOnline: boolean; lastScanAt?: string; lastExportAt?: string; lastCompletedImportAt?: string; lastReceiptReconciledAt?: string; sourceFreshness?: 'unknown'|'current'|'delayed'; expectedIntervalSeconds?: number; sourceWatermarkAt?:string; sourceAccounting?: { receivedExports:number; acceptedRows:number; duplicateRows:number; rejectedRows:number; pendingRows:number; linkedProofs:number }; quarantinedFileCount?:number; queueCount: number | null; preservedQueueCount?: number; lastErrorCode?: string };
   approvalPath?: string;
 }
 export interface ConnectBridge {

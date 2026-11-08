@@ -82,6 +82,29 @@ it('labels bounded evidence counts and applies the selected entity to requiremen
   expect(screen.getByText('1 loaded')).toBeVisible();
   expect(screen.queryByText('1 of 2 met')).not.toBeInTheDocument();
 });
+it('retains the authoritative unresolved count when 500 newer resolved issues fill the detail response', async () => {
+  const issues = Array.from({ length: 500 }, (_, index) => ({ id: `resolved-${index}`, state: 'resolved', title: `Resolved issue ${index}` }));
+  const detail = { record: { ...record, issueCount: 1 }, timeline: [], evidence: [], requirements: [], issues, relationships: [], sourceHealth: { state: 'unknown' }, capabilities: {} };
+  const request = vi.fn(async (path: string) => path.startsWith('/context') ? context : detail);
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, '/app/records/proof-a?organizationId=org-a&environment=live'));
+  expect(await screen.findByText('1 issue(s) need review')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Review issues' })).toBeVisible();
+});
+it('explains an assembled source event with its original receipt, interpretation and separate record commit time', async () => {
+  const sourceObservation = { receiptId: 'source-receipt-a', sourceEventId: '000099', sourceKind: 'Customer dispatch', sourceSchemaVersion: '2026.1', mappingVersion: 'dispatch/v1', ruleVersion: 'packproof.source-reference/v1', reference: { type: 'SHIPMENT', externalId: '000123' }, receivedAt: '2026-11-04T10:00:00Z', payloadSha256: 'a'.repeat(64) };
+  const detail = { record, timeline: [{ id: 'event-a', type: 'SOURCE_UPDATE', source: 'organization:opaque', reportedAt: '2026-11-04T09:00:00Z', receivedAt: '2026-11-04T11:00:00Z', data: { sourceObservation } }], evidence: [], requirements: [], issues: [], relationships: [], sourceHealth: { state: 'unknown' }, capabilities: {} };
+  const request = vi.fn(async (path: string) => path.startsWith('/context') ? context : detail), user = userEvent.setup();
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, '/app/records/proof-a?organizationId=org-a&environment=live'));
+  await user.click(await screen.findByRole('button', { name: 'Timeline' }));
+  expect(screen.getByText('Customer dispatch', { selector: 'p' })).toBeVisible();
+  expect(screen.getByText(/Committed to record/)).toBeVisible();
+  await user.click(screen.getByText('Source details'));
+  expect(screen.getByText('Original source receipt received')).toBeVisible();
+  expect(screen.getByText('source-receipt-a')).toBeVisible();
+  expect(screen.getByText('dispatch/v1')).toBeVisible();
+  expect(screen.getByText('packproof.source-reference/v1')).toBeVisible();
+  expect(screen.getByText(/Organization-submitted source assertion/)).toHaveTextContent('outside the inventory of earlier signed snapshots');
+});
 it('preserves records filters and scope while retaining old owned capture and proof boundaries', () => {
   expect(canonicalWorkspacePath('/app/records/proof-a?organizationId=org-a&environment=live&q=000123#token')).toBe('/app/records/proof-a?organizationId=org-a&environment=live&q=000123');
   expect(canonicalWorkspacePath('/app/connections?organizationId=org-a')).toBe('/app/connections?organizationId=org-a');

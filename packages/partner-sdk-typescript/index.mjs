@@ -143,6 +143,9 @@ export class PackProofClient {
   listAuditEvents({ operation, resourceId, from, to, cursor, limit, signal } = {}) { return this.request(withQuery('/v1/partner/audit-events', { operation, resourceId, from, to, cursor, limit }), { signal }); }
   listWebhookDeliveries({ state, webhookId, cursor, limit, signal } = {}) { return this.request(withQuery('/v1/partner/webhook-deliveries', { state, webhookId, cursor, limit }), { signal }); }
   replayWebhookDelivery(deliveryId, reason, options) { requireKey(options); return this.request(`/v1/partner/webhook-deliveries/${segment(deliveryId)}/replay`, { ...options, method: 'POST', body: { reason } }); }
+  resolveSourceReference(input, options) { return this.request('/v1/partner/source-references/resolve', { ...options, method: 'POST', body: input }); }
+  createSourceObservation(input, options) { requireKey(options); return this.request('/v1/partner/source-observations', { ...options, method: 'POST', body: input }); }
+  getSourceObservation(id, options) { return this.request(`/v1/partner/operations/${segment(id)}`, options); }
   createIngestion(input, options) { requireKey(options); return this.request('/v1/partner/ingestions', { ...options, method: 'POST', body: input }); }
   getOperation(operationId, options) { return this.request(`/v1/partner/operations/${segment(operationId)}`, options); }
   waitForOperation(operationId, options) { return this.pollOperation(`/v1/partner/operations/${segment(operationId)}`, options); }

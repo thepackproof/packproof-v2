@@ -10,6 +10,7 @@ import {listRecordReviewers,assignRecordIssue} from './issue-assignments.js';
 import {resolveRecordEntityReference} from './service.js';
 import { requireRecordWorkspace,listRecordLocations,requireRecordAccess,type RecordWorkspace } from './access.js';
 import { listRecordConnections } from './connections.js';
+import {listSourceAssociations,approveSourceCrosswalk,replaySourceAssociation} from './source-associations.js';
 import { getRecord,listRecords,readRecordEvidence,readRecordIssues,readRecordRequirements,readRecordTimeline,
   recordCommand,patchRecord,changeRecordLifecycle,addRequirement,waiveRequirement,actOnIssue,appendAmendment,addRecordEntity,linkRecordEvidence,pageRecordEvidence,pageRecordTimeline,reviewRecord } from './service.js';
 
@@ -40,6 +41,9 @@ export function createRecordsRouter(deps:AppDependencies) {
   }));
   router.get('/',run(async(r,s)=>{const w=await workspace(r);s.json(await listRecords(deps.db,deps.clock,w,r.query));}));
   router.get('/connections',run(async(r,s)=>{const w=await workspace(r);s.json(await listRecordConnections(deps.db,deps.clock,w));}));
+  router.get('/source-associations',run(async(r,s)=>{const w=await workspace(r);s.json(await listSourceAssociations(deps.db,w,{before:r.query.before,limit:r.query.limit}));}));
+  router.post('/source-crosswalks',run(async(r,s)=>{const w=await workspace(r,true);s.json(await approveSourceCrosswalk(deps.db,deps.clock,w,r.body,r.header('Idempotency-Key')));}));
+  router.post('/source-associations/:associationId/replay',run(async(r,s)=>{const w=await workspace(r,true);s.status(202).json(await replaySourceAssociation(deps.db,deps.clock,w,r.params.associationId,r.body,r.header('Idempotency-Key')));}));
   router.get('/issues',run(async(r,s)=>{const w=await workspace(r);const page=await listRecords(deps.db,deps.clock,w,{...r.query,view:'needs_attention',limit:100}),issues=[];
     for(const record of page.records){await requireRecordAccess(deps.db,w,record.id);issues.push(...(await readRecordIssues(deps.db,record.id)).filter(i=>i.status!=='resolved'));}
     s.json({issues,nextCursor:page.nextCursor,updatedAt:page.updatedAt});}));

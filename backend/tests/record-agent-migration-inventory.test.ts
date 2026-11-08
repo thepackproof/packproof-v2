@@ -5,10 +5,12 @@ import {inspectAgentMigrationInventory} from '../scripts/record-agent-migration-
 
 describe('Windows Connect additive schema preparation',()=>{
  it('pins source SQL and exact predecessor receipts without changing historical release manifests',async()=>{
-  const inventory=await migrationInventory();
+  const fullInventory=await migrationInventory();
+  const inventory=fullInventory.filter(row=>Number(row.id.slice(0,3))<=108);
   const manifest=JSON.parse(await readFile(new URL('../scripts/record-agent-migration-manifest.json',import.meta.url),'utf8'));
   const historical=JSON.parse(await readFile(new URL('../scripts/records-migration-manifest.json',import.meta.url),'utf8'));
   const options={reviewedSourceCommit:'a'.repeat(40),reviewedInventorySha256:manifest.inventorySha256};
+  expect(()=>inspectAgentMigrationInventory(fullInventory,fullInventory,options)).toThrow('AGENT_SOURCE_INVENTORY_MISMATCH');
   const predecessor=inventory.filter(row=>row.id!=='108_record_agents');
   expect(manifest.predecessorInventorySha256).toBe(historical.inventorySha256);
   expect(historical.sourceCount).toBe(106);

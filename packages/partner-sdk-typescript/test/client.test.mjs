@@ -131,3 +131,15 @@ test('webhook verification uses original bytes and bounds replay; no reserializa
   assert.equal(verifyWebhook({ ...options, signature: signature + ',v1=bad' }), false);
   assert.equal(verifyWebhook({ ...options, signature: 't=NaN,v1=00' }), false);
 });
+
+test('reference intake preserves exact identifiers and source command identity', async () => {
+  const calls=[],client=new PackProofClient({...settings,fetch:async(url,options)=>{calls.push({url,options});return json(url.endsWith('/resolve')?{outcome:'unresolved_no_match',proofId:null,candidates:[]}:{id:'association_1',state:'pending',operationId:null});}});
+  const scope={connectionId:'source_1',locationId:null,reference:{type:'SHIPMENT',externalId:'000045'}};
+  assert.equal((await client.resolveSourceReference(scope)).data.outcome,'unresolved_no_match');
+  const body={...scope,sourceKind:'fixture',sourceSchemaVersion:'1',mappingVersion:'1',event:{sourceEventId:'e1',eventType:'DELIVERED',reportedAt:'2026-11-07T00:00:00Z'}};
+  await client.createSourceObservation(body,{idempotencyKey:'stable-source-command'});
+  assert.equal(JSON.parse(calls[1].options.body).reference.externalId,'000045');
+  assert.equal(calls[1].options.headers.get('Idempotency-Key'),'stable-source-command');
+  await client.getSourceObservation('association_1');assert.match(calls[2].url,/operations\/association_1$/);
+  assert.throws(()=>client.createSourceObservation(body),/idempotencyKey/);
+});
