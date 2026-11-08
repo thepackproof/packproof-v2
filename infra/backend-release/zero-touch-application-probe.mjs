@@ -9,8 +9,8 @@ const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const fail=code=>{throw Error(code);};
 const host='packproof-zero-touch-runtime-20261108.c8v2esku2zyt.us-east-1.rds.amazonaws.com';
 const modes={
- candidate:{source:'3bff0173c9d91fc11ae614d72872b877628c327d',image:'sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96'},
- rollback:{source:'e346452ade2744820fb2f429d7aeb94fef376419',image:'sha256:f0caa6cd0a2720c05f3bd7debf3b5e74cf24b628f6225d766c141a75e7e8254b'},
+ candidate:{source:'3bff0173c9d91fc11ae614d72872b877628c327d',image:'sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557'},
+ rollback:{source:'e346452ade2744820fb2f429d7aeb94fef376419',image:'sha256:24e8bae0a3b4db24e75d681baa29d3d0b8c96f2d2e8e3d62bbca22e66ea69783'},
 };
 let opened,phase='binding';
 const deadline=setTimeout(()=>process.exit(2),180000);deadline.unref();

@@ -5,7 +5,7 @@ import {pathToFileURL} from 'node:url';
 
 export const RUNTIME_PINS=Object.freeze({
  source:'3bff0173c9d91fc11ae614d72872b877628c327d',
- image:'sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96',
+ image:'sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557',
  predecessorInventory:'605ba38f1c9ffcd6dd28a64a7d07d9cc41c3397ee7c10ba26198ad14ec50c2e1',
  inventory:'a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d',
  instance:'packproof-zero-touch-runtime-20261108',
