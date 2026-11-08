@@ -1,0 +1,755 @@
+{
+  "schema": "packproof.zero-touch-live-deployment/v1",
+  "status": "DEPLOYED",
+  "authorizedScope": "Backend API and worker deployment; no new customer/source activation",
+  "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+  "version": "zero-touch-api-2026.11.08-3bff0173",
+  "apiOrigin": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+  "review": {
+    "schema": "packproof.zero-touch-live-review/v1",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "image": "sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+    "bridge": "sha256:24e8bae0a3b4db24e75d681baa29d3d0b8c96f2d2e8e3d62bbca22e66ea69783",
+    "target": {
+      "host": "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+      "database": "packproof_v2"
+    },
+    "inventorySha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+    "qualifiedRuntime": true,
+    "qualifiedRollback": true,
+    "qualificationSha256": "a63947310ec273240e4f08266f79dc300e96483b2b88a3477b5f3fdfb39898c4",
+    "snapshotArn": "arn:aws:rds:us-east-1:784514617543:snapshot:packproof-zero-touch-live-20261108t2313",
+    "snapshotVerified": true,
+    "expiresAt": "2026-11-09T01:15:32.464Z"
+  },
+  "inspection": {
+    "event": "zero_touch_live_inspection",
+    "schema": "packproof.zero-touch-live-inspection/v1",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "targetHost": "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "reviewSha256": "7c75cd6884c8236e587d4b21e468a7cc46eea9f03589d8a77b1b8324e99272d6",
+    "inspectedAt": "2026-11-08T23:23:18.750Z",
+    "ledgerCount": 106,
+    "ledgerSha256": "605ba38f1c9ffcd6dd28a64a7d07d9cc41c3397ee7c10ba26198ad14ec50c2e1",
+    "baseline": {
+      "sha256": "321ce33c2762c313d2c9abbd823cdbda55472eee000ffa63c78c5a9d06b7e8ed",
+      "tableChecks": 2926,
+      "columnChecks": 14568,
+      "sequenceChecks": 36,
+      "functionChecks": 162
+    },
+    "m2": {
+      "schema": "packproof.m2-database-privileges.v1",
+      "apiRole": "packproof_records_api_v1",
+      "workerRole": "packproof_records_worker_v1",
+      "policySha256": "eda5dedaf09b292d8dcfc9c0c2e72bcfa9a10754497561483ebe649dde9cf903",
+      "effectivePrivilegesSha256": "7a232051db9642453ede8974eb54ccd0a1b89e4bcd7f6f9aae94fc1b1e7c727a",
+      "migrations": {
+        "093_integrity_envelope_jobs": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b",
+        "094_claim_cases": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e",
+        "095_recipient_export_preservation": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+      }
+    },
+    "readOnly": true,
+    "sha256": "2532d69168c99303fe68a9e175916d1313e04afa9a7687c5e9bed8f005d51c4a"
+  },
+  "migration": {
+    "event": "zero_touch_live_migration_applied",
+    "schema": "packproof.zero-touch-live-migration/v1",
+    "status": "PASSED",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "image": "sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+    "reviewSha256": "7c75cd6884c8236e587d4b21e468a7cc46eea9f03589d8a77b1b8324e99272d6",
+    "inspectionSha256": "2532d69168c99303fe68a9e175916d1313e04afa9a7687c5e9bed8f005d51c4a",
+    "snapshotArn": "arn:aws:rds:us-east-1:784514617543:snapshot:packproof-zero-touch-live-20261108t2313",
+    "actual": {
+      "role": "packproof",
+      "login": "packproof",
+      "database": "packproof_v2",
+      "schema": "public",
+      "tls": {
+        "ssl": true,
+        "version": "TLSv1.3"
+      }
+    },
+    "before": {
+      "tables": 245,
+      "rows": 3717,
+      "sha256": "b5a787446aee4f3caaf4b93b8de01f8b9989ca7c5a0e55e2b748921f37cadfd8"
+    },
+    "after": {
+      "tables": 245,
+      "rows": 3717,
+      "sha256": "b5a787446aee4f3caaf4b93b8de01f8b9989ca7c5a0e55e2b748921f37cadfd8"
+    },
+    "baseline": {
+      "sha256": "321ce33c2762c313d2c9abbd823cdbda55472eee000ffa63c78c5a9d06b7e8ed",
+      "tableChecks": 2926,
+      "columnChecks": 14568,
+      "sequenceChecks": 36,
+      "functionChecks": 162
+    },
+    "ledger": {
+      "count": 108,
+      "sha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d"
+    },
+    "previousLedger": {
+      "count": 106,
+      "sha256": "605ba38f1c9ffcd6dd28a64a7d07d9cc41c3397ee7c10ba26198ad14ec50c2e1"
+    },
+    "recordsPolicySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+    "statementsSha256": "5c4ca8e2430516ad8b86a795c339813eb43e82f2c45d5d799a4f19fe971cd3d0",
+    "inheritedNewTableGrantsRemoved": 0,
+    "customerSourcesActivated": false,
+    "completedAt": "2026-11-08T23:28:50.946Z"
+  },
+  "runtimeVerification": [
+    {
+      "event": "zero_touch_live_runtime_verified",
+      "mode": "verify-api",
+      "status": "PASSED",
+      "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "image": "sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+      "reviewSha256": "7c75cd6884c8236e587d4b21e468a7cc46eea9f03589d8a77b1b8324e99272d6",
+      "receipt": {
+        "actual": {
+          "role": "packproof_records_api_v1",
+          "login": "packproof_records_api_v1",
+          "database": "packproof_v2",
+          "schema": "public",
+          "tls": {
+            "ssl": true,
+            "version": "TLSv1.3"
+          }
+        },
+        "ledger": {
+          "count": 108,
+          "sha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d"
+        },
+        "records": {
+          "schema": "packproof.records-runtime-privileges/v1",
+          "sourceCommit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+          "databaseSchema": "public",
+          "caller": "packproof_records_api_v1",
+          "runtimeRole": "packproof_records_api_v1",
+          "workerRole": "packproof_records_worker_v1",
+          "migrations": {
+            "096_records_portal": "e1e1e6cf708b1810598051c7eb00ebf36ee89aeb1628e04f90316b714ee17738",
+            "097_record_imports": "897afca84439849e4e27379e3855a86d1a3287242427ddd80b30c11852c0a437",
+            "098_record_connections": "50ae3bcd1d9d203fb29c5a250866c1019331c06f4c80fc003e087087bb21803c",
+            "099_workspace_requests": "b53dbb586e25c2e4dd53bfe658af50d206bdba946bd9300cf7db5822d6fab1c0",
+            "100_source_ingestions": "e8271a163324b120c263485966041a30b0925939234cb2f52c3dbf5ad46ff8b2",
+            "101_partner_imports_exports": "718840eb997eb7e1be4fb201fd1aac7994c6cb5653a70f9dd7a9d69cc90b1c91",
+            "102_source_artifacts": "6b3b810a98a1b9d447308649df241fb3327dab3de4a8542eafa078efa482b86a",
+            "103_operational_snapshots": "265f756242b969428caea0214155a8be90eaa23964b1e711c6067482c7d2980a",
+            "104_record_snapshot_shares": "1abd528f058f6ee69ca7b08d4846fb89e8f033875a1dad1423a11ead61dcc534",
+            "105_record_deletion_review": "2861536f40efa3ba4f241385d6053ccacf942118f50853e43185727ebda26ae3",
+            "106_requirement_templates": "fd238e239d76209eda950cabd6a2419a0fe183ecfea4decc9ed79adeb3e870ca",
+            "107_record_issue_assignments": "88eb3991374e37c2dc61b96abc374d92c2b6227d22be0b5af334c397a6098c76",
+            "108_record_agents": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f",
+            "109_source_associations": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+          },
+          "migrationSha256": "5148b9746d855d2b192dbc5ffa35b3c7802dbc2fa490bc82e9ebd82a85077168",
+          "policySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+          "effectivePrivilegesSha256": "b37bcdc88c1689015d73ce9982108713aefc86301bd7e1ec05fb59afb85ec6f6"
+        },
+        "m2": {
+          "schema": "packproof.m2-database-privileges.v1",
+          "apiRole": "packproof_records_api_v1",
+          "workerRole": "packproof_records_worker_v1",
+          "policySha256": "eda5dedaf09b292d8dcfc9c0c2e72bcfa9a10754497561483ebe649dde9cf903",
+          "effectivePrivilegesSha256": "7a232051db9642453ede8974eb54ccd0a1b89e4bcd7f6f9aae94fc1b1e7c727a",
+          "migrations": {
+            "093_integrity_envelope_jobs": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b",
+            "094_claim_cases": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e",
+            "095_recipient_export_preservation": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+          }
+        }
+      },
+      "readOnly": true,
+      "completedAt": "2026-11-08T23:30:10.653Z"
+    },
+    {
+      "event": "zero_touch_live_runtime_verified",
+      "mode": "verify-worker",
+      "status": "PASSED",
+      "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "image": "sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+      "reviewSha256": "7c75cd6884c8236e587d4b21e468a7cc46eea9f03589d8a77b1b8324e99272d6",
+      "receipt": {
+        "actual": {
+          "role": "packproof_records_worker_v1",
+          "login": "packproof_records_worker_v1",
+          "database": "packproof_v2",
+          "schema": "public",
+          "tls": {
+            "ssl": true,
+            "version": "TLSv1.3"
+          }
+        },
+        "ledger": {
+          "count": 108,
+          "sha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d"
+        },
+        "records": {
+          "schema": "packproof.records-runtime-privileges/v1",
+          "sourceCommit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+          "databaseSchema": "public",
+          "caller": "packproof_records_worker_v1",
+          "runtimeRole": "packproof_records_api_v1",
+          "workerRole": "packproof_records_worker_v1",
+          "migrations": {
+            "096_records_portal": "e1e1e6cf708b1810598051c7eb00ebf36ee89aeb1628e04f90316b714ee17738",
+            "097_record_imports": "897afca84439849e4e27379e3855a86d1a3287242427ddd80b30c11852c0a437",
+            "098_record_connections": "50ae3bcd1d9d203fb29c5a250866c1019331c06f4c80fc003e087087bb21803c",
+            "099_workspace_requests": "b53dbb586e25c2e4dd53bfe658af50d206bdba946bd9300cf7db5822d6fab1c0",
+            "100_source_ingestions": "e8271a163324b120c263485966041a30b0925939234cb2f52c3dbf5ad46ff8b2",
+            "101_partner_imports_exports": "718840eb997eb7e1be4fb201fd1aac7994c6cb5653a70f9dd7a9d69cc90b1c91",
+            "102_source_artifacts": "6b3b810a98a1b9d447308649df241fb3327dab3de4a8542eafa078efa482b86a",
+            "103_operational_snapshots": "265f756242b969428caea0214155a8be90eaa23964b1e711c6067482c7d2980a",
+            "104_record_snapshot_shares": "1abd528f058f6ee69ca7b08d4846fb89e8f033875a1dad1423a11ead61dcc534",
+            "105_record_deletion_review": "2861536f40efa3ba4f241385d6053ccacf942118f50853e43185727ebda26ae3",
+            "106_requirement_templates": "fd238e239d76209eda950cabd6a2419a0fe183ecfea4decc9ed79adeb3e870ca",
+            "107_record_issue_assignments": "88eb3991374e37c2dc61b96abc374d92c2b6227d22be0b5af334c397a6098c76",
+            "108_record_agents": "65794164c6cd479a5921d0f1b7f4bc6585cbeca149657f2e156523553fc65f9f",
+            "109_source_associations": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+          },
+          "migrationSha256": "5148b9746d855d2b192dbc5ffa35b3c7802dbc2fa490bc82e9ebd82a85077168",
+          "policySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+          "effectivePrivilegesSha256": "b37bcdc88c1689015d73ce9982108713aefc86301bd7e1ec05fb59afb85ec6f6"
+        },
+        "m2": {
+          "schema": "packproof.m2-database-privileges.v1",
+          "apiRole": "packproof_records_api_v1",
+          "workerRole": "packproof_records_worker_v1",
+          "policySha256": "eda5dedaf09b292d8dcfc9c0c2e72bcfa9a10754497561483ebe649dde9cf903",
+          "effectivePrivilegesSha256": "7a232051db9642453ede8974eb54ccd0a1b89e4bcd7f6f9aae94fc1b1e7c727a",
+          "migrations": {
+            "093_integrity_envelope_jobs": "6f4d3f3e3f52fd82816aa84fc74b70c60853b27ca155670359058741f6b84b9b",
+            "094_claim_cases": "e32f262ef9cba012d3bcd886476239f75876a148d3567a1e99ac76bad7f7658e",
+            "095_recipient_export_preservation": "1cecb6cdc12ef5ba89e0515599c8be7b875e99a4cf1a47eee2c4be08e9a25ce2"
+          }
+        }
+      },
+      "readOnly": true,
+      "completedAt": "2026-11-08T23:30:04.530Z"
+    }
+  ],
+  "startup": {
+    "event": "zero_touch_live_startup_verified",
+    "schema": "packproof.zero-touch-live-startup/v1",
+    "status": "PASSED",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "image": "sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+    "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/9269c71ce98e4b9fa9f68fb5cd217302",
+    "targetHost": "packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "checks": [
+      {
+        "route": "/meta",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "route": "/health",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "route": "/ready",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "route": "/me/capabilities",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "route": "/me/records/agent-installations",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "route": "/connect/enrollments",
+        "method": "POST",
+        "status": 400,
+        "cors": "https://thepackproof.com"
+      }
+    ],
+    "workersStarted": false,
+    "customerSourcesActivated": false,
+    "completedAt": "2026-11-08T23:30:17.927Z"
+  },
+  "rolloutStarted": {
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "candidate": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+    "rollback": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:24e8bae0a3b4db24e75d681baa29d3d0b8c96f2d2e8e3d62bbca22e66ea69783",
+    "version": "zero-touch-api-2026.11.08-3bff0173",
+    "workerTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:4",
+    "workerDeployment": "ecs-svc/9912488269625651907",
+    "apiStatus": {
+      "statusCode": "ACTIVE"
+    },
+    "apiConfigurationPreserved": true,
+    "workerConfigurationPreserved": true,
+    "customerSourcesActivated": false
+  },
+  "temporaryOperatorCleanup": {
+    "inactiveTaskDefinitions": [
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-live-operator:1",
+        "status": "INACTIVE"
+      },
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-live-operator:2",
+        "status": "INACTIVE"
+      },
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-live-operator:3",
+        "status": "INACTIVE"
+      },
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-live-operator:4",
+        "status": "INACTIVE"
+      },
+      {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-zero-touch-live-startup:1",
+        "status": "INACTIVE"
+      }
+    ],
+    "temporaryExecutionRoleDeleted": true,
+    "temporaryOperatorTasksStoppedSuccessfully": 5,
+    "recoverySnapshotRetained": "packproof-zero-touch-live-20261108t2313",
+    "executionRoleAbsenceVerified": true
+  },
+  "operatorTasks": [
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/d732c4264a5f4c8b88646dd88608871c",
+      "lastStatus": "STOPPED",
+      "containers": [
+        {
+          "name": "prepare-temporary",
+          "exitCode": 0
+        },
+        {
+          "name": "operator",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/70daaa4a01d74923a7b0b5475c8ee91d",
+      "lastStatus": "STOPPED",
+      "containers": [
+        {
+          "name": "prepare-temporary",
+          "exitCode": 0
+        },
+        {
+          "name": "operator",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/6d6da3b83c7e49ef9979f0cf2bc09f0b",
+      "lastStatus": "STOPPED",
+      "containers": [
+        {
+          "name": "prepare-temporary",
+          "exitCode": 0
+        },
+        {
+          "name": "operator",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/91ba826dd63b4f368959141d0951f6f5",
+      "lastStatus": "STOPPED",
+      "containers": [
+        {
+          "name": "prepare-temporary",
+          "exitCode": 0
+        },
+        {
+          "name": "operator",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/9269c71ce98e4b9fa9f68fb5cd217302",
+      "lastStatus": "STOPPED",
+      "containers": [
+        {
+          "name": "Main",
+          "exitCode": 0
+        }
+      ]
+    }
+  ],
+  "qualificationReceipt": "RUNTIME_QUALIFICATION.json",
+  "operatorCI": {
+    "source": "bb859ccbb9dfb5ee2634b78936d7dbce2d8e479d",
+    "workflow_runs": [
+      {
+        "id": 42534651363,
+        "name": "Infrastructure",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 213,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651363/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651363/logs",
+        "workflow_id": 349893170
+      },
+      {
+        "id": 42534651305,
+        "name": "Records contract and SDKs",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 77,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651305/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651305/logs",
+        "workflow_id": 407310961
+      },
+      {
+        "id": 42534651282,
+        "name": "CodeQL",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 556,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651282/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651282/logs",
+        "workflow_id": 349886535
+      },
+      {
+        "id": 42534651433,
+        "name": "CI",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 601,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651433/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42534651433/logs",
+        "workflow_id": 348765242
+      }
+    ]
+  },
+  "localReleaseChecks": {
+    "command": "node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs",
+    "passed": 150,
+    "failed": 0
+  },
+  "rollback": {
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:24e8bae0a3b4db24e75d681baa29d3d0b8c96f2d2e8e3d62bbca22e66ea69783",
+    "apiTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:54",
+    "workerTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:3",
+    "schemaCompatible": true
+  },
+  "customerQualification": false,
+  "customerSourcesActivated": false,
+  "websiteVersion": 79,
+  "websiteChanged": false,
+  "publicHttp": {
+    "schema": "packproof.zero-touch-live-http/v1",
+    "status": "PASSED",
+    "origin": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws",
+    "checkedAt": "2026-11-08T23:36:37.672347+00:00",
+    "meta": {
+      "service": "packproof-api",
+      "environment": "production",
+      "commit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "version": "zero-touch-api-2026.11.08-3bff0173",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557"
+    },
+    "checks": [
+      {
+        "path": "/meta",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/health",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/ready",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/me/capabilities",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/me/records/agent-installations",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/connect/enrollments",
+        "method": "POST",
+        "status": 400,
+        "cors": "https://thepackproof.com"
+      }
+    ],
+    "enrollmentsCreated": 0,
+    "customerSourcesActivated": false
+  },
+  "knownPreexistingIssue": {
+    "worker": "record-connections",
+    "status": "OPEN_PREEXISTING",
+    "evidence": "The original worker:2, compatibility worker:3 and candidate worker:4 all log scheduled_job_failed for record-connections; candidate worker liveness remains HEALTHY. No claim of successful connection-health processing.",
+    "productionSource": "backend/src/records/connections.ts:150",
+    "diagnosis": "The selection locks both operation and integration-account rows. A lock/permission mismatch is suspected; scheduler logs do not retain the original SQL error. No privilege broadening or connection-row lock removal was performed."
+  },
+  "configurationPreservation": {
+    "apiConfigurationPreserved": true,
+    "workerConfigurationPreserved": true,
+    "apiTaskRolesPreserved": true,
+    "apiTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:55",
+    "workerTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:4"
+  },
+  "recoveryVerification": {
+    "deployment": {
+      "serviceDeploymentArn": "arn:aws:ecs:us-east-1:784514617543:service-deployment/packproof-v2-staging-cluster/packproof-v2-staging-api/ccT37fM3DBJDxLsxP3_82",
+      "serviceArn": "arn:aws:ecs:us-east-1:784514617543:service/packproof-v2-staging-cluster/packproof-v2-staging-api",
+      "clusterArn": "arn:aws:ecs:us-east-1:784514617543:cluster/packproof-v2-staging-cluster",
+      "createdAt": "2026-11-08T23:31:30.351000+00:00",
+      "startedAt": "2026-11-08T23:31:30.420000+00:00",
+      "finishedAt": "2026-11-08T23:40:08.061000+00:00",
+      "updatedAt": "2026-11-08T23:40:08.061000+00:00",
+      "sourceServiceRevisions": [
+        {
+          "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/0488159373261245795",
+          "requestedTaskCount": 0,
+          "runningTaskCount": 0,
+          "pendingTaskCount": 0,
+          "requestedTestTrafficWeight": 0,
+          "requestedProductionTrafficWeight": 0
+        }
+      ],
+      "targetServiceRevision": {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/2464531099448594575",
+        "requestedTaskCount": 1,
+        "runningTaskCount": 1,
+        "pendingTaskCount": 0,
+        "requestedTestTrafficWeight": 100,
+        "requestedProductionTrafficWeight": 100
+      },
+      "status": "SUCCESSFUL",
+      "deploymentConfiguration": {
+        "deploymentCircuitBreaker": {
+          "enable": true,
+          "rollback": true,
+          "resetOnHealthyTask": true,
+          "thresholdConfiguration": {
+            "type": "BOUNDED_PERCENT",
+            "value": 50
+          }
+        },
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100,
+        "alarms": {
+          "alarmNames": [
+            "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+          ],
+          "rollback": true,
+          "enable": true
+        },
+        "strategy": "CANARY",
+        "bakeTimeInMinutes": 3,
+        "canaryConfiguration": {
+          "canaryPercent": 5,
+          "canaryBakeTimeInMinutes": 3
+        }
+      },
+      "deploymentCircuitBreaker": {
+        "status": "MONITORING_COMPLETE",
+        "failureCount": 0,
+        "threshold": 3
+      },
+      "alarms": {
+        "status": "MONITORING_COMPLETE",
+        "alarmNames": [
+          "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+        ],
+        "triggeredAlarmNames": []
+      }
+    },
+    "snapshot": [
+      {
+        "arn": "arn:aws:rds:us-east-1:784514617543:snapshot:packproof-zero-touch-live-20261108t2313",
+        "status": "available",
+        "encrypted": true,
+        "createdAt": "2026-11-08T23:14:13.783000+00:00"
+      }
+    ]
+  },
+  "preexistingWorkerLogs": {
+    "logs": [
+      {
+        "stream": "worker/worker/d3afc692e34545b682d3346a6628af70",
+        "events": 100,
+        "failedWorkers": {
+          "record-connections": 100
+        }
+      },
+      {
+        "stream": "worker/worker/5c3f48ca7a0148d0994b668d780ecb5e",
+        "events": 100,
+        "failedWorkers": {
+          "record-connections": 100
+        }
+      },
+      {
+        "stream": "worker/worker/fcfb8b9bde3e4177af0e0559033ffd1d",
+        "events": 35,
+        "failedWorkers": {
+          "record-connections": 34
+        }
+      }
+    ]
+  },
+  "operatorFiles": [
+    {
+      "path": "infra/backend-release/zero-touch-production-operator.mjs",
+      "sha256": "d3bc3691ee31ba5293abd9920abf3b9ad65e8dca2f8cc92dd6c565a1358b32f0"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-production-operator.test.mjs",
+      "sha256": "ae382851794add99b40c8a13bc7c3404cd5d95abd11c7aa31a8893fefe61e546"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-live-startup-probe.mjs",
+      "sha256": "8dcd7b8e0cd381e182f092438df9765d3f28d346eb73d7d39a333a61026697c1"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-live-execution-policy.json",
+      "sha256": "433a0ffa0b3b061dc5f279851ab232e4b598c93bcb44ddb8882f3c3ce0e36b41"
+    }
+  ],
+  "completedAt": "2026-11-08T23:40:08.061000+00:00",
+  "finalControlPlane": {
+    "deployment": {
+      "serviceDeploymentArn": "arn:aws:ecs:us-east-1:784514617543:service-deployment/packproof-v2-staging-cluster/packproof-v2-staging-api/ccT37fM3DBJDxLsxP3_82",
+      "serviceArn": "arn:aws:ecs:us-east-1:784514617543:service/packproof-v2-staging-cluster/packproof-v2-staging-api",
+      "clusterArn": "arn:aws:ecs:us-east-1:784514617543:cluster/packproof-v2-staging-cluster",
+      "createdAt": "2026-11-08T23:31:30.351000+00:00",
+      "startedAt": "2026-11-08T23:31:30.420000+00:00",
+      "finishedAt": "2026-11-08T23:40:08.061000+00:00",
+      "updatedAt": "2026-11-08T23:40:08.061000+00:00",
+      "sourceServiceRevisions": [
+        {
+          "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/0488159373261245795",
+          "requestedTaskCount": 0,
+          "runningTaskCount": 0,
+          "pendingTaskCount": 0,
+          "requestedTestTrafficWeight": 0,
+          "requestedProductionTrafficWeight": 0
+        }
+      ],
+      "targetServiceRevision": {
+        "arn": "arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/2464531099448594575",
+        "requestedTaskCount": 1,
+        "runningTaskCount": 1,
+        "pendingTaskCount": 0,
+        "requestedTestTrafficWeight": 100,
+        "requestedProductionTrafficWeight": 100
+      },
+      "status": "SUCCESSFUL",
+      "deploymentConfiguration": {
+        "deploymentCircuitBreaker": {
+          "enable": true,
+          "rollback": true,
+          "resetOnHealthyTask": true,
+          "thresholdConfiguration": {
+            "type": "BOUNDED_PERCENT",
+            "value": 50
+          }
+        },
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100,
+        "alarms": {
+          "alarmNames": [
+            "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+          ],
+          "rollback": true,
+          "enable": true
+        },
+        "strategy": "CANARY",
+        "bakeTimeInMinutes": 3,
+        "canaryConfiguration": {
+          "canaryPercent": 5,
+          "canaryBakeTimeInMinutes": 3
+        }
+      },
+      "deploymentCircuitBreaker": {
+        "status": "MONITORING_COMPLETE",
+        "failureCount": 0,
+        "threshold": 3
+      },
+      "alarms": {
+        "status": "MONITORING_COMPLETE",
+        "alarmNames": [
+          "packproof-v2-staging-cluster/packproof-v2-staging-api/RollbackAlarm"
+        ],
+        "triggeredAlarmNames": []
+      }
+    },
+    "services": [
+      {
+        "name": "packproof-v2-staging-api",
+        "desired": 1,
+        "running": 1,
+        "pending": 0,
+        "deployments": [
+          {
+            "id": "ecs-svc/2464531099448594575",
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:55",
+            "running": 1,
+            "rolloutState": "IN_PROGRESS",
+            "failedTasks": 0
+          },
+          {
+            "id": "ecs-svc/0488159373261245795",
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:54",
+            "running": 0,
+            "rolloutState": "COMPLETED",
+            "failedTasks": 0
+          }
+        ]
+      },
+      {
+        "name": "packproof-records-worker",
+        "desired": 1,
+        "running": 1,
+        "pending": 0,
+        "deployments": [
+          {
+            "id": "ecs-svc/9912488269625651907",
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:4",
+            "running": 1,
+            "rolloutState": "COMPLETED",
+            "failedTasks": 0
+          }
+        ]
+      }
+    ]
+  },
+  "canaryPassed": true
+}

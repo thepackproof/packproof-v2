@@ -2,9 +2,19 @@
   "schema": "packproof.zero-touch-evidence/v1",
   "baselineCommit": "575b42f1d297736a89ee6d5167d7e25b6b0e4ad2",
   "sourceBranch": "feature/zero-touch-warehouse",
-  "checkedAt": "2026-11-08T03:48:32.405455+00:00",
+  "checkedAt": "2026-11-08T23:40:08.061000+00:00",
   "deployment": {
-    "backend": null,
+    "backend": {
+      "status": "DEPLOYED",
+      "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+      "version": "zero-touch-api-2026.11.08-3bff0173",
+      "receipt": "LIVE_DEPLOYMENT.json",
+      "customerSourcesActivated": false,
+      "knownPreexistingIssue": "record-connections scheduled job error",
+      "completedAt": "2026-11-08T23:40:08.061000+00:00",
+      "canaryPassed": true
+    },
     "portal": null,
     "windowsSigned": null,
     "cohort": null,
@@ -16,12 +26,12 @@
     "D2": "synthetic_local_and_hosted_fixtures_verified_external_acceptance_pending",
     "D3": "blocked_signed_windows11",
     "D4": "blocked_named_source_customer_novice",
-    "D5": "blocked_signed_windows11_named_source_full_baseline_roles_previous_image_current_target_canary",
+    "D5": "customer_qualification_blocked_D0_D4_backend_migration_roles_startup_http_canary_completed",
     "G0": "prior_internal_hosted_windows_server_only",
     "G1": "blocked_approved_hosted_native_path",
     "G2": "blocked_signed_windows11_lifecycle",
     "G3": "blocked_named_source_customer_novice",
-    "G4": "blocked_release_canary"
+    "G4": "customer_client_rollout_blocked_native_signed_install_import_acceptance"
   },
   "tests": [
     {
@@ -240,18 +250,26 @@
       "passed": 130,
       "failed": 0,
       "skipped": 0
+    },
+    {
+      "name": "production_release_scripts",
+      "command": "node --test infra/backend-service-state.test.mjs infra/backend-release/*.test.mjs",
+      "result": "passed",
+      "passed": 150,
+      "failed": 0,
+      "hostedOperatorCommit": "bb859ccbb9dfb5ee2634b78936d7dbce2d8e479d",
+      "hostedWorkflowsPassed": 4,
+      "startupProbe": "Actual candidate with full production API configuration; meta/health/ready200, auth401, invalid Connect enrollment400, exact CORS. See LIVE_DEPLOYMENT.json."
     }
   ],
   "customerReconciliation": null,
   "firstRunUsability": null,
   "signedArtifact": null,
   "apiImage": {
-    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
     "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
-    "buildId": "packproof-v2-staging-api:0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
-    "scanStatus": "COMPLETE",
-    "scanFindingCount": 0,
-    "deployed": false
+    "scanReceipt": "RUNTIME_QUALIFICATION.json",
+    "liveReceipt": "LIVE_DEPLOYMENT.json"
   },
   "assurance": "Organization-submitted unsigned operational additions; prior frozen manifests and original signing scopes unchanged.",
   "securityReview": {
@@ -368,14 +386,54 @@
   },
   "liveInspection": {
     "apiMetaUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws/meta",
+    "service": "packproof-api",
     "environment": "production",
-    "commit": "e346452ade2744820fb2f429d7aeb94fef376419",
-    "version": "records-api-2026.11.05-e346452a",
-    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0",
+    "commit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "version": "zero-touch-api-2026.11.08-3bff0173",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
     "siteUrl": "https://thepackproof.com",
     "siteVersion": 79,
-    "changed": false,
-    "awsControlPlane": "Verification request cancelled; no mutation result"
+    "backendChanged": true,
+    "websiteChanged": false,
+    "publicChecks": [
+      {
+        "path": "/meta",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/health",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/ready",
+        "method": "GET",
+        "status": 200,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/me/capabilities",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/me/records/agent-installations",
+        "method": "GET",
+        "status": 401,
+        "cors": "https://thepackproof.com"
+      },
+      {
+        "path": "/connect/enrollments",
+        "method": "POST",
+        "status": 400,
+        "cors": "https://thepackproof.com"
+      }
+    ],
+    "receipt": "LIVE_DEPLOYMENT.json"
   },
   "hostedChecks": {
     "previousHead": "6f833e35a06d552bff09450fafd9e796210761c0",
@@ -655,5 +713,22 @@
     "connect-windows": "c525f27f474b8602734cb9f620308cc89e85f0f4"
   },
   "runtimeQualificationReceipt": "RUNTIME_QUALIFICATION.json",
-  "latestContinuationPullRequest": "https://github.com/thepackproof/packproof-v2/pull/152"
+  "latestContinuationPullRequest": "https://github.com/thepackproof/packproof-v2/pull/153",
+  "previousPreparedApiImage": {
+    "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+    "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+    "receipt": "RELEASE_PREPARATION.json"
+  },
+  "priorLiveInspection": {
+    "apiMetaUrl": "https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws/meta",
+    "environment": "production",
+    "commit": "e346452ade2744820fb2f429d7aeb94fef376419",
+    "version": "records-api-2026.11.05-e346452a",
+    "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0",
+    "siteUrl": "https://thepackproof.com",
+    "siteVersion": 79,
+    "changed": false,
+    "awsControlPlane": "Verification request cancelled; no mutation result"
+  },
+  "liveDeploymentReceipt": "LIVE_DEPLOYMENT.json"
 }
