@@ -43,7 +43,7 @@ async function dataSnapshot(db,shape){
 
 // Compare all existing application rights outside the independently verified
 // records policy, including effective PUBLIC/inherited and column permissions.
-export async function applicationBaseline(db,managed){
+export async function applicationBaseline(db,managed,functionOids){
  const roles=[RUNTIME_PINS.apiRole,RUNTIME_PINS.workerRole];
  const tables=(await db.query(`SELECT r.role,c.relname,p.privilege,
  has_table_privilege(r.role,c.oid,p.privilege) AS allowed,
@@ -70,8 +70,8 @@ export async function applicationBaseline(db,managed){
  has_function_privilege(r.role,p.oid,'EXECUTE') AS allowed,
  has_function_privilege(r.role,p.oid,'EXECUTE WITH GRANT OPTION') AS grantable
  FROM pg_proc p CROSS JOIN unnest($1::text[]) r(role)
- WHERE p.pronamespace='public'::regnamespace AND p.proname<>'lock_operational_snapshot_authority'
- ORDER BY r.role,p.oid`,[roles])).rows;
+ WHERE p.pronamespace='public'::regnamespace AND p.proname<>'lock_operational_snapshot_authority' AND p.oid=ANY($2::oid[])
+ ORDER BY r.role,p.oid`,[roles,functionOids])).rows;
  if([...tables,...columns,...sequences,...functions].some(x=>x.grantable))fail('RUNTIME_REHEARSAL_DELEGABLE_BASELINE_UNSAFE');
  const controls=(await db.query(`SELECT r.rolname,r.rolcanlogin,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolinherit,r.rolreplication,r.rolbypassrls,
  has_schema_privilege(r.rolname,'public','CREATE') AS schema_create,
@@ -125,7 +125,8 @@ export async function runRuntimeRehearsal(e=process.env){
    const actual=await identity(tx,'packproof',review.target.database);
    const previous=(await tx.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
    if(previous.length!==106||hash(previous)!==RUNTIME_PINS.predecessorInventory)fail('RUNTIME_REHEARSAL_DEPLOYED_LEDGER_REQUIRED');
-   const shape=await dataShape(tx),before=await dataSnapshot(tx,shape),baseline=await applicationBaseline(tx,managed);
+   const functionOids=(await tx.query("SELECT oid FROM pg_proc WHERE pronamespace='public'::regnamespace ORDER BY oid")).rows.map(x=>x.oid);
+   const shape=await dataShape(tx),before=await dataSnapshot(tx,shape),baseline=await applicationBaseline(tx,managed,functionOids);
    const m2=await verifyM2RuntimePrivileges(tx,{apiRole:RUNTIME_PINS.apiRole,workerRole:RUNTIME_PINS.workerRole});
    await migrate(tx,undefined,{expectedRole:'packproof',adoptLegacyChecksums:false});
    // Remove only inherited default grants on newly introduced tables. Existing
@@ -138,10 +139,14 @@ export async function runRuntimeRehearsal(e=process.env){
    await assertSchemaCurrent(tx);
    const applied=(await tx.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
    inspectSourceAssociationInventory(inventory,applied,{reviewedSourceCommit:RUNTIME_PINS.source,reviewedInventorySha256:RUNTIME_PINS.inventory});
-   const after=await dataSnapshot(tx,shape),baselineAfter=await applicationBaseline(tx,managed);
+   const after=await dataSnapshot(tx,shape),baselineAfter=await applicationBaseline(tx,managed,functionOids);
+   const newFunctions=(await tx.query("SELECT proname,prosecdef,prorettype='trigger'::regtype AS trigger_only FROM pg_proc WHERE pronamespace='public'::regnamespace AND NOT oid=ANY($1::oid[]) ORDER BY proname",[functionOids])).rows;
+   if(JSON.stringify(newFunctions.map(x=>x.proname))!==JSON.stringify(['preserve_partner_import_agent_revision','preserve_partner_source_control','preserve_source_pending_origin'])||newFunctions.some(x=>x.prosecdef||!x.trigger_only))fail('RUNTIME_REHEARSAL_NEW_FUNCTION_AUTHORITY_UNSAFE');
    const m2After=await verifyM2RuntimePrivileges(tx,{apiRole:RUNTIME_PINS.apiRole,workerRole:RUNTIME_PINS.workerRole});
-   if(hash(before)!==hash(after)||hash(baseline)!==hash(baselineAfter)||hash(m2)!==hash(m2After))fail('RUNTIME_REHEARSAL_PRESERVATION_FAILED');
-   return {actual,previousMigrationCount:previous.length,migrationCount:applied.length,before,after,baseline,recordsPolicySha256:plan.policySha256,recordsStatementsSha256:plan.statementsSha256,m2PolicySha256:m2.policySha256,legacyNewTableGrantsRemoved:inherited.length};
+   if(hash(before)!==hash(after))fail('RUNTIME_REHEARSAL_DATA_PRESERVATION_FAILED');
+   if(hash(baseline)!==hash(baselineAfter))fail('RUNTIME_REHEARSAL_BASELINE_PRESERVATION_FAILED');
+   if(hash(m2)!==hash(m2After))fail('RUNTIME_REHEARSAL_M2_PRESERVATION_FAILED');
+   return {actual,previousMigrationCount:previous.length,migrationCount:applied.length,before,after,baseline,newFunctions,recordsPolicySha256:plan.policySha256,recordsStatementsSha256:plan.statementsSha256,m2PolicySha256:m2.policySha256,legacyNewTableGrantsRemoved:inherited.length};
   });
   phase='actual_runtime_logins';const runtimeReceipts=[];
   for(const [kind,role,password] of [['api',RUNTIME_PINS.apiRole,e.REHEARSAL_API_PASSWORD],['worker',RUNTIME_PINS.workerRole,e.REHEARSAL_WORKER_PASSWORD]]){

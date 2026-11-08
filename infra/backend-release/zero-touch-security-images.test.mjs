@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {zeroTouchSecurityBuildRequest,SECURITY_BASES} from './zero-touch-security-images.mjs';
 import {ZERO_TOUCH_IMAGE_SOURCE,ZERO_TOUCH_ARCHIVE_SHA256} from './zero-touch-image-build.mjs';
 const input={sourceSha:ZERO_TOUCH_IMAGE_SOURCE,zipSha256:ZERO_TOUCH_ARCHIVE_SHA256};
@@ -19,4 +20,9 @@ test('both security images pin their parent and preserve application/migration/p
 test('unknown image or source cannot prepare a security build',()=>{
  assert.throws(()=>zeroTouchSecurityBuildRequest('latest',input),/SECURITY_PROFILE/);
  assert.throws(()=>zeroTouchSecurityBuildRequest('candidate',{...input,sourceSha:'a'.repeat(40)}),/EXACT_REVIEWED_ARCHIVE/);
+});
+test('future backend builds require the fixed OS package in both Docker stages',async()=>{
+ const dockerfile=await readFile(new URL('../../backend/Dockerfile',import.meta.url),'utf8');
+ assert.equal(dockerfile.match(/RUN apk add --no-cache --upgrade 'zlib>=1\.4-r0'/g)?.length,2);
+ assert.ok(!dockerfile.includes('zlib>=1.3.2-r1'));
 });

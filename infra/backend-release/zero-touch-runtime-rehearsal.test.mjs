@@ -33,3 +33,16 @@ test('temporary bootstrap has no public route, original DB ingress or unrelated 
  assert.ok(secrets.slice(1).every(x=>x.includes('packproof/production/database/records-')));
  assert.ok(!JSON.stringify(t).includes('rds!db-8f5824eb'));
 });
+test('startup probe has only public-key and pinned system-object reads',async()=>{
+ const t=JSON.parse(await readFile(new URL('../partner-foundation/zero-touch-release-bootstrap.json',import.meta.url),'utf8'));
+ const role=t.Resources.ProbeTaskRole.Properties;
+ const statements=role.Policies.flatMap(x=>x.PolicyDocument.Statement);
+ assert.deepEqual(statements.map(x=>x.Action).sort(),['kms:GetPublicKey','s3:GetObjectVersion']);
+ const storage=statements.find(x=>x.Action==='s3:GetObjectVersion');
+ assert.ok(storage.Resource.endsWith('/proofs/system/readiness/proof-navigation-2026-09-08.txt'));
+ assert.equal(storage.Condition.StringEquals['s3:VersionId'],'DBzaGdqzLTbDb_wfLgScCLbp1uhR9Y7v');
+ const trust=role.AssumeRolePolicyDocument.Statement[0];
+ assert.equal(trust.Principal.Service,'ecs-tasks.amazonaws.com');
+ assert.equal(trust.Condition.StringEquals['aws:SourceAccount'],'784514617543');
+ assert.equal(t.Resources.ExecutionRole.Condition,'OwnerSecretReady');
+});
