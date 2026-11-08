@@ -44,7 +44,7 @@ jobs:
       - name: Records API and worker acceptance on PostgreSQL
         env:
           PACKPROOF_TEST_DATABASE_URL: postgres://packproof_test:synthetic_ci_only@localhost:5432/packproof_test
-        run: npm test -- --run tests/partner-imports-exports.test.ts tests/canonical-human-exports.test.ts tests/source-artifacts.test.ts tests/source-artifacts-http.test.ts tests/source-artifact-storage.test.ts tests/source-artifact-requirements.test.ts tests/record-snapshot-shares.test.ts tests/record-deletion-review.test.ts tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts --pool=threads --maxWorkers=2 --no-file-parallelism --reporter=default --reporter=junit --outputFile=records-postgres.xml
+        run: npm test -- --run tests/source-associations.test.ts tests/record-ingestions.test.ts tests/scheduled-csv-source.test.ts tests/source-association-migration-inventory.test.ts tests/partner-imports-exports.test.ts tests/canonical-human-exports.test.ts tests/source-artifacts.test.ts tests/source-artifacts-http.test.ts tests/source-artifact-storage.test.ts tests/source-artifact-requirements.test.ts tests/record-snapshot-shares.test.ts tests/record-deletion-review.test.ts tests/records-review-continuation.test.ts tests/records-runtime-privileges.test.ts --pool=threads --maxWorkers=2 --no-file-parallelism --reporter=default --reporter=junit --outputFile=records-postgres.xml
       - name: Reference adapter contract
         run: node --test ../examples/merchant-receiver/partner-client.test.mjs
       - name: Published contract and migration packaging compatibility
