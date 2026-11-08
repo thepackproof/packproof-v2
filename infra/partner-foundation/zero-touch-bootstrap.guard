@@ -1,0 +1,58 @@
+let interfaces = Resources.*[ Type == 'AWS::EC2::VPCEndpoint' Properties.VpcEndpointType == 'Interface' ]
+let ingress = Resources.*[ Type == 'AWS::EC2::SecurityGroupIngress' ]
+
+rule only_private_bootstrap_resources {
+    Resources.*.Type IN ['AWS::EC2::SecurityGroup', 'AWS::EC2::SecurityGroupIngress', 'AWS::EC2::VPCEndpoint']
+    Parameters.VpcId.AllowedValues[0] == 'vpc-0c4f12c0ba9393ae3'
+    Parameters.VpcId.AllowedValues[1] !exists
+    Parameters.SubnetId.AllowedValues[0] == 'subnet-00ce0618188c68de8'
+    Parameters.S3PrefixListId.AllowedValues[0] == 'pl-63a5400a'
+    Parameters.S3PrefixListId.AllowedValues[1] !exists
+    Resources.EndpointSecurityGroup.Properties.SecurityGroupIngress[*] {
+        IpProtocol == 'tcp'
+        FromPort == 443
+        ToPort == 443
+        SourceSecurityGroupId exists
+        CidrIp !exists
+        CidrIpv6 !exists
+    }
+    %interfaces.Properties {
+        PrivateDnsEnabled == true
+        SubnetIds[*].Ref == 'SubnetId'
+        SecurityGroupIds[*].Ref == 'EndpointSecurityGroup'
+    }
+    %ingress.Properties {
+        IpProtocol == 'tcp'
+        SourceSecurityGroupId.Ref == 'RehearsalTaskSecurityGroup'
+        CidrIp !exists
+        CidrIpv6 !exists
+    }
+    Resources.RehearsalTaskSecurityGroup.Properties {
+        SecurityGroupIngress empty
+        SecurityGroupEgress[*].IpProtocol == 'tcp'
+        SecurityGroupEgress[*].CidrIp !exists
+        SecurityGroupEgress[*].CidrIpv6 !exists
+        SecurityGroupEgress[0].ToPort == 443
+        SecurityGroupEgress[0].DestinationSecurityGroupId.Ref == 'EndpointSecurityGroup'
+        SecurityGroupEgress[1].ToPort == 5432
+        SecurityGroupEgress[1].DestinationSecurityGroupId.Ref == 'RestoredDatabaseSecurityGroup'
+        SecurityGroupEgress[2].ToPort == 443
+        SecurityGroupEgress[2].DestinationPrefixListId.Ref == 'S3PrefixListId'
+        SecurityGroupEgress[3] !exists
+    }
+    Resources.RestoredDatabaseIngress.Properties {
+        FromPort == 5432
+        ToPort == 5432
+        GroupId.Ref == 'RestoredDatabaseSecurityGroup'
+    }
+    Resources.RehearsalBootstrapIngress.Properties {
+        FromPort == 443
+        ToPort == 443
+        GroupId.Ref == 'EndpointSecurityGroup'
+    }
+    Resources.SecretsEndpoint.Properties.PolicyDocument.Statement[0].Action == 'secretsmanager:GetSecretValue'
+    Resources.S3Endpoint.Properties.PolicyDocument.Statement[0] {
+        Action == 's3:GetObject'
+        Resource == 'arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*'
+    }
+}

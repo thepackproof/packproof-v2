@@ -1,0 +1,17 @@
+{
+  "schema": "packproof.zero-touch-restored-review/v1",
+  "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+  "imageDigest": "sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+  "syntheticOnly": true,
+  "originalInventorySha256": "4c8fdf8c9a1c08b22c1b13ddd54dc34c7e51cdd3a1dc238edb5485a7a970556e",
+  "inventorySha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+  "snapshotArn": "arn:aws:rds:us-east-1:784514617543:snapshot:packproof-zero-touch-3bff0173",
+  "instanceArn": "arn:aws:rds:us-east-1:784514617543:db:packproof-zero-touch-3bff0173",
+  "target": {
+    "host": "packproof-zero-touch-3bff0173.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "database": "m1_service_20261021"
+  },
+  "expiresAt": "2026-11-08T04:26:36.581Z",
+  "originalDataSha256": "eb7f29ab4a75953c5e514af41c86b87ed297724a768d46a4083f3df3f2ea7000",
+  "originalDataReceiptSha256": "0925d7fd45eece46638b077cee3e21a467dacf0723cb9a8fbce8bb412c7ac184"
+}

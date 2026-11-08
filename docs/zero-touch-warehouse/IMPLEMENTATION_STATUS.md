@@ -18,7 +18,7 @@ This is the primary ledger for the November 7 development plan. Source implement
 
 `109_source_associations.sql` adds `record_source_crosswalks`, `record_source_pending`, append-only `record_source_resolution_attempts`, and a frozen source-control revision on partner import jobs. Original bytes/identity and submitted associations are immutable. Replay may record a newer explicitly approved control revision without changing the original revision or payload.
 
-Current runtime privilege planning includes 109. Worker permissions permit only the receipt admissions and append-only entity/issue writes required by stored source assembly; approval, crosswalk, replay, human review, waivers and installation configuration remain API/human responsibilities. API roles cannot write event-processing results or preserved artifact results. Historical 096–107 and 108 operators keep their exact frozen source envelopes; they must not be used to install 109. A new restored-database/role/image qualification is required before deploying this schema. The `zero-touch-v1` exact Git archive and new read-only109 inventory manifest/preparation are available; the frozen `connect-v1` profile rejects109 source instead of relaxing its107-file guard.
+Current runtime privilege planning includes 109. Worker permissions permit only the receipt admissions and append-only entity/issue writes required by stored source assembly; approval, crosswalk, replay, human review, waivers and installation configuration remain API/human responsibilities. API roles cannot write event-processing results or preserved artifact results. Historical 096–107 and 108 operators keep their exact frozen source envelopes; they must not be used to install 109. A restored synthetic migration/data/catalog and records-delta role rehearsal has now passed; full application baseline privileges, previous-image compatibility and current production-target qualification remain required. The `zero-touch-v1` exact Git archive and new read-only109 inventory manifest/preparation are available; the frozen `connect-v1` profile rejects109 source instead of relaxing its107-file guard.
 
 ## Work package and gate disposition
 
@@ -32,7 +32,7 @@ Current runtime privilege planning includes 109. Worker permissions permit only 
 | WP05 | Safe reference preflight reuses existing exact-original artifact path | Approved source media contract and actual original transfer; no camera claim |
 | WP06 | Bounded scan, quarantine, retries, separate health/accounting and repair history | Windows interruption/full-disk/reboot and hosted recovery/restore drill |
 | WP07 | Existing wizard and portal extended; UI regression checks | Browser/assistive-technology checks and five observed first-time users |
-| WP08 | Additive migration and narrow runtime policy; contract/build/security checks | Restored PostgreSQL, actual distinct API/worker logins, current images, signed Windows11 lifecycle and protected branch/review enforcement |
+| WP08 | Additive migration and narrow runtime policy; contract/build/security checks | Full application baseline API/worker privileges, previous-image rollback, current-target canary, signed Windows11 lifecycle and protected branch/review enforcement |
 | WP09 | Scorecard/rollout criteria retained from plan | Authorized warehouse dataset, live observation, manual baseline comparison and customer signoff |
 
 | Gate | State and missing evidence |
@@ -51,7 +51,7 @@ Current runtime privilege planning includes 109. Worker permissions permit only 
 
 ## Deployment and ownership
 
-No production schema, roles, source cohort, API image, website version or signed client is claimed deployed by this change. The AWS account verification was cancelled without a new result. The GitHub connector can publish source/PRs and inspect CI but cannot dispatch the protected signing workflow. A fresh read of the public API metadata confirmed production source `e346452ade2744820fb2f429d7aeb94fef376419` and image `sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0`; the live website remains version 79. These reads confirm the candidate is not deployed; they do not establish current database/control-plane eligibility.
+No production schema, roles, source cohort, API image, website version or signed client is claimed deployed by this change. The candidate image was built and scanned separately from deployment. The earlier cancelled account check was superseded by a successful account-bound inspection during continuation. The GitHub connector can publish source/PRs and inspect CI but cannot dispatch the protected signing workflow. A fresh read of the public API metadata confirmed production source `e346452ade2744820fb2f429d7aeb94fef376419` and image `sha256:d1775ac9ff380b7364814ed1ad7504c8eef6e82484f686d9e381dcf16c816ff0`; the live website remains version 79. These reads confirm the candidate is not deployed; they do not establish current database/control-plane eligibility.
 
 Required owners: source/customer owner supplies exact exporter/version, authorized originals, locations/cadence/retention and pilot contact; release administrator supplies approved restored/nonproduction target and protected signing execution; Windows tester supplies an actual Windows11 x64 lifecycle run; operational testers supply five observed onboarding attempts and a representative live window. These are missing evidence/access, not a request to repeat implementation authorization.
 
@@ -70,3 +70,11 @@ Mobile secure-token-storage remediation remains a separate prerequisite before b
 ## Exact verification receipts
 
 See `EVIDENCE.json` for commands, counts, source-tree identity, source publication and CI links. A built portal is not a deployed API; an unsigned CI installer is not a signed release. The ledger records exact tested source and artifact receipts; PR checks identify the final publication head.
+
+## Cloud release preparation continuation
+
+Runtime source `3bff0173c9d91fc11ae614d72872b877628c327d` produced immutable candidate image `sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96`. The exact Git archive was checked again inside CodeBuild before extraction; the existing source bucket is unversioned and no S3 version receipt is invented. ECR scanning completed with zero returned findings.
+
+A fresh encrypted/private RDS restore matched the source digest for 1,927 synthetic rows across 203 tables. The shipped migrator upgraded the copy through 108 and 109 in one transaction. Migration 109 preserved 1,841 existing non-ledger rows across 247 preexisting tables, old catalog/ACL/function/membership hashes and closed recovery controls. Separate authenticated API/worker logins passed the records privilege preflight, four allowed SQL checks and seven permission-denial checks. These are records-delta checks; the complete application baseline and previous-image rollback are not qualified. No application, customer cohort or human attestation was activated.
+
+The original M1 database was re-read afterward: its data and 91 historical migration receipts matched, both runtime logins remained disabled and its writer fence remained closed. The temporary RDS copy, snapshot, network and execution role were removed and all five temporary task definitions retired; provider reads confirmed cleanup. Exact receipts are recorded in RELEASE_PREPARATION.json. The image, source archive and CloudWatch receipts are retained. GitHub signing remains blocked by the signed-out browser session; no signed artifact or Windows11 qualification is claimed.

@@ -1,0 +1,561 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Temporary private bootstrap for synthetic M1 read-only/rehearsal tasks. No internet route, public ingress, database or application activation.",
+  "Parameters": {
+    "VpcId": {
+      "Type": "String",
+      "Description": "Existing synthetic-only M1 VPC",
+      "AllowedValues": [
+        "vpc-0c4f12c0ba9393ae3"
+      ]
+    },
+    "SubnetId": {
+      "Type": "String",
+      "Description": "One existing private M1 subnet for bounded rehearsal",
+      "AllowedValues": [
+        "subnet-00ce0618188c68de8"
+      ]
+    },
+    "RouteTableId": {
+      "Type": "String",
+      "Description": "Existing local-only M1 route table",
+      "AllowedValues": [
+        "rtb-05ee97c6869a5baab"
+      ]
+    },
+    "RuntimeSecurityGroupId": {
+      "Type": "String",
+      "Description": "Existing private runtime security group",
+      "AllowedValues": [
+        "sg-0f9eb34ec26318728"
+      ]
+    },
+    "RunnerSecurityGroupId": {
+      "Type": "String",
+      "Description": "Existing isolated runner security group",
+      "AllowedValues": [
+        "sg-075e612f687f88c7e"
+      ]
+    },
+    "S3PrefixListId": {
+      "Type": "String",
+      "Description": "Inspected regional S3 gateway prefix, for ECR image layers only",
+      "AllowedValues": [
+        "pl-63a5400a"
+      ]
+    }
+  },
+  "Rules": {
+    "ExactAccountRegion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::AccountId"
+              },
+              "784514617543"
+            ]
+          },
+          "AssertDescription": "Only the inspected PackProof AWS account"
+        },
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::Region"
+              },
+              "us-east-1"
+            ]
+          },
+          "AssertDescription": "Only the inspected region"
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "EndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "TLS only from the two existing isolated M1 task groups",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "RuntimeSecurityGroupId"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "RunnerSecurityGroupId"
+            }
+          }
+        ],
+        "SecurityGroupEgress": [],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "EcrApiEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.api"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "ecr:GetAuthorizationToken",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-m1-20261021-runtime",
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "EcrDkrEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.dkr"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-m1-20261021-runtime",
+                "arn:aws:ecr:us-east-1:784514617543:repository/packproof-v2-staging-api"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "SecretsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "secretsmanager:GetSecretValue",
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/ApiDatabase-oV03Dp",
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/WorkerDatabase-eQcMIm",
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/Configuration-iSvDYo",
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:packproof-m1-20261021-runtime/Tls-7INDCk",
+                "arn:aws:secretsmanager:us-east-1:784514617543:secret:rds!db-2e730349-8986-4ded-a190-20a2e369097b-6Ms46r"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "LogsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+        },
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "SubnetId"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:us-east-1:784514617543:log-group:/packproof/packproof-m1-20261021-runtime:log-stream:*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:PrincipalAccount": "784514617543"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": [
+          {
+            "Ref": "RouteTableId"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "RestoredDatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "Temporary restored database; only the rehearsal task can connect",
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "RehearsalTaskSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "GroupDescription": "Only private bootstrap TLS and the separate restored database",
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "EndpointSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": {
+              "Ref": "RestoredDatabaseSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "S3PrefixListId"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "PackProof"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "zero-touch-synthetic-rehearsal"
+          },
+          {
+            "Key": "data-classification",
+            "Value": "synthetic-only"
+          }
+        ]
+      }
+    },
+    "RestoredDatabaseIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RestoredDatabaseSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "RehearsalTaskSecurityGroup"
+        }
+      }
+    },
+    "RehearsalBootstrapIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "RehearsalTaskSecurityGroup"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "EndpointSecurityGroup": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EndpointSecurityGroup"
+      }
+    },
+    "EcrApiEndpoint": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EcrApiEndpoint"
+      }
+    },
+    "EcrDkrEndpoint": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "EcrDkrEndpoint"
+      }
+    },
+    "SecretsEndpoint": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "SecretsEndpoint"
+      }
+    },
+    "LogsEndpoint": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "LogsEndpoint"
+      }
+    },
+    "S3Endpoint": {
+      "Description": "Private synthetic rehearsal resource; remove after bounded tests",
+      "Value": {
+        "Ref": "S3Endpoint"
+      }
+    },
+    "RestoredDatabaseSecurityGroup": {
+      "Description": "Temporary private rehearsal isolation; no preserved-instance access",
+      "Value": {
+        "Ref": "RestoredDatabaseSecurityGroup"
+      }
+    },
+    "RehearsalTaskSecurityGroup": {
+      "Description": "Temporary private rehearsal isolation; no preserved-instance access",
+      "Value": {
+        "Ref": "RehearsalTaskSecurityGroup"
+      }
+    }
+  }
+}

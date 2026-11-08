@@ -1,0 +1,291 @@
+{
+  "image": {
+    "imageDetails": [
+      {
+        "registryId": "784514617543",
+        "repositoryName": "packproof-v2-staging-api",
+        "imageDigest": "sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+        "imageTags": [
+          "zero-touch-v1-3bff0173c9d91fc11ae614d72872b877628c327d"
+        ],
+        "imageSizeInBytes": 146808878,
+        "imagePushedAt": "2026-11-08T02:57:30.889000+00:00",
+        "imageManifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+        "artifactMediaType": "application/vnd.docker.container.image.v1+json",
+        "imageStatus": "ACTIVE"
+      }
+    ]
+  },
+  "build": {
+    "id": "packproof-v2-staging-api:0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
+    "status": "SUCCEEDED",
+    "phase": "COMPLETED",
+    "phases": [
+      {
+        "phaseType": "SUBMITTED",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:17.096000+00:00",
+        "endTime": "2026-11-08T02:56:17.229000+00:00",
+        "durationInSeconds": 0
+      },
+      {
+        "phaseType": "QUEUED",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:17.229000+00:00",
+        "endTime": "2026-11-08T02:56:17.895000+00:00",
+        "durationInSeconds": 0
+      },
+      {
+        "phaseType": "PROVISIONING",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:17.895000+00:00",
+        "endTime": "2026-11-08T02:56:25.624000+00:00",
+        "durationInSeconds": 7,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "DOWNLOAD_SOURCE",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:25.624000+00:00",
+        "endTime": "2026-11-08T02:56:26.741000+00:00",
+        "durationInSeconds": 1,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "INSTALL",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:26.741000+00:00",
+        "endTime": "2026-11-08T02:56:26.806000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "PRE_BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:26.806000+00:00",
+        "endTime": "2026-11-08T02:56:49.707000+00:00",
+        "durationInSeconds": 22,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:56:49.707000+00:00",
+        "endTime": "2026-11-08T02:57:21.916000+00:00",
+        "durationInSeconds": 32,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "POST_BUILD",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:57:21.916000+00:00",
+        "endTime": "2026-11-08T02:57:31.993000+00:00",
+        "durationInSeconds": 10,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "UPLOAD_ARTIFACTS",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:57:31.993000+00:00",
+        "endTime": "2026-11-08T02:57:32.055000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "FINALIZING",
+        "phaseStatus": "SUCCEEDED",
+        "startTime": "2026-11-08T02:57:32.055000+00:00",
+        "endTime": "2026-11-08T02:57:32.339000+00:00",
+        "durationInSeconds": 0,
+        "contexts": [
+          {
+            "statusCode": "",
+            "message": ""
+          }
+        ]
+      },
+      {
+        "phaseType": "COMPLETED",
+        "startTime": "2026-11-08T02:57:32.339000+00:00"
+      }
+    ],
+    "logs": {
+      "groupName": "/aws/codebuild/packproof-v2-staging-api",
+      "streamName": "0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
+      "deepLink": "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws$252Fcodebuild$252Fpackproof-v2-staging-api/log-events/0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
+      "cloudWatchLogsArn": "arn:aws:logs:us-east-1:784514617543:log-group:/aws/codebuild/packproof-v2-staging-api:log-stream:0b4766c3-eb3a-4b1e-9fef-e5a05a013815",
+      "cloudWatchLogs": {
+        "status": "ENABLED",
+        "groupName": "/aws/codebuild/packproof-v2-staging-api"
+      }
+    }
+  },
+  "network": {
+    "stackArn": "arn:aws:cloudformation:us-east-1:784514617543:stack/packproof-zero-touch-bootstrap/1deffea0-db20-11f1-b565-12ffda0fdf99",
+    "groups": {
+      "EndpointSecurityGroup": "sg-0cfa728ea744a853b",
+      "RehearsalTaskSecurityGroup": "sg-0c13e28d437af3ab1",
+      "SecretsEndpoint": "vpce-00953c954907f9e0c",
+      "LogsEndpoint": "vpce-047e63cd8f34a9f43",
+      "S3Endpoint": "vpce-0324d8dd23aefd5a0",
+      "EcrDkrEndpoint": "vpce-04cdf87a012d56600",
+      "RestoredDatabaseSecurityGroup": "sg-0aed3d229be07a313",
+      "EcrApiEndpoint": "vpce-04d2284d92ae39655"
+    },
+    "temporary": true,
+    "privateOnly": true,
+    "regionalS3PrefixList": "pl-63a5400a",
+    "layerBucketReadsOnly": true
+  },
+  "productionDeployed": false,
+  "candidateImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
+  "schema": "packproof.zero-touch-release-preparation/v1",
+  "source": "3bff0173c9d91fc11ae614d72872b877628c327d",
+  "sourceArchive": {
+    "sha256": "656cf424bb93de9dc76d9141c5a4f38107a6ae29849accc0f87519a3cf8b2e83",
+    "bytes": 2308703,
+    "bucket": "packproof-v2-staging-build-784514617543",
+    "key": "security-release/3bff0173c9d91fc11ae614d72872b877628c327d/656cf424bb93de9dc76d9141c5a4f38107a6ae29849accc0f87519a3cf8b2e83/backend.zip",
+    "s3VersionId": null,
+    "buildReFetchedAndCheckedBytes": true,
+    "gitFilesVerified": 869
+  },
+  "scan": {
+    "status": {
+      "status": "COMPLETE",
+      "description": "The scan was completed successfully."
+    },
+    "counts": {},
+    "completedAt": "2026-11-08T02:57:44+00:00",
+    "findings": []
+  },
+  "restoredRehearsal": {
+    "status": "PASSED",
+    "receipt": "RESTORED_REHEARSAL.json",
+    "actualApiWorkerLogins": 2,
+    "allowedSqlChecks": 4,
+    "deniedSqlChecks": 7,
+    "fullApplicationBaselineQualified": false,
+    "previousImageRehearsal": false
+  },
+  "originalPreservation": {
+    "schema": "packproof.zero-touch-original-preservation/v1",
+    "sourceHost": "packproof-m1-20261020-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com",
+    "beforeDataSha256": "eb7f29ab4a75953c5e514af41c86b87ed297724a768d46a4083f3df3f2ea7000",
+    "afterDataSha256": "eb7f29ab4a75953c5e514af41c86b87ed297724a768d46a4083f3df3f2ea7000",
+    "sourceRows": 1927,
+    "sourceTables": 203,
+    "migrationCount": 91,
+    "sourceMigrationInventorySha256": "4c8fdf8c9a1c08b22c1b13ddd54dc34c7e51cdd3a1dc238edb5485a7a970556e",
+    "originalDataUnchanged": true,
+    "runtimeLoginsStillDisabled": true,
+    "writerFenceStillClosed": true,
+    "postCheckTaskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-m1-20261021-runtime/16953dccfbce444cbf5db68ebc9b37ae",
+    "completedAt": "2026-11-08T03:36:49.054Z"
+  },
+  "cleanup": {
+    "temporarySnapshot": "deleted_verified",
+    "temporaryDatabase": "deleted_verified",
+    "temporaryRole": "deleted_verified",
+    "temporaryNetwork": "DELETE_COMPLETE_verified",
+    "remainingPrivateEndpoints": 0,
+    "remainingTemporarySecurityGroups": 0,
+    "temporaryTaskDefinitions": "5_inactive",
+    "activeTasks": 0,
+    "retained": [
+      "immutable_candidate_image",
+      "exact_source_archive",
+      "CloudWatch_receipts"
+    ]
+  },
+  "signing": {
+    "workflow": "https://github.com/thepackproof/packproof-v2/actions/workflows/connect-windows-release.yml",
+    "browserAuthenticated": false,
+    "workflowRunsObserved": 0
+  },
+  "signedWindowsArtifact": null,
+  "customerQualified": false,
+  "tests": {
+    "releaseScriptsPassed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "guardPositivePassed": 1,
+    "guardNegativeCasesRejected": 5,
+    "cfnLintErrors": 0,
+    "cfnLintWarnings": 0
+  },
+  "completedAt": "2026-11-08T03:48:32.305Z",
+  "preparationFiles": [
+    {
+      "path": ".github/workflows/partner-infrastructure.yml",
+      "sha256": "240ccd2a913526bbfdba96a1ec8d6bc4a2d3161116dfba60d421ca739000f19c"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-database-inspect.mjs",
+      "sha256": "1530bdf8a04ddef9739f78ef5c2d7cb221442958f7f553465fa1fc3ae12fa15d"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-image-build.mjs",
+      "sha256": "6c80c91ae3aedc8625aa3d745d453223fcd1d32f2f20fc8de86af6c0d4fe3cde"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-image-build.test.mjs",
+      "sha256": "eece299ea70d89861234e18d3649be4198fa74a3050c54264244cd7090f137cc"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-inspector-execution-role.json",
+      "sha256": "504a106775476bd46b9b12c9f45f0ac644501aadbf5ed40de051ec238c9ba720"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-restored-rehearsal.mjs",
+      "sha256": "3ad5d10ca2707e066ab482ce4dc6c88d1b9d850261aef359a188b288b10772a7"
+    },
+    {
+      "path": "infra/backend-release/zero-touch-restored-rehearsal.test.mjs",
+      "sha256": "4873126b46fa58964db655b8d6e666942595cf8b03ec9a1a7ae7425cf21b641d"
+    },
+    {
+      "path": "infra/partner-foundation/zero-touch-bootstrap.json",
+      "sha256": "6b988038df383648d42a2daf7c6870168bfadb028137ea425deebbc3d1b666c5"
+    },
+    {
+      "path": "infra/partner-foundation/zero-touch-bootstrap.guard",
+      "sha256": "45e47605f9a3c8eff7b2a830f604efd7ffa6a2510f4e96baf24b42e018c248a0"
+    }
+  ]
+}
