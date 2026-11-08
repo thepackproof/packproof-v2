@@ -1,0 +1,12 @@
+{
+  "schema": "packproof.source-association-migration-manifest/v1",
+  "sourceCount": 108,
+  "predecessorInventorySha256": "ac0f0b11921f57e6dffeba0561c3e8e0991e63f9b6eaa1870ce5c7246d5a5921",
+  "inventorySha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+  "additions": [
+    {
+      "id": "109_source_associations",
+      "checksum": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+    }
+  ]
+}
