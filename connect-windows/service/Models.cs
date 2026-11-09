@@ -12,6 +12,13 @@ public static class Json
 }
 public sealed record HostConfiguration(string Environment, string ApiOrigin, string WebOrigin, string OperatorsSid)
 {
+    // Accept existing installer-generated UTF-8 BOMs only at the host config boundary.
+    // Protected state, source JSON and integrity payloads retain the strict Json.Read behavior.
+    public static HostConfiguration Read(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF })) bytes = bytes[3..];
+        return Json.Read<HostConfiguration>(bytes);
+    }
     public string Suffix => Environment switch { "development" => "Development", "staging" => "Staging", "live" => "Production", _ => throw new ConnectException("ENVIRONMENT_INVALID", "This installation has no approved environment.") };
     public string ServiceName => $"PackProofConnect{Suffix}";
     public string PipeName => $"PackProofConnect-{(Environment == "live" ? "production" : Environment)}-v1";

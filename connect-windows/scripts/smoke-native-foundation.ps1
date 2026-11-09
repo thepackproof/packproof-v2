@@ -9,7 +9,7 @@ $serviceName='PackProofConnectDevelopment'
 $data=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PackProof\Connect\development'
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PackProof\Exports\development'
 $operatorSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$evidence=[ordered]@{schemaVersion=1;sourceCommit=(& git -C $root rev-parse HEAD).Trim();scope='Native service foundation on the hosted Windows Server runner; not Windows 11/customer/installer acceptance';osBuild=[Environment]::OSVersion.Version.ToString();tests=@();windows11Acceptance='not_run';installerAcceptance='not_run';remotePipeClient='not_run';customerAcceptance='not_run'}
+$evidence=[ordered]@{schemaVersion=1;sourceCommit=(& git -C $root rev-parse HEAD).Trim();scope='Native service foundation using the installer Windows PowerShell host on the hosted Windows Server runner; not Windows 11/customer/installer UI acceptance';osBuild=[Environment]::OSVersion.Version.ToString();lifecycleHost='Windows PowerShell';tests=@();windows11Acceptance='not_run';installerAcceptance='not_run';remotePipeClient='not_run';customerAcceptance='not_run'}
 $pipeName='PackProofConnect-development-v1'
 $disposableUser=$null
 $operatorTemporarilyChanged=$false
@@ -24,10 +24,13 @@ function Invoke-Bridge([string]$Operation,[object]$Payload=$null) {
  if (-not $reply.ok -or $reply.id -ne $request.id -or $reply.version -ne 1) { throw 'The installed pipe protocol did not return the expected receipt.' }
  return $reply.result
 }
-function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator) {
- $parameters=@{Action=$Action;InstallRoot=$install;AllowUnsupportedDevelopmentHost=$true}
- if (-not $KeepApprovedOperator) { $parameters.OperatorSid=$operatorSid }
- & (Join-Path $install 'resources\installer\lifecycle.ps1') @parameters
+function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator,[string]$OperatorOverride) {
+ # NSIS invokes the inbox Windows PowerShell, not this CI job's PowerShell7 host.
+ $hostPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+ $parameters=@('-NoProfile','-NonInteractive','-ExecutionPolicy','RemoteSigned','-File',(Join-Path $install 'resources\installer\lifecycle.ps1'),'-Action',$Action,'-InstallRoot',$install,'-AllowUnsupportedDevelopmentHost')
+ if (-not $KeepApprovedOperator) { $parameters+=@('-OperatorSid',$(if ($OperatorOverride) { $OperatorOverride } else { $operatorSid })) }
+ & $hostPath @parameters
+ if ($LASTEXITCODE -ne 0) { throw ('The installer Windows PowerShell lifecycle failed: '+$Action) }
 }
 try {
  Add-Type -Path (Join-Path $root 'tests\native-security-probes.cs')
@@ -35,6 +38,9 @@ try {
  New-Item -Path $install -ItemType Directory | Out-Null
  Copy-Item -Path (Join-Path $unpacked '*') -Destination $install -Recurse -Force
  Run-Lifecycle Install
+ $configBytes=[IO.File]::ReadAllBytes((Join-Path $install 'resources\service\service-config.json'))
+ if ($configBytes.Length -ge 3 -and $configBytes[0] -eq 0xEF -and $configBytes[1] -eq 0xBB -and $configBytes[2] -eq 0xBF) { throw 'The installer host wrote a UTF-8 BOM into the native service configuration.' }
+ Record-Pass 'inbox Windows PowerShell installs BOM-free service configuration'
  $service=Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
  if ($service.StartName -ne 'NT AUTHORITY\LocalService' -or $service.State -ne 'Running') { throw 'The installed collector is not running as LocalService.' }
  Record-Pass 'service starts under LocalService independently of Electron'
@@ -82,7 +88,7 @@ try {
  Record-Pass 'unapproved standard-user token denied pipe access and protected state bytes'
  $operatorTemporarilyChanged=$true
  try {
-  & (Join-Path $install 'resources\installer\lifecycle.ps1') -Action Install -InstallRoot $install -OperatorSid $disposableUser.SID.Value -AllowUnsupportedDevelopmentHost
+  Run-Lifecycle Install -OperatorOverride $disposableUser.SID.Value
   $approved=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
   if ($approved.PipeAccess -ne 'allowed_status' -or $approved.ProtectedFileAccess -ne 'denied') { throw 'The explicitly approved standard user did not receive bounded status while protected files remained denied.' }
   Record-Pass 'explicitly approved standard user reads bounded service status without direct protected-file access'

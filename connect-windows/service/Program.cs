@@ -5,7 +5,7 @@ using PackProof.Connect;
 
 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("PackProof Connect requires Windows 11 x64.");
 var path = Path.Combine(AppContext.BaseDirectory, "service-config.json");
-var configuration = Json.Read<HostConfiguration>(File.ReadAllBytes(path)); configuration.Validate();
+var configuration = HostConfiguration.Read(File.ReadAllBytes(path)); configuration.Validate();
 var builder = Host.CreateApplicationBuilder(args); builder.Logging.ClearProviders();
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(40));
 builder.Services.AddWindowsService(options => options.ServiceName = configuration.ServiceName);
