@@ -23,7 +23,8 @@ it('requires mapping confirmation and explicit whole-original upload consent', a
   expect(upload).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /including columns that are not mapped/ }));
   expect(upload).toBeEnabled();
-  expect(screen.getByText('000123')).toBeVisible();
+  expect(screen.getByRole('heading',{name:'Shipment 000123'})).toBeVisible();
+  fireEvent.click(screen.getByText('See the original report columns'));
   expect(screen.getByText('=SUM(1)')).toBeVisible();
   fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'), { target: { value: 'America/New_York' } });
   expect(upload).toBeDisabled();
