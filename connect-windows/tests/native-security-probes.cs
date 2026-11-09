@@ -7,6 +7,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Security;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -102,6 +103,60 @@ public static class ConnectNativeSecurityProbe
         }
     }
 
+    public static void AssertVerifiedBridgeAsStandardUser(string name, string password, string bridgePath)
+    {
+        // Launch the exact packaged bridge under a real non-administrator token.
+        // The direct pipe test is not sufficient: ordinary operators also need
+        // the Win32/SCM identity checks used by the Electron subprocess.
+        using (var secret = new SecureString())
+        {
+            foreach (char character in password) secret.AppendChar(character);
+            secret.MakeReadOnly();
+            var start = new ProcessStartInfo(bridgePath)
+            {
+                UserName = name,
+                Domain = ".",
+                Password = secret,
+                LoadUserProfile = false,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardInputEncoding = new UTF8Encoding(false)
+            };
+            using (var child = Process.Start(start))
+            {
+                if (child == null) throw new InvalidOperationException("The standard-user bridge could not launch.");
+                try
+                {
+                    var id = Guid.NewGuid().ToString();
+                    child.StandardInput.WriteLine(JsonSerializer.Serialize(new { version = 1, id, operation = "status" }));
+                    child.StandardInput.Close();
+                    if (!child.WaitForExit(20000)) throw new TimeoutException("The standard-user verified bridge did not respond.");
+                    var output = child.StandardOutput.ReadToEnd();
+                    using (var parsed = JsonDocument.Parse(output))
+                    {
+                        var root = parsed.RootElement;
+                        if (child.ExitCode != 0 || root.GetProperty("version").GetInt32() != 1 ||
+                            root.GetProperty("id").GetString() != id ||
+                            !root.GetProperty("ok").GetBoolean() ||
+                            !root.GetProperty("result").GetProperty("health").GetProperty("serviceOnline").GetBoolean())
+                        {
+                            string code = root.TryGetProperty("error", out var error) &&
+                                error.TryGetProperty("code", out var errorCode) ? errorCode.GetString() : "NO_CODE";
+                            throw new InvalidOperationException("The standard-user verified bridge rejected the registered helper: " + code);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (!child.HasExited) { child.Kill(true); child.WaitForExit(5000); }
+                }
+            }
+        }
+    }
+
     public static void AssertCounterfeitPeerRejected(string pipeName, string bridgePath)
     {
         // The caller has stopped the registered service and checked its old PID exited.
@@ -136,7 +191,7 @@ public static class ConnectNativeSecurityProbe
                     using (var response = JsonDocument.Parse(child.StandardOutput.ReadToEnd()))
                     {
                         var root = response.RootElement;
-                        if (child.ExitCode != 1 || root.GetProperty("id").GetString() != id || root.GetProperty("ok").GetBoolean() || !new[] { "SERVICE_NOT_RUNNING", "SERVICE_IDENTITY_MISMATCH" }.Contains(root.GetProperty("error").GetProperty("code").GetString()))
+                        if (child.ExitCode != 1 || root.GetProperty("id").GetString() != id || root.GetProperty("ok").GetBoolean() || !new[] { "SERVICE_NOT_RUNNING", "SERVICE_PIPE_PEER_MISMATCH", "SERVICE_IDENTITY_MISMATCH" }.Contains(root.GetProperty("error").GetProperty("code").GetString()))
                             throw new InvalidOperationException("The helper did not return the bounded peer-verification refusal.");
                     }
                     errorOutput.GetAwaiter().GetResult();
