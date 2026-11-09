@@ -90,7 +90,10 @@ $serviceConfigPath=Join-Path $installPath 'resources\service\service-config.json
 $serviceConfig=Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
 # An exact original-user SID works immediately; newly added group membership requires a new logon token.
 $serviceConfig.operatorsSid=if ($approvedOperatorSid) { $approvedOperatorSid } else { $group.SID.Value }
-$serviceConfig | ConvertTo-Json | Set-Content -LiteralPath $serviceConfigPath -Encoding utf8
+# Windows PowerShell 5.1's -Encoding utf8 writes a BOM. System.Text.Json's UTF-8 byte parser
+# rejects a BOM when the service reads service-config.json directly, preventing service startup.
+# Write exactly UTF-8 without a BOM; do not change the existing queue or source configuration.
+[IO.File]::WriteAllText($serviceConfigPath, ($serviceConfig | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
 $binary=Join-Path $installPath 'resources\service\PackProof.Connect.Service.exe'
 if ($null -eq $service) { & "$env:SystemRoot\System32\sc.exe" create $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto DisplayName= ('PackProof Connect '+$suffix) | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service creation failed.' } }
 else { & "$env:SystemRoot\System32\sc.exe" config $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service configuration failed.' } }
