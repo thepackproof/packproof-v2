@@ -25,7 +25,7 @@ it('requires mapping confirmation and explicit whole-original upload consent', a
   expect(upload).toBeEnabled();
   expect(screen.getByRole('heading',{name:'Shipment 000123'})).toBeVisible();
   fireEvent.click(screen.getByText('See the original report columns'));
-  expect(screen.getByText('=SUM(1)')).toBeVisible();
+  expect(screen.getAllByText('=SUM(1)')).toHaveLength(2);
   fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'), { target: { value: 'America/New_York' } });
   expect(upload).toBeDisabled();
   expect(previewCloud).not.toHaveBeenCalled();
