@@ -16,7 +16,10 @@
   Pop $1
   ${EnableX64FSRedirection}
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "The PackProof connection service could not be installed. Pending data is preserved. Ask IT to review service installation permissions."
+    DetailPrint "PackProof service setup exit code: $0"
+    DetailPrint "$1"
+    SetDetailsView show
+    MessageBox MB_ICONSTOP "The PackProof background service could not be set up. View the installer details for the Windows error. Pending data is preserved."
     Abort
   ${EndIf}
 !macroend
