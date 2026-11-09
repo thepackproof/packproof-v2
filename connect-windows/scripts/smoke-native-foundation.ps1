@@ -38,6 +38,16 @@ try {
  $service=Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
  if ($service.StartName -ne 'NT AUTHORITY\LocalService' -or $service.State -ne 'Running') { throw 'The installed collector is not running as LocalService.' }
  Record-Pass 'service starts under LocalService independently of Electron'
+  # NSIS uses Windows PowerShell 5.1, not pwsh. Exercise that exact engine.
+  $windowsPowerShell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  if (-not (Test-Path -LiteralPath $windowsPowerShell)) { throw 'Windows PowerShell 5.1 is unavailable for installer regression.' }
+  & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File (Join-Path $install 'resources\installer\lifecycle.ps1') -Action Install -InstallRoot $install -OperatorSid $operatorSid -AllowUnsupportedDevelopmentHost
+  if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell 5.1 service lifecycle install failed.' }
+  $configBytes=[IO.File]::ReadAllBytes((Join-Path $install 'resources\service\service-config.json'))
+  if ($configBytes.Length -ge 3 -and $configBytes[0] -eq 239 -and $configBytes[1] -eq 187 -and $configBytes[2] -eq 191) { throw 'Installed service config has a UTF-8 BOM.' }
+  if (-not (Invoke-Bridge status).health.serviceOnline) { throw 'PowerShell 5.1 service install did not produce a trusted, reachable helper.' }
+  Record-Pass 'NSIS PowerShell 5.1 service installation produces BOM-free, reachable helper'
+
  $status=Invoke-Bridge status
  if (-not $status.health.serviceOnline -or ($status.PSObject.Properties.Name -contains 'installationId' -and $status.installationId)) { throw 'The fresh service must be online without an enrolled grant.' }
  Record-Pass 'verified expected-service peer bridge returns bounded setup-only state'
