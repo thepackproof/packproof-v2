@@ -25,7 +25,7 @@ it('requires mapping confirmation and explicit whole-original upload consent', a
   expect(upload).toBeEnabled();
   expect(screen.getByText('000123')).toBeVisible();
   expect(screen.getByText('=SUM(1)')).toBeVisible();
-  fireEvent.change(screen.getByLabelText('Source time zone'), { target: { value: 'America/New_York' } });
+  fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'), { target: { value: 'America/New_York' } });
   expect(upload).toBeDisabled();
   expect(previewCloud).not.toHaveBeenCalled();
 });
@@ -42,7 +42,7 @@ it('requires the named exporter, cadence and timestamp cutoff before requesting 
   const proposeConfiguration=vi.fn(async()=>current);render(<ConnectApp bridge={{getStatus:vi.fn(async()=>current),proposeConfiguration} as unknown as ConnectBridge}/>);
   await screen.findByRole('heading',{name:'Get ready'});await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh status'})).toBeEnabled());
   fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));const approve=screen.getByRole('button',{name:'Request configuration approval'});expect(approve).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Exporter product'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Exporter version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Earliest approved shipment time'),{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Source time zone'),{target:{value:'UTC'}});
+  fireEvent.change(screen.getByLabelText('Name of your shipping software'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Shipping software version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Start collecting shipments from',{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'),{target:{value:'UTC'}});
   fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));expect(approve).toBeEnabled();fireEvent.click(approve);
   await waitFor(()=>expect(proposeConfiguration).toHaveBeenCalledWith(expect.objectContaining({sourceContract:{schema:'packproof.scheduled-csv/v1',exporterName:'Synthetic exporter',exporterVersion:'fixture-1',expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:900,backfillFrom:'2026-11-01T00:00:00Z'}})));
   expect(screen.getByRole('button',{name:/Continue to secure preview/})).toBeDisabled();
