@@ -28,10 +28,17 @@ internal static class Program
             using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous, System.Security.Principal.TokenImpersonationLevel.Identification);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
             await pipe.ConnectAsync(timeout.Token);
-            if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid) || pid == 0 || pid != ServiceProcessId(serviceName)) throw new BridgeFailure("SERVICE_IDENTITY_MISMATCH");
-            using var process = OpenProcess(0x1000, false, pid);
-            var path = new StringBuilder(32768); uint length = 32768;
-            if (process.IsInvalid || !QueryFullProcessImageName(process, 0, path, ref length) || !string.Equals(Path.GetFullPath(path.ToString()), expected, StringComparison.OrdinalIgnoreCase)) throw new BridgeFailure("SERVICE_IDENTITY_MISMATCH");
+            // Both IDs come from Windows, not from a process-supplied claim.
+            if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid) || pid == 0)
+                throw new BridgeFailure("SERVICE_PIPE_PEER_UNAVAILABLE");
+            var registered = ServiceInformation(serviceName);
+            if (pid != registered.Pid) throw new BridgeFailure("SERVICE_PIPE_PEER_MISMATCH");
+            // Query the protected SCM executable configuration as an independent
+            // identity check. Ordinary Windows users may lack permission to open
+            // a LocalService process even with PROCESS_QUERY_LIMITED_INFORMATION.
+            if (!string.Equals(TrustedBinaryPath(registered.BinaryPath), expected, StringComparison.OrdinalIgnoreCase))
+                throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH");
+            VerifyProcessImageWhenAccessible(pid, expected);
             if (channel != "development") VerifyPublisher(expected, config.GetProperty("publisher").GetString() ?? "");
             await pipe.WriteAsync(Encoding.UTF8.GetBytes(input + "\n"), timeout.Token);
             await pipe.FlushAsync(timeout.Token);
@@ -52,6 +59,12 @@ internal static class Program
                 "SERVICE_NOT_INSTALLED" => "PackProof's background helper is missing. Run the PackProof Connect installer again to repair it.",
                 "SERVICE_NOT_RUNNING" => "PackProof's background helper is stopped. Try checking again; if it remains stopped, run the installer to repair it.",
                 "SERVICE_TIMEOUT" => "The background helper did not respond in time. Check again, or ask an administrator to repair PackProof Connect.",
+                "SERVICE_PIPE_PEER_UNAVAILABLE" => "Windows could not identify the background helper's connection. Collection stays blocked; ask an administrator to check the service.",
+                "SERVICE_PIPE_PEER_MISMATCH" => "The background helper connection belongs to the wrong process. Collection is blocked; ask an administrator to repair the installation.",
+                "SERVICE_INSTALL_PATH_MISMATCH" => "The installed background helper does not match this PackProof Connect installation. Collection is blocked until an administrator repairs it.",
+                "SERVICE_PROCESS_PATH_MISMATCH" => "The running background helper does not match its registered executable. Collection is blocked until an administrator repairs it.",
+                "SERVICE_PROCESS_QUERY_FAILED" => "Windows could not verify the helper's process details. Collection stays blocked; ask an administrator to inspect system permissions.",
+                "SERVICE_CONFIG_UNAVAILABLE" => "Windows could not verify the installed background helper's configuration. Collection stays blocked; ask an administrator to inspect the service.",
                 "SERVICE_IDENTITY_MISMATCH" => "The installed background helper could not be trusted. Collection is blocked. Run the official PackProof Connect installer to repair it.",
                 _ => "PackProof could not contact its background helper. Check again or run the installer to repair it."
             };
@@ -71,22 +84,101 @@ internal static class Program
         return new UTF8Encoding(false, true).GetString(result.ToArray());
     }
     private sealed class BridgeFailure(string code) : Exception(code) { public string Code { get; } = code; }
-    private static uint ServiceProcessId(string name)
+    private sealed record ServiceInfo(uint Pid, string BinaryPath);
+
+    // Service Control Manager is the authority for the registered service and
+    // the PID. The fixed pipe-to-PID match prevents another user-owned process
+    // from impersonating the helper by claiming the same pipe name.
+    private static ServiceInfo ServiceInformation(string name)
     {
-        var manager = OpenSCManager(null, null, 1); if (manager == IntPtr.Zero) throw new InvalidOperationException();
+        const uint ScManagerConnect = 1, ServiceQueryConfig = 1, ServiceQueryStatus = 4;
+        var manager = OpenSCManager(null, null, ScManagerConnect);
+        if (manager == IntPtr.Zero) throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
         try
         {
-            var service = OpenService(manager, name, 4); if (service == IntPtr.Zero) throw new BridgeFailure("SERVICE_NOT_INSTALLED");
+            var service = OpenService(manager, name, ServiceQueryConfig | ServiceQueryStatus);
+            if (service == IntPtr.Zero) throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
             try
             {
-                var size = Marshal.SizeOf<ServiceStatus>(); var buffer = Marshal.AllocHGlobal(size);
-                try { if (!QueryServiceStatusEx(service, 0, buffer, (uint)size, out _)) throw new InvalidOperationException(); var status = Marshal.PtrToStructure<ServiceStatus>(buffer); if (status.State != 4) throw new BridgeFailure("SERVICE_NOT_RUNNING"); return status.Pid; }
-                finally { Marshal.FreeHGlobal(buffer); }
+                var statusBuffer = Marshal.AllocHGlobal(Marshal.SizeOf<ServiceStatus>());
+                try
+                {
+                    if (!QueryServiceStatusEx(service, 0, statusBuffer, (uint)Marshal.SizeOf<ServiceStatus>(), out _))
+                        throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
+                    var status = Marshal.PtrToStructure<ServiceStatus>(statusBuffer);
+                    if (status.State != 4) throw new BridgeFailure("SERVICE_NOT_RUNNING");
+
+                    _ = QueryServiceConfig(service, IntPtr.Zero, 0, out var needed);
+                    if (needed < (uint)Marshal.SizeOf<ServiceConfig>() || needed > 65536)
+                        throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
+                    var configBuffer = Marshal.AllocHGlobal((int)needed);
+                    try
+                    {
+                        if (!QueryServiceConfig(service, configBuffer, needed, out _))
+                            throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
+                        var config = Marshal.PtrToStructure<ServiceConfig>(configBuffer);
+                        var binaryPath = Marshal.PtrToStringUni(config.BinaryPathName);
+                        if (string.IsNullOrWhiteSpace(binaryPath)) throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
+                        return new ServiceInfo(status.Pid, binaryPath);
+                    }
+                    finally { Marshal.FreeHGlobal(configBuffer); }
+                }
+                finally { Marshal.FreeHGlobal(statusBuffer); }
             }
             finally { CloseServiceHandle(service); }
         }
         finally { CloseServiceHandle(manager); }
     }
+
+    private static string TrustedBinaryPath(string commandLine)
+    {
+        // Installer writes exactly one quoted absolute executable and no
+        // arguments. Treat anything different as a configuration mismatch.
+        var raw = commandLine.Trim();
+        string file;
+        if (raw.StartsWith('"'))
+        {
+            var closing = raw.IndexOf('"', 1);
+            if (closing < 2 || raw[(closing + 1)..].Trim().Length != 0)
+                throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH");
+            file = raw[1..closing];
+        }
+        else
+        {
+            if (raw.Any(char.IsWhiteSpace) || raw.Contains('"'))
+                throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH");
+            file = raw;
+        }
+        try
+        {
+            if (!Path.IsPathFullyQualified(file)) throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH");
+            return Path.GetFullPath(file);
+        }
+        catch (ArgumentException) { throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH"); }
+        catch (NotSupportedException) { throw new BridgeFailure("SERVICE_INSTALL_PATH_MISMATCH"); }
+    }
+
+    private static void VerifyProcessImageWhenAccessible(uint pid, string expected)
+    {
+        using var process = OpenProcess(0x1000, false, pid);
+        if (process.IsInvalid)
+        {
+            // PROCESS_QUERY_LIMITED_INFORMATION can be denied to ordinary users
+            // on Windows 11 by the service process DACL. This is not grounds
+            // to discard two independent kernel/SCM checks above.
+            if (Marshal.GetLastWin32Error() == 5) return;
+            throw new BridgeFailure("SERVICE_PROCESS_QUERY_FAILED");
+        }
+        var image = new StringBuilder(32768); uint length = (uint)image.Capacity;
+        if (!QueryFullProcessImageName(process, 0, image, ref length))
+        {
+            if (Marshal.GetLastWin32Error() == 5) return;
+            throw new BridgeFailure("SERVICE_PROCESS_QUERY_FAILED");
+        }
+        if (!string.Equals(Path.GetFullPath(image.ToString()), expected, StringComparison.OrdinalIgnoreCase))
+            throw new BridgeFailure("SERVICE_PROCESS_PATH_MISMATCH");
+    }
+
     private static void VerifyPublisher(string path, string publisher)
     {
         if (string.IsNullOrWhiteSpace(publisher)) throw new InvalidOperationException();
@@ -106,6 +198,7 @@ internal static class Program
         finally { Marshal.DestroyStructure<TrustFile>(pointer); Marshal.FreeHGlobal(pointer); }
     }
     [StructLayout(LayoutKind.Sequential)] private struct ServiceStatus { public uint Type, State, Controls, Win32Exit, ServiceExit, Checkpoint, WaitHint, Pid, Flags; }
+    [StructLayout(LayoutKind.Sequential)] private struct ServiceConfig { public uint Type, StartType, ErrorControl; public IntPtr BinaryPathName, LoadOrderGroup; public uint TagId; public IntPtr Dependencies, ServiceStartName, DisplayName; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct TrustFile { public uint Size; [MarshalAs(UnmanagedType.LPWStr)] public string FilePath; public IntPtr File, KnownSubject; }
     [StructLayout(LayoutKind.Sequential)] private struct TrustData { public uint Size; public IntPtr PolicyCallback, SipClient; public uint UiChoice, RevocationChecks, UnionChoice; public IntPtr File; public uint StateAction; public IntPtr StateData, UrlReference; public uint ProviderFlags, UiContext; public IntPtr SignatureSettings; }
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint pid);
@@ -114,6 +207,9 @@ internal static class Program
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr OpenSCManager(string? machine, string? database, uint access);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr OpenService(IntPtr manager, string name, uint access);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool QueryServiceStatusEx(IntPtr service, uint level, IntPtr buffer, uint size, out uint needed);
+    [DllImport("advapi32.dll", EntryPoint = "QueryServiceConfigW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryServiceConfig(IntPtr service, IntPtr config, uint size, out uint needed);
     [DllImport("advapi32.dll")] private static extern bool CloseServiceHandle(IntPtr service);
     [DllImport("wintrust.dll", ExactSpelling = true)] private static extern int WinVerifyTrust(IntPtr window, ref Guid action, ref TrustData data);
 }
