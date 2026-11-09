@@ -10,42 +10,43 @@ const initial: ConnectStatus = { state: 'ready', environment: 'sandbox', install
 it('fails closed when the installed bridge is absent', async () => {
   render(<ConnectApp/>);
   expect(await screen.findByRole('alert')).toHaveTextContent('secure connection');
-  expect(screen.getByRole('button', { name: 'Connect a local export folder' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
 });
 it('requires mapping confirmation and explicit whole-original upload consent', async () => {
   const previewCloud = vi.fn(async () => initial), bridge = { getStatus: vi.fn(async () => initial), previewCloud } as unknown as ConnectBridge;
   render(<ConnectApp bridge={bridge}/>);
-  await screen.findByRole('heading', { name: 'Field mapping' });
+  await screen.findByRole('heading', { name: 'Get ready' });
   await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled());
-  const upload = screen.getByRole('button', { name: 'Create secure preview' });
+  const upload = screen.getByRole('button', { name: /Continue to secure preview/ });
   expect(upload).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: /confirmed the identifiers/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: /shipment number, quantities, dates/ }));
   expect(upload).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /including columns that are not mapped/ }));
   expect(upload).toBeEnabled();
-  expect(screen.getByText('000123')).toBeVisible();
-  expect(screen.getByText('=SUM(1)')).toBeVisible();
-  fireEvent.change(screen.getByLabelText('Source time zone'), { target: { value: 'America/New_York' } });
+  expect(screen.getByRole('heading',{name:'Shipment 000123'})).toBeVisible();
+  fireEvent.click(screen.getByText('See the original report columns'));
+  expect(screen.getAllByText('=SUM(1)')).toHaveLength(2);
+  fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'), { target: { value: 'America/New_York' } });
   expect(upload).toBeDisabled();
   expect(previewCloud).not.toHaveBeenCalled();
 });
 it('a queued response never unlocks automatic collection', async () => {
   const current: ConnectStatus = { ...initial, preview: { id: 'import-a', previewVersion: 'v', state: 'queued', original: { sha256: 'digest', byteSize: 40 }, counts: { valid: 1, invalid: 0 }, rows: [], recordIds: [] } };
   render(<ConnectApp bridge={{ getStatus: vi.fn(async () => current) } as unknown as ConnectBridge}/>);
-  await waitFor(() => expect(screen.getByRole('heading', { name: 'First import' })).toBeVisible());
-  expect(screen.getByRole('button', { name: 'Review automatic collection' })).toBeDisabled();
-  expect(screen.getByText(/Verification is incomplete/)).toBeVisible();
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Start collecting' })).toBeVisible());
+  expect(screen.getByRole('button', { name: /Continue to automatic collection/ })).toBeDisabled();
+  expect(screen.getByText(/waiting for confirmation/)).toBeVisible();
 });
 
 it('requires the named exporter, cadence and timestamp cutoff before requesting a new source approval',async()=>{
   const current:ConnectStatus={...initial,config:undefined,configRevision:0,binding:{sourceName:config.sourceName,integrationAccountId:config.integrationAccountId,operatorMembershipId:config.operatorMembershipId,locationId:null},source:{...initial.source!,headers:['Shipment reference','Description','Quantity','Shipment date']}};
   const proposeConfiguration=vi.fn(async()=>current);render(<ConnectApp bridge={{getStatus:vi.fn(async()=>current),proposeConfiguration} as unknown as ConnectBridge}/>);
-  await screen.findByRole('heading',{name:'Field mapping'});await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh status'})).toBeEnabled());
-  fireEvent.click(screen.getByRole('checkbox',{name:/confirmed the identifiers/}));const approve=screen.getByRole('button',{name:'Request configuration approval'});expect(approve).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Exporter product'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Exporter version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Earliest approved shipment time'),{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Source time zone'),{target:{value:'UTC'}});
-  fireEvent.click(screen.getByRole('checkbox',{name:/confirmed the identifiers/}));expect(approve).toBeEnabled();fireEvent.click(approve);
+  await screen.findByRole('heading',{name:'Get ready'});await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh status'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));const approve=screen.getByRole('button',{name:'Request configuration approval'});expect(approve).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Name of your shipping software'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Shipping software version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Start collecting shipments from'),{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'),{target:{value:'UTC'}});
+  fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));expect(approve).toBeEnabled();fireEvent.click(approve);
   await waitFor(()=>expect(proposeConfiguration).toHaveBeenCalledWith(expect.objectContaining({sourceContract:{schema:'packproof.scheduled-csv/v1',exporterName:'Synthetic exporter',exporterVersion:'fixture-1',expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:900,backfillFrom:'2026-11-01T00:00:00Z'}})));
-  expect(screen.getByRole('button',{name:'Create secure preview'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:/Continue to secure preview/})).toBeDisabled();
 });
 
 it('requires informed preservation consent before expired-installation recovery', async () => {
@@ -60,5 +61,33 @@ it('requires informed preservation consent before expired-installation recovery'
   fireEvent.click(screen.getByRole('checkbox', { name: /old receipts will not transfer/ }));
   fireEvent.click(recover);
   await waitFor(() => expect(recoverEnrollment).toHaveBeenCalledWith({ preservePendingWorkApproved: true }));
-  expect(await screen.findByRole('heading', { name: 'Workspace' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Find records' })).toBeVisible();
+});
+
+it('presents three operator stages without exposing seven internal steps',async()=>{
+  render(<ConnectApp bridge={{getStatus:vi.fn(async()=>({...initial,preview:undefined,source:undefined,config:undefined,installationId:undefined}))} as unknown as ConnectBridge}/>);
+  await screen.findByRole('heading',{name:'Find records'});
+  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Find records');
+  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Get ready');
+  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Start collecting');
+  expect(screen.getByRole('navigation',{name:'Setup progress'})).not.toHaveTextContent('Field mapping');
+  expect(screen.getByRole('button',{name:/Get started/})).toBeEnabled();
+});
+
+it('explains how to find reports without granting filesystem access', async()=>{
+  const chooseFolder=vi.fn();
+  render(<ConnectApp bridge={{getStatus:vi.fn(async()=>({...initial,source:undefined,config:undefined})),chooseFolder} as unknown as ConnectBridge}/>);
+  await screen.findByRole('heading',{name:'Find records'});
+  // A configured enrollment without a chosen folder resumes at the folder screen.
+  fireEvent.click(screen.getByRole('button',{name:/not sure where the files are/}));
+  expect(screen.getByRole('textbox',{name:'Message for your IT team'})).toHaveAttribute('readonly');
+  expect(chooseFolder).not.toHaveBeenCalled();
+});
+
+it('shows recovery guidance when the trusted helper cannot be reached',async()=>{
+  const getStatus=vi.fn().mockRejectedValue(new Error("PackProof's background helper is stopped."));
+  render(<ConnectApp bridge={{getStatus} as unknown as ConnectBridge}/>);
+  expect(await screen.findByRole('heading',{name:'PackProof needs one quick fix.'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'Check again'})).toBeEnabled();
+  expect(screen.getByText('Show repair steps')).toBeVisible();
 });

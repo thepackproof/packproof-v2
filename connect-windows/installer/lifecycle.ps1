@@ -32,7 +32,17 @@ if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'Pac
 $metadataRoot='HKLM:\SOFTWARE\PackProofConnect'
 $metadataPath=Join-Path $metadataRoot $channel
 function Assert-OperatorMetadataPermissions([string]$Path) {
- $acl=Get-Acl -LiteralPath $Path
+ # Windows PowerShell 5.1's Get-Acl registry provider can resolve the PowerShell
+ # drive path as a non-existent filesystem path. Read the exact 64-bit registry
+ # view through its native handle on both PowerShell 5.1 and PowerShell 7.
+ $machine=[Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+ $key=$null
+ try {
+  $key=$machine.OpenSubKey($Path.Substring('HKLM:\'.Length),[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadSubTree,[Security.AccessControl.RegistryRights]::ReadPermissions)
+  if ($null -eq $key) { throw 'Protected operator metadata is missing. Repair the PackProof Connect installation.' }
+  if ($null -ne $key.PSObject.Methods['GetAccessControl']) { $acl=$key.GetAccessControl() }
+  else { $acl=[Microsoft.Win32.RegistryAclExtensions]::GetAccessControl($key) }
+ } finally { if ($null -ne $key) { $key.Dispose() };$machine.Dispose() }
  $trusted=@('S-1-5-18','S-1-5-32-544')
  $writes=[Security.AccessControl.RegistryRights]::SetValue -bor [Security.AccessControl.RegistryRights]::CreateSubKey -bor [Security.AccessControl.RegistryRights]::Delete -bor [Security.AccessControl.RegistryRights]::ChangePermissions -bor [Security.AccessControl.RegistryRights]::TakeOwnership
  if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $trusted) { throw 'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.' }
@@ -90,7 +100,10 @@ $serviceConfigPath=Join-Path $installPath 'resources\service\service-config.json
 $serviceConfig=Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
 # An exact original-user SID works immediately; newly added group membership requires a new logon token.
 $serviceConfig.operatorsSid=if ($approvedOperatorSid) { $approvedOperatorSid } else { $group.SID.Value }
-$serviceConfig | ConvertTo-Json | Set-Content -LiteralPath $serviceConfigPath -Encoding utf8
+# Windows PowerShell 5.1's -Encoding utf8 writes a BOM. System.Text.Json's UTF-8 byte parser
+# rejects a BOM when the service reads service-config.json directly, preventing service startup.
+# Write exactly UTF-8 without a BOM; do not change the existing queue or source configuration.
+[IO.File]::WriteAllText($serviceConfigPath, ($serviceConfig | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding($false)))
 $binary=Join-Path $installPath 'resources\service\PackProof.Connect.Service.exe'
 if ($null -eq $service) { & "$env:SystemRoot\System32\sc.exe" create $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto DisplayName= ('PackProof Connect '+$suffix) | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service creation failed.' } }
 else { & "$env:SystemRoot\System32\sc.exe" config $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service configuration failed.' } }

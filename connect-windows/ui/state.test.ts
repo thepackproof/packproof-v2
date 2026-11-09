@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { configKey, previewValid, resumeStep, suggestMapping, verificationCurrent } from './state';
+import { configKey, guidedStage, GUIDED_STAGES, previewValid, resumeStep, suggestMapping, verificationCurrent } from './state';
 import type { Configuration, ConnectStatus } from './types';
 const config: Configuration = { sourceName: 'Dispatch', folderDigest: 'f'.repeat(64), integrationAccountId: 'source-a', operatorMembershipId: 'member-a', locationId: 'site-a', mapping: { shipmentReference: 'Reference', itemTitle: 'Description', quantity: 'Quantity' }, timeZone: 'America/New_York', importValidRows: false, offlineWindowHours: 24 };
 const status: ConnectStatus = { state: 'ready', environment: 'sandbox', installationId: 'install-a', configRevision: 3, config, source: { folder: 'approved folder', folderDigest: config.folderDigest, accessible: true, fileSha256: 'file-a' }, verification: { complete: true, recordId: 'proof-a', configRevision: 3, fileSha256: 'file-a' }, health: { serviceOnline: true, queueCount: 0 } };
@@ -38,4 +38,14 @@ it('invalidates first-record verification after the approved exporter or backfil
   const reordered=Object.fromEntries(Object.entries(sourceContract).reverse()) as typeof sourceContract;
   expect(verificationCurrent(current,{...approved,sourceContract:reordered},false)).toBe(true);
   for(const changed of [{exporterVersion:'2'},{expectedIntervalSeconds:3600},{backfillFrom:'2026-11-02T00:00:00Z'},{expectedHeaders:['Reference','Private extra']}])expect(verificationCurrent(current,{...approved,sourceContract:{...sourceContract,...changed}},false)).toBe(false);
+});
+
+it('groups native resume checkpoints into exactly three operator-facing stages',()=>{
+ expect(GUIDED_STAGES).toEqual(['Find records','Get ready','Start collecting']);
+ expect([0,1,2,3,4,5,6].map(guidedStage)).toEqual([0,0,0,0,1,2,2]);
+});
+it('recognizes common shipment headers without inventing a shipment number',()=>{
+ expect(suggestMapping(['Shipment-Number','Item_Description','Qty','Shipment Date'])).toEqual({shipmentReference:'Shipment-Number',itemTitle:'Item_Description',quantity:'Qty',shippedAt:'Shipment Date'});
+ expect(suggestMapping(['Tracking Number','Qty'])).not.toHaveProperty('shipmentReference');
+ expect(suggestMapping(['Shipment Number','Shipment ID','Qty'])).not.toHaveProperty('shipmentReference');
 });

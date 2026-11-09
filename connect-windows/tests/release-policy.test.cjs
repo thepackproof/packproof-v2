@@ -3,3 +3,11 @@ const {context,validate,trustedUrl}=require('../scripts/release-policy.cjs');
 test('Connect environments never overwrite capture identity or each other',()=>{const all=['development','staging','production'].map(APP_ENV=>context({APP_ENV}));assert.equal(new Set(all.map(x=>x.appId)).size,3);assert.equal(new Set(all.map(x=>x.serviceName)).size,3);for(const x of all){assert.match(x.updateUrl,/\/connect\//);assert.doesNotMatch(x.appId,/desktop/);}});
 test('signed packages require native Windows and signing identity',()=>{assert.throws(()=>validate({APP_ENV:'production'},'linux'),/native Windows/);assert.throws(()=>validate({APP_ENV:'production'},'win32'),/required/);});
 test('endpoint configuration disallows credentials/query/HTTP',()=>{for(const u of ['http://thepackproof.com','https://x:y@thepackproof.com/','https://thepackproof.com/?token=a'])assert.equal(trustedUrl(u),false);assert.equal(trustedUrl('https://thepackproof.com'),true);});
+
+const {readFileSync}=require('node:fs');const {join}=require('node:path');
+test('Windows service config is written BOM-free for System.Text.Json startup',()=>{
+ const installer=readFileSync(join(__dirname,'../installer/lifecycle.ps1'),'utf8');
+ assert.match(installer,/WriteAllText\(\$serviceConfigPath/);
+ assert.match(installer,/UTF8Encoding\(\$false\)/);
+ assert.doesNotMatch(installer,/\$serviceConfig\s*\|\s*ConvertTo-Json[^\n]*Set-Content[^\n]*Encoding\s+utf8/i);
+});

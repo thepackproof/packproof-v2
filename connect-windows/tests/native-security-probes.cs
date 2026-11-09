@@ -136,7 +136,7 @@ public static class ConnectNativeSecurityProbe
                     using (var response = JsonDocument.Parse(child.StandardOutput.ReadToEnd()))
                     {
                         var root = response.RootElement;
-                        if (child.ExitCode != 1 || root.GetProperty("id").GetString() != id || root.GetProperty("ok").GetBoolean() || root.GetProperty("error").GetProperty("code").GetString() != "SERVICE_BRIDGE_UNAVAILABLE")
+                        if (child.ExitCode != 1 || root.GetProperty("id").GetString() != id || root.GetProperty("ok").GetBoolean() || !new[] { "SERVICE_NOT_RUNNING", "SERVICE_IDENTITY_MISMATCH" }.Contains(root.GetProperty("error").GetProperty("code").GetString()))
                             throw new InvalidOperationException("The helper did not return the bounded peer-verification refusal.");
                     }
                     errorOutput.GetAwaiter().GetResult();

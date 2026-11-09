@@ -1,7 +1,14 @@
 import type { Configuration, ConnectStatus } from './types';
+/** Internal checkpoints are retained for safe resume. Operators only see three stages. */
 export const STEPS = ['Welcome', 'Computer check', 'Workspace', 'Export source', 'Field mapping', 'First import', 'Automatic collection'] as const;
+export const GUIDED_STAGES = ['Find records', 'Get ready', 'Start collecting'] as const;
+export function guidedStage(step: number): 0 | 1 | 2 {
+  if (step <= 3) return 0;
+  if (step === 4) return 1;
+  return 2;
+}
 const synonyms: Record<string, string[]> = {
-  shipmentReference: ['shipment reference', 'shipment_reference', 'shipment id', 'order id', 'order number'],
+  shipmentReference: ['shipment reference', 'shipment_ref', 'shipment id', 'shipment identifier', 'shipment number', 'shipment no', 'order id', 'order number'],
   itemTitle: ['item description', 'description', 'item title', 'item_title'],
   quantity: ['quantity', 'qty'], trackingNumber: ['tracking number', 'tracking_number'],
   carrier: ['carrier'], shippedAt: ['shipment date', 'shipment_date'], locationId: ['location id', 'location_id'],
@@ -9,7 +16,8 @@ const synonyms: Record<string, string[]> = {
 export function suggestMapping(headers: string[]): Record<string, string> {
   const mapping: Record<string, string> = {};
   for (const [field, names] of Object.entries(synonyms)) {
-    const matches = headers.filter(header => names.includes(header.trim().toLowerCase()));
+    const normalized = (value: string) => value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    const matches = headers.filter(header => names.some(name => normalized(name) === normalized(header)));
     if (matches.length === 1) mapping[field] = matches[0];
   }
   return mapping;

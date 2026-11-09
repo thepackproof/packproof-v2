@@ -28,10 +28,10 @@ internal static class Program
             using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous, System.Security.Principal.TokenImpersonationLevel.Identification);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
             await pipe.ConnectAsync(timeout.Token);
-            if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid) || pid == 0 || pid != ServiceProcessId(serviceName)) throw new InvalidOperationException();
+            if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid) || pid == 0 || pid != ServiceProcessId(serviceName)) throw new BridgeFailure("SERVICE_IDENTITY_MISMATCH");
             using var process = OpenProcess(0x1000, false, pid);
             var path = new StringBuilder(32768); uint length = 32768;
-            if (process.IsInvalid || !QueryFullProcessImageName(process, 0, path, ref length) || !string.Equals(Path.GetFullPath(path.ToString()), expected, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException();
+            if (process.IsInvalid || !QueryFullProcessImageName(process, 0, path, ref length) || !string.Equals(Path.GetFullPath(path.ToString()), expected, StringComparison.OrdinalIgnoreCase)) throw new BridgeFailure("SERVICE_IDENTITY_MISMATCH");
             if (channel != "development") VerifyPublisher(expected, config.GetProperty("publisher").GetString() ?? "");
             await pipe.WriteAsync(Encoding.UTF8.GetBytes(input + "\n"), timeout.Token);
             await pipe.FlushAsync(timeout.Token);
@@ -41,9 +41,21 @@ internal static class Program
             await Console.Out.WriteLineAsync(response);
             return 0;
         }
-        catch
+        catch (Exception error)
         {
-            await Console.Out.WriteLineAsync(JsonSerializer.Serialize(new { version = 1, id, ok = false, error = new { code = "SERVICE_BRIDGE_UNAVAILABLE", message = "The trusted background service could not be verified or reached. Repair this installation; queued work is preserved." } }));
+            // Only approved fixed messages cross to the renderer. Never expose paths, tokens or pipe details.
+            var code = error is BridgeFailure failure ? failure.Code
+                : error is OperationCanceledException ? "SERVICE_TIMEOUT"
+                : "SERVICE_BRIDGE_UNAVAILABLE";
+            var message = code switch
+            {
+                "SERVICE_NOT_INSTALLED" => "PackProof's background helper is missing. Run the PackProof Connect installer again to repair it.",
+                "SERVICE_NOT_RUNNING" => "PackProof's background helper is stopped. Try checking again; if it remains stopped, run the installer to repair it.",
+                "SERVICE_TIMEOUT" => "The background helper did not respond in time. Check again, or ask an administrator to repair PackProof Connect.",
+                "SERVICE_IDENTITY_MISMATCH" => "The installed background helper could not be trusted. Collection is blocked. Run the official PackProof Connect installer to repair it.",
+                _ => "PackProof could not contact its background helper. Check again or run the installer to repair it."
+            };
+            await Console.Out.WriteLineAsync(JsonSerializer.Serialize(new { version = 1, id, ok = false, error = new { code, message } }));
             return 1;
         }
     }
@@ -58,16 +70,17 @@ internal static class Program
         }
         return new UTF8Encoding(false, true).GetString(result.ToArray());
     }
+    private sealed class BridgeFailure(string code) : Exception(code) { public string Code { get; } = code; }
     private static uint ServiceProcessId(string name)
     {
         var manager = OpenSCManager(null, null, 1); if (manager == IntPtr.Zero) throw new InvalidOperationException();
         try
         {
-            var service = OpenService(manager, name, 4); if (service == IntPtr.Zero) throw new InvalidOperationException();
+            var service = OpenService(manager, name, 4); if (service == IntPtr.Zero) throw new BridgeFailure("SERVICE_NOT_INSTALLED");
             try
             {
                 var size = Marshal.SizeOf<ServiceStatus>(); var buffer = Marshal.AllocHGlobal(size);
-                try { if (!QueryServiceStatusEx(service, 0, buffer, (uint)size, out _)) throw new InvalidOperationException(); var status = Marshal.PtrToStructure<ServiceStatus>(buffer); if (status.State != 4) throw new InvalidOperationException(); return status.Pid; }
+                try { if (!QueryServiceStatusEx(service, 0, buffer, (uint)size, out _)) throw new InvalidOperationException(); var status = Marshal.PtrToStructure<ServiceStatus>(buffer); if (status.State != 4) throw new BridgeFailure("SERVICE_NOT_RUNNING"); return status.Pid; }
                 finally { Marshal.FreeHGlobal(buffer); }
             }
             finally { CloseServiceHandle(service); }
