@@ -96,6 +96,9 @@ try {
   $approved=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
   if ($approved.PipeAccess -ne 'allowed_status' -or $approved.ProtectedFileAccess -ne 'denied') { throw 'The explicitly approved standard user did not receive bounded status while protected files remained denied.' }
   Record-Pass 'explicitly approved standard user reads bounded service status without direct protected-file access'
+  # Exercise the packaged bridge under the disposable non-admin account.
+  [ConnectNativeSecurityProbe]::AssertVerifiedBridgeAsStandardUser($probeName,$plainProbePassword,(Join-Path $install 'resources\bridge\PackProof.Connect.Bridge.exe'))
+  Record-Pass 'packaged bridge authenticates service under real non-administrator Windows logon'
   $network=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,3,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
   if (-not $network.IsNetworkLogon -or $network.PipeAccess -ne 'denied' -or $network.ProtectedFileAccess -ne 'denied') { throw 'The approved identity network-logon token was not denied by the local pipe policy.' }
   $evidence.networkTokenPolicy='passed; actual remote-machine transport not exercised'
