@@ -7,6 +7,7 @@ import {createTransaction} from '../src/domain/transactions.js';
 import {createOrGetProof} from '../src/domain/create-proof.js';
 import {recordsMigrationInventory,planRecordsRuntimePrivileges,verifyRecordsRuntimePrivileges,type RecordsPrivilegeOptions} from '../scripts/records-runtime-privileges.mjs';
 import {verifyOperationalSnapshotPrivileges,type OperationalSnapshotBinding} from '../src/records/operational-snapshot-runtime.js';
+import {processRecordConnectionOperations} from '../src/records/connections.js';
 
 describe('records source-bound API and worker privileges',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,options:RecordsPrivilegeOptions,ownerRole:string;
@@ -88,6 +89,12 @@ describe('records source-bound API and worker privileges',()=>{
    await expect(asRole(role,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
    await expect(asRole(role,db=>db.query(`TRUNCATE ${table}`))).rejects.toMatchObject({code:'42501'});
   }
+ });
+ it('polls connection checks with read-only account metadata and preserves the account write denial',async()=>{
+  await opened.db.query(`GRANT SELECT ON platform_integration_accounts TO ${workerRole}`);
+  expect(await asRole(workerRole,async db=>(await db.query<{allowed:boolean}>("SELECT has_any_column_privilege(current_user,'platform_integration_accounts','UPDATE') AS allowed")).rows[0].allowed)).toBe(false);
+  await expect(asRole(workerRole,db=>processRecordConnectionOperations(db,{now:()=>new Date(fixture.at)},new Map(),1))).resolves.toEqual({processed:0});
+  await expect(asRole(workerRole,db=>db.query('UPDATE platform_integration_accounts SET provider=provider WHERE false'))).rejects.toMatchObject({code:'42501'});
  });
  it('permits API installation lifecycle decisions but denies all worker decision writes',async()=>{
   for(const table of ['record_agent_enrollments','record_agent_installations']){

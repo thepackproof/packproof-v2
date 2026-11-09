@@ -11,9 +11,15 @@
       "version": "zero-touch-api-2026.11.08-3bff0173",
       "receipt": "LIVE_DEPLOYMENT.json",
       "customerSourcesActivated": false,
-      "knownPreexistingIssue": "record-connections scheduled job error",
       "completedAt": "2026-11-08T23:40:08.061000+00:00",
-      "canaryPassed": true
+      "canaryPassed": true,
+      "workerCorrection": {
+        "source": "e6709d6cfb7634ec295133387d72d4920e5d1c8b",
+        "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:dbaabad53ecba284ba830ab5443242234ad28b95a28d5ac9ecc2bda834366fd2",
+        "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:5",
+        "receipt": "../connection-worker-fix/RELEASE.json",
+        "status": "DEPLOYED_AND_VERIFIED"
+      }
     },
     "portal": null,
     "windowsSigned": null,
@@ -713,7 +719,7 @@
     "connect-windows": "c525f27f474b8602734cb9f620308cc89e85f0f4"
   },
   "runtimeQualificationReceipt": "RUNTIME_QUALIFICATION.json",
-  "latestContinuationPullRequest": "https://github.com/thepackproof/packproof-v2/pull/153",
+  "latestContinuationPullRequest": "https://github.com/thepackproof/packproof-v2/pull/154",
   "previousPreparedApiImage": {
     "uri": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:edb5051c4dc1dbd09fee6fd69e00bb16f47645486570f4e76861000812c3df96",
     "source": "3bff0173c9d91fc11ae614d72872b877628c327d",

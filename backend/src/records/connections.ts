@@ -144,9 +144,11 @@ export async function processRecordConnectionOperations(db:Database,clock:Clock,
   const job=await db.transaction(async tx=>{
    const row=(await tx.query<{id:string;connection_id:string;organization_id:string;environment:'sandbox'|'live';actor_user_id:string;action:'test'|'reconcile';attempts:number;provider:string;control_revision:string|number}>(`
     SELECT j.*,a.provider FROM record_connection_operations j JOIN platform_integration_accounts a ON a.id=j.connection_id
+    JOIN record_connection_state s ON s.connection_id=j.connection_id AND s.organization_id=j.organization_id AND s.environment=j.environment
     WHERE ((j.state='queued' AND j.next_attempt_at<=$1) OR (j.state='running' AND j.lease_expires_at<=$1))
      AND NOT EXISTS(SELECT 1 FROM record_connection_operations active WHERE active.connection_id=j.connection_id AND active.id<>j.id AND active.state='running' AND active.lease_expires_at>$1)
-    ORDER BY j.created_at,j.id LIMIT 1 FOR UPDATE OF j,a SKIP LOCKED`,[now.toISOString()])).rows[0];
+    -- Serialize claims on mutable connection state; account metadata is read-only for this worker.
+    ORDER BY j.created_at,j.id LIMIT 1 FOR UPDATE OF j,s SKIP LOCKED`,[now.toISOString()])).rows[0];
    if(!row)return null;
    await tx.query("UPDATE record_connection_operations SET state='running',attempts=attempts+1,lease_token=$2,lease_expires_at=$3,updated_at=$4 WHERE id=$1",[row.id,leaseToken,new Date(now.getTime()+120000).toISOString(),now.toISOString()]);
    return row;
