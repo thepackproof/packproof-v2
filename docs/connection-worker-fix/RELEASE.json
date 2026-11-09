@@ -1,0 +1,405 @@
+{
+  "schema": "packproof.connection-worker-fix/v1",
+  "status": "DEPLOYED_AND_VERIFIED",
+  "source": "e6709d6cfb7634ec295133387d72d4920e5d1c8b",
+  "scope": "connection-maintenance worker; existing API stays on its healthy image",
+  "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:dbaabad53ecba284ba830ab5443242234ad28b95a28d5ac9ecc2bda834366fd2",
+  "rollbackImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557",
+  "rollbackTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:4",
+  "fix": "Claim locks the operation and tenant/environment-bound mutable connection-state row. Integration-account metadata remains read-only; completion authorization, pause/revision checks, leases and retries remain unchanged.",
+  "diagnosis": {
+    "event": "connection_job_readonly_diagnostic",
+    "identity": {
+      "role": "packproof_records_worker_v1",
+      "database": "packproof_v2",
+      "read_only": "on",
+      "accounts_select": true,
+      "accounts_any_update": false,
+      "operations_any_update": true
+    },
+    "results": [
+      {
+        "name": "deployed_selection",
+        "planning": "FAILED",
+        "sqlState": "42501",
+        "message": "permission denied for table platform_integration_accounts"
+      },
+      {
+        "name": "operation_row_only_control",
+        "planning": "PASSED"
+      }
+    ],
+    "analyze": false,
+    "jobQueryExecuted": false,
+    "dataChanged": false,
+    "completedAt": "2026-11-08T23:57:23.404Z"
+  },
+  "localChecks": {
+    "typecheck": "PASSED",
+    "build": "PASSED",
+    "focusedTests": 25,
+    "failed": 0
+  },
+  "postgresCI": {
+    "runId": 42538003353,
+    "jobId": 128906490947,
+    "status": "PASSED",
+    "restrictedRoleRegression": "records-runtime-privileges.test.ts; PostgreSQL16"
+  },
+  "archive": {
+    "sha256": "45264dd8900a52df1f33932e8774d5778cd35a189082815563ba7f6805dc5100",
+    "gitBlobFilesVerified": 869,
+    "migrationCount": 108,
+    "migrationInventorySha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+    "bucket": "packproof-v2-staging-build-784514617543",
+    "key": "security-release/e6709d6cfb7634ec295133387d72d4920e5d1c8b/45264dd8900a52df1f33932e8774d5778cd35a189082815563ba7f6805dc5100/backend.zip",
+    "bytes": 2308940,
+    "encryption": "AES256",
+    "versionId": null
+  },
+  "build": {
+    "project": "packproof-v2-staging-api",
+    "buildUuid": "4465999a-5018-4a27-8b68-35ed5e256756",
+    "status": "SUCCEEDED",
+    "request": "infra/backend-release/connection-worker-build-request.json",
+    "appAndMigrationAndScriptAndContractBytesPreservedExcept": "dist/records/connections.js",
+    "imageReceipt": [
+      {
+        "event": "connection_worker_image_verified",
+        "source": "e6709d6cfb7634ec295133387d72d4920e5d1c8b",
+        "nonRoot": true,
+        "schema": "packproof.source-association-schema-preparation/v1",
+        "sourceCount": 108,
+        "appliedCount": 108,
+        "pending": false,
+        "inventorySha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+        "additions": [
+          {
+            "id": "109_source_associations",
+            "checksum": "92731eb1d01248da47870884958e0f1da8d096196b52e95a50313622206aada9"
+          }
+        ],
+        "migrationApplied": false,
+        "rolesChanged": false,
+        "featureActivation": false
+      }
+    ]
+  },
+  "preflight": {
+    "event": "connection_worker_probe_passed",
+    "phase": "preflight",
+    "status": "PASSED",
+    "source": "e6709d6cfb7634ec295133387d72d4920e5d1c8b",
+    "image": "sha256:dbaabad53ecba284ba830ab5443242234ad28b95a28d5ac9ecc2bda834366fd2",
+    "identity": {
+      "role": "packproof_records_worker_v1",
+      "login": "packproof_records_worker_v1",
+      "database": "packproof_v2",
+      "read_only": "on",
+      "accounts_any_update": false,
+      "state_any_update": true
+    },
+    "tls": {
+      "ssl": true,
+      "version": "TLSv1.3"
+    },
+    "ledgerCount": 108,
+    "ledgerSha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+    "recordsPolicySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+    "queryPlanning": "PASSED",
+    "heartbeat": {
+      "worker_name": "record-connections",
+      "instance_id": "ef769b96-84e2-4133-96fe-1ae7dd149997",
+      "heartbeat_at": "2026-11-09T00:07:51.144Z",
+      "last_success_at": null,
+      "state": "ERROR"
+    },
+    "accountLockDenied": true,
+    "analyze": false,
+    "jobQueryExecuted": false,
+    "dataChanged": false,
+    "completedAt": "2026-11-09T00:07:53.838Z"
+  },
+  "databaseMigrationsApplied": false,
+  "databaseGrantsChanged": false,
+  "apiConfigurationChanged": false,
+  "customerSourcesActivated": false,
+  "pullRequest": "https://github.com/thepackproof/packproof-v2/pull/154",
+  "operatorFiles": [
+    {
+      "path": "infra/backend-release/connection-worker-runtime-probe.mjs",
+      "sha256": "31ac2b24aa872d514bb9c06d90f63d1f747b814eb7160a6788879022fb622088"
+    },
+    {
+      "path": "infra/backend-release/connection-worker-build-request.json",
+      "sha256": "493e4dea4dd801033eb9191043ef90dc29568cfae8097d6d6f149e74dfd9dd71"
+    }
+  ],
+  "ci": {
+    "workflow_runs": [
+      {
+        "id": 42538003253,
+        "name": "Isolated R&D checks",
+        "status": "completed",
+        "conclusion": "skipped",
+        "run_number": 202,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003253/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003253/logs",
+        "workflow_id": 373051587
+      },
+      {
+        "id": 42538003260,
+        "name": "Android production receipt integration",
+        "status": "completed",
+        "conclusion": "skipped",
+        "run_number": 206,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003260/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003260/logs",
+        "workflow_id": 381722425
+      },
+      {
+        "id": 42538003333,
+        "name": "Records contract and SDKs",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 80,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003333/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003333/logs",
+        "workflow_id": 407310961
+      },
+      {
+        "id": 42538003227,
+        "name": "CodeQL",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 559,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003227/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003227/logs",
+        "workflow_id": 349886535
+      },
+      {
+        "id": 42538003353,
+        "name": "Partner foundation gates",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 141,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003353/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003353/logs",
+        "workflow_id": 390920418
+      },
+      {
+        "id": 42538003249,
+        "name": "Records native media acceptance",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 39,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003249/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003249/logs",
+        "workflow_id": 407553958
+      },
+      {
+        "id": 42538003315,
+        "name": "CI",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 604,
+        "jobs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003315/jobs",
+        "logs_url": "https://api.github.com/repos/thepackproof/packproof-v2/actions/runs/42538003315/logs",
+        "workflow_id": 348765242
+      }
+    ]
+  },
+  "scan": {
+    "imageScanFindings": {
+      "findings": [],
+      "imageScanCompletedAt": "2026-11-09T00:08:06+00:00",
+      "vulnerabilitySourceUpdatedAt": "2026-11-09T00:08:06+00:00",
+      "findingSeverityCounts": {}
+    },
+    "registryId": "784514617543",
+    "repositoryName": "packproof-v2-staging-api",
+    "imageId": {
+      "imageDigest": "sha256:dbaabad53ecba284ba830ab5443242234ad28b95a28d5ac9ecc2bda834366fd2"
+    },
+    "imageScanStatus": {
+      "status": "COMPLETE",
+      "description": "The scan was completed successfully."
+    }
+  },
+  "rollout": {
+    "workerTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:5",
+    "deploymentId": "ecs-svc/6127158870223317011",
+    "desiredCount": 1,
+    "deploymentConfiguration": {
+      "deploymentCircuitBreaker": {
+        "enable": true,
+        "rollback": true,
+        "resetOnHealthyTask": true,
+        "thresholdConfiguration": {
+          "type": "BOUNDED_PERCENT",
+          "value": 50
+        }
+      },
+      "maximumPercent": 200,
+      "minimumHealthyPercent": 100,
+      "strategy": "ROLLING",
+      "bakeTimeInMinutes": 0
+    },
+    "apiUpdated": false
+  },
+  "taskPreparation": {
+    "candidateTaskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:5",
+    "workerConfigurationPreserved": true,
+    "changedFields": [
+      "container images",
+      "PACKPROOF_RELEASE_SHA",
+      "PACKPROOF_RELEASE_IMAGE",
+      "PACKPROOF_RELEASE_VERSION"
+    ],
+    "serviceUpdated": false
+  },
+  "preflightTask": {
+    "tasks": [
+      {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/0c49cbdf85224c269894013ea51f1b58",
+        "lastStatus": "STOPPED",
+        "containers": [
+          {
+            "name": "temporary-volume-init",
+            "exitCode": 0
+          },
+          {
+            "name": "worker",
+            "exitCode": 0
+          }
+        ]
+      }
+    ]
+  },
+  "probeDefinitions": {
+    "preflightDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-connection-worker-check:1",
+    "postdeployDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-connection-worker-check:2",
+    "preflightTasks": [
+      {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/0c49cbdf85224c269894013ea51f1b58",
+        "lastStatus": "PROVISIONING"
+      }
+    ],
+    "failures": []
+  },
+  "apiHealth": {
+    "status": "PASSED",
+    "apiImageAndSourceUnchanged": true,
+    "meta": {
+      "service": "packproof-api",
+      "environment": "production",
+      "commit": "3bff0173c9d91fc11ae614d72872b877628c327d",
+      "version": "zero-touch-api-2026.11.08-3bff0173",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3b1c81642b27a14629a5a8c8f4af4b0bf91f09bc0e0b5591e06af10d5bde0557"
+    },
+    "checks": [
+      {
+        "path": "/meta",
+        "status": 200
+      },
+      {
+        "path": "/health",
+        "status": 200
+      },
+      {
+        "path": "/ready",
+        "status": 200
+      }
+    ],
+    "checkedAt": "2026-11-09T00:14:50.280705+00:00"
+  },
+  "postdeploy": {
+    "event": "connection_worker_probe_passed",
+    "phase": "postdeploy",
+    "status": "PASSED",
+    "source": "e6709d6cfb7634ec295133387d72d4920e5d1c8b",
+    "image": "sha256:dbaabad53ecba284ba830ab5443242234ad28b95a28d5ac9ecc2bda834366fd2",
+    "identity": {
+      "role": "packproof_records_worker_v1",
+      "login": "packproof_records_worker_v1",
+      "database": "packproof_v2",
+      "read_only": "on",
+      "accounts_any_update": false,
+      "state_any_update": true
+    },
+    "tls": {
+      "ssl": true,
+      "version": "TLSv1.3"
+    },
+    "ledgerCount": 108,
+    "ledgerSha256": "a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d",
+    "recordsPolicySha256": "35f155395cfc342171da73b8902f13bf1a0b9eb6ef46898b67e61b3104064ddb",
+    "queryPlanning": "PASSED",
+    "heartbeat": {
+      "worker_name": "record-connections",
+      "instance_id": "1ba1e170-165f-48ab-a3ac-8cff0cfb43aa",
+      "heartbeat_at": "2026-11-09T00:14:59.188Z",
+      "last_success_at": "2026-11-09T00:14:59.188Z",
+      "state": "IDLE"
+    },
+    "accountLockDenied": true,
+    "analyze": false,
+    "jobQueryExecuted": false,
+    "dataChanged": false,
+    "completedAt": "2026-11-09T00:15:00.447Z"
+  },
+  "finalState": {
+    "services": [
+      {
+        "name": "packproof-records-worker",
+        "running": 1,
+        "deployments": [
+          {
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:5",
+            "running": 1,
+            "rolloutState": "COMPLETED"
+          }
+        ]
+      },
+      {
+        "name": "packproof-v2-staging-api",
+        "running": 1,
+        "deployments": [
+          {
+            "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:55",
+            "running": 1,
+            "rolloutState": "COMPLETED"
+          }
+        ]
+      }
+    ],
+    "postdeployTasks": [
+      {
+        "taskArn": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/70276b883911465f847e290dac98a14d",
+        "lastStatus": "STOPPED",
+        "containers": [
+          {
+            "name": "worker",
+            "exitCode": 0
+          },
+          {
+            "name": "temporary-volume-init",
+            "exitCode": 0
+          }
+        ]
+      }
+    ],
+    "workerLogEvents": 1,
+    "jobFailures": []
+  },
+  "cleanup": {
+    "bothProbeTasksExitedZero": true,
+    "bothProbeDefinitionsInactive": true,
+    "iamRolesCreated": 0,
+    "postdeployDefinition": {
+      "postdeployDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-connection-worker-check:2",
+      "status": "INACTIVE"
+    }
+  },
+  "completedAt": "2026-11-09T00:15:00.447Z"
+}
