@@ -23,7 +23,11 @@ function Invoke-Bridge([string]$Operation,[object]$Payload=$null) {
  $reply=$null
  try { $reply=$response|ConvertFrom-Json -ErrorAction Stop } catch { throw 'Native verified bridge returned a malformed bounded response.' }
  if ($exitCode -ne 0 -or -not $reply.ok) {
-  $safeCode=if ($reply.error.code -match '^[A-Z][A-Z0-9_]{1,63}
+  $safeCode=([string]$reply.error.code -replace '[^A-Z0-9_]', '')
+  if ([string]::IsNullOrEmpty($safeCode) -or $safeCode.Length -gt 64) { $safeCode='UNKNOWN_BRIDGE_FAILURE' }
+  throw ('Native verified bridge refused trusted service: '+$safeCode)
+ }
+ if ($reply.id -ne $request.id -or $reply.version -ne 1) { throw 'The installed pipe protocol did not return the expected receipt.' }
  return $reply.result
 }
 function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator) {
