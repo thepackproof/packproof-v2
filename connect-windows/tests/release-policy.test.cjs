@@ -25,7 +25,7 @@ test('bridge trust checks reject non-service peers and invalid service accounts 
 });
 
 test('native service smoke contains one coherent PowerShell test harness',()=>{
- const smoke=readFileSync(join(__dirname,'../scripts/smoke-native-foundation.ps1'),'utf8');
+ const smoke=readFileSync(join(__dirname,'../scripts/smoke-native-foundation.ps1'),'utf8').replace(/\r\n/g,'\n');
  const count=expression=>smoke.split(expression).length-1;
  assert.equal(count('function Invoke-Bridge('),1);
  assert.equal(count('function Run-Lifecycle('),1);
