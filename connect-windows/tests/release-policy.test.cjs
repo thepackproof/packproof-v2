@@ -11,3 +11,15 @@ test('Windows service config is written BOM-free for System.Text.Json startup',(
  assert.match(installer,/UTF8Encoding\(\$false\)/);
  assert.doesNotMatch(installer,/\$serviceConfig\s*\|\s*ConvertTo-Json[^\n]*Set-Content[^\n]*Encoding\s+utf8/i);
 });
+
+test('bridge trust checks reject non-service peers and invalid service accounts before data transfer',()=>{
+ const bridge=readFileSync(join(__dirname,'../bridge/Program.cs'),'utf8');
+ assert.match(bridge,/GetNamedPipeServerProcessId\(pipe\.SafePipeHandle/);
+ assert.match(bridge,/pid != registered\.Pid/);
+ assert.match(bridge,/SERVICE_PIPE_PEER_MISMATCH/);
+ assert.match(bridge,/SERVICE_ACCOUNT_MISMATCH/);
+ assert.match(bridge,/TrustedBinaryPath\(registered\.BinaryPath\)/);
+ assert.match(bridge,/VerifyProcessImageWhenAccessible\(pid, expected\)/);
+ assert.match(bridge,/if \(Marshal\.GetLastWin32Error\(\) == 5\) return/);
+ assert.match(bridge,/await pipe\.WriteAsync/);
+});
