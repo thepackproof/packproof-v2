@@ -15,7 +15,7 @@ export class ServiceBridge{
    child.on('error',()=>finish(Error('The trusted background service bridge is unavailable. Repair this installation.')));
    child.on('close',code=>{if(settled)return;let reply:any;
     try{reply=JSON.parse(output);if(reply.version!==1||reply.id!==id||typeof reply.ok!=='boolean')throw Error();}catch{finish(Error('The background service could not complete this action. Your pending work is preserved.'));return;}
-    if(!reply.ok){const message=typeof reply.error?.message==='string'?reply.error.message.slice(0,400):'The service requires attention.';finish(Error(message));return;}
+    if(!reply.ok){const message=typeof reply.error?.message==='string'?reply.error.message.slice(0,350):'The service requires attention.';const code=typeof reply.error?.code==='string'&&/^[A-Z][A-Z0-9_]{1,63}$/.test(reply.error.code)?reply.error.code:'SERVICE_BRIDGE_UNAVAILABLE';finish(Error(`${message} (Code: ${code})`));return;}
     if(code!==0){finish(Error('The trusted background service bridge stopped unexpectedly. Pending work is preserved.'));return;}finish(undefined,reply.result);
    });
    child.stdin.on('error',()=>finish(Error('The service bridge closed before receiving the request.')));child.stdin.end(request);
