@@ -107,6 +107,44 @@ $serviceConfig.operatorsSid=if ($approvedOperatorSid) { $approvedOperatorSid } e
 $binary=Join-Path $installPath 'resources\service\PackProof.Connect.Service.exe'
 if ($null -eq $service) { & "$env:SystemRoot\System32\sc.exe" create $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto DisplayName= ('PackProof Connect '+$suffix) | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service creation failed.' } }
 else { & "$env:SystemRoot\System32\sc.exe" config $serviceName binPath= ('"'+$binary+'"') obj= 'NT AUTHORITY\LocalService' start= auto | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service configuration failed.' } }
+# PowerShell 5.1 and 7 differ in how native-command quoting is transmitted to
+# sc.exe. Use the SCM API to persist a single explicitly quoted image path.
+# This is required even on repair, since older installations may have an
+# unquoted service ImagePath. Do not change the service account or protected data.
+if (-not ('PackProofConnectServiceImage' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class PackProofConnectServiceImage {
+ [DllImport("advapi32.dll", EntryPoint="OpenSCManagerW", CharSet=CharSet.Unicode, SetLastError=true)]
+ private static extern IntPtr OpenSCManager(string machine, string database, uint access);
+ [DllImport("advapi32.dll", EntryPoint="OpenServiceW", CharSet=CharSet.Unicode, SetLastError=true)]
+ private static extern IntPtr OpenService(IntPtr manager, string name, uint access);
+ [DllImport("advapi32.dll", EntryPoint="ChangeServiceConfigW", CharSet=CharSet.Unicode, SetLastError=true)]
+ [return: MarshalAs(UnmanagedType.Bool)]
+ private static extern bool ChangeServiceConfig(IntPtr service, uint serviceType, uint startType, uint errorControl,
+   string imagePath, string loadOrderGroup, IntPtr tagId, string dependencies, string startName, string password, string displayName);
+ [DllImport("advapi32.dll", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)]
+ private static extern bool CloseServiceHandle(IntPtr handle);
+ public static void Configure(string serviceName, string exactImagePath) {
+   IntPtr manager=OpenSCManager(null,null,0x0001);
+   if (manager==IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "SCM could not be opened for Connect path repair.");
+   try {
+     IntPtr service=OpenService(manager,serviceName,0x0002);
+     if (service==IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Connect service configuration could not be opened.");
+     try {
+       const uint noChange=0xffffffff;
+       if (!ChangeServiceConfig(service,noChange,noChange,noChange,exactImagePath,null,IntPtr.Zero,null,null,null,null))
+         throw new Win32Exception(Marshal.GetLastWin32Error(), "Connect service executable path could not be registered.");
+     } finally { CloseServiceHandle(service); }
+   } finally { CloseServiceHandle(manager); }
+ }
+}
+'@
+}
+$quotedServiceImage='"'+$binary+'"'
+[PackProofConnectServiceImage]::Configure($serviceName,$quotedServiceImage)
 & "$env:SystemRoot\System32\sc.exe" sidtype $serviceName unrestricted | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Service identity configuration failed.' }
 $serviceSid=(New-Object Security.Principal.NTAccount('NT SERVICE\'+$serviceName)).Translate([Security.Principal.SecurityIdentifier])
