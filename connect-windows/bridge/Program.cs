@@ -33,6 +33,8 @@ internal static class Program
                 throw new BridgeFailure("SERVICE_PIPE_PEER_UNAVAILABLE");
             var registered = ServiceInformation(serviceName);
             if (pid != registered.Pid) throw new BridgeFailure("SERVICE_PIPE_PEER_MISMATCH");
+            if (!string.Equals(registered.StartAccount, @"NT AUTHORITY\LocalService", StringComparison.OrdinalIgnoreCase))
+                throw new BridgeFailure("SERVICE_ACCOUNT_MISMATCH");
             // Query the protected SCM executable configuration as an independent
             // identity check. Ordinary Windows users may lack permission to open
             // a LocalService process even with PROCESS_QUERY_LIMITED_INFORMATION.
@@ -61,6 +63,7 @@ internal static class Program
                 "SERVICE_TIMEOUT" => "The background helper did not respond in time. Check again, or ask an administrator to repair PackProof Connect.",
                 "SERVICE_PIPE_PEER_UNAVAILABLE" => "Windows could not identify the background helper's connection. Collection stays blocked; ask an administrator to check the service.",
                 "SERVICE_PIPE_PEER_MISMATCH" => "The background helper connection belongs to the wrong process. Collection is blocked; ask an administrator to repair the installation.",
+                "SERVICE_ACCOUNT_MISMATCH" => "The background helper is not running under its required restricted Windows service account. Collection is blocked; reinstall it with administrator approval.",
                 "SERVICE_INSTALL_PATH_MISMATCH" => "The installed background helper does not match this PackProof Connect installation. Collection is blocked until an administrator repairs it.",
                 "SERVICE_PROCESS_PATH_MISMATCH" => "The running background helper does not match its registered executable. Collection is blocked until an administrator repairs it.",
                 "SERVICE_PROCESS_QUERY_FAILED" => "Windows could not verify the helper's process details. Collection stays blocked; ask an administrator to inspect system permissions.",
@@ -84,7 +87,7 @@ internal static class Program
         return new UTF8Encoding(false, true).GetString(result.ToArray());
     }
     private sealed class BridgeFailure(string code) : Exception(code) { public string Code { get; } = code; }
-    private sealed record ServiceInfo(uint Pid, string BinaryPath);
+    private sealed record ServiceInfo(uint Pid, string BinaryPath, string StartAccount);
 
     // Service Control Manager is the authority for the registered service and
     // the PID. The fixed pipe-to-PID match prevents another user-owned process
@@ -119,7 +122,9 @@ internal static class Program
                         var config = Marshal.PtrToStructure<ServiceConfig>(configBuffer);
                         var binaryPath = Marshal.PtrToStringUni(config.BinaryPathName);
                         if (string.IsNullOrWhiteSpace(binaryPath)) throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
-                        return new ServiceInfo(status.Pid, binaryPath);
+                        var account = Marshal.PtrToStringUni(config.ServiceStartName);
+                        if (string.IsNullOrWhiteSpace(account)) throw new BridgeFailure("SERVICE_CONFIG_UNAVAILABLE");
+                        return new ServiceInfo(status.Pid, binaryPath, account);
                     }
                     finally { Marshal.FreeHGlobal(configBuffer); }
                 }
