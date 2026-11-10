@@ -19,9 +19,15 @@ function Invoke-Bridge([string]$Operation,[object]$Payload=$null) {
  $request=@{version=1;id=[Guid]::NewGuid().ToString();operation=$Operation}
  if ($null -ne $Payload) { $request.payload=$Payload }
  $response=($request|ConvertTo-Json -Compress -Depth 8)| & (Join-Path $install 'resources\bridge\PackProof.Connect.Bridge.exe')
- if ($LASTEXITCODE -ne 0) { throw 'The installed verified pipe bridge did not complete its native smoke.' }
- $reply=$response|ConvertFrom-Json
- if (-not $reply.ok -or $reply.id -ne $request.id -or $reply.version -ne 1) { throw 'The installed pipe protocol did not return the expected receipt.' }
+ $exitCode=$LASTEXITCODE
+ $reply=$null
+ try { $reply=$response|ConvertFrom-Json -ErrorAction Stop } catch { throw 'Native verified bridge returned a malformed bounded response.' }
+ if ($exitCode -ne 0 -or -not $reply.ok) {
+  $safeCode=([string]$reply.error.code -replace '[^A-Z0-9_]', '')
+  if ([string]::IsNullOrEmpty($safeCode) -or $safeCode.Length -gt 64) { $safeCode='UNKNOWN_BRIDGE_FAILURE' }
+  throw ('Native verified bridge refused trusted service: '+$safeCode)
+ }
+ if ($reply.id -ne $request.id -or $reply.version -ne 1) { throw 'The installed pipe protocol did not return the expected receipt.' }
  return $reply.result
 }
 function Run-Lifecycle([string]$Action,[switch]$KeepApprovedOperator) {
@@ -96,6 +102,9 @@ try {
   $approved=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,2,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
   if ($approved.PipeAccess -ne 'allowed_status' -or $approved.ProtectedFileAccess -ne 'denied') { throw 'The explicitly approved standard user did not receive bounded status while protected files remained denied.' }
   Record-Pass 'explicitly approved standard user reads bounded service status without direct protected-file access'
+  # Exercise the packaged bridge under the disposable non-admin account.
+  [ConnectNativeSecurityProbe]::AssertVerifiedBridgeAsStandardUser($probeName,$plainProbePassword,(Join-Path $install 'resources\bridge\PackProof.Connect.Bridge.exe'))
+  Record-Pass 'packaged bridge authenticates service under real non-administrator Windows logon'
   $network=[ConnectNativeSecurityProbe]::CheckIdentity($probeName,$plainProbePassword,3,$disposableUser.SID.Value,$pipeName,(Join-Path $data 'state.bin'))
   if (-not $network.IsNetworkLogon -or $network.PipeAccess -ne 'denied' -or $network.ProtectedFileAccess -ne 'denied') { throw 'The approved identity network-logon token was not denied by the local pipe policy.' }
   $evidence.networkTokenPolicy='passed; actual remote-machine transport not exercised'
