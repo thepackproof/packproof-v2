@@ -23,3 +23,14 @@ test('bridge trust checks reject non-service peers and invalid service accounts 
  assert.match(bridge,/if \(Marshal\.GetLastWin32Error\(\) == 5\) return/);
  assert.match(bridge,/await pipe\.WriteAsync/);
 });
+
+test('native service smoke contains one coherent PowerShell test harness',()=>{
+ const smoke=readFileSync(join(__dirname,'../scripts/smoke-native-foundation.ps1'),'utf8');
+ const count=expression=>smoke.split(expression).length-1;
+ assert.equal(count('function Invoke-Bridge('),1);
+ assert.equal(count('function Run-Lifecycle('),1);
+ assert.equal(count("try {\n Add-Type -Path"),1);
+ assert.equal(count("finally {\n if ($operatorTemporarilyChanged"),1);
+ assert.match(smoke,/Native verified bridge refused trusted service:/);
+ assert.ok(smoke.trimEnd().endsWith('}'));
+});
