@@ -2,6 +2,7 @@ import { SIGNAL_ENABLED } from './signal/Signal';
 import { selectFirstProofStudy, recordStudyInteraction, pauseStudyAccount, retainStudyAuth, completeStudyAuth } from './analytics/study-capture';
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
 import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
+import { rememberConnectApprovalReturn, consumeConnectApprovalReturn } from './auth/connect-approval-return';
 import { selectFirstExperience } from '../../packages/onboarding/model';
 import { SampleProof } from './site/SampleProof';
 import {DerivativeRedeem} from "./rnd/DerivativeRedeem";
@@ -382,6 +383,13 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     refresh: (token) => cognitoRefresh(defaultCognitoConfig(), token),
   }), []);
   const proofIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!session) {
+      try { rememberConnectApprovalReturn(window.location.pathname + window.location.search, sessionStorage); }
+      catch { /* A blocked session store must not prevent sign-in. */ }
+    }
+  }, [session?.userId]);
 
   useEffect(() => {
     setNavigationScope(session ? `${session.apiBaseUrl}.${session.userId}` : "guest");
@@ -884,11 +892,14 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
             tokenRef.current = next.token;
             setSession(next);
             let authReturn: string | null = null;
+            let connectReturn: string | null = null;
+            try { connectReturn = consumeConnectApprovalReturn(sessionStorage); } catch { /* Missing session storage must not block sign-in. */ }
             try { authReturn = sessionStorage.getItem("packproof.auth-return"); sessionStorage.removeItem("packproof.auth-return"); } catch { /* Optional return state must not block sign-in. */ }
             const expiredTask = reauthenticationTask.current;
             reauthenticationTask.current = null;
             clearReauthenticationTask();
-            if (authReturn === "/new/delete-account") go(authReturn);
+            if (connectReturn) go(connectReturn);
+            else if (authReturn === "/new/delete-account") go(authReturn);
             else if (expiredTask) go(reauthenticationDestination(expiredTask, next));
             else if (["/login", "/signup", "/"].includes(window.location.pathname)) go(mobileTask ? "/app" : "/app/records");
             // Keep the requested Proof or receiver invitation through sign-in.

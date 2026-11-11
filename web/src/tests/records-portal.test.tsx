@@ -178,3 +178,30 @@ it('binds a reasoned waiver to the displayed revision and reuses its command key
   expect(request.mock.calls[0][3]['If-Match']).toBe('"2"');
   expect(request.mock.calls[0][3]['Idempotency-Key']).toBe(request.mock.calls[1][3]['Idempotency-Key']);
 });
+
+
+it('shows Connect-specific workspace recovery without losing the approval locator when no organization exists', async () => {
+  const request = vi.fn(async (path: string) => {
+    if (path.startsWith('/context')) return { ...context, organizations: [], selectedOrganizationId: null };
+    throw new Error('No authorized organization routes should run');
+  });
+  const href = '/app/records/connect/approve?enrollmentId=enroll-a';
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, href));
+  expect(await screen.findByRole('heading', { name: 'Finish connecting this computer' })).toBeVisible();
+  expect(screen.getByText(/no active business workspace/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Check workspace access again' })).toBeEnabled();
+  expect(screen.getByRole('heading', { name: 'Set up your business' })).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Your workspace is not ready yet' })).not.toBeInTheDocument();
+  expect(request.mock.calls.every(([path]) => path.startsWith('/context'))).toBe(true);
+});
+
+it('does not offer computer approval for a disabled records workspace', async () => {
+  const request = vi.fn(async (path: string) => {
+    if (path.startsWith('/context')) return { ...context, organizations: [{ ...organizations[0], enabled: false }], capabilities: { records: false, import: false, review: false, manage: true } };
+    throw new Error('Enrollment API must not run before activation');
+  });
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, '/app/records/connect/approve?enrollmentId=enroll-a&organizationId=org-a&environment=live'));
+  expect(await screen.findByRole('heading', { name: 'This workspace cannot approve computers yet' })).toBeVisible();
+  expect(screen.getByText(/The setup request has not been authorized/)).toBeVisible();
+  expect(request.mock.calls.every(([path]) => path.startsWith('/context'))).toBe(true);
+});
