@@ -22,7 +22,10 @@ jobs:
     env:
       APP_ENV: development
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_CONNECT_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
-      PACKPROOF_WEB_BASE_URL: https://thepackproof.com
+      # Existing AWS application deployment. The public website is released separately.
+      # Verify the hosted route before packaging so an old website cannot silently
+      # send a collection-computer approval to ordinary login or Proof discovery.
+      PACKPROOF_WEB_BASE_URL: https://dvpmnwc27i8tw.cloudfront.net
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +41,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:release
+      - run: node --test tests/hosted-approval.test.mjs
+      - run: node scripts/verify-hosted-approval.mjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
       - run: npm run build
       - run: npm run publish:native
