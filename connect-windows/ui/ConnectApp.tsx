@@ -23,6 +23,25 @@ export function ConnectApp({ bridge = getBridge() }: { bridge?: ConnectBridge })
       if (mounted.current) setPreflightError(caught instanceof Error ? caught.message : 'Computer checks need attention.');
     });
   }, [bridge, !!status]);
+  useEffect(() => {
+    if (!bridge || step !== 2 || status?.installationId || status?.enrollment?.state !== 'pending') return;
+    let active = true;
+    let polling = false;
+    // Enrollment redemption remains inside the protected LocalService. Nothing secret
+    // crosses into the renderer; the UI simply observes the approved installation.
+    const timer = setInterval(() => {
+      if (busy || polling) return;
+      polling = true;
+      void bridge.pollEnrollment().then(next => {
+        if (!active) return;
+        setStatus(next);
+        if (next.installationId) { setStep(3); setError(''); }
+      }).catch(caught => {
+        if (active) setError(caught instanceof Error ? caught.message : 'Unable to check approval. You can still reopen the approval page.');
+      }).finally(() => { polling = false; });
+    }, 6000);
+    return () => { active = false; clearInterval(timer); };
+  }, [bridge, step, status?.installationId, status?.enrollment?.id, status?.enrollment?.state, busy]);
   useEffect(() => { heading.current?.focus(); }, [step]);
   useEffect(() => { setMappingConfirmed(false); setUploadConsent(false); setBatchConsent(false); }, [status?.configRevision, status?.source?.fileSha256, status?.preview?.id]);
   const invalidate = () => { setDirty(true); setMappingConfirmed(false); setUploadConsent(false); setBatchConsent(false); };
@@ -67,10 +86,10 @@ export function ConnectApp({ bridge = getBridge() }: { bridge?: ConnectBridge })
       <div className="connect-section-kicker">Secure connection</div>
       <h2>Connect to your PackProof workspace.</h2>
       <p>We'll open your browser so you can choose the approved company, shipping source and teammate. You won't need to enter passwords into this setup window.</p>
-      {status?.enrollment && <div className="connect-comparison"><span>Make sure this code matches the one in your browser</span><strong>{status.enrollment.comparisonCode}</strong><p>{readable(status.enrollment.state)} · Expires {time(status.enrollment.expiresAt)}</p></div>}
+      {status?.enrollment && <div className="connect-comparison"><span>Make sure this code matches the one in your browser</span><strong>{status.enrollment.comparisonCode}</strong><p>{readable(status.enrollment.state)} · Expires {time(status.enrollment.expiresAt)}</p>{status.enrollment.state === 'pending' && <p role="status">Waiting for browser approval. This window checks automatically every few seconds.</p>}{['denied','expired'].includes(status.enrollment.state) && <p role="alert">This request can no longer be approved. Start a new browser approval request.</p>}</div>}
       {status?.installationId && <Notice tone="passed">This computer has been approved. We'll ask separately before uploading shipment files or starting ongoing collection.</Notice>}
       <div className="connect-actions">{!status?.installationId && <button className="primary" disabled={blocked || !!status?.enrollment && status.enrollment.state === 'pending'} onClick={() => bridge && void action('Opening secure browser approval', () => bridge.beginEnrollment())}>Open browser approval <span aria-hidden="true">→</span></button>}
-      {status?.enrollment && !status.installationId && <><button className="secondary" disabled={blocked} onClick={() => bridge && external(() => bridge.openApproval())}>Reopen approval page</button><button className="secondary" disabled={blocked || ['expired','denied'].includes(status.enrollment.state)} onClick={() => bridge && void action('Checking browser approval', () => bridge.pollEnrollment())}>I've approved it — check again</button></>}
+      {status?.enrollment && !status.installationId && <><button className="secondary" disabled={blocked || status.enrollment.state !== 'pending'} onClick={() => bridge && external(() => bridge.openApproval())}>Reopen approval page</button><button className="secondary" disabled={blocked || status.enrollment.state !== 'pending'} onClick={() => bridge && void action('Checking browser approval', () => bridge.pollEnrollment())}>Check approval now</button></>}
       {status?.installationId && <button className="primary" disabled={blocked} onClick={() => setStep(3)}>Find shipment records <span aria-hidden="true">→</span></button>}</div>
     </section>}
     {step === 3 && <section className="connect-card">
