@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { ConnectApp } from './ConnectApp';
 import type { ConnectBridge, ConnectStatus } from './types';
@@ -90,4 +90,21 @@ it('shows recovery guidance when the trusted helper cannot be reached',async()=>
   expect(await screen.findByRole('heading',{name:'PackProof needs one quick fix.'})).toBeVisible();
   expect(screen.getByRole('button',{name:'Check again'})).toBeEnabled();
   expect(screen.getByText('Show repair steps')).toBeVisible();
+});
+
+
+it('detects pending browser authorization automatically and advances without manual checks', async () => {
+  vi.useFakeTimers();
+  try {
+    const waiting: ConnectStatus = { state: 'needs_approval', environment: 'sandbox', health: { serviceOnline: true, queueCount: 0 },
+      enrollment: { id: 'enroll-a', comparisonCode: 'CODE-123', expiresAt: '2026-11-10T23:00:00Z', state: 'pending' } };
+    const pollEnrollment = vi.fn(async () => ({ ...waiting, state: 'source_selected', installationId: 'install-a' }));
+    render(<ConnectApp bridge={{ getStatus: vi.fn(async () => waiting), pollEnrollment } as unknown as ConnectBridge}/>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText(/This window checks automatically/)).toBeVisible();
+    expect(pollEnrollment).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(6000); await Promise.resolve(); await Promise.resolve(); });
+    expect(pollEnrollment).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: 'Where does your team save shipment reports?' })).toBeVisible();
+  } finally { cleanup(); vi.useRealTimers(); }
 });
