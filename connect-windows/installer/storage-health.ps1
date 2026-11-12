@@ -38,7 +38,7 @@ public static class PackProofStorageNative {
     var timer=Stopwatch.StartNew();var buffer=new byte[1];
     while(result.Length<8192 && timer.ElapsedMilliseconds<12000) {
      var read=pipe.ReadAsync(buffer,0,1);
-     if(!read.Wait(12000-(int)timer.ElapsedMilliseconds)) throw new IOException("Service readiness response timed out.");
+     if(!read.Wait(Math.Max(1,12000-(int)timer.ElapsedMilliseconds))) throw new IOException("Service readiness response timed out.");
      if(read.Result!=1) throw new IOException("Service readiness response ended early.");
      if(buffer[0]==10)return Encoding.UTF8.GetString(result.ToArray());
      result.WriteByte(buffer[0]);
@@ -76,8 +76,8 @@ function Repair-ConnectStoragePermissions([string]$Root,[string]$ServiceSid) {
    $entries.Add($entry)
   }
  }
- # Validate the entire retained tree before changing any descendant ACL. Only
- # the product's known, ordinary, trusted-owned private entries are repaired.
+ # Validate the entire tree BEFORE changing even its root ACL: inherited ACL
+ # propagation can otherwise modify a hard-linked external target indirectly.
  foreach($entry in $entries) {
   [PackProofStorageNative]::AssertOrdinary($entry.FullName,[bool]$entry.PSIsContainer)
   if($entry.PSIsContainer) {
@@ -91,6 +91,29 @@ function Repair-ConnectStoragePermissions([string]$Root,[string]$ServiceSid) {
    Set-Acl -LiteralPath $entry.FullName -AclObject $acl -ErrorAction Stop
   }
  }
+}
+function Initialize-ConnectStorageRoot([string]$Root,[string]$ServiceSid) {
+ # New roots are born with their final ACL, not created writable and secured later.
+ $acl=New-Object Security.AccessControl.DirectorySecurity
+ $acl.SetAccessRuleProtection($true,$false)
+ $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+ foreach($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)),'FullControl','ContainerInherit,ObjectInherit','None','Allow'))) }
+ $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($ServiceSid)),'Modify','ContainerInherit,ObjectInherit','None','Allow')))
+ $parent=Split-Path $Root -Parent
+ if(-not (Test-Path -LiteralPath $parent)) { New-Item -Path $parent -ItemType Directory -Force | Out-Null }
+ $directory=New-Object IO.DirectoryInfo($Root)
+ if($PSVersionTable.PSVersion.Major -le 5) { $directory.Create($acl) }
+ else { [IO.FileSystemAclExtensions]::Create($directory,$acl) }
+ [PackProofStorageNative]::AssertOrdinary($Root,$true)
+ $current=Get-Acl -LiteralPath $Root -ErrorAction Stop
+ if($current.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin @('S-1-5-18','S-1-5-32-544')) { throw 'PROTECTED_STORAGE_OWNER: The private storage root has an untrusted owner. No retained data was changed.' }
+ $writes=[Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership
+ foreach($rule in $current.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
+  if($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Deny) { throw 'PROTECTED_STORAGE_POLICY: Repair will not remove a private-root deny rule.' }
+  if(-not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and $rule.IdentityReference.Value -notin @('S-1-5-18','S-1-5-32-544',$ServiceSid) -and ($rule.FileSystemRights -band $writes)) { throw 'PROTECTED_STORAGE_POLICY: An untrusted writer can change the private storage root. Preserve retained work for review.' }
+ }
+ Repair-ConnectStoragePermissions $Root $ServiceSid
+ Set-DirectoryPermissions $Root @(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($ServiceSid,'Modify'))
 }
 function Wait-ConnectReadiness([string]$ServiceName,[string]$PipeName,[string]$ExpectedBinary) {
  $watch=[Diagnostics.Stopwatch]::StartNew()

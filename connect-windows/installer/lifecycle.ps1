@@ -168,18 +168,19 @@ function Set-DirectoryPermissions([string]$Path,[array]$Rules) {
 }
 Assert-NoReparseAncestors $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
-New-Item -Path $dataRoot -ItemType Directory -Force | Out-Null
-Set-DirectoryPermissions $dataRoot @(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'Modify'))
+Initialize-ConnectStorageRoot $dataRoot $serviceSid.Value
 Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
-Repair-ConnectStoragePermissions $dataRoot $serviceSid.Value
+# Preserve existing producer permissions on the prepared source. It is not
+# private service storage and must not be normalized as part of a queue repair.
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('PackProof\Exports\'+$serviceConfig.environment)
 Assert-NoReparseAncestors $exports ([Environment]::GetFolderPath('CommonApplicationData'))
 Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicationData'))
-if (-not (Test-Path -LiteralPath $exports)) { New-Item -Path $exports -ItemType Directory -Force | Out-Null }
-if ((Get-Acl -LiteralPath $exports).GetOwner([Security.Principal.SecurityIdentifier]).Value -notin @('S-1-5-18','S-1-5-32-544')) { throw 'PREPARED_SOURCE_OWNER: The prepared export directory has an unexpected owner. No source files were changed.' }
-$exportRules=@(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'ReadAndExecute'),@($group.SID.Value,'Modify'))
-if ($approvedOperatorSid) { $exportRules+=,@($approvedOperatorSid,'Modify') }
-Set-DirectoryPermissions $exports $exportRules
+if (-not (Test-Path -LiteralPath $exports)) {
+ New-Item -Path $exports -ItemType Directory -Force | Out-Null
+ $exportRules=@(@('S-1-5-18','FullControl'),@('S-1-5-32-544','FullControl'),@($serviceSid.Value,'ReadAndExecute'),@($group.SID.Value,'Modify'))
+ if ($approvedOperatorSid) { $exportRules+=,@($approvedOperatorSid,'Modify') }
+ Set-DirectoryPermissions $exports $exportRules
+}
 Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicationData'))
 Assert-OperatorMetadataPermissions $metadataRoot
 Assert-OperatorMetadataPermissions $metadataPath
