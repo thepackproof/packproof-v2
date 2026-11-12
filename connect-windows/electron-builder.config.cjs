@@ -3,7 +3,7 @@ const c=context(),signed=c.channel!=='development';
 module.exports={
  appId:c.appId,productName:c.productName,copyright:'Copyright © 2026 PackProof',asar:true,npmRebuild:false,forceCodeSigning:signed,
  directories:{buildResources:'build',output:c.output},files:['dist/main/**/*','dist/renderer/**/*','package.json','!**/*.map','!**/.env*'],
- extraResources:[{from:'native/service',to:'service'},{from:'native/bridge',to:'bridge'},{from:'installer/lifecycle.ps1',to:'installer/lifecycle.ps1'}],
+ extraResources:[{from:'native/service',to:'service'},{from:'native/bridge',to:'bridge'},{from:'installer/lifecycle.ps1',to:'installer/lifecycle.ps1'},{from:'installer/storage-health.ps1',to:'installer/storage-health.ps1'}],
  electronFuses:{runAsNode:false,enableCookieEncryption:true,enableNodeOptionsEnvironmentVariable:false,enableNodeCliInspectArguments:false,enableEmbeddedAsarIntegrityValidation:true,onlyLoadAppFromAsar:true},
  beforePack:async()=>{validate(process.env,process.platform,{native:true});if(process.platform!=='win32')throw Error('Package Connect on native Windows');},
  artifactName:`PackProof-Connect-${c.channel}-Setup-\${version}.exe`,

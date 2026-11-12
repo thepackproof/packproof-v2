@@ -21,8 +21,21 @@ public static class FolderSource
     [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInformation info);
     [StructLayout(LayoutKind.Sequential)] private struct FileInformation { public uint Attributes; public System.Runtime.InteropServices.ComTypes.FILETIME Creation, Access, Write; public uint Serial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow; }
     private static string Final(SafeFileHandle h) { var chars = new char[32768]; var n = GetFinalPath(h, chars, (uint)chars.Length, 0); if (n == 0 || n >= chars.Length) throw Error(); return new string(chars, 0, (int)n).Replace(@"\\?\", ""); }
-    private static ConnectException Error() => new("SOURCE_ACCESS_DENIED", "The collection service cannot safely read this source. Ask IT to grant this service read/list access to a dedicated local NTFS export folder.");
-    public static string Validate(string input)
+    private static ConnectException Error() => new("SOURCE_ACCESS_DENIED", "The background collector cannot read this shipment folder. Choose the prepared PackProof Exports folder, or have the source owner grant this specific service read/list access to a dedicated local NTFS folder. Your protected storage and queued records have not been reset.");
+    internal static T SourceRead<T>(Func<T> action)
+    {
+        try { return action(); }
+        catch (UnauthorizedAccessException) { throw Error(); }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+        { throw new ConnectException("SOURCE_NOT_FOUND", "The selected shipment folder or export is no longer available. Choose an existing local export folder. Protected storage and queued records are unchanged."); }
+        catch (IOException error)
+        {
+            if (LocalIo.NativeError(error) is 32 or 33) throw new ConnectException("SOURCE_BUSY", "The shipment export is still open in another program. Close it or wait for the export to finish, then retry. The original has not been changed.");
+            throw new ConnectException("SOURCE_READ_FAILED", "The selected shipment folder could not be read. Choose the prepared PackProof Exports folder or check this source with its owner. This is not an instruction to reset PackProof's protected storage.");
+        }
+    }
+    public static string Validate(string input) => SourceRead(() => ValidateCore(input));
+    private static string ValidateCore(string input)
     {
         if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(input) || input.Length > 260 || input.StartsWith(@"\\") || input.IndexOf(':', 2) >= 0 || !Path.IsPathFullyQualified(input)) throw Error();
         var path = Path.GetFullPath(input).TrimEnd(Path.DirectorySeparatorChar); var drive = new DriveInfo(Path.GetPathRoot(path)!);
@@ -33,7 +46,7 @@ public static class FolderSource
         using var h = CreateFile(path, 0x80000000, 3, IntPtr.Zero, OpenExisting, OpenReparse | BackupSemantics, IntPtr.Zero); if (h.IsInvalid || !Final(h).Equals(path, StringComparison.OrdinalIgnoreCase)) throw Error();
         _ = Directory.EnumerateFiles(path).Take(1).ToArray(); return path;
     }
-    public static IReadOnlyList<object> Inventory(string folder)
+    public static IReadOnlyList<object> Inventory(string folder) => SourceRead<IReadOnlyList<object>>(() =>
     {
         folder = Validate(folder); var result = new List<object>(); var examined = 0; foreach (var file in Directory.EnumerateFileSystemEntries(folder, "*", SearchOption.TopDirectoryOnly))
         {
@@ -44,18 +57,23 @@ public static class FolderSource
             var f = new FileInfo(file); result.Add(new { name = f.Name, byteSize = f.Length });
         }
         return result;
-    }
-    public static byte[] Snapshot(string folder, string fileName)
+    });
+    public static byte[] Snapshot(string folder, string fileName) => SourceRead(() =>
     {
         folder = Validate(folder); if (fileName != Path.GetFileName(fileName) || !fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw Error();
-        // Deny directory rename while resolving and opening the final immutable file.
         using var directory = CreateFile(folder, 0x80000000, 3, IntPtr.Zero, OpenExisting, OpenReparse | BackupSemantics, IntPtr.Zero); if (directory.IsInvalid || !Final(directory).Equals(folder, StringComparison.OrdinalIgnoreCase)) throw Error();
         var path = Path.Combine(folder, fileName); using var handle = CreateFile(path, 0x80000000, 1, IntPtr.Zero, OpenExisting, OpenReparse, IntPtr.Zero);
-        if (handle.IsInvalid || !GetFileInformationByHandle(handle, out var info) || (info.Attributes & (uint)(FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Offline)) != 0 || info.Links != 1 || !Final(handle).Equals(path, StringComparison.OrdinalIgnoreCase)) throw Error();
+        if (handle.IsInvalid)
+        {
+            var error = Marshal.GetLastWin32Error();
+            if (error is 32 or 33) throw new IOException("Source is busy.", new Win32Exception(error));
+            throw Error();
+        }
+        if (!GetFileInformationByHandle(handle, out var info) || (info.Attributes & (uint)(FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Offline)) != 0 || info.Links != 1 || !Final(handle).Equals(path, StringComparison.OrdinalIgnoreCase)) throw Error();
         using var stream = new FileStream(handle, FileAccess.Read); if (stream.Length == 0 || stream.Length > MaxCsvBytes) throw new ConnectException("CSV_SIZE_UNSUPPORTED", "Use a nonempty UTF-8 CSV export no larger than 2 MiB. The original will not be split.");
         var bytes = new byte[(int)stream.Length]; stream.ReadExactly(bytes); if (stream.ReadByte() != -1) throw new ConnectException("SOURCE_CHANGED", "The export changed during collection. The producer must publish complete immutable files.");
         return bytes;
-    }
+    });
     private static string Display(string value, int max) => value.Length > max ? value[..max] + "…" : value;
     internal static string[] ScanBatch(IEnumerable<string> paths,string? after)
     {
@@ -105,5 +123,4 @@ public static class FolderSource
             }
         } catch(CsvHelperException) {throw new ConnectException("MAPPING_NEEDS_REVIEW","The timestamp column no longer matches the approved source export.");}
     }
-
 }
