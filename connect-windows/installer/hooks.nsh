@@ -16,7 +16,8 @@
   Pop $1
   ${EnableX64FSRedirection}
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "The PackProof connection service could not be installed. Pending data is preserved. Ask IT to review service installation permissions."
+    DetailPrint "$1"
+    MessageBox MB_ICONSTOP "PackProof did not pass its installation or protected-storage readiness check. Setup has not completed. Existing data and encryption keys were not reset. Open the installation details for the specific failure; do not delete the PackProof data folder."
     Abort
   ${EndIf}
 !macroend
@@ -31,5 +32,4 @@
     Abort
   ${EndIf}
   DetailPrint "Encrypted queued data and keys are retained in the protected ProgramData directory. Source exports and cloud records are retained. Revocation is a separate administrator action in PackProof."
-  ; ProgramData queue, encryption keys, source exports and cloud records are retained.
 !macroend

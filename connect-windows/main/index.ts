@@ -4,6 +4,7 @@ import {join,resolve,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
+import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {ConnectStatus} from '../ui/types';
 protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);app.enableSandbox();
@@ -18,7 +19,18 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
 function setup(){
  bind('getStatus',async()=>{try{await bridge.request('refresh');return status();}catch{const cached=await status();return {...cached,state:cached.state==='revoked'?'revoked':'action_needed',verification:{complete:false},authorizationNotice:'Current PackProof approval could not be refreshed. Check service network access, or begin approved recovery when access has expired or been revoked.'};}});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');const path=value.approvalPath||value.enrollment?.approvalPath;if(path)await open(approvalUrl(path,config.webBaseUrl));return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown};return {...await status(),checks:result.checks};});
  for(const [method,operation] of Object.entries({pollEnrollment:'pollEnrollment',verifyImport:'verify',proposeActivation:'proposeActivation',activate:'activate',pause:'pause',resume:'resume',refresh:'refresh'}))bind(method as Method,()=>mutate(operation));
- bind('chooseFolder',async()=>{const value=await dialog.showOpenDialog(win!,{title:'Choose the approved local CSV export folder',properties:['openDirectory','dontAddToRecent']});if(value.canceled||value.filePaths.length!==1)return status();return mutate('selectFolder',{folder:value.filePaths[0]});});
+ bind('chooseFolder',async()=>{
+  const prepared=preparedExportPath(config.channel,process.env.ProgramData);
+  const value=await dialog.showOpenDialog(win!,{title:'Choose shipment reports — the prepared PackProof folder is ready',defaultPath:prepared,properties:['openDirectory','dontAddToRecent']});
+  if(value.canceled||value.filePaths.length!==1)return status();
+  try{return await mutate('selectFolder',{folder:value.filePaths[0]});}
+  catch(error){
+   if(!canOfferPreparedFolder(error))throw error;
+   const answer=await dialog.showMessageBox(win!,{type:'info',title:'Choose a folder the background collector can read',message:'This shipment folder is not accessible to the PackProof background helper.',detail:'Use the dedicated folder PackProof prepared during installation, and save your shipping software’s finished CSV exports there. This will not move files, change access to your personal folders, or upload anything.',buttons:['Use prepared PackProof folder','Cancel'],defaultId:0,cancelId:1});
+   if(answer.response!==0)throw error;
+   return mutate('selectFolder',{folder:prepared});
+  }
+ });
  bind('previewLocal',fileName=>mutate('localPreview',{fileName}));bind('proposeConfiguration',value=>mutate('proposeConfiguration',value));bind('previewCloud',consent=>mutate('preview',consent));bind('commitBatch',consent=>mutate('commit',consent));
  bind('openApproval',async()=>{const s=await status(),path=s.approvalPath||s.enrollment?.approvalPath;if(!path)throw Error('Start or refresh the approval request first.');await open(approvalUrl(path,config.webBaseUrl));});
  bind('openRecord',async id=>{const s=await status();if(!id)id=s.verification?.recordId;if(!id||!s.verification?.complete||id!==s.verification.recordId)throw Error('Verify the completed record before opening it.');await open(new URL(`/app/records/${encodeURIComponent(id)}`,config.webBaseUrl).href);});
