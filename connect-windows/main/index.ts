@@ -32,6 +32,8 @@ function setup(){
    return mutate('selectFolder',{folder:prepared});
   }
  });
+ bind('analyzeLocal',input=>mutate('analyzeLocal',input));
+ bind('startSetup',input=>submitConfigurationForReview(()=>mutate('startSetup',input),open,config.webBaseUrl));
  bind('previewLocal',fileName=>mutate('localPreview',{fileName}));
  bind('proposeConfiguration',value=>submitConfigurationForReview(()=>mutate('proposeConfiguration',value),open,config.webBaseUrl));
  bind('previewCloud',consent=>mutate('preview',consent));bind('commitBatch',consent=>mutate('commit',consent));
@@ -47,7 +49,7 @@ if(!app.requestSingleInstanceLock())app.quit();else{
   session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
   const root=resolve(__dirname,'../renderer');
   protocol.handle('packproof-connect',async request=>{const u=new URL(request.url);if(!trustedRenderer(request.url))return new Response('',{status:403});let pathname;try{pathname=decodeURIComponent(u.pathname);}catch{return new Response('',{status:400});}const file=resolve(root,'.'+pathname);if(file!==root&&!file.startsWith(root+sep))return new Response('',{status:403});try{if(!(await stat(file)).isFile())return new Response('',{status:404});const response=await net.fetch(pathToFileURL(file).href);const headers=new Headers(response.headers);headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");headers.set('X-Content-Type-Options','nosniff');return new Response(response.body,{status:response.status,headers});}catch{return new Response('',{status:404});}});
-  setup();win=new BrowserWindow({width:1180,height:820,minWidth:800,minHeight:600,title:'PackProof Connect',show:false,backgroundColor:'#f7f9fc',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
+  setup();win=new BrowserWindow({width:1180,height:820,minWidth:560,minHeight:600,title:'PackProof Connect',show:false,backgroundColor:'#f7f9fc',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.webContents.on('will-attach-webview',event=>event.preventDefault());win.once('ready-to-show',()=>win?.show());await win.loadURL(APP_ORIGIN+'/index.html');startUpdates(win,bridge,config);
  }).catch(()=>{dialog.showErrorBox('PackProof Connect requires repair','The trusted application files could not be loaded. Your background service and queued exports are preserved.');app.quit();});
 }

@@ -159,3 +159,54 @@ it('reconciles a versioned scheduled source and never treats healthy scans or la
  for(let attempt=0;attempt<33;attempt++)await heartbeatAgent(deps,a.actor,{version:'0.1.0',queueCount:0,lastErrorCode:attempt%2?'MAPPING_NEEDS_REVIEW':'CSV_ENCODING_UNSUPPORTED'});
  const bounded=await heartbeatAgent(deps,a.actor,{version:'0.1.0',queueCount:0,lastErrorCode:'CSV_ENCODING_UNSUPPORTED'});expect(bounded.health.history).toHaveLength(30);expect(bounded.health.history.every(event=>event.configRevision===1)).toBe(true);
 });
+
+it('runs the v2 guided contract through exact approvals, canonical retrieval and a subsequent policy-authorized import',async()=>{
+ const {CSV_RULES}=await import('../src/records/csv-semantics.js');
+ const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
+ const {readPartnerProof}=await import('../src/platform/partner-proofs.js');
+ const a=await enroll(),acknowledged=await ack(a);expect(acknowledged.capabilities.rulesVersion).toBe(CSV_RULES.version);
+ const original=`Shipment reference,Description,Quantity,Shipment date\nGUIDED-000001,TEST ONLY - PVC elbow 1 inch,12,${clock.now().toISOString()}\n`;
+ const c={...config(a.account),timeZone:'source-offset',mapping:{shipmentReference:'Shipment reference',itemTitle:'Description',quantity:'Quantity',shippedAt:'Shipment date'},sourceContract:{schema:'packproof.scheduled-csv/v2' as const,exporterName:null,exporterVersion:null,expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:null,backfillFrom:new Date(time-86400000).toISOString(),rulesVersion:CSV_RULES.version,profileVersion:CSV_RULES.profile,analysisRevision:1,confirmedFields:[],historyPolicy:{mode:'selected_then_new' as const,baselineSha256:'a'.repeat(64),observedAt:clock.now().toISOString(),initialFileName:'synthetic-guided.csv',initialFileSha256:sha256Hex(Buffer.from(original))}}};
+ const input={integrationAccountId:a.account,operatorMembershipId:member,sourceName:c.sourceName,mapping:c.mapping,timeZone:c.timeZone,csv:original};
+ await expect(proposeAgentConfig(deps,a.actor,{...c,mapping:{...c.mapping,shipmentReference:'Description',itemTitle:'Shipment reference'}})).rejects.toMatchObject({code:'INVALID_MAPPING'});
+ const proposal=await proposeAgentConfig(deps,a.actor,c);
+ await expect(previewPartnerImport(deps,a.actor,'v2-before-consent',input)).rejects.toMatchObject({code:'AGENT_AUTHORIZATION_REQUIRED'});
+ await humanAction(a.result.installationId,{action:'configure',proposalSha256:proposal.proposalSha256});
+ await expect(previewPartnerImport(deps,a.actor,'v2-changed-file',{...input,csv:original.replace('12,','13,')})).rejects.toMatchObject({code:'SOURCE_CHANGED'});
+ const first=(await previewPartnerImport(deps,a.actor,'v2-exact-preview',input)).value;
+ const same=(await previewPartnerImport(deps,a.actor,'v2-exact-preview',input)).value;expect(same.id).toBe(first.id);
+ const detail=await readAgentDetail(deps,w,a.result.installationId);expect(detail.testCandidate?.id).toBe(first.id);expect(detail.testCandidate?.rows[0].normalized).toMatchObject({shipmentReference:'GUIDED-000001',quantity:12});
+ await expect(commitPartnerImport(deps,a.actor,first.id,'v2-exact-commit',{previewVersion:first.previewVersion,importValidRows:false})).rejects.toMatchObject({code:'AGENT_TEST_APPROVAL_REQUIRED'});
+ await humanAction(a.result.installationId,{action:'authorize_test',importId:first.id});
+ await commitPartnerImport(deps,a.actor,first.id,'v2-exact-commit',{previewVersion:first.previewVersion,importValidRows:false});await processPendingPartnerImports(deps);
+ const terminal=await readPartnerImport(deps,a.actor,first.id);expect(terminal.state).toBe('succeeded');
+ const canonical=await readPartnerProof(opened.db,clock,a.actor,terminal.recordIds[0]);expect(canonical.proof.transaction).toMatchObject({itemTitle:'TEST ONLY - PVC elbow 1 inch',quantity:12,shipping:{shipmentDate:clock.now().toISOString().slice(0,10)}});
+ await expect(humanAction(a.result.installationId,{action:'activate'})).rejects.toMatchObject({code:'VERIFICATION_REQUIRED'});
+ await expect(heartbeatAgent(deps,a.actor,{version:'0.1.2',queueCount:0,verifiedImportId:'unknown-receipt'})).rejects.toMatchObject({code:'VERIFICATION_REQUIRED'});
+ await heartbeatAgent(deps,a.actor,{version:'0.1.2',queueCount:0,verifiedImportId:first.id});
+ const active=await humanAction(a.result.installationId,{action:'activate'});expect(active.state).toBe('active');expect(active.health.sourceFreshness).toBe('unknown');
+ const second=(await previewPartnerImport(deps,a.actor,'v2-second-preview',{...input,csv:original.replace('GUIDED-000001','GUIDED-000002')})).value;
+ await commitPartnerImport(deps,a.actor,second.id,'v2-second-commit',{previewVersion:second.previewVersion,importValidRows:false});await processPendingPartnerImports(deps);
+ const secondTerminal=await readPartnerImport(deps,a.actor,second.id);expect(secondTerminal.state).toBe('succeeded');expect(secondTerminal.recordIds[0]).not.toBe(terminal.recordIds[0]);
+ const repeatProposal=await proposeAgentConfig(deps,a.actor,{...c,sourceContract:{...c.sourceContract,analysisRevision:2}});await humanAction(a.result.installationId,{action:'configure',proposalSha256:repeatProposal.proposalSha256});
+ const repeated=(await previewPartnerImport(deps,a.actor,'v2-existing-record',input)).value;expect(repeated.counts.duplicate).toBe(1);
+ await humanAction(a.result.installationId,{action:'authorize_test',importId:repeated.id});await commitPartnerImport(deps,a.actor,repeated.id,'v2-existing-record-commit',{previewVersion:repeated.previewVersion,importValidRows:false});await processPendingPartnerImports(deps);
+ await heartbeatAgent(deps,a.actor,{version:'0.1.2',queueCount:0,verifiedImportId:repeated.id});await humanAction(a.result.installationId,{action:'activate'});
+ expect((await readPartnerImport(deps,a.actor,repeated.id)).recordIds).toEqual(terminal.recordIds);
+ const before=Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows[0].n);
+ await expect(previewPartnerImport(deps,a.actor,'v2-drift',{...input,csv:original.replace('Shipment date\n','Shipment date,Private extra\n').replace(/\n$/ ,',secret\n')})).rejects.toMatchObject({code:'MAPPING_NEEDS_REVIEW'});
+ expect(Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows[0].n)).toBe(before);
+});
+
+
+it('revalidates a legacy saved proposal at approval instead of trusting its old matched selections',async()=>{
+ const {canonicalize}=await import('../src/canonical.js');
+ const a=await enroll();await ack(a);
+ const wrong={...config(a.account),mapping:{shipmentReference:'Description',itemTitle:'Shipment reference',quantity:'Quantity'}};
+ const digest=sha256Hex(canonicalize(wrong));
+ // Simulate a proposal persisted by the previous version, before the new
+ // proposal validator existed. Preserve it for review after rejection.
+ await opened.db.query('UPDATE record_agent_installations SET pending_proposal=$2::jsonb,pending_proposal_sha256=$3 WHERE id=$1',[a.result.installationId,JSON.stringify(wrong),digest]);
+ await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'INVALID_MAPPING'});
+ const held=await loadInstallation(opened.db,a.result.installationId);expect(held.approved_config).toBeNull();expect(held.status).toBe('setup');expect(held.pending_proposal_sha256).toBe(digest);
+});

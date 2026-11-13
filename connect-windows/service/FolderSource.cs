@@ -54,7 +54,7 @@ public static class FolderSource
             if ((File.GetAttributes(file) & FileAttributes.Directory) != 0) continue;
             if (!Path.GetExtension(file).Equals(".csv", StringComparison.OrdinalIgnoreCase)) continue;
             if (result.Count >= 10000) throw new ConnectException("SOURCE_CAPACITY_REACHED", "This source folder contains too many final CSV files. Ask the source owner to apply the agreed export retention policy.");
-            var f = new FileInfo(file); result.Add(new { name = f.Name, byteSize = f.Length });
+            var f = new FileInfo(file); result.Add(new { name = f.Name, byteSize = f.Length, lastWriteAt = f.LastWriteTimeUtc.ToString("O",CultureInfo.InvariantCulture) });
         }
         return result;
     });
@@ -83,29 +83,37 @@ public static class FolderSource
         if(start<0)start=0;
         return Enumerable.Range(0,Math.Min(100,ordered.Length)).Select(offset=>ordered[(start+offset)%ordered.Length]).ToArray();
     }
+    internal sealed record Parsed(string[] Headers,List<Dictionary<string,string>> Rows);
+    internal static Parsed Parse(byte[] bytes)
+    {
+        if(bytes.Length is 0 or >MaxCsvBytes)throw new ConnectException("CSV_SIZE_UNSUPPORTED","Use a nonempty UTF-8 CSV no larger than 2 MiB.");
+        string text;try{text=new UTF8Encoding(false,true).GetString(bytes);}catch(DecoderFallbackException){throw new ConnectException("CSV_ENCODING_UNSUPPORTED","Save the export as UTF-8 CSV.");}
+        if(text.Contains('\0'))throw new ConnectException("INVALID_CSV","The export contains a null character.");
+        var config=new CsvConfiguration(CultureInfo.InvariantCulture){HasHeaderRecord=true,DetectDelimiter=true,DetectDelimiterValues=[",",";","\t"],MaxFieldSize=10000,ExceptionMessagesContainRawData=false};
+        using var reader=new CsvReader(new StringReader(text.TrimStart('\uFEFF')),config);
+        try{
+            if(!reader.Read())throw new ConnectException("INVALID_CSV","Include a header and at least one shipment row.");reader.ReadHeader();var headers=reader.HeaderRecord??[];
+            if(headers.Length is 0 or >50||headers.Any(h=>string.IsNullOrWhiteSpace(h)||h.Length>200)||headers.Select(CsvSemantics.Key).Distinct(StringComparer.Ordinal).Count()!=headers.Length)throw new ConnectException("INVALID_CSV","Use at most 50 unique columns without normalized heading collisions.");
+            var rows=new List<Dictionary<string,string>>();while(reader.Read()){
+                if(rows.Count>=1000)throw new ConnectException("CSV_ROW_LIMIT","Use at most 1,000 shipment rows per report.");
+                if(reader.Parser.Count!=headers.Length)throw new ConnectException("INVALID_CSV","A row has a different number of columns from its header.");
+                rows.Add(headers.Select((h,i)=>(h,i)).ToDictionary(x=>x.h,x=>reader.GetField(x.i)??""));
+            }
+            if(rows.Count==0)throw new ConnectException("INVALID_CSV","Include at least one shipment row.");return new(headers,rows);
+        }catch(CsvHelperException){throw new ConnectException("INVALID_CSV","The source is not a supported UTF-8 CSV export.");}
+    }
     public static object Preview(byte[] bytes)
     {
-        string text; try { text = new UTF8Encoding(false, true).GetString(bytes); } catch(DecoderFallbackException) { throw new ConnectException("CSV_ENCODING_UNSUPPORTED","Save the source export as UTF-8 CSV."); } var config = new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true, DetectDelimiter = true, DetectDelimiterValues = [",", ";", "\t"], MaxFieldSize = 10000, ExceptionMessagesContainRawData = false };
-        using var reader = new CsvReader(new StringReader(text.TrimStart('\uFEFF')), config);
-        try
-        {
-            if (!reader.Read()) throw new ConnectException("INVALID_CSV", "Include a header row and at least one shipment row."); reader.ReadHeader(); var headers = reader.HeaderRecord ?? [];
-            if (headers.Length == 0 || headers.Length > 50 || headers.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 200) || headers.Distinct(StringComparer.Ordinal).Count() != headers.Length) throw new ConnectException("INVALID_CSV", "Use at most 50 uniquely named columns.");
-            var samples = new List<Dictionary<string, string>>(); var count = 0; while (reader.Read())
-            {
-                count++; if (count > 1000) throw new ConnectException("CSV_ROW_LIMIT", "Use at most 1,000 shipment rows per export."); if (reader.Parser.Count != headers.Length) throw new ConnectException("INVALID_CSV", "A source row has a different number of columns from its header.");
-                if (samples.Count < 10) samples.Add(headers.Select((h, i) => (h, i)).ToDictionary(x => x.h, x => Display(reader.GetField(x.i) ?? "", 40)));
-            }
-            if (count == 0) throw new ConnectException("INVALID_CSV", "Include at least one shipment row.");
-            while (samples.Count > 0 && Json.Bytes(new { headers, samples }).Length > 65536) samples.RemoveAt(samples.Count - 1);
-            return new { headers, samples, displaySamplesTruncated = count > samples.Count, rowCount = count, fileSha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)), byteSize = bytes.Length };
-        }
-        catch (CsvHelperException) { throw new ConnectException("INVALID_CSV", "The source is not a supported UTF-8 CSV export. Ask the source owner to correct its structure."); }
+        var parsed=Parse(bytes);var headers=parsed.Headers;var samples=parsed.Rows.Take(10).Select(row=>row.ToDictionary(x=>x.Key,x=>Display(x.Value,40))).ToList();
+        while(samples.Count>0&&Json.Bytes(new{headers,samples}).Length>65536)samples.RemoveAt(samples.Count-1);
+        return new{headers,samples,displaySamplesTruncated=parsed.Rows.Count>samples.Count,rowCount=parsed.Rows.Count,fileSha256=Convert.ToHexStringLower(SHA256.HashData(bytes)),byteSize=bytes.Length};
     }
     public static void ValidateContract(byte[] bytes, JsonElement approved)
     {
+        CsvSemantics.RequireValid(bytes,approved);
         if(!approved.TryGetProperty("sourceContract",out var contract)||contract.ValueKind==JsonValueKind.Null)return;
-        if(contract.GetProperty("schema").GetString()!="packproof.scheduled-csv/v1")throw new ConnectException("MAPPING_NEEDS_REVIEW","The source contract is not supported by this service version.");
+        if(contract.GetProperty("schema").GetString() is not("packproof.scheduled-csv/v1" or "packproof.scheduled-csv/v2"))throw new ConnectException("MAPPING_NEEDS_REVIEW","The source contract is not supported by this service version.");
+        if(contract.GetProperty("schema").GetString()=="packproof.scheduled-csv/v2" && (contract.GetProperty("rulesVersion").GetString()!=CsvSemantics.Version||contract.GetProperty("profileVersion").GetString()!=CsvSemantics.Profile))throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","Install the matching source validation version.");
         var preview=Json.Element(Preview(bytes));
         var actual=preview.GetProperty("headers").EnumerateArray().Select(x=>x.GetString()).ToArray();
         var expected=contract.GetProperty("expectedHeaders").EnumerateArray().Select(x=>x.GetString()).ToArray();

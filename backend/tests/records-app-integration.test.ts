@@ -51,7 +51,7 @@ describe('records through the assembled server application',()=>{
  });
 
  it('creates a durable import then opens its canonical record through the actual mounted routes',async()=>{
-  const preview=await request(app).post('/me/records/imports/preview').set(authorization()).send(csvBody('Shipment reference,Description,Tracking number\r\nMOUNT-0001,Assembled workflow parcel,0000456\r\n'));
+  const preview=await request(app).post('/me/records/imports/preview').set(authorization()).send(csvBody('Shipment reference,Description,Quantity,Tracking number\r\nMOUNT-0001,Assembled workflow parcel,1,0000456\r\n'));
   expect(preview.status,preview.text).toBe(201);expect(preview.body.state).toBe('previewed');
   const commit=await request(app).post(`/me/records/imports/${preview.body.id}/commit`).set(authorization()).send({previewVersion:preview.body.previewVersion,importValidRows:false});
   expect(commit.status,commit.text).toBe(202);expect(commit.headers.location).toBe(`/me/records/imports/${preview.body.id}`);
@@ -70,7 +70,7 @@ describe('records through the assembled server application',()=>{
   // Quoted CSV cells make JSON transport larger than the 2 MiB general API
   // envelope while the original CSV remains below its independent 2 MiB cap.
   const escapedCell='"'.repeat(6000).replace(/"/g,'""');
-  const csv='Reference,Notes\n'+Array.from({length:100},(_,index)=>`ENVELOPE-${index},"${escapedCell}"`).join('\n');
+  const csv='Reference,Description,Quantity,Notes\n'+Array.from({length:100},(_,index)=>`ENVELOPE-${index},Envelope fixture,1,"${escapedCell}"`).join('\n');
   const body=csvBody(csv);expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(2*1024*1024);expect(Buffer.byteLength(csv)).toBeLessThan(2*1024*1024);
   const accepted=await request(app).post('/me/records/imports/preview').set(authorization()).send(body);expect(accepted.status,accepted.text.slice(0,1000)).toBe(201);expect(accepted.body.counts.valid).toBe(100);
   const oversized=await request(app).post('/me/records/imports/preview').set(authorization()).send(csvBody(`Reference,Notes\nTOO-LARGE,${'A'.repeat(2*1024*1024)}`));

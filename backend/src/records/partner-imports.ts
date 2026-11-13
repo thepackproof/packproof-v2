@@ -11,7 +11,7 @@ import { importPartnerOrder } from '../platform/partner-proofs.js';
 import { idempotent } from '../platform/idempotency.js';
 import { textField } from '../platform/tenants.js';
 import { parseShipmentCsv, correctionCsv, type ShipmentCsvRow, type CsvMapping } from './csv.js';
-import { authorizeAgentPreview, authorizeAgentImport } from './agent-restrictions.js';
+import { authorizeAgentPreview, authorizeAgentImport, agentRestriction } from './agent-restrictions.js';
 import {shipmentBindingKey} from './source-reference.js';
 type Deps = Pick<AppDependencies, 'db' | 'clock' | 'objectStore' | 'devAuth'>;
 type State = 'previewed' | 'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed' | 'action_needed';
@@ -114,7 +114,7 @@ async function authorize(deps: Deps, db: Database, a: PartnerActor, j: Job, writ
     await authorizeAgentImport(db, deps.clock, a, j, processing ? 'process' : write ? 'commit' : 'read', rs.map(r => ({values:r.source_values,normalized:r.normalized})), importValidRows);
     if (!inspectRows)
         return;
-    const locations = new Set(rs.flatMap(r => r.normalized ? [r.normalized.locationId] : [])), proofs = new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []));
+    const locations = new Set(rs.map(r => j.mapping.locationId?(r.source_values[j.mapping.locationId]??'').trim()||null:r.normalized?.locationId??null)), proofs = new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []));
     for (const location of locations)
         await requireOperator(db, a, j.operator_membership_id, location);
     for (const proofId of proofs)
@@ -139,7 +139,11 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:write');
     await reauthorizePartner(deps.db, deps.clock, a, 'imports:read');
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:read');
-    const approvedInput = {integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone,headers:parsed.headers};
+    const sourceRestriction=await agentRestriction(deps.db,a);
+    if(sourceRestriction?.approved_config?.sourceContract?.schema==='packproof.scheduled-csv/v2' && !parsed.mapping.locationId){
+        for(const row of parsed.rows)if(row.normalized){row.normalized.locationId=sourceRestriction.location_id;row.payloadSha256=sha256Hex(canonicalize(row.normalized));}
+    }
+    const approvedInput = {originalSha256:digest,integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone,headers:parsed.headers};
     await authorizeAgentPreview(deps.db,deps.clock,a,approvedInput,parsed.rows);
     const result = await idempotent(deps.db, deps.clock, a.tenantId, `service-import-preview:${a.principalId}:${a.credentialId}:${a.delegationGrantId ?? ''}`, key, b, async (tx) => {
         await reauthorizePartner(tx, deps.clock, a, 'imports:write');
@@ -156,6 +160,7 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
         }>("SELECT COUNT(*)::text n FROM partner_import_jobs WHERE organization_id=$1 AND environment=$2 AND (state IN ('queued','running') OR (state='previewed' AND received_at>$3))", [a.merchantId, a.environment,new Date(deps.clock.now().getTime()-86400000).toISOString()])).rows[0];
         if (Number(active.n) >= 50)
             throw new DomainError('IMPORT_LIMIT_REACHED', 'Finish queued imports or wait for the rolling 24-hour preview allowance to recover', 409);
+        for(const r of parsed.rows)await requireOperator(tx,a,operator,parsed.mapping.locationId?(r.values[parsed.mapping.locationId]??'').trim()||null:r.normalized?.locationId??null);
         for (const r of parsed.rows)
             if (r.normalized) {
                 await requireOperator(tx, a, operator, r.normalized.locationId);
@@ -185,9 +190,7 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
             throw new DomainError('IMPORT_ORIGINAL_UNVERIFIED', 'The original spreadsheet could not be preserved at an exact verified version', 503);
         await reauthorizePartner(tx, deps.clock, a, 'imports:write');
         await reauthorizePartner(tx, deps.clock, a, 'proofs:write');
-        for (const r of parsed.rows)
-            if (r.normalized)
-                await requireOperator(tx, a, operator, r.normalized.locationId);
+        for(const r of parsed.rows)await requireOperator(tx,a,operator,parsed.mapping.locationId?(r.values[parsed.mapping.locationId]??'').trim()||null:r.normalized?.locationId??null);
         const installation = await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
         const now = deps.clock.now().toISOString(), version = sha256Hex(canonicalize({ schema: MAPPING_VERSION, sha256: digest, mapping: parsed.mapping, timeZone: parsed.timeZone, account, operator, sourceName: name }));
         await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision,source_control_revision) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23,$24)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null,control?.control_revision??0]);

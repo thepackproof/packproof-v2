@@ -26,10 +26,10 @@ describe('bounded spreadsheet parsing',()=>{
   expect(parseShipmentCsv('Order ID,Shipment ID\nA,B',undefined,'UTC').rows[0].status).toBe('ambiguous');
   expect(parseShipmentCsv('Reference,Shipment date\nA,11/04/2026',undefined,'UTC').rows[0].status).toBe('ambiguous');
   expect(parseShipmentCsv('Reference,Shipment date\nA,2026-11-01T01:30:00',undefined,'America/New_York').rows[0].status).toBe('ambiguous');
-  expect(parseShipmentCsv('Order ID,Shipment ID\n0001,B',{shipmentReference:'Order ID'},'UTC').rows[0].normalized?.shipmentReference).toBe('0001');
+  expect(parseShipmentCsv('Order ID,Shipment ID,Description,Quantity\n0001,B,Fixture,1',{shipmentReference:'Order ID',itemTitle:'Description',quantity:'Quantity'},'UTC').rows[0].normalized).toBeNull();
  });
  it('classifies conflicting references and ordinary row mistakes before any import',()=>{
-  const rows=parseShipmentCsv('Reference;Quantity\nA;1\nA;1\nB;2\nB;3\n;1\nC;1,5',undefined,'UTC').rows;
+  const rows=parseShipmentCsv('Reference;Description;Quantity\nA;Fixture;1\nA;Fixture;1\nB;Fixture;2\nB;Fixture;3\n;Fixture;1\nC;Fixture;1,5',undefined,'UTC').rows;
   expect(rows.map(row=>row.status)).toEqual(['valid','duplicate','ambiguous','ambiguous','invalid','invalid']);
  });
  it('enforces byte, row, date and encoding boundaries',()=>{
@@ -60,7 +60,7 @@ describe('durable human CSV import through canonical Proof services',()=>{
  afterAll(async()=>{await opened?.close();vi.unstubAllEnvs();});
  async function commit(id:string,version:string,partial=true,user=owner){await commitRecordImport(opened.db,clock,user,id,{previewVersion:version,importValidRows:partial});return processPendingRecordImports(deps);}
  it('preserves exact original bytes and creates one real human-attributed canonical record',async()=>{
-  const csv='\uFEFFShipment reference,Description,Tracking number\r\n000123,Warehouse parcel,00000456\r\n';
+  const csv='\uFEFFShipment reference,Description,Tracking number,Quantity\r\n000123,Warehouse parcel,00000456,1\r\n';
   const preview=await previewRecordImport(deps,owner,input(csv));expect(preview.state).toBe('previewed');expect(preview.counts.valid).toBe(1);
   const receipt=(await opened.db.query<{original_object_key:string;original_sha256:string}>('SELECT original_object_key,original_sha256 FROM record_import_jobs WHERE id=$1',[preview.id])).rows[0];
   expect((await store.get(receipt.original_object_key))?.body).toEqual(Buffer.from(csv));expect(receipt.original_sha256).toBe(sha256Hex(csv));
@@ -72,34 +72,34 @@ describe('durable human CSV import through canonical Proof services',()=>{
   expect((await opened.db.query('SELECT reference FROM record_state WHERE proof_id=$1',[proofId])).rows).toEqual([{reference:'000123'}]);
  });
  it('requires explicit partial acceptance and keeps durable successes when corrected rows are uploaded',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference,Quantity\nPARTIAL-1,1\n,2'));
+  const preview=await previewRecordImport(deps,owner,input('Reference,Quantity,Description\nPARTIAL-1,1,Fixture\n,2,Fixture'));
   expect(preview.counts).toMatchObject({valid:1,invalid:1});
   await expect(commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:false})).rejects.toMatchObject({code:'IMPORT_HAS_ROW_ERRORS'});
   await commit(preview.id,preview.previewVersion);const done=await readRecordImport(opened.db,owner,preview.id);expect(done.state).toBe('partially_succeeded');expect(done.counts.imported).toBe(1);expect(done.correctionsCsv).toContain('"","2"');
-  const fixed=await previewRecordImport(deps,owner,input('Reference,Quantity\nPARTIAL-1,1\nPARTIAL-2,2'));expect(fixed.counts).toMatchObject({duplicate:1,valid:1});
+  const fixed=await previewRecordImport(deps,owner,input('Reference,Quantity,Description\nPARTIAL-1,1,Fixture\nPARTIAL-2,2,Fixture'));expect(fixed.counts).toMatchObject({duplicate:1,valid:1});
   await commit(fixed.id,fixed.previewVersion);expect((await readRecordImport(opened.db,owner,fixed.id)).counts).toMatchObject({duplicate:1,imported:1});
  });
  it('deduplicates across new receipts and rejects changed source bytes with a reused identity',async()=>{
-  const replay=await previewRecordImport(deps,owner,input('Reference,Description,Tracking number\n000123,Warehouse parcel,00000456'));
+  const replay=await previewRecordImport(deps,owner,input('Reference,Description,Tracking number,Quantity\n000123,Warehouse parcel,00000456,1'));
   expect(replay.counts.duplicate).toBe(1);await commit(replay.id,replay.previewVersion);expect((await readRecordImport(opened.db,owner,replay.id)).recordIds).toHaveLength(1);
-  const conflict=await previewRecordImport(deps,owner,input('Reference,Description,Tracking number\n000123,Changed description,00000456'));expect(conflict.counts.ambiguous).toBe(1);
+  const conflict=await previewRecordImport(deps,owner,input('Reference,Description,Tracking number,Quantity\n000123,Changed description,00000456,1'));expect(conflict.counts.ambiguous).toBe(1);
   await expect(commit(conflict.id,conflict.previewVersion)).rejects.toMatchObject({code:'IMPORT_NO_VALID_ROWS'});
  });
  it('binds commit to the exact preview and current tenant authorization',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nSCOPED-1'));
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nSCOPED-1,Fixture,1'));
   await expect(readRecordImport(opened.db,otherOwner,preview.id)).rejects.toMatchObject({code:'ORGANIZATION_NOT_FOUND'});
-  await expect(previewRecordImport(deps,otherOwner,input('Reference\nX'))).rejects.toMatchObject({code:'ORGANIZATION_NOT_FOUND'});
+  await expect(previewRecordImport(deps,otherOwner,input('Reference,Description,Quantity\nX,Fixture,1'))).rejects.toMatchObject({code:'ORGANIZATION_NOT_FOUND'});
   await expect(commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:'stale',importValidRows:true})).rejects.toMatchObject({code:'IMPORT_PREVIEW_CHANGED'});
  });
  it('preserves human-only import authority, activation and exact storage version gates',async()=>{
   const reviewer=await insertUser(opened.db,clock);await addOrganizationMember(opened.db,clock,owner,org,{userId:reviewer,role:'REVIEWER'},'setup');
-  await expect(previewRecordImport(deps,reviewer,input('Reference\nREVIEWER-1'))).rejects.toMatchObject({code:'RECORD_PERMISSION_DENIED'});
+  await expect(previewRecordImport(deps,reviewer,input('Reference,Description,Quantity\nREVIEWER-1,Fixture,1'))).rejects.toMatchObject({code:'RECORD_PERMISSION_DENIED'});
   const principal=await createServicePrincipal(opened.db,clock,owner,org,{name:'Synthetic service'},'setup');
   const actor=(await opened.db.query<{actor_user_id:string}>('SELECT actor_user_id FROM platform_principals WHERE id=$1',[principal.id])).rows[0].actor_user_id;
-  await expect(previewRecordImport(deps,actor,input('Reference\nSERVICE-1'))).rejects.toMatchObject({code:'HUMAN_AUTHENTICATION_REQUIRED'});
-  await expect(previewRecordImport({...deps,devAuth:false},owner,input('Reference\nNO-VERSION-1'))).rejects.toMatchObject({code:'IMPORT_STORAGE_VERSION_UNAVAILABLE'});
+  await expect(previewRecordImport(deps,actor,input('Reference,Description,Quantity\nSERVICE-1,Fixture,1'))).rejects.toMatchObject({code:'HUMAN_AUTHENTICATION_REQUIRED'});
+  await expect(previewRecordImport({...deps,devAuth:false},owner,input('Reference,Description,Quantity\nNO-VERSION-1,Fixture,1'))).rejects.toMatchObject({code:'IMPORT_STORAGE_VERSION_UNAVAILABLE'});
   await setOrganizationEntitlement(opened.db,clock,admin,otherOrg,{enabled:false},'pause');
-  await expect(previewRecordImport(deps,otherOwner,input('Reference\nPENDING-1',{organizationId:otherOrg}))).rejects.toMatchObject({code:'WORKSPACE_PENDING'});
+  await expect(previewRecordImport(deps,otherOwner,input('Reference,Description,Quantity\nPENDING-1,Fixture,1',{organizationId:otherOrg}))).rejects.toMatchObject({code:'WORKSPACE_PENDING'});
   await setOrganizationEntitlement(opened.db,clock,admin,otherOrg,{enabled:true},'resume');
  });
  it('blocks unauthorized location rows before committing and rechecks location revocation',async()=>{
@@ -107,23 +107,23 @@ describe('durable human CSV import through canonical Proof services',()=>{
   await opened.db.query("INSERT INTO platform_memberships(id,organization_id,user_id,role,location_scoped,created_at) VALUES($1,$2,$3,'OPERATOR',true,$4)",[membership,org,scoped,clock.now().toISOString()]);
   await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',['loc-import',org,'North',clock.now().toISOString()]);
   await opened.db.query('INSERT INTO record_membership_locations(membership_id,organization_id,location_id) VALUES($1,$2,$3)',[membership,org,'loc-import']);
-  const invalid=await previewRecordImport(deps,scoped,input('Reference,Location\nLOCATION-MISSING,\nLOCATION-OTHER,loc-other'));expect(invalid.counts.invalid).toBe(2);
-  const preview=await previewRecordImport(deps,scoped,input('Reference,Location\nLOCATION-1,loc-import'));await commitRecordImport(opened.db,clock,scoped,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
+  const invalid=await previewRecordImport(deps,scoped,input('Reference,Location,Description,Quantity\nLOCATION-MISSING,,Fixture,1\nLOCATION-OTHER,loc-other,Fixture,1'));expect(invalid.counts.invalid).toBe(2);
+  const preview=await previewRecordImport(deps,scoped,input('Reference,Location,Description,Quantity\nLOCATION-1,loc-import,Fixture,1'));await commitRecordImport(opened.db,clock,scoped,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
   await opened.db.query('DELETE FROM record_membership_locations WHERE membership_id=$1',[membership]);await processPendingRecordImports(deps);
   expect((await readRecordImport(opened.db,owner,preview.id)).recordIds).toEqual([]);
  });
  it('retains one accepted outcome when commit and processing are repeated',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nRETRY-1'));await commit(preview.id,preview.previewVersion);
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nRETRY-1,Fixture,1'));await commit(preview.id,preview.previewVersion);
   const first=await readRecordImport(opened.db,owner,preview.id);await commit(preview.id,preview.previewVersion);const second=await readRecordImport(opened.db,owner,preview.id);
   expect(second.recordIds).toEqual(first.recordIds);expect(second.counts.imported).toBe(1);expect(await processPendingRecordImports(deps)).toEqual({processed:0,failed:0});
  });
  it('recovers an expired lease without duplicating already committed row results',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nCRASH-1'));await commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nCRASH-1,Fixture,1'));await commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
   await opened.db.query("UPDATE record_import_jobs SET state='running',lease_token='dead-worker',lease_expires_at=$2 WHERE id=$1",[preview.id,new Date(Date.now()-1000).toISOString()]);
   await processPendingRecordImports(deps);expect((await readRecordImport(opened.db,owner,preview.id)).counts.imported).toBe(1);
  });
  it('cannot create records after a slow original digest outlives the worker lease',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nSLOW-DIGEST-LEASE'));
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nSLOW-DIGEST-LEASE,Fixture,1'));
   await commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
   let simulated=Date.now();const leasedDeps={...deps,clock:{now:()=>new Date(simulated)}};
   const digest=store.digest.bind(store),slow=vi.spyOn(store,'digest').mockImplementationOnce(async(...args)=>{simulated+=120001;return digest(...args);});
@@ -138,27 +138,27 @@ describe('durable human CSV import through canonical Proof services',()=>{
   expect(done.state).toBe('succeeded');expect(done.counts.imported).toBe(1);expect(done.recordIds).toHaveLength(1);
  });
  it('fails closed on changed original bytes while preserving the receipt',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nTAMPER-1'));await commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nTAMPER-1,Fixture,1'));await commitRecordImport(opened.db,clock,owner,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
   const key=(await opened.db.query<{original_object_key:string}>('SELECT original_object_key FROM record_import_jobs WHERE id=$1',[preview.id])).rows[0].original_object_key;
   await store.put(key,Buffer.from('changed'),'text/csv');await processPendingRecordImports(deps);const failed=await readRecordImport(opened.db,owner,preview.id);
   expect(failed.state).toBe('action_needed');expect(failed.lastErrorCode).toBe('IMPORT_ORIGINAL_INTEGRITY_FAILED');expect(failed.recordIds).toEqual([]);
  });
  it('does not process revoked membership or reveal another operator import receipt',async()=>{
-  const owned=await previewRecordImport(deps,owner,input('Reference\nOWNER-ONLY'));
+  const owned=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nOWNER-ONLY,Fixture,1'));
   await expect(readRecordImport(opened.db,operator,owned.id)).rejects.toMatchObject({code:'IMPORT_NOT_FOUND'});
-  const preview=await previewRecordImport(deps,operator,input('Reference\nREVOKED-1'));await commitRecordImport(opened.db,clock,operator,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
+  const preview=await previewRecordImport(deps,operator,input('Reference,Description,Quantity\nREVOKED-1,Fixture,1'));await commitRecordImport(opened.db,clock,operator,preview.id,{previewVersion:preview.previewVersion,importValidRows:true});
   await revokeOrganizationMember(opened.db,clock,owner,org,member,'revoke');await processPendingRecordImports(deps);
   const failed=await readRecordImport(opened.db,owner,preview.id);expect(failed.recordIds).toEqual([]);expect(failed.rows[0].status).toBe('failed');
  });
  it('rejects mutation of accepted original and normalized source rows',async()=>{
-  const preview=await previewRecordImport(deps,owner,input('Reference\nIMMUTABLE-1'));
+  const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nIMMUTABLE-1,Fixture,1'));
   await expect(opened.db.query("UPDATE record_import_jobs SET original_sha256=repeat('0',64) WHERE id=$1",[preview.id])).rejects.toThrow(/immutable/);
   await expect(opened.db.query("UPDATE record_import_rows SET normalized='{}'::jsonb WHERE import_id=$1",[preview.id])).rejects.toThrow(/immutable/);
  });
  it('exposes authenticated receipts and safe downloads through the HTTP router',async()=>{
   const app=express();app.use(express.json());app.use('/me/records/imports',createRecordImportsRouter(deps));app.use((e:unknown,_r:express.Request,s:express.Response,_n:express.NextFunction)=>{s.status(e instanceof DomainError?e.httpStatus:500).json({code:e instanceof DomainError?e.code:'UNEXPECTED'});});
   expect((await request(app).get('/me/records/imports/template.csv')).status).toBe(401);
-  const preview=await request(app).post('/me/records/imports/preview').set('Authorization',`Bearer ${owner}`).send(input('Reference,Quantity\n=EVIL(),bad'));
+  const preview=await request(app).post('/me/records/imports/preview').set('Authorization',`Bearer ${owner}`).send(input('Reference,Quantity,Description\n=EVIL(),bad,Fixture'));
   expect(preview.status,preview.text).toBe(201);
   const correction=await request(app).get(`/me/records/imports/${preview.body.id}/corrections.csv`).set('Authorization',`Bearer ${owner}`);expect(correction.status).toBe(200);expect(correction.text).toContain('"\'=EVIL()"');
   const foreign=await request(app).get(`/me/records/imports/${preview.body.id}`).set('Authorization',`Bearer ${otherOwner}`);expect(foreign.status).toBe(404);

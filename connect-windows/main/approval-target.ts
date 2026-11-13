@@ -13,11 +13,11 @@ export function currentApprovalPath(status:ConnectStatus, now=Date.now()):string
  }
  if(!validId(status.installationId))throw Error('Refresh this installation before opening its approval.');
  const query=new URLSearchParams({installationId:status.installationId});
- if(status.preview){
+ if(status.preview && !status.setup?.running){
   if(!validId(status.preview.id))throw Error('Create a valid secure preview before reviewing the shipment batch.');
   query.set('importId',status.preview.id);
  }else if(!status.pendingProposal&&!status.config){
-  throw Error('No configuration is ready for browser review yet. Complete the shipping software name, version, time zone and start date, confirm the column matches, then select Request configuration approval.');
+  throw Error('No configuration is ready for browser review yet. Review the selected shipment, then select Approve and connect.');
  }
  // Only a same-installation resume locator may preserve its action. Stale
  // enrollment/import IDs and arbitrary query parameters are never carried over.

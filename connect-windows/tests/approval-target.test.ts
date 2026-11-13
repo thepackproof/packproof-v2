@@ -5,7 +5,7 @@ const base:ConnectStatus={state:'source_selected',environment:'development',inst
 const config={folderDigest:'folder',sourceName:'test',mapping:{shipmentReference:'Reference'},timeZone:'America/New_York',importValidRows:false,offlineWindowHours:24} satisfies Configuration;
 const origin='https://approved.example';
 describe('stage-correct browser review',()=>{
- it('does not open an old enrollment before a configuration request exists',()=>expect(()=>currentApprovalPath(base)).toThrow('Request configuration approval'));
+ it('does not open an old enrollment before a configuration request exists',()=>expect(()=>currentApprovalPath(base)).toThrow('Approve and connect'));
  it('uses the current installation for a pending configuration instead of stale enrollment',()=>expect(currentApprovalPath({...base,pendingProposal:config})).toBe('/app/records/connect/approve?installationId=install-123'));
  it('uses the current import receipt rather than a stale previous receipt',()=>expect(currentApprovalPath({...base,config,preview:{id:'import-new'} as ConnectStatus['preview'],approvalPath:'/app/records/connect/approve?installationId=install-old&importId=import-old'})).toBe('/app/records/connect/approve?installationId=install-123&importId=import-new'));
  it('opens only a live pending enrollment before the computer is enrolled',()=>{const s={...base,installationId:undefined,enrollment:{id:'enroll-new',state:'pending',expiresAt:'2030-01-01T00:00:00Z',comparisonCode:'123456'}};expect(currentApprovalPath(s,Date.parse('2026-11-13'))).toBe('/app/records/connect/approve?enrollmentId=enroll-new');expect(()=>currentApprovalPath(s,Date.parse('2031-01-01'))).toThrow('no longer pending');});

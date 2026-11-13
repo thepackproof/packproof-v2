@@ -7,7 +7,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal static class Program
 {
-    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint"];
+    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "analyzeLocal", "startSetup", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint"];
     public static async Task<int> Main()
     {
         string id = "unknown";

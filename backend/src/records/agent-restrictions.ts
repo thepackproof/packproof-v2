@@ -6,33 +6,50 @@ import { DomainError } from '../domain/errors.js';
 import { canonicalize } from '../canonical.js';
 import { strictBody } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
+import { CSV_RULES, analyzeColumns, headerKey, explicitInstant, eligibleHeader, type SemanticField } from './csv-semantics.js';
 
 export interface ScheduledCsvSourceContract {
-  schema: 'packproof.scheduled-csv/v1';
-  exporterName: string;
-  exporterVersion: string;
+  schema: 'packproof.scheduled-csv/v1'|'packproof.scheduled-csv/v2';
+  exporterName: string|null;
+  exporterVersion: string|null;
   expectedHeaders: string[];
-  expectedIntervalSeconds: number;
+  expectedIntervalSeconds: number|null;
+  rulesVersion?: string;
+  profileVersion?: string;
+  confirmedFields?: string[];
+  analysisRevision?: number;
+  historyPolicy?: { mode:'selected_then_new'; baselineSha256:string; observedAt:string; initialFileName:string; initialFileSha256:string };
+
   backfillFrom: string;
 }
-function explicitTimestamp(value:string):number|null {
-  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value))return null;
-  const parsed=Date.parse(value),day=Date.parse(`${value.slice(0,10)}T00:00:00Z`);
-  return Number.isFinite(parsed)&&Number.isFinite(day)&&new Date(day).toISOString().slice(0,10)===value.slice(0,10)&&Number(value.slice(11,13))<24?parsed:null;
-}
+const explicitTimestamp = explicitInstant;
 export function validateScheduledCsvSourceContract(input:unknown):ScheduledCsvSourceContract {
-  const b=strictBody(input,['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom']);
-  if(b.schema!=='packproof.scheduled-csv/v1')throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose the scheduled CSV v1 source contract',400);
-  const exporterName=textField(b.exporterName,'exporterName',100),exporterVersion=textField(b.exporterVersion,'exporterVersion',80);
-  if(!Array.isArray(b.expectedHeaders)||!b.expectedHeaders.length||b.expectedHeaders.length>50||b.expectedHeaders.some(h=>typeof h!=='string'||!h.trim()||h!==h.trim()||h.length>200)||new Set(b.expectedHeaders).size!==b.expectedHeaders.length)throw new DomainError('INVALID_SOURCE_HEADERS','Confirm at most 50 exact, unique CSV headers',400);
-  if(!Number.isInteger(b.expectedIntervalSeconds)||Number(b.expectedIntervalSeconds)<60||Number(b.expectedIntervalSeconds)>604800)throw new DomainError('INVALID_SOURCE_CADENCE','Choose a source cadence from one minute to seven days',400);
+  const v2=!!input && typeof input==='object' && 'schema' in input && input.schema==='packproof.scheduled-csv/v2';
+  const b=strictBody(input,['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom',...(v2?['rulesVersion','profileVersion','confirmedFields','historyPolicy','analysisRevision']:[])]);
+  if(b.schema!=='packproof.scheduled-csv/v1'&&!v2)throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose the scheduled CSV v1 source contract',400);
+  const exporterName=v2&&b.exporterName===null?null:textField(b.exporterName,'exporterName',100),exporterVersion=v2&&b.exporterVersion===null?null:textField(b.exporterVersion,'exporterVersion',80);
+  if(!Array.isArray(b.expectedHeaders)||!b.expectedHeaders.length||b.expectedHeaders.length>50||b.expectedHeaders.some(h=>typeof h!=='string'||!h.trim()||!v2&&h!==h.trim()||h.length>200)||new Set(b.expectedHeaders.map(h=>headerKey(String(h)))).size!==b.expectedHeaders.length)throw new DomainError('INVALID_SOURCE_HEADERS','Confirm at most 50 exact, unique CSV headers',400);
+  if(!(v2&&b.expectedIntervalSeconds===null)&&(!Number.isInteger(b.expectedIntervalSeconds)||Number(b.expectedIntervalSeconds)<60||Number(b.expectedIntervalSeconds)>604800))throw new DomainError('INVALID_SOURCE_CADENCE','Choose a source cadence from one minute to seven days',400);
   const backfillFrom=textField(b.backfillFrom,'backfillFrom',64);
   if(explicitTimestamp(backfillFrom)===null)throw new DomainError('INVALID_BACKFILL_BOUNDARY','Set a valid backfill cutoff with an explicit UTC offset',400);
+  if(v2){
+    if(b.rulesVersion!==CSV_RULES.version||b.profileVersion!==CSV_RULES.profile||!Number.isSafeInteger(b.analysisRevision)||Number(b.analysisRevision)<1)throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Install matching Connect validation rules before approving this source',409);
+    if(!Array.isArray(b.confirmedFields)||new Set(b.confirmedFields).size!==b.confirmedFields.length||b.confirmedFields.some(f=>typeof f!=='string'||!Object.hasOwn(CSV_RULES.aliases,f)))throw new DomainError('INVALID_MAPPING','Confirm only documented field meanings',400);
+    const history=strictBody(b.historyPolicy,['mode','baselineSha256','observedAt','initialFileName','initialFileSha256']);
+    if(history.mode!=='selected_then_new'||![history.baselineSha256,history.initialFileSha256].every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/.test(h))||typeof history.initialFileName!=='string'||history.initialFileName.length>255||!/\.csv$/i.test(history.initialFileName)||/[\\/:]/.test(history.initialFileName)||typeof history.observedAt!=='string'||explicitInstant(history.observedAt)===null)throw new DomainError('INVALID_SOURCE_HISTORY','Review the exact initial file and local folder baseline',400);
+    return {...b,exporterName,exporterVersion,backfillFrom} as unknown as ScheduledCsvSourceContract;
+  }
   return {schema:'packproof.scheduled-csv/v1',exporterName,exporterVersion,expectedHeaders:b.expectedHeaders as string[],expectedIntervalSeconds:Number(b.expectedIntervalSeconds),backfillFrom};
 }
 export function validateScheduledCsvRows(config:AgentApprovedConfig,rows:readonly Pick<ShipmentCsvRow,'values'|'normalized'>[],headers:readonly string[]=Object.keys(rows[0]?.values??{})) {
   const contract=config.sourceContract;
-  if(!contract)return;
+  const columns=headers as string[];
+  for(const [field,header] of Object.entries(config.mapping))if(!columns.includes(header!)||!eligibleHeader(field as SemanticField,header!))throw new DomainError('MAPPING_NEEDS_REVIEW','A mapped column has an incompatible business meaning',409);
+  if(!contract){
+    const decisions=analyzeColumns(columns,rows.map(r=>r.values),config.mapping,Object.keys(config.mapping),config.locationId,false);
+    if(decisions.some(d=>['incompatible','missing_required'].includes(d.state)))throw new DomainError('MAPPING_NEEDS_REVIEW','Revalidate this legacy mapping before new ingestion; existing receipts are preserved',409);
+    return;
+  }
   const approved=validateScheduledCsvSourceContract(contract);
   if(!config.mapping.shippedAt)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires its reported shipment timestamp column',409);
   if(canonicalize(headers)!==canonicalize(approved.expectedHeaders))throw new DomainError('MAPPING_NEEDS_REVIEW','The CSV headers differ from the administrator-approved source version',409);
@@ -45,6 +62,9 @@ export function validateScheduledCsvRows(config:AgentApprovedConfig,rows:readonl
     if(at===null)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires valid explicit-offset shipment timestamps',409);
     if(at<Date.parse(approved.backfillFrom))throw new DomainError('SOURCE_BACKFILL_BOUNDARY','This export includes rows before the administrator-approved backfill cutoff',409);
   }
+  const decisions=analyzeColumns(columns,rows.map(r=>r.values),config.mapping,approved.schema.endsWith('/v2')?approved.confirmedFields: Object.keys(config.mapping),config.locationId);
+  if(decisions.some(d=>['incompatible','needs_confirmation','missing_required'].includes(d.state)))throw new DomainError('MAPPING_NEEDS_REVIEW','The full export must pass semantic and value checks before importing',409);
+
 }
 
 /** A restriction belongs to the principal, so issuing another credential cannot
@@ -151,6 +171,7 @@ interface ImportIdentity {
   mapping: CsvMapping;
   timeZone: string;
   headers?: readonly string[];
+  originalSha256?: string;
 }
 function exactConfig(row: AgentRestriction, input: ImportIdentity) {
   const c = row.approved_config;
@@ -162,7 +183,7 @@ function rowLocations(row: AgentRestriction, mapping: CsvMapping, rows: readonly
   for (const source of rows) {
     // Check even invalid business rows. A malformed quantity must not hide a
     // request to upload another location's data in the retained original.
-    const location = mapping.locationId ? (source.values[mapping.locationId] ?? '').trim() || null : null;
+    const location = mapping.locationId ? (source.values[mapping.locationId] ?? '').trim() || null : row.location_id;
     if (location !== row.location_id || (source.normalized && source.normalized.locationId !== row.location_id)) throw new DomainError('AGENT_LOCATION_DENIED', 'Every source row must identify the approved location.', 403);
   }
 }
@@ -174,6 +195,8 @@ export async function authorizeAgentPreview(db: Database, clock: Clock, actor: P
   if (!row) return null;
   await binding(db, row, actor, clock); dataCredential(row, actor);
   if (!['ready', 'active'].includes(row.status) || !exactConfig(row, input)) throw unavailable();
+  const contract=row.approved_config!.sourceContract;
+  if(contract?.schema==='packproof.scheduled-csv/v2' && row.status!=='active' && input.originalSha256!==contract.historyPolicy!.initialFileSha256)throw new DomainError('SOURCE_CHANGED','The initial upload must be the exact file approved for this source',409);
   rowLocations(row, input.mapping, rows);
   validateScheduledCsvRows(row.approved_config!, rows, input.headers);
   return row;

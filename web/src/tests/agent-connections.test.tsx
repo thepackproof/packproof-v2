@@ -93,7 +93,7 @@ it('retains exact browser approval locators without accepting arbitrary nested r
   expect(canonicalWorkspacePath('/app/records/connect/remote-command?token=secret')).toBe('/proofs');
 });
 it('invalidates whole-batch consent when the displayed original changes', async () => {
-  const batch = (id: string) => ({ ...installation, testCandidate: { id, state: 'previewed', counts: { valid: 1 }, original: { sha256: id, byteSize: 100 } } });
+  const batch = (id: string) => ({ ...installation, testImportId:undefined, testCandidate: { id, state: 'previewed', counts: { valid: 1 }, original: { sha256: id, byteSize: 100 } } });
   const request = vi.fn(async (path: string) => batch(path.includes('import-b') ? 'import-b' : 'import-a'));
   const api = { recordsRequest: request } as unknown as PackProofApi;
   const renderApproval = (importId: string) => <AgentApproval api={api} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'agent-a', importId })} canManage/>;
