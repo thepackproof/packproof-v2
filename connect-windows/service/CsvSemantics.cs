@@ -82,6 +82,21 @@ public static class CsvSemantics
         }
         return new(ready,selected,decisions,ready?normalized[0]:Json.Element(partial),normalized.ToArray(),issues.ToArray(),fingerprint,rows.Count);
     }
+    public static bool ConfigurationSupported(JsonElement config)
+    {
+        try{
+            var map=JsonSerializer.Deserialize<Dictionary<string,string>>(config.GetProperty("mapping"),Json.Options)!;
+            if(new[]{"shipmentReference","itemTitle","quantity"}.Any(f=>!map.ContainsKey(f))||map.Values.Distinct(StringComparer.Ordinal).Count()!=map.Count||map.Any(x=>!Fields.Contains(x.Key)||!Eligible(x.Key,x.Value)))return false;
+            if(config.TryGetProperty("sourceContract",out var contract)&&contract.ValueKind==JsonValueKind.Object){
+                var schema=contract.GetProperty("schema").GetString();
+                if(schema is not("packproof.scheduled-csv/v1" or "packproof.scheduled-csv/v2")||!map.ContainsKey("shippedAt"))return false;
+                if(schema=="packproof.scheduled-csv/v2"&&(contract.GetProperty("rulesVersion").GetString()!=Version||contract.GetProperty("profileVersion").GetString()!=Profile))return false;
+                var headers=contract.GetProperty("expectedHeaders").EnumerateArray().Select(h=>h.GetString()).ToArray();
+                if(map.Values.Any(h=>!headers.Contains(h)))return false;
+            }
+            return true;
+        }catch(Exception error)when(error is JsonException or KeyNotFoundException or InvalidOperationException or ArgumentException){return false;}
+    }
     public static void RequireValid(byte[] bytes,JsonElement config)
     {
         var map=JsonSerializer.Deserialize<Dictionary<string,string>>(config.GetProperty("mapping"),Json.Options)!;

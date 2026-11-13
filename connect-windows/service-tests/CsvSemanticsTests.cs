@@ -24,6 +24,13 @@ public sealed class CsvSemanticsTests
         if(name=="leading-zero-long-id")Assert.Equal(new string('0',70),result.Shipment!.Value.GetProperty("shipmentReference").GetString());
         if(name=="bound-location-provenance")Assert.Contains(result.Decisions,d=>d.Field=="locationId"&&d.Origin=="approved_binding"&&d.State=="validated");
     }
+    [Fact] public void A_saved_mapping_cannot_use_the_active_label_as_validation()
+    {
+        var valid=Json.Element(new{mapping=new{shipmentReference="Shipment reference",itemTitle="Description",quantity="Quantity"}});
+        var wrong=Json.Element(new{mapping=new{shipmentReference="Description",itemTitle="Shipment reference",quantity="Quantity"}});
+        Assert.True(CsvSemantics.ConfigurationSupported(valid));Assert.False(CsvSemantics.ConfigurationSupported(wrong));
+        Assert.False(CsvSemantics.ConfigurationSupported(Json.Element(new{mapping=new{shipmentReference="Order ID",itemTitle="Description",quantity="Quantity"}})));
+    }
     [Fact] public void Server_disagreement_is_never_promoted_to_a_commit()
     {
         var bytes=Encoding.UTF8.GetBytes("Shipment reference,Description,Quantity,Shipment date\nSHIP-1,Elbow,12,2026-11-13T09:00:00Z\n");

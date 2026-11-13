@@ -80,5 +80,5 @@ public sealed class GuidedSetupTests : IDisposable
         var error=await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("startSetup",Json.Element(new{wholeFileUploadApproved=true,draftRevision=1}),default));
         Assert.Equal("SOURCE_CONTRACT_UNSUPPORTED",error.Code);Assert.Equal(1,requests);Assert.Equal(0,reads);
     }
-    public void Dispose(){using var connection=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=Path.Combine(root,"queue.sqlite")}.ToString());SqliteConnection.ClearPool(connection);if(Directory.Exists(root))Directory.Delete(root,true);}
+    public void Dispose(){using var connection=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=Path.Combine(root,"queue.sqlite"),Mode=SqliteOpenMode.ReadWriteCreate}.ToString());SqliteConnection.ClearPool(connection);if(Directory.Exists(root))Directory.Delete(root,true);}
 }
