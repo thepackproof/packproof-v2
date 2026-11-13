@@ -197,3 +197,16 @@ it('runs the v2 guided contract through exact approvals, canonical retrieval and
  await expect(previewPartnerImport(deps,a.actor,'v2-drift',{...input,csv:original.replace('Shipment date\n','Shipment date,Private extra\n').replace(/\n$/ ,',secret\n')})).rejects.toMatchObject({code:'MAPPING_NEEDS_REVIEW'});
  expect(Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows[0].n)).toBe(before);
 });
+
+
+it('revalidates a legacy saved proposal at approval instead of trusting its old matched selections',async()=>{
+ const {canonicalize}=await import('../src/canonical.js');
+ const a=await enroll();await ack(a);
+ const wrong={...config(a.account),mapping:{shipmentReference:'Description',itemTitle:'Shipment reference',quantity:'Quantity'}};
+ const digest=sha256Hex(canonicalize(wrong));
+ // Simulate a proposal persisted by the previous version, before the new
+ // proposal validator existed. Preserve it for review after rejection.
+ await opened.db.query('UPDATE record_agent_installations SET pending_proposal=$2::jsonb,pending_proposal_sha256=$3 WHERE id=$1',[a.result.installationId,JSON.stringify(wrong),digest]);
+ await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'INVALID_MAPPING'});
+ const held=await loadInstallation(opened.db,a.result.installationId);expect(held.approved_config).toBeNull();expect(held.status).toBe('setup');expect(held.pending_proposal_sha256).toBe(digest);
+});

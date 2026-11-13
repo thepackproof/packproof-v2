@@ -7,8 +7,8 @@ import { DomainError } from '../domain/errors.js';
 import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { canonicalize } from '../canonical.js';
-import { CSV_MAPPING_FIELDS, type CsvMapping } from './csv.js';
-import {validateScheduledCsvSourceContract,type ScheduledCsvSourceContract} from './agent-restrictions.js';
+import { CSV_MAPPING_FIELDS, type CsvMapping, type ShipmentCsvRow } from './csv.js';
+import {validateScheduledCsvSourceContract,validateScheduledCsvRows,type ScheduledCsvSourceContract} from './agent-restrictions.js';
 import { requireRecordWorkspace, requireRecordLocation, listRecordLocations, type RecordWorkspace } from './access.js';
 import { strictBody, organizationAdmin, createServicePrincipal, issuePartnerCredential, auditOrganization, reauthorizePartner, type PartnerActor } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
@@ -171,10 +171,15 @@ export async function readAgentInventory(deps:Deps,w:RecordWorkspace){
  const rs=(await deps.db.query<Installation>('SELECT * FROM record_agent_installations WHERE organization_id=$1 AND environment=$2 ORDER BY created_at DESC,id LIMIT 100',[w.organizationId,w.environment])).rows;
  return {installations:await Promise.all(rs.map(i=>agentView(deps,i)))};
 }
-export async function ownedImport(db:Database,i:Installation,id:string){
- const j=(await db.query<{id:string;state:string;integration_account_id:string;operator_membership_id:string;source_name:string;mapping:CsvMapping;time_zone:string;original_sha256:string;original_byte_size:number;preview_version:string;import_valid_rows:boolean;agent_installation_id:string;agent_config_revision:number}>(`SELECT * FROM partner_import_jobs WHERE id=$1 AND organization_id=$2 AND environment=$3 AND principal_id=$4 AND integration_account_id=$5`,[id,i.organization_id,i.environment,i.principal_id,i.integration_account_id])).rows[0];
+export async function ownedImport(db:Database,i:Installation,id:string,revalidate=false){
+ const j=(await db.query<{id:string;state:string;integration_account_id:string;operator_membership_id:string;source_name:string;mapping:CsvMapping;headers:string[];time_zone:string;original_sha256:string;original_byte_size:number;preview_version:string;import_valid_rows:boolean;agent_installation_id:string;agent_config_revision:number}>(`SELECT * FROM partner_import_jobs WHERE id=$1 AND organization_id=$2 AND environment=$3 AND principal_id=$4 AND integration_account_id=$5`,[id,i.organization_id,i.environment,i.principal_id,i.integration_account_id])).rows[0];
  if(!j)fail('IMPORT_NOT_FOUND','Import not found',404);
  if(!i.approved_config||j.agent_installation_id!==i.id||j.agent_config_revision!==i.config_revision||j.source_name!==i.approved_config.sourceName||j.operator_membership_id!==i.operator_membership_id||j.time_zone!==i.approved_config.timeZone||canonicalize(j.mapping)!==canonicalize(i.approved_config.mapping))fail('CONFIGURATION_CHANGED','This import does not match the currently approved configuration');
+ if(revalidate){
+  validateAgentConfig(i.approved_config,i);
+  const originalRows=(await db.query<{source_values:Record<string,string>;normalized:ShipmentCsvRow['normalized']}>('SELECT source_values,normalized FROM partner_import_rows WHERE import_id=$1 ORDER BY row_number',[id])).rows;
+  validateScheduledCsvRows(i.approved_config!,originalRows.map(r=>({values:r.source_values,normalized:r.normalized})),j.headers);
+ }
  const counts=(await db.query<{status:string;n:string}>('SELECT status,COUNT(*)::text n FROM partner_import_rows WHERE import_id=$1 GROUP BY status',[id])).rows;
  const rs=(await db.query<{location_id:string|null}>("SELECT normalized->>'locationId' location_id FROM partner_import_rows WHERE import_id=$1 AND normalized IS NOT NULL",[id])).rows;
  if(rs.some(r=>(r.location_id??null)!==i.location_id))fail('LOCATION_NOT_FOUND','The batch contains an unapproved location',404);
@@ -182,7 +187,7 @@ export async function ownedImport(db:Database,i:Installation,id:string){
  return {rows:displayed.map(r=>({rowNumber:r.row_number,normalized:r.normalized})),id:j.id,state:j.state,previewVersion:j.preview_version,original:{sha256:j.original_sha256,byteSize:j.original_byte_size},counts:Object.fromEntries(counts.map(r=>[r.status,Number(r.n)])),totalRows:counts.reduce((n,r)=>n+Number(r.n),0)};
 }
 async function verifyCanonicalSetup(db:Database,i:Installation,id:string){
- const receipt=await ownedImport(db,i,id);
+ const receipt=await ownedImport(db,i,id,true);
  if(receipt.state!=='succeeded')fail('VERIFICATION_REQUIRED','Wait for all durable row outcomes');
  const rows=(await db.query<{normalized:{shipmentReference:string;itemTitle:string;quantity:number;trackingNumber:string|null;carrier:string|null;shipmentDate:string|null;shippedAt:string|null;locationId:string|null};proof_id:string|null;status:string}>("SELECT normalized,proof_id,status FROM partner_import_rows WHERE import_id=$1 ORDER BY row_number",[id])).rows;
  if(!rows.length||rows.some(r=>!r.proof_id||!['imported','duplicate'].includes(r.status)))fail('VERIFICATION_REQUIRED','Every row needs a durable canonical record');
@@ -213,6 +218,7 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
  }else if(b.action==='configure'){
   if(!i.pending_proposal||b.proposalSha256!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','Refresh and review the exact proposed configuration');
   if(i.pending_proposal!.sourceContract?.schema==='packproof.scheduled-csv/v2'&&deps.clock.now().getTime()>Date.parse(i.pending_proposal!.sourceContract!.historyPolicy!.observedAt)+30*60000)fail('APPROVAL_EXPIRED','This source review expired. Reopen the selected local report and request a fresh review.');
+  validateAgentConfig(i.pending_proposal,i);
   await validateBinding(tx,w,i.pending_proposal as unknown as Record<string,unknown>);
   if((await tx.query("SELECT 1 FROM partner_import_jobs WHERE principal_id=$1 AND state IN ('queued','running') LIMIT 1",[i.principal_id])).rows[0])fail('IMPORTS_PENDING','Wait for accepted imports before changing configuration');
   // Configuration approval explicitly supersedes only uncommitted previews.
@@ -220,7 +226,7 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
   await tx.query("UPDATE partner_import_jobs SET state='action_needed',last_error_code='AGENT_CONFIGURATION_SUPERSEDED',updated_at=$2 WHERE principal_id=$1 AND state='previewed'",[i.principal_id,now]);
   await tx.query("UPDATE record_agent_installations SET approved_config=pending_proposal,config_sha256=pending_proposal_sha256,config_revision=config_revision+1,pending_proposal=NULL,pending_proposal_sha256=NULL,test_import_id=NULL,verified_import_id=NULL,status='ready',approval_user_id=$2,updated_at=$3 WHERE id=$1",[id,w.userId,now]);
  }else if(b.action==='authorize_test'){
-  const j=await ownedImport(tx,i,textField(b.importId,'importId'));
+  const j=await ownedImport(tx,i,textField(b.importId,'importId'),true);
   const receivedAt=new Date((await tx.query<{received_at:string}>('SELECT received_at FROM partner_import_jobs WHERE id=$1',[j.id])).rows[0].received_at).getTime();
   if(i.approved_config?.sourceContract?.schema==='packproof.scheduled-csv/v2'&&deps.clock.now().getTime()>receivedAt+30*60000)fail('APPROVAL_EXPIRED','This exact batch review expired. Stop this uncommitted preview, preserve its original, and request a fresh review.');
   if(j.state!=='previewed'||j.totalRows<1||Object.entries(j.counts).some(([status,n])=>!['valid','duplicate'].includes(status)&&n>0))fail('TEST_PREVIEW_INVALID','The first test needs a completely valid preview; approve the entire displayed batch');
