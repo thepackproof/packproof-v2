@@ -58,7 +58,13 @@ public sealed partial class AgentRuntime
         var result=await api.Request("POST","/v1/partner/agent/config-proposals",config,state.Token,null,ct);
         state.GuidedProposalSha256=result.GetProperty("proposalSha256").GetString();state.ApprovalPath=result.GetProperty("approvalPath").GetString();Save();await Refresh(ct);
     }
-    private bool EligibleNewFile(string name)
+    internal static void RequireInitialOriginal(byte[] bytes,string name,JsonElement config)
+    {
+        if(!config.TryGetProperty("sourceContract",out var contract)||contract.ValueKind!=JsonValueKind.Object||contract.GetProperty("schema").GetString()!="packproof.scheduled-csv/v2")return;
+        var history=contract.GetProperty("historyPolicy");
+        if(history.GetProperty("initialFileSha256").GetString()!=HashBytes(bytes)||history.GetProperty("initialFileName").GetString()!=name)throw new ConnectException("SOURCE_CHANGED","The initial upload must be the exact report approved for this source. No original was uploaded.");
+    }
+    internal bool EligibleNewFile(string name)
     {
         if(Approved?.TryGetProperty("sourceContract",out var c)!=true||c.GetProperty("schema").GetString()!="packproof.scheduled-csv/v2")return true;
         var baseline=c.GetProperty("historyPolicy").GetProperty("baselineSha256").GetString();

@@ -80,5 +80,23 @@ public sealed class GuidedSetupTests : IDisposable
         var error=await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("startSetup",Json.Element(new{wholeFileUploadApproved=true,draftRevision=1}),default));
         Assert.Equal("SOURCE_CONTRACT_UNSUPPORTED",error.Code);Assert.Equal(1,requests);Assert.Equal(0,reads);
     }
+    [Fact] public async Task The_legacy_configuration_command_cannot_bypass_raw_value_validation()
+    {
+        var state=State();using var runtime=new AgentRuntime(Host(),Store(),new PackProofClient(Host(),new Handler(_=>throw new Exception("An invalid local mapping must never be proposed remotely"))),state,(_,_)=>Original);
+        var tampered=Json.Element(new{folderDigest="folder",sourceName="Synthetic",integrationAccountId="source",operatorMembershipId="operator",mapping=new{shipmentReference="Description",itemTitle="Shipment reference",quantity="Shipment date"},timeZone="UTC",importValidRows=false,offlineWindowHours=24});
+        Assert.Equal("MAPPING_NEEDS_REVIEW",(await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("proposeConfiguration",tampered,default))).Code);
+    }
+    [Fact] public void A_forged_initial_file_binding_is_rejected_before_upload()
+    {
+        var config=Json.Element(new{sourceContract=new{schema="packproof.scheduled-csv/v2",historyPolicy=new{initialFileName="synthetic.csv",initialFileSha256=new string('0',64)}}});
+        Assert.Equal("SOURCE_CHANGED",Assert.Throws<ConnectException>(()=>AgentRuntime.RequireInitialOriginal(Original,"synthetic.csv",config)).Code);
+    }
+    [Fact] public void The_approved_filename_baseline_excludes_old_files_and_requires_its_protected_identity()
+    {
+        var state=State();state.BaselineSha256="baseline";state.ExcludedFileNames=["old.csv","synthetic.csv"];
+        using var runtime=new AgentRuntime(Host(),Store(),new PackProofClient(Host(),new Handler(_=>throw new Exception("No network expected"))),state,(_,_)=>Original);
+        Assert.False(runtime.EligibleNewFile("OLD.csv"));Assert.True(runtime.EligibleNewFile("new.csv"));
+        state.BaselineSha256="different";Assert.False(runtime.EligibleNewFile("new.csv"));Assert.True(state.LocalPaused);Assert.Equal("SOURCE_BASELINE_UNAVAILABLE",state.LastErrorCode);
+    }
     public void Dispose(){using var connection=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=Path.Combine(root,"queue.sqlite"),Mode=SqliteOpenMode.ReadWriteCreate}.ToString());SqliteConnection.ClearPool(connection);if(Directory.Exists(root))Directory.Delete(root,true);}
 }
