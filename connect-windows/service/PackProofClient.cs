@@ -7,12 +7,18 @@ public sealed class ApiException(string code, int status, TimeSpan? retryAfter =
 public sealed class PackProofClient : IDisposable
 {
     private readonly HttpClient http;
-    public DateTimeOffset? LastServerDate { get; private set; }
-    public PackProofClient(HostConfiguration host, HttpMessageHandler? handler = null)
+    private readonly TimeProvider time;
+    private DateTimeOffset? serverDate;
+    private long serverDateTimestamp;
+    // HTTP Date describes the time at receipt, not the time of the next action.
+    // Project it using elapsed (Stopwatch) time, independent of wall-clock edits.
+    public DateTimeOffset? LastServerDate => serverDate is { } observed ? observed + time.GetElapsedTime(serverDateTimestamp) : null;
+    public bool LastResponseHadServerDate { get; private set; }
+    public PackProofClient(HostConfiguration host, HttpMessageHandler? handler = null, TimeProvider? timeProvider = null)
     {
-        host.Validate();
+        host.Validate(); time = timeProvider ?? TimeProvider.System;
         http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false, UseProxy = true }) { BaseAddress = new Uri(host.ApiOrigin), Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 6 * 1024 * 1024 };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PackProofConnect/0.1.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PackProofConnect/0.1.1");
     }
     public async Task<JsonElement> Request(string method, string path, object? body, string? token, string? key, CancellationToken ct)
     {
@@ -25,8 +31,11 @@ public sealed class PackProofClient : IDisposable
         if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (key is not null) request.Headers.Add("Idempotency-Key", key);
         if (body is not null) { var bytes = body is ExactJsonBody exact ? exact.Bytes : Json.Bytes(body); if (body is ExactJsonBody checkedBody && Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) != checkedBody.Sha256) throw new ConnectException("REQUEST_BODY_INTEGRITY_FAILED", "The preserved upload request failed its integrity check. Queued work is preserved."); if (bytes.Length > 6 * 1024 * 1024) throw new ConnectException("CSV_WIRE_LIMIT", "The encoded source exceeds the upload limit. Ask the source owner for a smaller approved export."); request.Content = new ByteArrayContent(bytes); request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json"); }
+        LastResponseHadServerDate = false;
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        LastServerDate = response.Headers.Date;
+        LastResponseHadServerDate = response.Headers.Date is not null;
+        if (response.Headers.Date is { } observedDate) { serverDate = observedDate; serverDateTimestamp = time.GetTimestamp(); }
+        // A missing Date header must not erase a previously observed clock skew.
         if (!response.IsSuccessStatusCode)
         {
             string code = "PACKPROOF_REQUEST_FAILED";
