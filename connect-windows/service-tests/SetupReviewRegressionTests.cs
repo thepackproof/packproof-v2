@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using PackProof.Connect;
 using Xunit;
 namespace PackProof.Connect.Tests;
@@ -13,7 +14,14 @@ public sealed class SetupReviewRegressionTests : IDisposable
     { public long Ticks; public override long GetTimestamp() => Ticks; public override long TimestampFrequency => TimeSpan.TicksPerSecond; }
     private static HostConfiguration Host() => new("development", "https://api.example", "https://app.example", "S-1-5-21-1-2-3-1001");
     public SetupReviewRegressionTests() => Directory.CreateDirectory(root);
-    public void Dispose() => Directory.Delete(root, true);
+    public void Dispose()
+    {
+        // Disposing a SQLite connection returns its handle to the pool. Release
+        // only this fixture's pool before deleting its synthetic Windows files.
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(root, "queue.sqlite"), Mode = SqliteOpenMode.ReadWriteCreate }.ToString());
+        SqliteConnection.ClearPool(connection);
+        Directory.Delete(root, true);
+    }
     private ProtectedStore Store() { var store = new ProtectedStore(root, new PlainProtector()); store.Initialize(); return store; }
     private static JsonElement Policy(object? proposal = null) => Json.Element(new { state = "needs_approval", config = (object?)null, configRevision = 0, pendingProposal = proposal, integrationAccountId = "integration", operatorMembershipId = "operator", sourceName = "Test CSV", locationId = (string?)null });
     private static HttpResponseMessage Response(JsonElement body, DateTimeOffset? date)
