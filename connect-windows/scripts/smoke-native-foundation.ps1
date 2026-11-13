@@ -61,13 +61,20 @@ try {
  foreach ($checkId in @('identity','storage','disk')) { if (@($preflight.checks | Where-Object { $_.id -eq $checkId -and $_.state -eq 'passed' }).Count -ne 1) { throw ('Native service preflight failed: '+$checkId) } }
  Record-Pass 'actual LocalService identity DPAPI round trip and disk reserve'
  $temporary=Join-Path $exports 'setup.tmp'
- [IO.File]::WriteAllText($temporary,"Reference,Description,Quantity`r`n000123,CI synthetic shipment,1`r`n",[Text.UTF8Encoding]::new($false))
+ [IO.File]::WriteAllText($temporary,"Reference,Description,Quantity,Shipment date`r`n000123,CI synthetic shipment,1,2026-11-13T09:00:00-05:00`r`n",[Text.UTF8Encoding]::new($false))
  Move-Item -LiteralPath $temporary -Destination (Join-Path $exports 'setup.csv')
  $selected=Invoke-Bridge selectFolder @{folder=$exports}
  if (-not $selected.source.accessible) { throw 'The actual service identity cannot access its prepared export folder.' }
  $preview=Invoke-Bridge localPreview @{fileName='setup.csv'}
  if ($preview.source.samples[0].Reference -ne '000123' -or ($preview.PSObject.Properties.Name -contains 'preview' -and $preview.preview)) { throw 'Local preview must preserve identifiers and must not upload a cloud original.' }
  Record-Pass 'actual service read-only immutable CSV local preview preserves leading zeros'
+ if (-not $preview.analysis.ready -or $preview.analysis.shipment.shipmentReference -ne '000123' -or $preview.analysis.shipment.quantity -ne 1) { throw 'The installed service did not return its validated full-value shipment card.' }
+ if ($null -ne $preview.analysis.configuration.sourceContract.exporterName -or $null -ne $preview.analysis.configuration.sourceContract.expectedIntervalSeconds) { throw 'Unknown exporter metadata or cadence was fabricated.' }
+ Record-Pass 'packaged LocalService returns raw-value validated shipment with honest unknown source metadata'
+ $wrong=Invoke-Bridge analyzeLocal @{mapping=@{shipmentReference='Description';itemTitle='Reference';quantity='Shipment date';shippedAt='Shipment date';carrier='Quantity'};confirmedFields=@()}
+ if ($wrong.analysis.ready -or @($wrong.analysis.decisions | Where-Object { $_.state -eq 'incompatible' }).Count -lt 1) { throw 'The screenshot-like incorrect mapping was accepted by the installed service.' }
+ Record-Pass 'packaged LocalService blocks screenshot-like tampered mapping without uploading an original'
+ $preview=Invoke-Bridge localPreview @{fileName='setup.csv'}
  $stateHash=(Get-FileHash -LiteralPath (Join-Path $data 'state.bin') -Algorithm SHA256).Hash
  Run-Lifecycle Stop
  Start-Service -Name $serviceName

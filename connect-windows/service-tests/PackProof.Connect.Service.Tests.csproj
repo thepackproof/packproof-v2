@@ -9,5 +9,7 @@
 <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
 <PackageReference Include="CsvHelper" Version="33.1.0" />
 </ItemGroup>
-<ItemGroup><Compile Include="../service/AgentRuntime.cs" Link="AgentRuntime.cs"/><Compile Include="../service/CollectionPolicy.cs" Link="CollectionPolicy.cs"/><Compile Include="../service/Models.cs" Link="Models.cs"/><Compile Include="../service/ProtectedStore.cs" Link="ProtectedStore.cs"/><Compile Include="../service/DurableQueue.cs" Link="DurableQueue.cs"/><Compile Include="../service/FolderSource.cs" Link="FolderSource.cs"/><Compile Include="../service/PackProofClient.cs" Link="PackProofClient.cs"/></ItemGroup>
+<ItemGroup><Compile Include="../service/AgentSetup.cs" Link="AgentSetup.cs"/><Compile Include="../service/AgentRuntime.cs" Link="AgentRuntime.cs"/><Compile Include="../service/CollectionPolicy.cs" Link="CollectionPolicy.cs"/><Compile Include="../service/Models.cs" Link="Models.cs"/><Compile Include="../service/ProtectedStore.cs" Link="ProtectedStore.cs"/><Compile Include="../service/DurableQueue.cs" Link="DurableQueue.cs"/><Compile Include="../service/CsvSemantics.cs" Link="CsvSemantics.cs"/><Compile Include="../service/FolderSource.cs" Link="FolderSource.cs"/><Compile Include="../service/PackProofClient.cs" Link="PackProofClient.cs"/></ItemGroup>
+<ItemGroup><EmbeddedResource Include="../../backend/src/records/connect-csv-rules.json" Link="connect-csv-rules.json" /></ItemGroup>
+<ItemGroup><None Include="../../backend/tests/fixtures/connect-csv-corpus.json" Link="connect-csv-corpus.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

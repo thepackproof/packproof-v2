@@ -132,11 +132,11 @@ public sealed class RecoveryTests : IDisposable {
     }
     [Fact] public void Approved_source_contract_holds_schema_drift_and_ambiguous_or_pre_cutoff_timestamps()
     {
-        var approved=Json.Element(new{mapping=new{shippedAt="Reported at"},sourceContract=new{schema="packproof.scheduled-csv/v1",expectedHeaders=new[]{"Reference","Reported at"},backfillFrom="2026-11-01T00:00:00Z"}});
-        FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-11-07T08:00:00-05:00\r\n"),approved);
-        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at,New field\r\n000045,2026-11-07T08:00:00Z,extra\r\n"),approved)).Code);
-        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-11-07\r\n"),approved)).Code);
-        Assert.Equal("SOURCE_BACKFILL_BOUNDARY",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Reported at\r\n000045,2026-10-31T23:59:59Z\r\n"),approved)).Code);
+        var approved=Json.Element(new{timeZone="UTC",mapping=new{shipmentReference="Reference",itemTitle="Description",quantity="Quantity",shippedAt="Reported at"},sourceContract=new{schema="packproof.scheduled-csv/v1",expectedHeaders=new[]{"Reference","Description","Quantity","Reported at"},backfillFrom="2026-11-01T00:00:00Z"}});
+        FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Description,Quantity,Reported at\r\n000045,Fixture,1,2026-11-07T08:00:00-05:00\r\n"),approved);
+        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Description,Quantity,Reported at,New field\r\n000045,Fixture,1,2026-11-07T08:00:00Z,extra\r\n"),approved)).Code);
+        Assert.Equal("MAPPING_NEEDS_REVIEW",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Description,Quantity,Reported at\r\n000045,Fixture,1,2026-11-07\r\n"),approved)).Code);
+        Assert.Equal("SOURCE_BACKFILL_BOUNDARY",Assert.Throws<ConnectException>(()=>FolderSource.ValidateContract(Encoding.UTF8.GetBytes("Reference,Description,Quantity,Reported at\r\n000045,Fixture,1,2026-10-31T23:59:59Z\r\n"),approved)).Code);
     }
     [Fact] public void Bounded_backfill_scan_reaches_later_files_and_revisits_the_full_source_without_starvation()
     {

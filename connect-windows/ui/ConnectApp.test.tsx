@@ -3,108 +3,43 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { ConnectApp } from './ConnectApp';
-import type { ConnectBridge, ConnectStatus } from './types';
-afterEach(cleanup);
-const config = { sourceName: 'Dispatch', folderDigest: 'f'.repeat(64), integrationAccountId: 'source-a', operatorMembershipId: 'member-a', locationId: null, timeZone: 'UTC', importValidRows: false, offlineWindowHours: 24, mapping: { shipmentReference: 'Reference', itemTitle: 'Description', quantity: 'Quantity' } };
-const initial: ConnectStatus = { state: 'ready', environment: 'sandbox', installationId: 'install-a', config, configRevision: 1, source: { folder: 'approved folder', folderDigest: config.folderDigest, accessible: true, selectedFileName: 'shipment.csv', fileSha256: 'digest', headers: ['Reference', 'Description', 'Quantity'], samples: [{ Reference: '000123', Description: '=SUM(1)', Quantity: '1' }] }, health: { serviceOnline: true, queueCount: 0 } };
-it('fails closed when the installed bridge is absent', async () => {
-  render(<ConnectApp/>);
-  expect(await screen.findByRole('alert')).toHaveTextContent('secure connection');
-  expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
+import { analysis, bridgeFor, selected, configuration } from './test-fixtures';
+import type { ConnectStatus } from './types';
+afterEach(()=>{cleanup();vi.useRealTimers();});
+it('fails closed when the installed bridge is absent',()=>{
+ render(<ConnectApp/>);expect(screen.getByRole('alert')).toHaveTextContent('secure Windows helper');expect(screen.getByRole('button',{name:'Sign in and approve this computer'})).toBeDisabled();
 });
-it('requires mapping confirmation and explicit whole-original upload consent', async () => {
-  const previewCloud = vi.fn(async () => initial), bridge = { getStatus: vi.fn(async () => initial), previewCloud } as unknown as ConnectBridge;
-  render(<ConnectApp bridge={bridge}/>);
-  await screen.findByRole('heading', { name: 'Get ready' });
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled());
-  const upload = screen.getByRole('button', { name: /Continue to secure preview/ });
-  expect(upload).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: /shipment number, quantities, dates/ }));
-  expect(upload).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: /including columns that are not mapped/ }));
-  expect(upload).toBeEnabled();
-  expect(screen.getByRole('heading',{name:'Shipment 000123'})).toBeVisible();
-  fireEvent.click(screen.getByText('See the original report columns'));
-  expect(screen.getAllByText('=SUM(1)')).toHaveLength(2);
-  fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'), { target: { value: 'America/New_York' } });
-  expect(upload).toBeDisabled();
-  expect(previewCloud).not.toHaveBeenCalled();
+it('shows the service-validated shipment without technical inputs or a blanket correctness checkbox',async()=>{
+ const bridge=bridgeFor(selected);render(<ConnectApp bridge={bridge}/>);
+ expect(await screen.findByRole('heading',{name:'Does this shipment look right?'})).toBeVisible();
+ expect(screen.getByRole('heading',{name:'PP-TEST-20261113-001'})).toBeVisible();expect(screen.getByText('<script>alert(1)</script> =SUM(1)')).toBeVisible();expect(document.querySelector('script')).toBeNull();
+ expect(screen.queryByLabelText(/software version|polling|time zone/i)).toBeNull();expect(screen.queryByRole('checkbox')).toBeNull();expect(bridge.previewCloud).not.toHaveBeenCalled();expect(bridge.startSetup).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ expect(screen.getByText(/entire original report is uploaded and preserved/)).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Approve and connect'}));await waitFor(()=>expect(bridge.startSetup).toHaveBeenCalledWith({wholeFileUploadApproved:true,draftRevision:1}));expect(bridge.commitBatch).not.toHaveBeenCalled();
 });
-it('a queued response never unlocks automatic collection', async () => {
-  const current: ConnectStatus = { ...initial, preview: { id: 'import-a', previewVersion: 'v', state: 'queued', original: { sha256: 'digest', byteSize: 40 }, counts: { valid: 1, invalid: 0 }, rows: [], recordIds: [] } };
-  render(<ConnectApp bridge={{ getStatus: vi.fn(async () => current) } as unknown as ConnectBridge}/>);
-  await waitFor(() => expect(screen.getByRole('heading', { name: 'Start collecting' })).toBeVisible());
-  expect(screen.getByRole('button', { name: /Continue to automatic collection/ })).toBeDisabled();
-  expect(screen.getByText(/waiting for confirmation/)).toBeVisible();
+it('blocks a stale bad mapping and asks only for the unresolved detail',async()=>{
+ const bad={...analysis,ready:false,decisions:analysis.decisions.map(d=>d.field==='quantity'?{...d,state:'incompatible' as const,sourceColumnId:'Shipment date',reasonCodes:['VALUE_TYPE_OR_RANGE'],candidates:['Quantity']}:d)};
+ render(<ConnectApp bridge={bridgeFor({...selected,analysis:bad})}/>);await screen.findByRole('heading',{name:'Review quantity'});expect(screen.getByRole('button',{name:'Continue'})).toBeDisabled();expect(screen.queryByText(/7 of 7 matched/)).toBeNull();
 });
-
-it('requires the named exporter, cadence and timestamp cutoff before requesting a new source approval',async()=>{
-  const current:ConnectStatus={...initial,config:undefined,configRevision:0,binding:{sourceName:config.sourceName,integrationAccountId:config.integrationAccountId,operatorMembershipId:config.operatorMembershipId,locationId:null},source:{...initial.source!,headers:['Shipment reference','Description','Quantity','Shipment date']}};
-  const proposeConfiguration=vi.fn(async()=>current);render(<ConnectApp bridge={{getStatus:vi.fn(async()=>current),proposeConfiguration} as unknown as ConnectBridge}/>);
-  await screen.findByRole('heading',{name:'Get ready'});await waitFor(()=>expect(screen.getByRole('button',{name:'Refresh status'})).toBeEnabled());
-  fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));const approve=screen.getByRole('button',{name:'Request configuration approval'});expect(approve).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Name of your shipping software'),{target:{value:'Synthetic exporter'}});fireEvent.change(screen.getByLabelText('Shipping software version'),{target:{value:'fixture-1'}});fireEvent.change(screen.getByLabelText('Start collecting shipments from'),{target:{value:'2026-11-01T00:00:00Z'}});fireEvent.change(screen.getByLabelText('Time zone used in shipment reports'),{target:{value:'UTC'}});
-  fireEvent.click(screen.getByRole('checkbox',{name:/shipment number, quantities, dates/}));expect(approve).toBeEnabled();fireEvent.click(approve);
-  await waitFor(()=>expect(proposeConfiguration).toHaveBeenCalledWith(expect.objectContaining({sourceContract:{schema:'packproof.scheduled-csv/v1',exporterName:'Synthetic exporter',exporterVersion:'fixture-1',expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:900,backfillFrom:'2026-11-01T00:00:00Z'}})));
-  expect(screen.getByRole('button',{name:/Continue to secure preview/})).toBeDisabled();
+it('a queued receipt never unlocks active collection or implies a canonical record',async()=>{
+ const current:ConnectStatus={...selected,setup:{running:true,phase:'first_import_pending'},preview:{id:'import-fixture',previewVersion:'v',state:'queued',original:{sha256:'b'.repeat(64),byteSize:200},counts:{valid:1},rows:[],recordIds:[]}};
+ render(<ConnectApp bridge={bridgeFor(current)}/>);await screen.findByRole('heading',{name:'Complete your browser review'});expect(screen.queryByRole('heading',{name:'Your connection is active'})).toBeNull();expect(screen.getByText(/Record creation has not yet been confirmed/)).toBeVisible();expect(screen.queryByRole('button',{name:'Open shipment records'})).toBeNull();
 });
-
-it('requires informed preservation consent before expired-installation recovery', async () => {
-  const recoverEnrollment = vi.fn(async () => ({ state: 'needs_approval', environment: 'sandbox', enrollment: { id: 'enroll-new', comparisonCode: 'ABCD-EFGH', expiresAt: '2026-11-07T10:00:00Z', state: 'pending' }, health: { serviceOnline: true, queueCount: 0, preservedQueueCount: 2 } }));
-  const current: ConnectStatus = { ...initial, state: 'revoked', recoveryAvailable: true };
-  render(<ConnectApp bridge={{ getStatus: vi.fn(async () => current), recoverEnrollment } as unknown as ConnectBridge}/>);
-  await screen.findByRole('heading', { name: 'Recover this installation with new approval.' });
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh status' })).toBeEnabled());
-  const recover = screen.getByRole('button', { name: 'Begin approved recovery' });
-  expect(recover).toBeDisabled();
-  expect(recoverEnrollment).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('checkbox', { name: /old receipts will not transfer/ }));
-  fireEvent.click(recover);
-  await waitFor(() => expect(recoverEnrollment).toHaveBeenCalledWith({ preservePendingWorkApproved: true }));
-  expect(await screen.findByRole('heading', { name: 'Find records' })).toBeVisible();
+it('requires informed preservation consent before installation recovery',async()=>{
+ const current={...selected,state:'revoked',recoveryAvailable:true};const bridge=bridgeFor(current);render(<ConnectApp bridge={bridge}/>);await screen.findByRole('heading',{name:'Recover this installation'});const button=screen.getByRole('button',{name:'Begin approved recovery'});expect(button).toBeDisabled();fireEvent.click(screen.getByRole('checkbox',{name:/Preserve former pending work/}));fireEvent.click(button);await waitFor(()=>expect(bridge.recoverEnrollment).toHaveBeenCalledWith({preservePendingWorkApproved:true}));
 });
-
-it('presents three operator stages without exposing seven internal steps',async()=>{
-  render(<ConnectApp bridge={{getStatus:vi.fn(async()=>({...initial,preview:undefined,source:undefined,config:undefined,installationId:undefined}))} as unknown as ConnectBridge}/>);
-  await screen.findByRole('heading',{name:'Find records'});
-  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Find records');
-  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Get ready');
-  expect(screen.getByRole('navigation',{name:'Setup progress'})).toHaveTextContent('Start collecting');
-  expect(screen.getByRole('navigation',{name:'Setup progress'})).not.toHaveTextContent('Field mapping');
-  expect(screen.getByRole('button',{name:/Get started/})).toBeEnabled();
+it('presents three stages and explains folder access without reading the filesystem',async()=>{
+ const bridge=bridgeFor({...selected,source:undefined,analysis:undefined});render(<ConnectApp bridge={bridge}/>);await screen.findByRole('heading',{name:'Choose your shipment folder'});expect(screen.getByRole('navigation',{name:'Setup progress'}).querySelectorAll('li')).toHaveLength(3);fireEvent.click(screen.getByText('Help finding your shipment reports'));expect(bridge.chooseFolder).not.toHaveBeenCalled();expect(screen.getByText(/Network shares and direct database connections/)).toBeVisible();
 });
-
-it('explains how to find reports without granting filesystem access', async()=>{
-  const chooseFolder=vi.fn();
-  render(<ConnectApp bridge={{getStatus:vi.fn(async()=>({...initial,source:undefined,config:undefined})),chooseFolder} as unknown as ConnectBridge}/>);
-  await screen.findByRole('heading',{name:'Find records'});
-  // A configured enrollment without a chosen folder resumes at the folder screen.
-  fireEvent.click(screen.getByRole('button',{name:/not sure where the files are/}));
-  expect(screen.getByRole('textbox',{name:'Message for your IT team'})).toHaveAttribute('readonly');
-  expect(chooseFolder).not.toHaveBeenCalled();
+it('shows non-destructive repair guidance when the helper cannot be reached',async()=>{
+ render(<ConnectApp bridge={bridgeFor(selected,{getStatus:vi.fn(async()=>{throw Error('Helper stopped');})})}/>);await screen.findByRole('heading',{name:'The background helper needs attention.'});expect(screen.getByRole('button',{name:'Check again'})).toBeEnabled();expect(screen.getByText(/Keep the protected data folder/)).toBeVisible();
 });
-
-it('shows recovery guidance when the trusted helper cannot be reached',async()=>{
-  const getStatus=vi.fn().mockRejectedValue(new Error("PackProof's background helper is stopped."));
-  render(<ConnectApp bridge={{getStatus} as unknown as ConnectBridge}/>);
-  expect(await screen.findByRole('heading',{name:'PackProof needs one quick fix.'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'Check again'})).toBeEnabled();
-  expect(screen.getByText('Show repair steps')).toBeVisible();
+it('observes browser enrollment and advances without a check-approval action',async()=>{
+ vi.useFakeTimers();const waiting:ConnectStatus={state:'needs_approval',environment:'sandbox',health:{serviceOnline:true,queueCount:0},enrollment:{id:'fixture',comparisonCode:'CODE-123',expiresAt:'2026-12-01T00:00:00Z',state:'pending'}};
+ const bridge=bridgeFor(waiting,{pollEnrollment:vi.fn(async()=>({...selected,source:undefined,analysis:undefined}))});render(<ConnectApp bridge={bridge}/>);await act(async()=>{await Promise.resolve();await Promise.resolve();});expect(screen.getByText(/This window checks automatically/)).toBeVisible();await act(async()=>{vi.advanceTimersByTime(6000);await Promise.resolve();await Promise.resolve();});expect(bridge.pollEnrollment).toHaveBeenCalledTimes(1);expect(screen.getByRole('heading',{name:'Choose your shipment folder'})).toBeVisible();expect(screen.queryByRole('button',{name:/Check approval/})).toBeNull();
 });
-
-
-it('detects pending browser authorization automatically and advances without manual checks', async () => {
-  vi.useFakeTimers();
-  try {
-    const waiting: ConnectStatus = { state: 'needs_approval', environment: 'sandbox', health: { serviceOnline: true, queueCount: 0 },
-      enrollment: { id: 'enroll-a', comparisonCode: 'CODE-123', expiresAt: '2026-11-10T23:00:00Z', state: 'pending' } };
-    const pollEnrollment = vi.fn(async () => ({ ...waiting, state: 'source_selected', installationId: 'install-a' }));
-    render(<ConnectApp bridge={{ getStatus: vi.fn(async () => waiting), pollEnrollment } as unknown as ConnectBridge}/>);
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-    expect(screen.getByText(/This window checks automatically/)).toBeVisible();
-    expect(pollEnrollment).not.toHaveBeenCalled();
-    await act(async () => { vi.advanceTimersByTime(6000); await Promise.resolve(); await Promise.resolve(); });
-    expect(pollEnrollment).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('heading', { name: 'Where does your team save shipment reports?' })).toBeVisible();
-  } finally { cleanup(); vi.useRealTimers(); }
+it('requires current verification plus the service active acknowledgement for completion',async()=>{
+ const current:ConnectStatus={...selected,config:configuration,configRevision:1,state:'active',verification:{complete:true,recordId:'proof-fixture',configRevision:1,fileSha256:selected.source!.fileSha256}};
+ const bridge=bridgeFor(current);render(<ConnectApp bridge={bridge}/>);await screen.findByRole('heading',{name:'Your connection is active'});fireEvent.click(screen.getByRole('button',{name:'Open shipment records'}));expect(bridge.openRecord).toHaveBeenCalledWith('proof-fixture');
 });

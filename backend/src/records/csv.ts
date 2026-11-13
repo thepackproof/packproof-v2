@@ -1,6 +1,7 @@
 import { DomainError } from '../domain/errors.js';
 import { canonicalize } from '../canonical.js';
 import { sha256Hex } from '../hash.js';
+import { CSV_RULES, headerKey, eligibleHeader } from './csv-semantics.js';
 
 export const CSV_LIMITS = { bytes: 2 * 1024 * 1024, rows: 1000, columns: 50, cellLength: 10000 } as const;
 export const CSV_MAPPING_FIELDS = ['shipmentReference','itemTitle','quantity','trackingNumber','carrier','shippedAt','locationId'] as const;
@@ -25,16 +26,8 @@ export interface ParsedShipmentCsv {
   rows: ShipmentCsvRow[];
 }
 
-const aliases: Record<CsvMappingField, string[]> = {
-  shipmentReference: ['shipmentreference','shipmentid','shipmentnumber','orderreference','orderid','ordernumber','reference'],
-  itemTitle: ['itemtitle','description','product','item','title'],
-  quantity: ['quantity','qty','units'],
-  trackingNumber: ['trackingnumber','tracking','trackingid'],
-  carrier: ['carrier','shippingcarrier'],
-  shippedAt: ['shippedat','shipmentdate','shipdate','shippeddate'],
-  locationId: ['locationid','location'],
-};
-const key = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+const aliases = CSV_RULES.aliases;
+const key = headerKey;
 
 /** A bounded RFC-4180 parser. No evaluation, number coercion or HTML parsing. */
 export function parseCsv(csv: string, delimiter: ',' | ';' | '\t'): string[][] {
@@ -73,7 +66,7 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
   if (Buffer.from(csv,'utf8').toString('utf8') !== csv) throw invalid('The spreadsheet contains invalid Unicode. Save it as UTF-8 CSV and upload again.');
   if (Buffer.byteLength(csv, 'utf8') > CSV_LIMITS.bytes) throw new DomainError('CSV_TOO_LARGE', 'Use a CSV file no larger than 2 MiB.', 413);
   if (typeof timeZoneInput !== 'string' || !timeZoneInput.length || timeZoneInput.length > 100) throw new DomainError('TIME_ZONE_REQUIRED', 'Choose the source location time zone before previewing the spreadsheet.', 400);
-  try { new Intl.DateTimeFormat('en-US', { timeZone: timeZoneInput }).format(); }
+  try { if(timeZoneInput !== 'source-offset') new Intl.DateTimeFormat('en-US', { timeZone: timeZoneInput }).format(); }
   catch { throw new DomainError('INVALID_TIME_ZONE', 'Choose a valid IANA time zone, such as America/New_York or UTC.', 400); }
   const source = csv.replace(/^\uFEFF/, '');
   const candidates = ([',',';','\t'] as const).map(delimiter => {
@@ -83,9 +76,9 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
   if (!candidates[0].parsed) return parseCsv(source, ',') as never;
   const { delimiter, parsed } = candidates[0];
   if (!parsed || parsed.length < 2) throw invalid('Include a header row and at least one shipment row.');
-  const headers = parsed[0].map(value => value.trim());
+  const headers = parsed[0];
   if (headers.some(header => !header || header.length > 200)) throw invalid('Every spreadsheet column needs a nonempty header of at most 200 characters.');
-  if (new Set(headers).size !== headers.length) throw invalid('Two columns have the same heading. Rename one so the mapping is unambiguous.');
+  if (new Set(headers.map(headerKey)).size !== headers.length) throw invalid('Two columns have the same heading. Rename one so the mapping is unambiguous.');
   const mapping: CsvMapping = {};
   const mappingProblems: string[] = [];
   if (mappingInput !== undefined && mappingInput !== null) {
@@ -101,7 +94,9 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
       else if (matches.length > 1) mappingProblems.push(`Choose which column identifies ${field}; more than one heading matches.`);
     }
   }
-  if (!mapping.shipmentReference) mappingProblems.push('Choose the column that identifies the shipment or order.');
+  if (!mapping.shipmentReference) mappingProblems.push('Choose the column that identifies the shipment; order IDs require a separately approved identity contract.');
+  for (const field of ['itemTitle','quantity'] as const) if(!mapping[field]) mappingProblems.push(`Choose the ${field} column; missing values cannot be invented.`);
+  for (const [field, header] of Object.entries(mapping)) if(!eligibleHeader(field as CsvMappingField,header!) || Object.entries(mapping).some(([other,h])=>other!==field && h===header)) mappingProblems.push(`The column ${header} is incompatible with ${field}.`);
   const rows: ShipmentCsvRow[] = parsed.slice(1).map((cells, index) => {
     const rowNumber = index + 2;
     const values = Object.fromEntries(headers.map((header, i) => [header, cells[i] ?? '']));
@@ -111,21 +106,23 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
     const shipmentReference = value('shipmentReference');
     if (!shipmentReference) errors.push(`Row ${rowNumber} is missing a shipment reference. Choose the correct column or add a reference and upload again.`);
     if (shipmentReference.length > 200) errors.push(`Row ${rowNumber} shipment reference exceeds 200 characters.`);
-    const itemTitle = value('itemTitle') || `Shipment ${shipmentReference}`;
+    const itemTitle = value('itemTitle');
+    if(!itemTitle) errors.push(`Row ${rowNumber} is missing contents.`);
     if (itemTitle.length > 200) errors.push(`Row ${rowNumber} description exceeds 200 characters.`);
     const quantityText = value('quantity');
-    const quantity = quantityText ? Number(quantityText) : 1;
+    const quantity = Number(quantityText);
+    if(!quantityText) errors.push(`Row ${rowNumber} is missing quantity.`);
     if (quantityText && (!/^\d+$/.test(quantityText) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100000)) errors.push(`Row ${rowNumber} quantity must be a whole number from 1 to 100,000; decimal conventions are not inferred.`);
     const trackingNumber = value('trackingNumber') || null, carrier = value('carrier') || null;
-    if ((trackingNumber?.length ?? 0) > 200 || (carrier?.length ?? 0) > 200) errors.push(`Row ${rowNumber} tracking and carrier fields may contain at most 200 characters.`);
+    if ((trackingNumber?.length ?? 0) > CSV_RULES.shippingTextMax || (carrier?.length ?? 0) > CSV_RULES.shippingTextMax) errors.push(`Row ${rowNumber} tracking and carrier fields may contain at most 100 characters.`);
     const shippedAt = value('shippedAt') || null;
     let shipmentDate: string | null = null, ambiguous = false;
     if (shippedAt) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(shippedAt) && !Number.isNaN(Date.parse(shippedAt)) && new Date(shippedAt).toISOString().slice(0,10) === shippedAt) shipmentDate = shippedAt;
       else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(shippedAt) && !Number.isNaN(Date.parse(shippedAt)) && new Date(`${shippedAt.slice(0,10)}T00:00:00Z`).toISOString().slice(0,10)===shippedAt.slice(0,10)) {
-        const parts = new Intl.DateTimeFormat('en-US',{timeZone:timeZoneInput,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(shippedAt));
+        const parts = new Intl.DateTimeFormat('en-US',{timeZone:timeZoneInput === 'source-offset' ? 'UTC' : timeZoneInput,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(shippedAt));
         const part = (name: string) => parts.find(p => p.type === name)!.value;
-        shipmentDate = `${part('year')}-${part('month')}-${part('day')}`;
+        shipmentDate = timeZoneInput === 'source-offset' ? shippedAt.slice(0,10) : `${part('year')}-${part('month')}-${part('day')}`;
       } else { ambiguous = true; errors.push(`Row ${rowNumber} shipment date is ambiguous. Use YYYY-MM-DD or an ISO timestamp with an explicit UTC offset. The selected source time zone is ${timeZoneInput}.`); }
     }
     const locationId = value('locationId') || null;

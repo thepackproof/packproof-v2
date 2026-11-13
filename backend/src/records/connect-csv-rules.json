@@ -1,0 +1,67 @@
+{
+  "version": "packproof.csv-semantics/v2",
+  "profile": "packproof.shipment-csv/v2",
+  "quantityMin": 1,
+  "quantityMax": 100000,
+  "textMax": 200,
+  "required": [
+    "shipmentReference",
+    "itemTitle",
+    "quantity",
+    "shippedAt"
+  ],
+  "aliases": {
+    "shipmentReference": [
+      "shipmentreference",
+      "shipmentref",
+      "shipmentid",
+      "shipmentidentifier",
+      "shipmentnumber",
+      "shipmentno",
+      "reference"
+    ],
+    "itemTitle": [
+      "itemdescription",
+      "description",
+      "itemtitle",
+      "product",
+      "item",
+      "title",
+      "contents"
+    ],
+    "quantity": [
+      "quantity",
+      "qty",
+      "units"
+    ],
+    "trackingNumber": [
+      "trackingnumber",
+      "tracking",
+      "trackingid"
+    ],
+    "carrier": [
+      "carrier",
+      "shippingcarrier"
+    ],
+    "shippedAt": [
+      "shippedat",
+      "shipmentdate",
+      "shipdate",
+      "shippeddate",
+      "reportedat"
+    ],
+    "locationId": [
+      "locationid",
+      "location"
+    ]
+  },
+  "forbiddenShipmentAliases": [
+    "orderid",
+    "ordernumber",
+    "orderreference",
+    "trackingnumber",
+    "trackingid",
+    "tracking"
+  ],
+  "shippingTextMax": 100
+}

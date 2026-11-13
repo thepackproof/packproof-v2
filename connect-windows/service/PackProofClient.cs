@@ -18,7 +18,7 @@ public sealed class PackProofClient : IDisposable
     {
         host.Validate(); time = timeProvider ?? TimeProvider.System;
         http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false, UseProxy = true }) { BaseAddress = new Uri(host.ApiOrigin), Timeout = TimeSpan.FromSeconds(30), MaxResponseContentBufferSize = 6 * 1024 * 1024 };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PackProofConnect/0.1.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PackProofConnect/"+AgentRuntime.InstalledVersion);
     }
     public async Task<JsonElement> Request(string method, string path, object? body, string? token, string? key, CancellationToken ct)
     {

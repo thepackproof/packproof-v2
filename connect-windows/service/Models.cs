@@ -30,6 +30,16 @@ public sealed record HostConfiguration(string Environment, string ApiOrigin, str
 }
 public sealed class LocalState
 {
+    public JsonElement? LocalAnalysis { get; set; }
+    public int DraftRevision { get; set; }
+    public string[]? ExcludedFileNames { get; set; }
+    public string? BaselineSha256 { get; set; }
+    public string? BaselineObservedAt { get; set; }
+    public bool GuidedSetup { get; set; }
+    public string? GuidedProposalSha256 { get; set; }
+    public string? GuidedFileSha256 { get; set; }
+    public string? GuidedPhase { get; set; }
+    public string? VerifiedSetupImportId { get; set; }
     public string? Token { get; set; }
     public string? InstallationId { get; set; }
     public DateTimeOffset? CredentialExpiresAt { get; set; }

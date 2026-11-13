@@ -1,0 +1,120 @@
+[
+  {
+    "name": "screenshot-supported",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "ready": true
+  },
+  {
+    "name": "screenshot-wrong-seven",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Description",
+      "itemTitle": "Shipment reference",
+      "quantity": "Shipment date",
+      "trackingNumber": "Shipment date",
+      "carrier": "Quantity",
+      "shippedAt": "Shipment date",
+      "locationId": "Description"
+    },
+    "ready": false
+  },
+  {
+    "name": "leading-zero-long-id",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\n0000000000000000000000000000000000000000000000000000000000000000000000,A title longer than forty characters that must survive unchanged,2,2026-11-13T09:00:00Z\n",
+    "ready": true
+  },
+  {
+    "name": "date-as-quantity",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,2026-11-13,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "bad-row-after-display-cap",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nSHIP-0,Elbow,1,2026-11-13T09:00:00Z\nSHIP-1,Elbow,1,2026-11-13T09:00:00Z\nSHIP-2,Elbow,1,2026-11-13T09:00:00Z\nSHIP-3,Elbow,1,2026-11-13T09:00:00Z\nSHIP-4,Elbow,1,2026-11-13T09:00:00Z\nSHIP-5,Elbow,1,2026-11-13T09:00:00Z\nSHIP-6,Elbow,1,2026-11-13T09:00:00Z\nSHIP-7,Elbow,1,2026-11-13T09:00:00Z\nSHIP-8,Elbow,1,2026-11-13T09:00:00Z\nSHIP-9,Elbow,1,2026-11-13T09:00:00Z\nSHIP-11,Elbow,1unit,2026-11-13T09:00:00Z\n",
+    "ready": false
+  },
+  {
+    "name": "no-order-id-equivalence",
+    "csv": "Order ID,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "ambiguous-reference",
+    "csv": "Shipment ID,Shipment number,Description,Quantity,Shipment date\nA,B,Elbow,1,2026-11-13T09:00:00Z\n",
+    "ready": false
+  },
+  {
+    "name": "unconfirmed-unknown-column",
+    "csv": "Dispatch key,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Dispatch key",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "ready": false
+  },
+  {
+    "name": "confirmed-unknown-column",
+    "csv": "Dispatch key,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Dispatch key",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ],
+    "ready": true
+  },
+  {
+    "name": "normalization-collision",
+    "csv": "Shipment-ID,Shipment_ID,Description,Quantity,Shipment date\nA,B,Elbow,1,2026-11-13T09:00:00Z\n",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "calendar-rollover",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-02-30T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "missing-offset",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00\n",
+    "ready": false
+  },
+  {
+    "name": "fractional-quantity",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,1.5,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "numeric-carrier",
+    "csv": "Shipment reference,Description,Quantity,Shipment date,Carrier\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00,12\n",
+    "ready": false
+  },
+  {
+    "name": "html-and-formulas-are-text",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nSAFE-1,\"<script>alert(1)</script> =SUM(1)\",1,2026-11-13T09:00:00Z\n",
+    "ready": true
+  },
+  {
+    "name": "mixed-grain-line-items",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\nPP-TEST-20261113-001,TEST ONLY - Different line item,12,2026-11-13T09:00:00-05:00\n",
+    "ready": false,
+    "mixedGrain": true
+  },
+  {
+    "name": "source-location-conflict",
+    "csv": "Shipment reference,Description,Quantity,Shipment date,Location ID\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00,other-location\n",
+    "locationId": "approved-location",
+    "ready": false
+  },
+  {
+    "name": "bound-location-provenance",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "locationId": "approved-location",
+    "ready": true
+  }
+]

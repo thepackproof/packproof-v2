@@ -1,147 +1,1262 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { configKey, guidedStage, GUIDED_STAGES, previewValid, resumeStep, suggestMapping, verificationCurrent } from './state';
-import { getBridge, type Configuration, type ConnectBridge, type ConnectStatus } from './types';
-const FIELDS = [['shipmentReference', 'Shipment number', true], ['itemTitle', 'What was shipped', true], ['quantity', 'Number of items', true], ['trackingNumber', 'Tracking number', false], ['carrier', 'Carrier', false], ['shippedAt', 'Shipment date and time', false], ['locationId', 'Location ID', false]] as const;
-const readable = (value: string) => value.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
-const time = (value?: string) => value ? new Date(value).toLocaleString() : 'Not reported';
-function Notice({ children, tone = 'info' }: { children: ReactNode; tone?: string }) { return <div className={`connect-notice ${tone}`}>{children}</div>; }
-function defaultConfig(status: ConnectStatus): Configuration {
-  return status.pendingProposal || status.config || { sourceName: status.binding?.sourceName || status.sourceName || 'Scheduled CSV Export Folder v1', integrationAccountId: status.binding?.integrationAccountId || status.integrationAccountId, operatorMembershipId: status.binding?.operatorMembershipId || status.operatorMembershipId, locationId: status.binding?.locationId ?? status.locationId ?? null, folderDigest: status.source?.folderDigest || '', mapping: suggestMapping(status.source?.headers || []), timeZone: '', importValidRows: false, offlineWindowHours: 24, sourceContract: { schema: 'packproof.scheduled-csv/v1', exporterName: '', exporterVersion: '', expectedHeaders: status.source?.headers || [], expectedIntervalSeconds: 900, backfillFrom: '' } };
+import { useEffect, useRef, useState } from "react";
+import {
+  GUIDED_STAGES,
+  guidedStage,
+  resumeStep,
+  verificationCurrent,
+} from "./state";
+import {
+  getBridge,
+  type ConnectBridge,
+  type ConnectStatus,
+  type LocalAnalysis,
+} from "./types";
+const fields = [
+  ["shipmentReference", "Shipment number"],
+  ["itemTitle", "Contents"],
+  ["quantity", "Quantity"],
+  ["shippedAt", "Shipment date and time"],
+  ["trackingNumber", "Tracking number"],
+  ["carrier", "Carrier"],
+  ["locationId", "Location"],
+] as const;
+const label = (field: string) =>
+  fields.find(([key]) => key === field)?.[1] ?? field;
+const stamp = (value?: string) =>
+  value
+    ? new Date(value).toLocaleString(undefined, { timeZoneName: "short" })
+    : "Not reported";
+const phaseText: Record<string, string> = {
+  permission_review:
+    "Waiting for configuration and original-file upload approval in your browser.",
+  cloud_preview_pending:
+    "Preserving the approved original and comparing the server interpretation.",
+  batch_review: "Review the exact shipment batch in the same browser window.",
+  first_import_pending:
+    "Waiting for durable shipment records. Your original and receipt are preserved.",
+  recurring_approval_pending:
+    "Your first import is confirmed. Approve ongoing collection in your browser.",
+  active: "The background service has acknowledged automatic collection.",
+  needs_review: "This source needs review before collection can continue.",
+  needs_retry: "Resume your saved setup request.",
+};
+function Shipment({
+  analysis,
+  uploaded = false,
+}: {
+  analysis: LocalAnalysis;
+  uploaded?: boolean;
+}) {
+  const shipment = analysis.shipment as unknown as
+    | Record<string, unknown>
+    | undefined;
+  const value = (field: string) => {
+    const decision = analysis.decisions.find((d) => d.field === field);
+    if (decision?.state === "missing_optional") return "Not provided";
+    if (decision?.state !== "validated") return "Needs review";
+    const v = shipment?.[field];
+    return v === undefined || v === null
+      ? "Not provided"
+      : field === "shippedAt"
+        ? stamp(String(v))
+        : String(v);
+  };
+  return (
+    <article className="shipment-card" aria-label="Shipment preview">
+      <div className="shipment-caption">
+        <span>SHIPMENT FROM YOUR REPORT</span>
+        <span className="pill">
+          {uploaded
+            ? "Original uploaded · local interpretation"
+            : "Local preview · not uploaded"}
+        </span>
+      </div>
+      <h2>{value("shipmentReference")}</h2>
+      <p className="shipment-contents">{value("itemTitle")}</p>
+      <dl className="shipment-facts">
+        {fields.slice(2).map(([field, name]) => (
+          <div key={field}>
+            <dt>{name}</dt>
+            <dd>{value(field)}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="source-caption">
+        {analysis.configuration.sourceContract?.historyPolicy?.initialFileName}{" "}
+        · Row 2 of {analysis.rowCount} shipment{" "}
+        {analysis.rowCount === 1 ? "row" : "rows"}
+      </p>
+    </article>
+  );
 }
-export function ConnectApp({ bridge = getBridge() }: { bridge?: ConnectBridge }) {
-  const [status, setStatus] = useState<ConnectStatus | null>(null), [step, setStep] = useState(0), [busy, setBusy] = useState(''), [error, setError] = useState(''), [draft, setDraft] = useState<Configuration | undefined>(), [dirty, setDirty] = useState(false), [file, setFile] = useState(''), [computerStaysOn, setComputerStaysOn] = useState(false), [producerContract, setProducerContract] = useState(false), [mappingConfirmed, setMappingConfirmed] = useState(false), [uploadConsent, setUploadConsent] = useState(false), [batchConsent, setBatchConsent] = useState(false), [diagnosticNotice, setDiagnosticNotice] = useState(''), [recoveryConsent, setRecoveryConsent] = useState(false), [folderHelp, setFolderHelp] = useState(false), [preflightError, setPreflightError] = useState(''), [showFieldDetails, setShowFieldDetails] = useState(false);
-  const mounted = useRef(true), heading = useRef<HTMLHeadingElement>(null), requestGeneration = useRef(0), preflightStarted = useRef(false);
-  useEffect(() => { mounted.current = true; const generation = ++requestGeneration.current; if (!bridge) return; setBusy('Checking saved setup'); void bridge.getStatus().then(next => { if (!mounted.current || generation !== requestGeneration.current) return; setStatus(next); setDraft(defaultConfig(next)); setFile(next.source?.selectedFileName || ''); setStep(resumeStep(next)); }).catch(caught => { if (mounted.current) setError(caught instanceof Error ? caught.message : 'The installed service could not be reached. Ask IT to check the PackProof Connect service.'); }).finally(() => { if (mounted.current) setBusy(''); }); return () => { mounted.current = false; }; }, [bridge]);
+export function ConnectApp({
+  bridge = getBridge(),
+}: {
+  bridge?: ConnectBridge;
+}) {
+  const [status, setStatus] = useState<ConnectStatus | null>(null),
+    [stage, setStage] = useState(0),
+    [busy, setBusy] = useState(""),
+    [error, setError] = useState(""),
+    [details, setDetails] = useState(false),
+    [correction, setCorrection] = useState(false),
+    [diagnostic, setDiagnostic] = useState(""),
+    [recoveryConsent, setRecoveryConsent] = useState(false);
+  const mounted = useRef(true),
+    generation = useRef(0),
+    inFlight = useRef(false),
+    heading = useRef<HTMLHeadingElement>(null);
+  const analysis = status?.analysis;
+  async function action(
+    message: string,
+    operation: () => Promise<ConnectStatus>,
+    nextStage?: number,
+  ) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const current = ++generation.current;
+    setBusy(message);
+    setError("");
+    try {
+      const next = await operation();
+      if (!mounted.current || current !== generation.current) return;
+      setStatus(next);
+      if (nextStage !== undefined) setStage(nextStage);
+    } catch (caught) {
+      if (mounted.current && current === generation.current)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The operation could not be confirmed. Your originals and queued work are preserved.",
+        );
+    } finally {
+      if (mounted.current && current === generation.current) setBusy("");
+      inFlight.current = false;
+    }
+  }
   useEffect(() => {
-    // Read-only readiness checks happen without a separate operator step. A service
-    // failure must be visible, never silently marked as a successful check.
-    if (!bridge || !status || preflightStarted.current || typeof bridge.checkComputer !== 'function') return;
-    preflightStarted.current = true;
-    void bridge.checkComputer().then(result => {
-      if (mounted.current) setStatus(current => current ? { ...current, checks: result.checks } : result);
-    }).catch(caught => {
-      if (mounted.current) setPreflightError(caught instanceof Error ? caught.message : 'Computer checks need attention.');
-    });
+    mounted.current = true;
+    const current = ++generation.current;
+    if (bridge) {
+      setBusy("Loading your connection");
+      void bridge
+        .getStatus()
+        .then((next) => {
+          if (!mounted.current || current !== generation.current) return;
+          setStatus(next);
+          setStage(guidedStage(resumeStep(next)));
+        })
+        .catch((caught) => {
+          if (mounted.current)
+            setError(
+              caught instanceof Error
+                ? caught.message
+                : "The background helper is unavailable.",
+            );
+        })
+        .finally(() => {
+          if (mounted.current) setBusy("");
+        });
+    }
+    return () => {
+      mounted.current = false;
+      generation.current++;
+    };
+  }, [bridge]);
+  const checked = useRef(false);
+  useEffect(() => {
+    if (!bridge || !status || checked.current) return;
+    if (typeof bridge.checkComputer !== "function") {
+      checked.current = true;
+      setError(
+        "This app needs the matching installed background helper. Run the official installer to repair the installation.",
+      );
+      return;
+    }
+    checked.current = true;
+    void bridge
+      .checkComputer()
+      .then((next) => {
+        if (mounted.current)
+          setStatus((value) =>
+            value ? { ...value, checks: next.checks } : next,
+          );
+      })
+      .catch((caught) => {
+        if (mounted.current)
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "The automatic computer check needs attention.",
+          );
+      });
   }, [bridge, !!status]);
   useEffect(() => {
-    if (!bridge || step !== 2 || status?.installationId || status?.enrollment?.state !== 'pending') return;
-    let active = true;
-    let polling = false;
-    // Enrollment redemption remains inside the protected LocalService. Nothing secret
-    // crosses into the renderer; the UI simply observes the approved installation.
-    const timer = setInterval(() => {
-      if (busy || polling) return;
-      polling = true;
-      void bridge.pollEnrollment().then(next => {
-        if (!active) return;
-        setStatus(next);
-        if (next.installationId) { setStep(3); setError(''); }
-      }).catch(caught => {
-        if (active) setError(caught instanceof Error ? caught.message : 'Unable to check approval. You can still reopen the approval page.');
-      }).finally(() => { polling = false; });
-    }, 6000);
-    return () => { active = false; clearInterval(timer); };
-  }, [bridge, step, status?.installationId, status?.enrollment?.id, status?.enrollment?.state, busy]);
-  useEffect(() => { heading.current?.focus(); }, [step]);
-  useEffect(() => { setMappingConfirmed(false); setUploadConsent(false); setBatchConsent(false); }, [status?.configRevision, status?.source?.fileSha256, status?.preview?.id]);
-  const invalidate = () => { setDirty(true); setMappingConfirmed(false); setUploadConsent(false); setBatchConsent(false); };
-  async function action(label: string, operation: () => Promise<ConnectStatus>, nextStep?: number) {
-    if (busy) return; setBusy(label); setError(''); const generation = ++requestGeneration.current;
-    try { const next = await operation(); if (!mounted.current || generation !== requestGeneration.current) return; setStatus(next); if (nextStep !== undefined) setStep(nextStep); if ((next.pendingProposal || next.config) && !dirty) setDraft(next.pendingProposal || next.config); }
-    catch (caught) { if (mounted.current) setError(caught instanceof Error ? caught.message : 'The operation could not be confirmed. Your queued work is preserved. Refresh status before trying again.'); }
-    finally { if (mounted.current) setBusy(''); }
+    heading.current?.focus();
+  }, [stage]);
+  // Observe the real service, with one request in flight and bounded backoff. The
+  // service owns upload, exact-receipt commit and first-record verification.
+  useEffect(() => {
+    if (
+      !bridge ||
+      !status ||
+      !(
+        (status.enrollment?.state === "pending" && !status.installationId) ||
+        status.setup?.running
+      )
+    )
+      return;
+    let alive = true,
+      timer: ReturnType<typeof setTimeout>,
+      attempt = 0;
+    const poll = async () => {
+      if (!alive) return;
+      if (!inFlight.current) {
+        const current = generation.current;
+        try {
+          const next = status.installationId
+            ? await bridge.getStatus()
+            : await bridge.pollEnrollment();
+          if (alive && current === generation.current) {
+            setStatus(next);
+            if (next.installationId && !status.installationId) setStage(0);
+          }
+        } catch (caught) {
+          if (alive)
+            setError(
+              caught instanceof Error
+                ? caught.message
+                : "Approval status could not be checked. Reopen the saved review to continue.",
+            );
+        }
+      }
+      if (alive)
+        timer = setTimeout(
+          poll,
+          Math.min(30000, 6000 * 2 ** Math.min(attempt++, 3)),
+        );
+    };
+    timer = setTimeout(poll, 6000);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [
+    bridge,
+    status?.installationId,
+    status?.enrollment?.id,
+    status?.enrollment?.state,
+    status?.setup?.running,
+  ]);
+  const disabled = !bridge || !!busy;
+  const compatible =
+    !!analysis &&
+    status?.capabilities?.rulesVersion === analysis.binding.rulesVersion;
+  const blockedChecks =
+    status?.checks?.filter((c) => c.state === "blocked") ?? [];
+  const verified =
+    !!status && verificationCurrent(status, status.config, false);
+  const active =
+    !!status &&
+    status.state === "active" &&
+    verified &&
+    status.health.serviceOnline &&
+    !status.pendingProposal;
+  const unresolved = analysis?.decisions.find((d) =>
+    ["missing_required", "incompatible", "needs_confirmation"].includes(
+      d.state,
+    ),
+  );
+  function external(operation: () => Promise<unknown>) {
+    setError("");
+    void operation().catch((caught) => {
+      if (mounted.current)
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The trusted PackProof page could not be opened.",
+        );
+    });
   }
-  function external(operation: () => Promise<unknown>) { setError(''); void operation().catch(caught => { if (mounted.current) setError(caught instanceof Error ? caught.message : 'The trusted PackProof page could not be opened. Try again from this setup window.'); }); }
-  const blocked = !bridge || !!busy;
-   const stage = guidedStage(step);
-  const configApproved = !!status?.config && !status.pendingProposal && !dirty && configKey(draft) === configKey(status.config);
-  const verified = status && verificationCurrent(status, draft, dirty);
-  const checksPassed = !!status?.checks?.length && status.checks.every(check => check.state === 'passed' || check.state === 'warning');
-  const expectedRows = status?.preview ? Object.values(status.preview.counts).reduce((total, n) => total + n, 0) : 0;
-  const update = (changes: Partial<Configuration>) => { if (!draft) return; setDraft({ ...draft, ...changes }); invalidate(); };
-  return <div className="connect-shell"><a className="connect-skip" href="#connect-content">Skip to setup</a><aside className="connect-sidebar"><div className="connect-brand"><img src="./brand/packproof-symbol.svg" width="38" height="38" alt=""/><span>PackProof<small>CONNECT YOUR OPERATION</small></span></div><nav aria-label="Setup progress"><ol>{GUIDED_STAGES.map((label, index) => <li key={label} className={stage > index ? 'completed' : ''} aria-current={stage === index ? 'step' : undefined}><span aria-hidden="true">{stage > index ? '✓' : index + 1}</span>{label}</li>)}</ol></nav><div className="connect-sidebar-note"><strong>One source. One clear record.</strong><p>The API stays hosted. This computer only collects your approved exports.</p><small>{status?.installedVersion ? `Version ${status.installedVersion}` : 'Installed version not reported'} · {status?.environment || 'Environment not confirmed'}</small></div></aside><div className="connect-workspace"><header className="connect-topbar"><span>Setup assistant <b>Local shipment exports</b></span><button className="quiet" disabled={blocked} onClick={() => bridge && void action('Refreshing authorization and service status', () => bridge.refresh())}>Refresh status</button></header><main id="connect-content" aria-busy={!!busy}><div className="connect-heading"><span className="eyebrow">STAGE {stage + 1} OF {GUIDED_STAGES.length}</span><h1 ref={heading} tabIndex={-1}>{GUIDED_STAGES[stage]}</h1><p className="connect-stage-description">{['We’ll help you find the shipment files your team already creates.','We’ll check the information and ask only where we need your help.','Review a real shipment, approve collection, and confirm it is working.'][stage]}</p></div>{!bridge && <div role="alert"><Notice tone="blocked">The secure connection to the installed Windows service is unavailable. Open this setup from the installed PackProof Connect application. No source has been connected.</Notice></div>}{error && <div role="alert"><Notice tone="blocked">{error}</Notice></div>}
-{preflightError && <div role="alert"><Notice tone="warning">We couldn't complete the automatic computer check. {preflightError}</Notice></div>}
-{(!!error && !status || status?.health?.serviceOnline === false) && <section className="connect-repair" aria-label="Background helper recovery"><div className="connect-repair-icon" aria-hidden="true">!</div><div><h2>PackProof needs one quick fix.</h2><p>The background helper isn't responding. Automatic collection cannot start until it can be verified. Checking again won't erase your original shipment files.</p><div className="connect-actions"><button className="primary" disabled={blocked} onClick={() => bridge && void action('Checking the background helper', async () => { const current = await bridge.getStatus(); setDraft(defaultConfig(current)); setStep(resumeStep(current)); return current; })}>Check again</button><details><summary>Show repair steps</summary><p>Close this window, then run your official PackProof Connect installer again with administrator approval. Reopen Connect and select <strong>Refresh status</strong>. If the helper still fails, contact your administrator and share the redacted diagnostic report when available. Do not delete the protected PackProof data folder.</p></details></div></div></section>}{status?.health.lastErrorCode && <Notice tone="warning">Action needed: {readable(status.health.lastErrorCode)}. Existing queued work remains preserved.</Notice>}{status?.state === 'revoked' && <Notice tone="blocked">This installation’s access was revoked. New collection is stopped. An administrator must approve recovery in PackProof.</Notice>}{status?.authorizationNotice && <Notice tone="warning">{status.authorizationNotice}</Notice>}{status?.recoveryAvailable && <section className="connect-card" aria-label="Installation recovery"><h2>Recover this installation with new approval.</h2><p>The former protected queue and receipts stay preserved. A new credential cannot take ownership of old receipts. Ask your administrator to revoke or replace the former installation in PackProof, then approve this computer again. Retained source exports must be replayed explicitly under the same authorized source; conflicts need review.</p><label className="connect-checkbox"><input type="checkbox" disabled={blocked} checked={recoveryConsent} onChange={event => setRecoveryConsent(event.target.checked)}/>Preserve former queued work and begin new browser approval. I understand old receipts will not transfer.</label><button className="primary" disabled={blocked || !recoveryConsent} onClick={() => bridge && void action('Preserving former work and requesting browser recovery', async () => { const next = await bridge.recoverEnrollment({ preservePendingWorkApproved: true }); setDraft(undefined); setFile(''); setRecoveryConsent(false); invalidate(); return next; }, 2)}>Begin approved recovery</button></section>}
-    {step === 0 && <section className="connect-card connect-welcome-card">
-      <div className="connect-hero-icon" aria-hidden="true">↗</div>
-      <h2>Let's connect your shipping records.</h2>
-      <p className="lead">PackProof turns approved shipment reports into organized records. We'll walk you through the setup, even if you've never connected software before.</p>
-      <div className="connect-benefits">
-        <div><span aria-hidden="true">01</span><strong>Find your shipment records</strong><p>Choose where your shipping software saves its reports.</p></div>
-        <div><span aria-hidden="true">02</span><strong>Check the details</strong><p>We'll recognize the columns and show you a real sample.</p></div>
-        <div><span aria-hidden="true">03</span><strong>Keep everything updated</strong><p>Approve the connection and let PackProof collect new exports.</p></div>
+  async function inspectFile(name: string) {
+    if (!bridge) return;
+    await action(
+      "Checking the complete shipment report",
+      () => bridge.previewLocal(name),
+      1,
+    );
+    setCorrection(false);
+  }
+  function changeColumn(field: string, column: string) {
+    if (!analysis || !bridge) return;
+    const mapping = { ...analysis.configuration.mapping };
+    if (column) mapping[field] = column;
+    else delete mapping[field];
+    void action("Validating the report", () =>
+      bridge.analyzeLocal({
+        mapping,
+        confirmedFields: (
+          analysis.configuration.sourceContract?.confirmedFields ?? []
+        ).filter((f) => f !== field),
+      }),
+    );
+  }
+  function confirmColumn(field: string) {
+    if (!analysis || !bridge) return;
+    void action("Checking the confirmed column", () =>
+      bridge.analyzeLocal({
+        mapping: analysis.configuration.mapping,
+        confirmedFields: [
+          ...new Set([
+            ...(analysis.configuration.sourceContract?.confirmedFields ?? []),
+            field,
+          ]),
+        ],
+      }),
+    );
+  }
+  return (
+    <div className="connect-shell">
+      <a className="connect-skip" href="#connect-content">
+        Skip to setup
+      </a>
+      <aside className="connect-sidebar">
+        <div className="connect-brand">
+          <img
+            src="./brand/packproof-symbol.svg"
+            width="38"
+            height="38"
+            alt=""
+          />
+          <span>
+            PackProof<small>CONNECT</small>
+          </span>
+        </div>
+        <nav aria-label="Setup progress">
+          <ol>
+            {GUIDED_STAGES.map((name, index) => (
+              <li
+                key={name}
+                aria-current={stage === index ? "step" : undefined}
+                className={stage > index ? "completed" : ""}
+              >
+                <span aria-hidden="true">
+                  {stage > index ? "✓" : index + 1}
+                </span>
+                {name}
+              </li>
+            ))}
+          </ol>
+        </nav>
+        <div className="connect-sidebar-note">
+          <strong>Your originals stay unchanged.</strong>
+          <p>
+            PackProof reads only the folder you select. The approved service can
+            collect while this window is closed.
+          </p>
+          <small>
+            {status?.installedVersion
+              ? `Version ${status.installedVersion}`
+              : "Version not reported"}{" "}
+            · {status?.environment ?? "Environment not confirmed"}
+          </small>
+        </div>
+      </aside>
+      <div className="connect-workspace">
+        <header className="connect-topbar">
+          <span>
+            {status?.binding?.sourceName ?? "Shipment connection"}
+            {status?.binding?.organizationId && (
+              <small>
+                Workspace{" "}
+                {status.binding.organizationName ?? "Approved workspace"}
+              </small>
+            )}
+          </span>
+          <button
+            className="quiet"
+            disabled={disabled}
+            onClick={() => bridge && external(() => bridge.openPortal())}
+          >
+            Help
+          </button>
+        </header>
+        <main id="connect-content" aria-busy={!!busy}>
+          <div className="connect-heading">
+            <span className="eyebrow">STAGE {stage + 1} OF 3</span>
+            <h1 ref={heading} tabIndex={-1}>
+              {active
+                ? "Your connection is active"
+                : stage === 0
+                  ? "Let's connect your shipment records."
+                  : stage === 1
+                    ? "Does this shipment look right?"
+                    : "Ready to connect these shipments?"}
+            </h1>
+            <p>
+              {active
+                ? "New eligible reports are collected by the approved background service."
+                : stage === 0
+                  ? "Choose your shipment folder. We’ll check the report before anything is uploaded."
+                  : stage === 1
+                    ? "Recognize a real shipment from your report. We’ll ask only where details need review."
+                    : "Review what will be uploaded, then approve the connection in your browser."}
+            </p>
+          </div>
+          {(!bridge || error) && (
+            <div role="alert" className="connect-notice blocked">
+              {error ||
+                "Open this setup from the installed PackProof Connect application. The secure Windows helper is unavailable."}
+            </div>
+          )}
+          {error && !status && bridge && (
+            <section className="connect-repair">
+              <div>
+                <h2>The background helper needs attention.</h2>
+                <p>
+                  Run the official PackProof Connect installer to repair the
+                  helper. Keep the protected data folder and queued work.
+                </p>
+                <button
+                  className="secondary"
+                  disabled={disabled}
+                  onClick={() =>
+                    void action("Checking the background helper", () =>
+                      bridge.getStatus(),
+                    )
+                  }
+                >
+                  Check again
+                </button>
+              </div>
+            </section>
+          )}
+          {status?.authorizationNotice && (
+            <p className="connect-notice warning">
+              {status.authorizationNotice}
+            </p>
+          )}
+          {status?.health.lastErrorCode && (
+            <p className="connect-notice warning">
+              Action needed:{" "}
+              {status.health.lastErrorCode.replaceAll("_", " ").toLowerCase()}.
+              Pending work is preserved.
+            </p>
+          )}
+          {status?.state === "revoked" && (
+            <p role="alert" className="connect-notice blocked">
+              This installation’s access was revoked. Collection is stopped.
+            </p>
+          )}
+          {blockedChecks.length > 0 && (
+            <section className="connect-card">
+              <h2>The background helper needs attention.</h2>
+              {blockedChecks.map((c) => (
+                <p key={c.id}>{c.detail}</p>
+              ))}
+              <button
+                className="secondary"
+                disabled={disabled}
+                onClick={() =>
+                  bridge &&
+                  void action("Checking this computer", () =>
+                    bridge.checkComputer(),
+                  )
+                }
+              >
+                Check again
+              </button>
+            </section>
+          )}
+          {status?.recoveryAvailable && (
+            <section className="connect-card">
+              <h2>Recover this installation</h2>
+              <p>
+                Your former queue, credentials and receipts stay preserved. Ask
+                your administrator to approve this computer again. Old receipts
+                cannot transfer to a new credential.
+              </p>
+              <label className="connect-checkbox">
+                <input
+                  type="checkbox"
+                  checked={recoveryConsent}
+                  onChange={(e) => setRecoveryConsent(e.target.checked)}
+                />
+                Preserve former pending work and begin new browser approval.
+              </label>
+              <button
+                className="secondary"
+                disabled={disabled || !recoveryConsent}
+                onClick={() =>
+                  bridge &&
+                  void action(
+                    "Preserving work for recovery",
+                    () =>
+                      bridge.recoverEnrollment({
+                        preservePendingWorkApproved: true,
+                      }),
+                    0,
+                  )
+                }
+              >
+                Begin approved recovery
+              </button>
+            </section>
+          )}
+          {stage === 0 && (
+            <section className="connect-card">
+              {!status?.installationId ? (
+                <>
+                  <h2>Connect your approved workspace</h2>
+                  <p>
+                    Sign in in your browser and approve this computer for the
+                    exact workspace, source and teammate.
+                  </p>
+                  {status?.enrollment?.state === "pending" ? (
+                    <>
+                      <div className="connect-comparison">
+                        <span>Compare this code with your browser</span>
+                        <strong>{status.enrollment.comparisonCode}</strong>
+                        <p>Expires {stamp(status.enrollment.expiresAt)}</p>
+                      </div>
+                      <p role="status">
+                        Waiting for browser approval. This window checks
+                        automatically.
+                      </p>
+                      <button
+                        className="secondary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge && external(() => bridge.openApproval())
+                        }
+                      >
+                        Resume approval
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="primary"
+                        disabled={
+                          disabled ||
+                          !status?.health.serviceOnline ||
+                          blockedChecks.length > 0
+                        }
+                        onClick={() =>
+                          bridge &&
+                          void action("Opening browser approval", () =>
+                            bridge.beginEnrollment(),
+                          )
+                        }
+                      >
+                        Sign in and approve this computer
+                      </button>
+                      {status?.enrollment && (
+                        <p>
+                          {status.enrollment.state === "denied"
+                            ? "Approval was denied."
+                            : "This approval expired."}{" "}
+                          Start a fresh request when you are ready.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h2>Choose your shipment folder</h2>
+                  <p>
+                    PackProof reads completed shipment reports from this folder.
+                    Your originals stay unchanged.
+                  </p>
+                  <div className="connect-folder-choice">
+                    <span className="connect-folder-symbol" aria-hidden="true">
+                      ▣
+                    </span>
+                    <div>
+                      <strong>
+                        {status.source?.folder ??
+                          "A local shipment export folder"}
+                      </strong>
+                      <p>
+                        {status.source?.accessible
+                          ? "Accessible to the background service"
+                          : "Windows 11 · local NTFS folder · CSV reports"}
+                      </p>
+                    </div>
+                    <button
+                      className="primary"
+                      disabled={disabled || blockedChecks.length > 0}
+                      onClick={() =>
+                        bridge &&
+                        void action(
+                          "Checking the selected folder",
+                          async () => {
+                            const next = await bridge.chooseFolder();
+                            if (next.source?.files?.length === 1) {
+                              const inspected = await bridge.previewLocal(
+                                next.source.files[0].name,
+                              );
+                              setStage(1);
+                              return inspected;
+                            }
+                            return next;
+                          },
+                        )
+                      }
+                    >
+                      {status.source
+                        ? "Change folder"
+                        : "Choose shipment folder"}
+                    </button>
+                  </div>
+                  {status.source && status.source.accessible && (
+                    <>
+                      {!status.source.files?.length ? (
+                        <p className="connect-notice">
+                          This folder has no completed CSV report yet. Save an
+                          export here, then check again. No shipment has been
+                          uploaded or created.
+                        </p>
+                      ) : (
+                        <div className="report-list">
+                          <h3>Choose a completed report</h3>
+                          {status.source.files.map((f) => (
+                            <button
+                              className="report-choice"
+                              key={f.name}
+                              disabled={disabled}
+                              onClick={() => void inspectFile(f.name)}
+                            >
+                              <strong>{f.name}</strong>
+                              <span>
+                                {f.byteSize.toLocaleString()} bytes
+                                {f.lastWriteAt && (
+                                  <small>
+                                    {" "}
+                                    · File updated {stamp(f.lastWriteAt)}
+                                  </small>
+                                )}
+                              </span>
+                              <span aria-hidden="true">→</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <details className="connect-advanced">
+                    <summary>Help finding your shipment reports</summary>
+                    <p>
+                      In your shipping or warehouse software, look for
+                      Shipments, Reports or Export. Save a finished CSV in a
+                      dedicated local folder that the background service can
+                      read. Ask your source owner if you need help. Network
+                      shares and direct database connections are not supported
+                      by this connector.
+                    </p>
+                  </details>
+                </>
+              )}
+            </section>
+          )}
+          {stage === 1 && (
+            <section className="connect-card">
+              {analysis ? (
+                <>
+                  <Shipment analysis={analysis} uploaded={!!status?.preview} />
+                  {analysis.issues.map((issue) => (
+                    <p className="connect-notice blocked" key={issue}>
+                      {issue.split(": ").slice(1).join(": ") || issue}
+                    </p>
+                  ))}
+                  {unresolved && (
+                    <section
+                      className="clarification"
+                      aria-label="Shipment detail requiring review"
+                    >
+                      <h2>
+                        {unresolved.field === "shipmentReference"
+                          ? "Which column identifies the shipment?"
+                          : `Review ${label(unresolved.field).toLowerCase()}`}
+                      </h2>
+                      <p>
+                        {unresolved.state === "incompatible"
+                          ? "The selected column conflicts with its meaning or contains unsupported values."
+                          : unresolved.state === "needs_confirmation"
+                            ? "This column’s values fit, but its business meaning needs your confirmation."
+                            : "Choose the column in this report, or use a different report if the detail is missing."}
+                      </p>
+                      {unresolved.field === "shipmentReference" && (
+                        <p>
+                          An order can ship more than once. An order number
+                          cannot automatically identify each shipment.
+                        </p>
+                      )}
+                      {unresolved.examples && (
+                        <ul className="field-examples">
+                          {Object.entries(unresolved.examples).map(
+                            ([column, values]) => (
+                              <li key={column}>
+                                <strong>{column}:</strong> {values.join(" · ")}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      )}
+                      <label>
+                        {label(unresolved.field)}
+                        <select
+                          disabled={disabled}
+                          value={unresolved.sourceColumnId ?? ""}
+                          onChange={(e) =>
+                            changeColumn(unresolved.field, e.target.value)
+                          }
+                        >
+                          <option value="">
+                            This report doesn’t include that
+                          </option>
+                          {[
+                            ...new Set([
+                              ...(unresolved.sourceColumnId
+                                ? [unresolved.sourceColumnId]
+                                : []),
+                              ...unresolved.candidates,
+                            ]),
+                          ].map((h) => (
+                            <option
+                              value={h}
+                              key={h}
+                              disabled={!unresolved.candidates.includes(h)}
+                            >
+                              {h}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {unresolved.state === "needs_confirmation" && (
+                        <button
+                          className="secondary"
+                          disabled={disabled}
+                          onClick={() => confirmColumn(unresolved.field)}
+                        >
+                          This column means{" "}
+                          {label(unresolved.field).toLowerCase()}
+                        </button>
+                      )}
+                      <p className="reason">
+                        {unresolved.reasonCodes
+                          .join(" · ")
+                          .replaceAll("_", " ")
+                          .toLowerCase()}
+                      </p>
+                    </section>
+                  )}
+                  {analysis.ready && (
+                    <p className="recognition-summary" role="status">
+                      Required details recognized
+                      {analysis.decisions.some(
+                        (d) => d.state === "missing_optional",
+                      )
+                        ? " · optional details may be unavailable"
+                        : ""}
+                    </p>
+                  )}
+                  <div className="connect-actions">
+                    <button
+                      className="primary"
+                      disabled={disabled || !analysis.ready}
+                      onClick={() => setStage(2)}
+                    >
+                      Continue
+                    </button>
+                    <button
+                      className="quiet"
+                      aria-expanded={correction}
+                      onClick={() => setCorrection((v) => !v)}
+                    >
+                      Something looks wrong
+                    </button>
+                  </div>
+                  {!analysis.ready && (
+                    <p>
+                      Resolve the highlighted details to continue. You can also
+                      go back and choose a different report.
+                    </p>
+                  )}
+                  <details
+                    className="connect-advanced"
+                    open={correction || undefined}
+                  >
+                    <summary>Review all fields</summary>
+                    <p>
+                      Changes are rechecked against every bounded row by the
+                      service. An incompatible mapping cannot be approved.
+                    </p>
+                    {analysis.decisions.map((d) => (
+                      <label key={d.field} className="field-review">
+                        {label(d.field)}
+                        <select
+                          disabled={disabled}
+                          value={d.sourceColumnId ?? ""}
+                          onChange={(e) =>
+                            changeColumn(d.field, e.target.value)
+                          }
+                        >
+                          <option value="">
+                            {d.field === "locationId" &&
+                            analysis.configuration.locationId
+                              ? "Use approved location"
+                              : "Leave unavailable"}
+                          </option>
+                          {[
+                            ...new Set([
+                              ...(d.sourceColumnId ? [d.sourceColumnId] : []),
+                              ...d.candidates,
+                            ]),
+                          ].map((h) => (
+                            <option
+                              key={h}
+                              value={h}
+                              disabled={!d.candidates.includes(h)}
+                            >
+                              {h}
+                            </option>
+                          ))}
+                        </select>
+                        <small>
+                          {d.state.replaceAll("_", " ")} ·{" "}
+                          {d.reasonCodes
+                            .join(", ")
+                            .replaceAll("_", " ")
+                            .toLowerCase()}
+                        </small>
+                      </label>
+                    ))}
+                  </details>
+                  <details className="connect-advanced">
+                    <summary>View source details</summary>
+                    <dl className="connect-facts">
+                      <div>
+                        <dt>Original report</dt>
+                        <dd>
+                          {
+                            analysis.configuration.sourceContract?.historyPolicy
+                              ?.initialFileName
+                          }
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Rows checked</dt>
+                        <dd>{analysis.rowCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Original source timestamp</dt>
+                        <dd>
+                          {analysis.shipment?.shippedAt ?? "Needs review"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Date interpretation</dt>
+                        <dd>
+                          Each shipment’s explicit source offset is preserved.
+                          No time zone is inferred.
+                        </dd>
+                      </div>
+                    </dl>
+                    <table>
+                      <caption>Column provenance</caption>
+                      <thead>
+                        <tr>
+                          <th>Shipment detail</th>
+                          <th>Original column</th>
+                          <th>State</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analysis.decisions.map((d) => (
+                          <tr key={d.field}>
+                            <td>{label(d.field)}</td>
+                            <td>
+                              {d.origin === "approved_binding"
+                                ? "Approved source location"
+                                : (d.sourceColumnId ?? "Not provided")}
+                            </td>
+                            <td>{d.state.replaceAll("_", " ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                  <details className="connect-advanced">
+                    <summary>Advanced source settings</summary>
+                    <p>
+                      Shipments dated on or after{" "}
+                      {stamp(
+                        analysis.configuration.sourceContract?.backfillFrom,
+                      )}{" "}
+                      are eligible. This boundary comes from the earliest valid
+                      shipment in the selected report.
+                    </p>
+                    <p>
+                      The initial report is imported once. Other reports already
+                      present at{" "}
+                      {stamp(
+                        analysis.configuration.sourceContract?.historyPolicy
+                          ?.observedAt,
+                      )}{" "}
+                      are excluded. Newly arriving CSV reports must pass this
+                      same exact header, field and history contract.
+                    </p>
+                    <p>
+                      Exporter and version:{" "}
+                      {analysis.configuration.sourceContract?.exporterName ??
+                        "Unknown"}{" "}
+                      · Expected export cadence:{" "}
+                      {analysis.configuration.sourceContract
+                        ?.expectedIntervalSeconds ?? "Unknown"}
+                      . The collector checks every 30 seconds while available;
+                      this does not establish how often your software exports.
+                    </p>
+                  </details>
+                </>
+              ) : (
+                <>
+                  <h2>Choose a report to review</h2>
+                  <p>
+                    A validated local snapshot is required. Return to the
+                    shipment folder and select a completed report.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+          {stage === 2 && (
+            <section className="connect-card">
+              {active ? (
+                <>
+                  <div className="connection-success" aria-hidden="true">
+                    ✓
+                  </div>
+                  <h2>Your first shipment is ready.</h2>
+                  <p>
+                    Approved source: {status?.config?.sourceName}. Closing this
+                    window leaves the authorized service running.
+                  </p>
+                  <dl className="connect-facts">
+                    <div>
+                      <dt>Last successful collection</dt>
+                      <dd>{stamp(status?.health.lastCompletedImportAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Pending work</dt>
+                      <dd>{status?.health.queueCount ?? "Not reported"}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    className="primary"
+                    disabled={disabled}
+                    onClick={() =>
+                      bridge &&
+                      external(() =>
+                        bridge.openRecord(status!.verification!.recordId!),
+                      )
+                    }
+                  >
+                    Open shipment records
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={disabled}
+                    onClick={() =>
+                      bridge &&
+                      void action("Pausing new collection", () =>
+                        bridge.pause(),
+                      )
+                    }
+                  >
+                    Pause collection
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2>
+                    {verified
+                      ? "First import confirmed"
+                      : status?.setup?.running
+                        ? "Complete your browser review"
+                        : "Approve the exact source and upload"}
+                  </h2>
+                  {(analysis?.configuration ?? status?.config) && (
+                    <dl className="connect-facts">
+                      <div>
+                        <dt>Workspace</dt>
+                        <dd>
+                          {status?.binding?.organizationId ??
+                            "Current approved workspace"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Source</dt>
+                        <dd>
+                          {analysis?.configuration.sourceName ??
+                            status?.config?.sourceName}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Folder</dt>
+                        <dd>{status?.source?.folder}</dd>
+                      </div>
+                      <div>
+                        <dt>File pattern</dt>
+                        <dd>Completed *.csv reports in this folder</dd>
+                      </div>
+                      <div>
+                        <dt>Initial report</dt>
+                        <dd>
+                          {analysis?.configuration.sourceContract?.historyPolicy
+                            ?.initialFileName ??
+                            status?.source?.selectedFileName}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Shipment history</dt>
+                        <dd>
+                          Shipments dated on or after{" "}
+                          {stamp(
+                            (analysis?.configuration ?? status?.config)
+                              ?.sourceContract?.backfillFrom,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  )}
+                  <p className="connect-notice">
+                    The entire original report is uploaded and preserved,
+                    including unmapped columns. Your originals stay unchanged.
+                    After the first import is verified and recurring collection
+                    is approved, new eligible reports are collected
+                    automatically.
+                  </p>
+                  {status?.setup?.running ? (
+                    <>
+                      <p role="status" className="setup-progress">
+                        {phaseText[status.setup.phase ?? ""] ??
+                          "Waiting for the service to confirm the next step."}
+                      </p>
+                      <p>
+                        Keep the same browser review open. Configuration, this
+                        exact batch, and recurring collection each need their
+                        own approval.
+                      </p>
+                      <button
+                        className="primary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge && external(() => bridge.openApproval())
+                        }
+                      >
+                        Resume approval in browser
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge &&
+                          void action(
+                            "Pausing setup and preserving its receipt",
+                            () => bridge.pause(),
+                          )
+                        }
+                      >
+                        Pause setup
+                      </button>
+                    </>
+                  ) : status?.pendingProposal ? (
+                    <>
+                      <p>
+                        A saved exact configuration is waiting for approval.
+                        Opening it does not upload a file or grant collection.
+                      </p>
+                      <button
+                        className="primary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge && external(() => bridge.openApproval())
+                        }
+                      >
+                        Resume saved approval
+                      </button>
+                    </>
+                  ) : status?.state === "paused" ? (
+                    <>
+                      <p>
+                        Automatic collection is paused. Your first record and
+                        queue remain preserved.
+                      </p>
+                      <button
+                        className="primary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge &&
+                          void action(
+                            "Requesting approved resume",
+                            async () => {
+                              const next = await bridge.proposeActivation();
+                              await bridge.openApproval();
+                              return next;
+                            },
+                          )
+                        }
+                      >
+                        Review resume in browser
+                      </button>
+                      <button
+                        className="secondary"
+                        disabled={disabled}
+                        onClick={() =>
+                          bridge &&
+                          void action("Checking approved resume", () =>
+                            bridge.resume(),
+                          )
+                        }
+                      >
+                        Resume after browser approval
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="primary"
+                        disabled={
+                          disabled ||
+                          !analysis?.ready ||
+                          !compatible ||
+                          !status?.installationId ||
+                          blockedChecks.length > 0
+                        }
+                        onClick={() =>
+                          bridge &&
+                          analysis &&
+                          void action("Saving the exact approval request", () =>
+                            bridge.startSetup({
+                              wholeFileUploadApproved: true,
+                              draftRevision: analysis.binding.draftRevision,
+                            }),
+                          )
+                        }
+                      >
+                        Approve and connect
+                      </button>
+                      {analysis?.ready && !compatible && (
+                        <p>
+                          The server needs matching source-validation support
+                          before this connection can be approved. No original
+                          has been uploaded.
+                        </p>
+                      )}
+                      {!analysis?.ready && (
+                        <p>
+                          Review a current shipment report before requesting
+                          this approval.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {status?.preview && (
+                    <p>
+                      Remote receipt:{" "}
+                      {status.preview.state.replaceAll("_", " ")} · original
+                      uploaded.{" "}
+                      {verified
+                        ? "A canonical record was retrieved."
+                        : "Record creation has not yet been confirmed."}
+                    </p>
+                  )}
+                  {verified && (
+                    <button
+                      className="quiet"
+                      disabled={disabled}
+                      onClick={() =>
+                        bridge &&
+                        external(() =>
+                          bridge.openRecord(status!.verification!.recordId!),
+                        )
+                      }
+                    >
+                      Open first shipment
+                    </button>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+          <footer className="connect-footer">
+            <button
+              className="quiet"
+              disabled={!!busy}
+              onClick={() => window.close()}
+            >
+              Save and exit
+            </button>
+            {stage > 0 && !active && (
+              <button
+                className="secondary"
+                disabled={disabled || status?.setup?.running}
+                onClick={() => setStage(stage - 1)}
+              >
+                Back
+              </button>
+            )}
+            <button
+              className="quiet"
+              disabled={disabled}
+              onClick={() =>
+                bridge &&
+                void action("Refreshing service status", () =>
+                  bridge.getStatus(),
+                )
+              }
+            >
+              Refresh status
+            </button>
+            <details
+              open={details}
+              onToggle={(e) => setDetails(e.currentTarget.open)}
+            >
+              <summary>Support and connection details</summary>
+              <p>
+                Windows 11 x64 · one local NTFS folder · UTF-8 CSV · at most 2
+                MiB, 1,000 rows and 50 columns per report. Collection pauses
+                during sleep or shutdown.
+              </p>
+              <button
+                className="secondary"
+                disabled={disabled}
+                onClick={() =>
+                  bridge &&
+                  external(async () => {
+                    const result = (await bridge.exportDiagnostics()) as {
+                      saved?: boolean;
+                    };
+                    setDiagnostic(
+                      result.saved
+                        ? "Redacted report saved."
+                        : "Diagnostic export canceled.",
+                    );
+                  })
+                }
+              >
+                Export redacted diagnostics
+              </button>
+              <p>{diagnostic}</p>
+            </details>
+            <span role="status" aria-live="polite">
+              {busy || ""}
+            </span>
+          </footer>
+        </main>
       </div>
-      <div className="connect-actions"><button className="primary" disabled={blocked || !status?.health?.serviceOnline} onClick={() => setStep(1)}>Get started <span aria-hidden="true">→</span></button><button className="quiet" disabled={blocked} onClick={() => bridge && external(() => bridge.openPortal())}>Use PackProof in your browser</button></div>
-      <p className="connect-privacy">Your original files stay where they are. Nothing is uploaded until you explicitly approve the file and destination.</p>
-    </section>}
-    {step === 1 && <section className="connect-card">
-      <div className="connect-section-kicker">Checking your computer</div>
-      <h2>We'll make sure PackProof can work here.</h2>
-      <p>These checks run automatically using the background helper, so shipments can be collected even when this window is closed.</p>
-      <ul className="connect-checks">{status?.checks?.length ? status.checks.map(check => <li key={check.id}><span className={`pill ${check.state}`}>{check.state === 'passed' ? 'Ready' : readable(check.state)}</span><div><strong>{check.label}</strong><p>{check.detail}</p></div></li>) : <li><span className="pill">Checking</span><div><strong>Preparing your computer</strong><p>We're checking Windows, storage, connectivity and the secure background helper.</p></div></li>}</ul>
-      <label className="connect-checkbox"><input disabled={blocked} type="checkbox" checked={computerStaysOn} onChange={event => setComputerStaysOn(event.target.checked)}/>This computer will stay on when shipment reports are created. Collection pauses during sleep or shutdown.</label>
-      <div className="connect-actions"><button className="primary" disabled={blocked || !checksPassed || !computerStaysOn} onClick={() => setStep(2)}>Continue <span aria-hidden="true">→</span></button><button className="secondary" disabled={blocked} onClick={() => bridge && void action('Checking this computer again', () => bridge.checkComputer())}>Check again</button></div>
-    </section>}
-    {step === 2 && <section className="connect-card">
-      <div className="connect-section-kicker">Secure connection</div>
-      <h2>Connect to your PackProof workspace.</h2>
-      <p>We'll open your browser so you can choose the approved company, shipping source and teammate. You won't need to enter passwords into this setup window.</p>
-      {status?.enrollment && <div className="connect-comparison"><span>Make sure this code matches the one in your browser</span><strong>{status.enrollment.comparisonCode}</strong><p>{readable(status.enrollment.state)} · Expires {time(status.enrollment.expiresAt)}</p>{status.enrollment.state === 'pending' && <p role="status">Waiting for browser approval. This window checks automatically every few seconds.</p>}{['denied','expired'].includes(status.enrollment.state) && <p role="alert">This request can no longer be approved. Start a new browser approval request.</p>}</div>}
-      {status?.installationId && <Notice tone="passed">This computer has been approved. We'll ask separately before uploading shipment files or starting ongoing collection.</Notice>}
-      <div className="connect-actions">{!status?.installationId && <button className="primary" disabled={blocked || !!status?.enrollment && status.enrollment.state === 'pending'} onClick={() => bridge && void action('Opening secure browser approval', () => bridge.beginEnrollment())}>Open browser approval <span aria-hidden="true">→</span></button>}
-      {status?.enrollment && !status.installationId && <><button className="secondary" disabled={blocked || status.enrollment.state !== 'pending'} onClick={() => bridge && external(() => bridge.openApproval())}>Reopen approval page</button><button className="secondary" disabled={blocked || status.enrollment.state !== 'pending'} onClick={() => bridge && void action('Checking browser approval', () => bridge.pollEnrollment())}>Check approval now</button></>}
-      {status?.installationId && <button className="primary" disabled={blocked} onClick={() => setStep(3)}>Find shipment records <span aria-hidden="true">→</span></button>}</div>
-    </section>}
-    {step === 3 && <section className="connect-card">
-      <div className="connect-section-kicker">Your shipment folder</div>
-      <h2>Where does your team save shipment reports?</h2>
-      <p>Choose the folder where your shipping software saves finished CSV shipment reports. We only look in the folder you choose; we won't search your computer or change files.</p>
-      <div className="connect-folder-choice">
-        <span className="connect-folder-symbol" aria-hidden="true">▣</span>
-        <div><strong>{status?.source?.folder ? 'Previously chosen folder' : 'Choose your report folder'}</strong><p>{status?.source?.folder || 'Look for the folder your team uses when exporting shipments.'}</p></div>
-        <button className="primary" disabled={blocked} onClick={() => bridge && void action('Checking your selected folder', async () => { invalidate(); const next = await bridge.chooseFolder(); setDraft(defaultConfig({ ...next, config: undefined, pendingProposal: undefined })); setFile(next.source?.selectedFileName || (next.source?.files?.length === 1 ? next.source.files[0].name : '')); return next; })}>{status?.source ? 'Change folder' : 'Choose folder'}</button>
-      </div>
-      <button className="connect-link-button" aria-expanded={folderHelp} onClick={() => setFolderHelp(value => !value)}>I'm not sure where the files are {folderHelp ? '−' : '+'}</button>
-      {folderHelp && <div className="connect-help-box"><h3>Let's find a shipment report.</h3><p>Open your shipping or warehouse software and look for <strong>Shipments</strong>, <strong>Reports</strong>, or <strong>Export</strong>. Save a recent shipment report as CSV, then choose the folder where it was saved.</p><p>If someone else manages exports, you can send them this message:</p><textarea readOnly rows={3} aria-label="Message for your IT team" value="We're connecting PackProof to our shipment reports. Which local Windows folder contains finished CSV shipment exports? Do new exports appear automatically, and can the PackProof background helper read the folder? PackProof will not change the original files."/><p>PackProof supports one approved local folder in this version; network folders and direct warehouse-system integrations need a separate setup.</p></div>}
-      {status?.source && <><dl className="connect-facts"><div><dt>Folder access</dt><dd>{status.source.accessible ? '✓ Ready for reading' : 'Needs attention — the background helper cannot read this folder'}</dd></div><div><dt>Shipment files found</dt><dd>{status.source.files?.length ?? 0}</dd></div></dl>
-      <div className="connect-folder-safety"><h3>One last thing about these reports</h3><p>Reports must be finished before PackProof reads them, and existing report files must not be overwritten. If you're unsure, ask the person who maintains your shipping software.</p><label className="connect-checkbox"><input disabled={blocked} type="checkbox" checked={producerContract} onChange={event => setProducerContract(event.target.checked)}/>I confirmed that finished reports stay unchanged and new reports use new file names.</label></div>
-      {status.source.files?.length ? <><label>Choose one recent shipment report<select disabled={blocked} value={file || status.source.selectedFileName || ''} onChange={event => { setFile(event.target.value); invalidate(); }}><option value="">Choose a shipment CSV</option>{status.source.files.map(item => <option key={item.name} value={item.name}>{item.name} · {item.byteSize.toLocaleString()} bytes</option>)}</select></label>
-      <button className="primary" disabled={blocked || !producerContract || !status.source.accessible || !file} onClick={() => bridge && void action('Reading your approved shipment sample', async () => { const next = await bridge.previewLocal(file); setDraft(defaultConfig({ ...next, config: undefined, pendingProposal: undefined })); invalidate(); return next; }, 4)}>Check this report <span aria-hidden="true">→</span></button></> : <Notice tone="warning">No finished shipment CSV was found yet. Export a report from your shipping software, then choose this folder again. Nothing has been uploaded.</Notice>}</>}
-    </section>}
-    {step === 4 && <section className="connect-card"><div className="connect-section-kicker">Recognizing your shipment information</div><h2>Here's what we found in your report.</h2><p>We've suggested matches for the important details. Please check the shipment number and quantities — we won't invent missing information or upload anything without your permission.</p><LocalShipmentCard status={status} draft={draft}/><details className="connect-advanced"><summary>See the original report columns</summary><Sample status={status}/></details>{draft && <><div className="connect-fields"><label>Approved shipping source<input disabled={blocked} value={draft.sourceName} readOnly aria-describedby="source-binding-note"/></label><span id="source-binding-note" className="connect-binding-note">This source was chosen securely in your browser. To change companies or sources, ask an administrator to approve a new connection.</span>{draft.sourceContract && <><label>Name of your shipping software<input disabled={blocked} value={draft.sourceContract.exporterName} placeholder="For example, the name shown at the top of your shipping software" onChange={event => update({ sourceContract: { ...draft.sourceContract!, exporterName: event.target.value } })}/></label><label>Shipping software version<input disabled={blocked} value={draft.sourceContract.exporterVersion} placeholder="Ask the person who manages your shipping exports" onChange={event => update({ sourceContract: { ...draft.sourceContract!, exporterVersion: event.target.value } })}/></label><label>How often are reports saved? (seconds)<input disabled={blocked} type="number" min="60" max="604800" value={draft.sourceContract.expectedIntervalSeconds} onChange={event => update({ sourceContract: { ...draft.sourceContract!, expectedIntervalSeconds: Number(event.target.value) } })}/></label><label>Start collecting shipments from<input disabled={blocked} value={draft.sourceContract.backfillFrom} placeholder="2026-11-01T00:00:00-05:00" onChange={event => update({ sourceContract: { ...draft.sourceContract!, backfillFrom: event.target.value } })}/></label></>}<label>Time zone used in shipment reports<input disabled={blocked} value={draft.timeZone} placeholder="For example: America/New_York" onChange={event => update({ timeZone: event.target.value })}/></label><div className="connect-mapping-summary"><div><strong>Recognized columns</strong><p>{FIELDS.filter(([key]) => draft.mapping[key]).length} of {FIELDS.length} fields matched · Missing optional fields will be shown as “not provided.”</p></div><button type="button" className="secondary" aria-expanded={showFieldDetails} onClick={() => setShowFieldDetails(value => !value)}>{showFieldDetails ? 'Hide column choices' : 'Review column choices'}</button></div>{(showFieldDetails || !draft.mapping.shipmentReference || !draft.mapping.itemTitle || !draft.mapping.quantity || !draft.mapping.shippedAt) && FIELDS.map(([key, label, required]) => <label key={key}>{label}{required || key === 'shippedAt' && draft.sourceContract ? ' *' : ''}<select disabled={blocked} value={draft.mapping[key] || ''} onChange={event => update({ mapping: Object.fromEntries(Object.entries({ ...draft.mapping, [key]: event.target.value }).filter(([, value]) => !!value)) })}><option value="">{required || key === 'shippedAt' && draft.sourceContract ? 'Choose a required column' : 'Not supplied'}</option>{status?.source?.headers?.map(header => <option key={header} value={header}>{header}</option>)}</select></label>)}</div><label className="connect-checkbox"><input disabled={blocked} type="checkbox" checked={mappingConfirmed} onChange={event => setMappingConfirmed(event.target.checked)}/>The shipment number, quantities, dates and other selected details match my report.</label><Notice>Every shipment must have a reliable identifier. If any rows are unclear or invalid, we'll hold them for review instead of making up records.</Notice><div className="connect-actions"><button className="secondary" disabled={blocked || !mappingConfirmed || !draft.mapping.shipmentReference || !draft.mapping.itemTitle || !draft.mapping.quantity || !draft.timeZone || !draft.sourceName || !!draft.sourceContract && (!draft.sourceContract.exporterName || !draft.sourceContract.exporterVersion || !draft.sourceContract.backfillFrom || !draft.mapping.shippedAt)} onClick={() => bridge && void action('Submitting the exact configuration for browser approval', async () => { const next = await bridge.proposeConfiguration(draft); setDirty(false); return next; })}>Request configuration approval</button><button className="secondary" disabled={blocked || !status?.approvalPath} onClick={() => bridge && external(() => bridge.openApproval())}>Review in browser</button></div>{configApproved && <Notice tone="passed">The server approved this exact configuration. Changing a field or file clears verification.</Notice>}<label className="connect-checkbox upload-consent"><input disabled={blocked} type="checkbox" checked={uploadConsent} onChange={event => setUploadConsent(event.target.checked)}/>Upload and preserve the entire selected CSV original in PackProof, including columns that are not mapped.</label><p>PackProof preserves the full original report, including any extra columns. If it contains information you don't want to upload, ask the person who creates the report to remove those columns first.</p><button className="primary" disabled={blocked || !configApproved || !uploadConsent || !mappingConfirmed} onClick={() => bridge && void action('Creating secure cloud preview', () => bridge.previewCloud({ wholeFileUploadApproved: true }), 5)}>Continue to secure preview <span aria-hidden="true">→</span></button></>}</section>}
-    {step === 5 && <section className="connect-card"><div className="connect-section-kicker">Your first shipment</div><h2>This is how your records will look.</h2><p>You've approved a cloud preview of the full original report. No shipment records are created until you approve the batch below. These are real records, not test data.</p>{status?.preview ? <><ServerShipmentCard status={status} draft={draft}/><div className="connect-counts">{Object.entries(status.preview.counts).map(([label, count]) => <div key={label}><strong>{count}</strong><span>{readable(label)}</span></div>)}</div><dl className="connect-facts"><div><dt>Selected original</dt><dd>{status.source?.selectedFileName || file || 'Recorded by service'}</dd></div><div><dt>Import receipt</dt><dd>{status.preview.id}</dd></div><div><dt>Original SHA-256</dt><dd className="digest">{status.preview.original.sha256}</dd></div><div><dt>State</dt><dd>{readable(status.preview.state)}</dd></div></dl>{status.preview.rows.some(row => row.errors.length) && <Notice tone="warning"><ul>{status.preview.rows.filter(row => row.errors.length).slice(0, 20).map(row => <li key={row.rowNumber}>Row {row.rowNumber}: {row.errors.join(' ')}</li>)}</ul>Correct the source and create a new preview. Setup cannot verify a partially valid batch.</Notice>}<label className="connect-checkbox"><input disabled={blocked} type="checkbox" checked={batchConsent} onChange={event => setBatchConsent(event.target.checked)}/>Create records from the entire displayed batch ({expectedRows} row{expectedRows === 1 ? '' : 's'}) in {status.environment}. I have browser approval for this exact receipt.</label><div className="connect-actions"><button className="secondary" disabled={blocked} onClick={() => bridge && external(() => bridge.openApproval())}>Approve this batch in browser</button><button className="primary" disabled={blocked || dirty || !batchConsent || !previewValid(status) || status.preview.state !== 'previewed'} onClick={() => bridge && void action('Submitting the approved batch', () => bridge.commitBatch({ wholeBatchApproved: true }))}>Create shipment records</button><button className="secondary" disabled={blocked || dirty || status.preview.state === 'previewed'} onClick={() => bridge && void action('Checking durable outcomes and retrieving the record', () => bridge.verifyImport())}>Confirm shipment was created</button></div><ol className="connect-verification"><li>Read the authorized source original</li><li>Preserve and validate the cloud preview</li><li>Approve and deliberately commit the exact batch</li><li>Wait for every row’s terminal outcome</li><li>Retrieve the authorized canonical record</li></ol>{verified ? <Notice tone="passed">The import finished and the expected record was retrieved. <button className="quiet" onClick={() => bridge && external(() => bridge.openRecord(status.verification!.recordId!))}>Open verified record</button></Notice> : <Notice>We're waiting for confirmation that your shipment record was created. A file being queued or uploaded doesn't mean it's finished.</Notice>}<button className="primary" disabled={blocked || !verified} onClick={() => setStep(6)}>Continue to automatic collection <span aria-hidden="true">→</span></button></> : <Notice tone="warning">No current server preview is available. Return to field mapping and create an approved preview.</Notice>}</section>}
-    {step === 6 && <section className="connect-card"><div className="connect-section-kicker">Stay up to date</div><h2>{status?.state === 'active' ? 'Your connection is active.' : "Let's keep new shipments up to date."}</h2><p>Once approved, PackProof checks your selected folder for new completed reports while this computer is on. New reports use the settings you confirmed.</p><Health status={status}/><Notice>Offline collection uses the last authenticated approval for at most {status?.config?.offlineWindowHours ?? 24} hours. New reads stop after that window or if the clock is uncertain. A disconnected PC learns remote revocation when it reconnects.</Notice>{status?.state !== 'active' && status?.state !== 'paused' && <><button className="primary" disabled={blocked || !verified} onClick={() => bridge && void action('Requesting exact recurring-collection approval', () => bridge.proposeActivation())}>Approve ongoing collection in browser</button><button className="secondary" disabled={blocked || !status?.approvalPath} onClick={() => bridge && external(() => bridge.openApproval())}>Review activation in browser</button><button className="secondary" disabled={blocked || !verified} onClick={() => bridge && void action('Checking approved activation', () => bridge.activate())}>Finish enabling collection</button></>}{status?.state === 'active' && <button className="secondary" disabled={blocked} onClick={() => bridge && void action('Pausing new reads and submissions', () => bridge.pause())}>Pause new collection</button>}{status?.state === 'paused' && <><Notice tone="warning">Collection is paused. Already accepted server work may finish. Resume requires current browser approval.</Notice><button className="secondary" disabled={blocked} onClick={() => bridge && external(() => bridge.openApproval())}>Review resume in browser</button><button className="secondary" disabled={blocked} onClick={() => bridge && void action('Checking approved resume', () => bridge.resume())}>Check resume</button></>}<button className="quiet" disabled={blocked} onClick={() => bridge && external(() => bridge.openPortal())}>View your records in PackProof</button></section>}
-    <footer className="connect-footer"><button className="secondary" disabled={blocked || step === 0} onClick={() => setStep(value => Math.max(0, value - 1))}>Back</button><details><summary>What will PackProof access?</summary><p>The approved folder, exact CSV originals and mapped shipment metadata. The background service owns protected credentials and encrypted pending work. Removing the application preserves pending work by default and does not revoke cloud access while offline.</p><p>Support diagnostics include versions, safe IDs, timestamps, counters and error codes. They exclude source paths, customer rows and credentials by default.</p><button className="quiet" disabled={blocked} onClick={() => { setDiagnosticNotice(''); void bridge?.exportDiagnostics().then(result => setDiagnosticNotice(result && typeof result === 'object' && 'saved' in result && result.saved ? 'The redacted report was saved. Choose whether to share it.' : 'Diagnostic export was canceled.')).catch(caught => setError(caught instanceof Error ? caught.message : 'Diagnostics could not be exported.')); }}>Preview and save diagnostics</button>{diagnosticNotice && <p role="status">{diagnosticNotice}</p>}</details><span role="status" aria-live="polite">{busy || 'Setup progress is rechecked against the service when reopened.'}</span></footer></main></div></div>;
-}
-function Sample({ status }: { status: ConnectStatus | null }) { const source = status?.source; return source?.headers?.length ? <div className="connect-table-wrap"><table><caption>Local-only sample · first {source.samples?.length || 0} rows · no upload yet</caption><thead><tr>{source.headers.map(header => <th scope="col" key={header}>{header}</th>)}</tr></thead><tbody>{source.samples?.slice(0, 20).map((row, index) => <tr key={index}>{source.headers!.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div> : <Notice>No local column preview is available. Choose an authorized final CSV first.</Notice>; }
-function Health({ status }: { status: ConnectStatus | null }) { const health = status?.health; return <dl className="connect-health"><div><dt>Service online</dt><dd>{health?.serviceOnline ? 'Online' : 'Not confirmed'}</dd></div><div><dt>Folder last checked</dt><dd>{time(health?.lastScanAt)}</dd></div><div><dt>Last observed export</dt><dd>{time(health?.lastExportAt)}</dd></div><div><dt>Last completed import</dt><dd>{time(health?.lastCompletedImportAt)}</dd></div><div><dt>Last receipt reconciled</dt><dd>{time(health?.lastReceiptReconciledAt)}</dd></div><div><dt>Exports needing review</dt><dd>{health?.quarantinedFileCount ?? 0}</dd></div><div><dt>Rows accepted by server</dt><dd>{health?.sourceAccounting?.acceptedRows ?? 'Not reported'}</dd></div><div><dt>Latest source timestamp</dt><dd>{time(health?.sourceWatermarkAt)}</dd></div><div><dt>Pending files</dt><dd>{health?.queueCount ?? 'Not reported'}</dd></div>{health?.preservedQueueCount !== undefined && <div><dt>Former preserved files</dt><dd>{health.preservedQueueCount}</dd></div>}<div><dt>Source freshness</dt><dd>{health?.sourceFreshness === 'current' ? 'Current source result' : health?.sourceFreshness === 'delayed' ? 'Delayed — review the exporter' : 'Unknown — no qualified source watermark'}</dd></div></dl>; }
-
-function LocalShipmentCard({status,draft}:{status:ConnectStatus|null;draft:Configuration|undefined}){
- const sample=status?.source?.samples?.[0], mapping=draft?.mapping || {};
- const value=(key:string)=>{const header=mapping[key];return header && sample && Object.prototype.hasOwnProperty.call(sample,header) ? (sample[header] || 'Not provided') : 'Not provided';};
- return <div className="connect-record-card">
-   <div className="connect-record-heading"><span className="pill">Local preview only</span><span>Not uploaded</span></div>
-   <h3>Shipment {value('shipmentReference')}</h3>
-   <dl className="connect-record-details"><div><dt>Contents</dt><dd>{value('itemTitle')}</dd></div><div><dt>Items</dt><dd>{value('quantity')}</dd></div><div><dt>Tracking</dt><dd>{value('trackingNumber')}</dd></div><div><dt>Carrier</dt><dd>{value('carrier')}</dd></div><div><dt>Shipment date</dt><dd>{value('shippedAt')}</dd></div><div><dt>Original report</dt><dd>{status?.source?.selectedFileName || 'Selected CSV export'}</dd></div></dl>
-   <p>These values come from the selected file. PackProof leaves the original unchanged.</p>
- </div>;
-}
-
-function ServerShipmentCard({status,draft}:{status:ConnectStatus|null;draft:Configuration|undefined}){
- const result=status?.preview?.rows?.find(row=>row.normalized || row.values);
- const mapping=draft?.mapping || {};
- const data=result?.normalized || {};
- const original=result?.values || {};
- const read=(key:string):string=>{
-   const normalized=data[key];
-   if(typeof normalized==='string' || typeof normalized==='number')return String(normalized);
-   const column=mapping[key];
-   return column && Object.prototype.hasOwnProperty.call(original,column) ? (original[column] || 'Not provided') : 'Not provided';
- };
- return <div className="connect-record-card">
-   <div className="connect-record-heading"><span className="pill">{status?.verification?.complete ? 'Record verified' : 'Cloud preview — awaiting record creation'}</span><span>{status?.environment || 'Current workspace'}</span></div>
-   <h3>Shipment {read('shipmentReference')}</h3>
-   <dl className="connect-record-details"><div><dt>What was shipped</dt><dd>{read('itemTitle')}</dd></div><div><dt>Number of items</dt><dd>{read('quantity')}</dd></div><div><dt>Tracking</dt><dd>{read('trackingNumber')}</dd></div><div><dt>Carrier</dt><dd>{read('carrier')}</dd></div><div><dt>Shipment date</dt><dd>{read('shippedAt')}</dd></div><div><dt>Source report</dt><dd>{status?.source?.selectedFileName || 'Selected CSV export'}</dd></div></dl>
-   <p>The original report has already been uploaded for this preview. New shipment records require the separate approval shown below.</p>
- </div>;
+    </div>
+  );
 }
