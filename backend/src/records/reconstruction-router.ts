@@ -17,6 +17,7 @@ import {readCaseAssertionSource,exportOperationalCase,exportSignedOperationalCas
 import {listOperationalCaseIssues,actOnOperationalCaseIssue,pageOperationalCaseIssueHistory} from './reconstruction-issues.js';
 import {RECONSTRUCTION_SIGNED_PROFILE} from './reconstruction-signing.js';
 import {requestSourceDisposition,approveSourceDisposition,readSourceDisposition,readCollectorCompactionCommands,ackCollectorCompactionCommand,authorizeCollectorCompactionPermit} from './source-retention-disposition.js';
+import {proposeSourceBackfill,listSourceBackfills,readSourceBackfill,readHumanSourceBackfill,actOnSourceBackfill,bindSourceBackfillReceipt} from './source-backfills.js';
 import {readSourceRetentionReview,actOnSourceRetention,getCaseRetentionSummary} from './source-retention.js';
 
 const run=(fn:(r:Request,s:Response)=>Promise<void>)=>(r:Request,s:Response,n:NextFunction)=>void fn(r,s).catch(n);
@@ -43,6 +44,9 @@ export function createReconstructionHumanRouter(deps:AppDependencies){
  router.post('/cases/entity-aliases',run(async(r,s)=>{const result=await approveCaseEntityAlias(deps.db,deps.clock,await workspace(r,true),r.body,r.header('Idempotency-Key'));s.json(result);}));
  router.post('/cases/identity-rules',run(async(r,s)=>{const result=await approveCaseIdentityRule(deps.db,deps.clock,await workspace(r,true),r.body,r.header('Idempotency-Key'));s.json(result);}));
  router.post('/cases/crosswalks',run(async(r,s)=>{s.json(await approveCaseCrosswalk(deps.db,deps.clock,await workspace(r,true),r.body,r.header('Idempotency-Key')));}));
+ router.get('/source-subscriptions/:subscriptionId/backfills',run(async(r,s)=>{s.json(await listSourceBackfills(deps,await workspace(r),r.params.subscriptionId,r.query.cursor));}));
+ router.get('/source-backfills/:jobId',run(async(r,s)=>{s.json(await readHumanSourceBackfill(deps,await workspace(r),r.params.jobId));}));
+ router.post('/source-backfills/:jobId/actions',run(async(r,s)=>{const result=await actOnSourceBackfill(deps,await workspace(r,true),r.params.jobId,r.body,r.header('Idempotency-Key'));s.setHeader('Idempotency-Replayed',String(result.replayed));s.json(result);}));
  router.get('/source-subscriptions',run(async(r,s)=>{s.json(await listSourceSubscriptions(deps.db,await workspace(r),r.query));}));
  router.get('/source-subscriptions/:subscriptionId',run(async(r,s)=>{s.json(await getSourceSubscription(deps.db,await workspace(r),r.params.subscriptionId,r.query.initialBatchId));}));
  router.get('/source-batches/:batchId/retention',run(async(r,s)=>{s.json(await readSourceRetentionReview(deps,await workspace(r),r.params.batchId));}));
@@ -75,6 +79,10 @@ export function createReconstructionPartnerRouter(deps:AppDependencies){
  router.post('/agent/source-dispositions/compaction-commands/:commandId/permit',run(async(r,s)=>{const result=await authorizeCollectorCompactionPermit(deps,actor(r),r.params.commandId,r.body,r.header('Idempotency-Key'));s.setHeader('Idempotency-Replayed',String(result.replayed));s.json(result.value);}));
  router.post('/agent/source-dispositions/compaction-commands/:commandId/ack',run(async(r,s)=>{const result=await ackCollectorCompactionCommand(deps,actor(r),r.params.commandId,r.body,r.header('Idempotency-Key'));s.json(result);}));
  router.get('/source-profiles',run(async(r,s)=>{requireReconstructionFeature('typedIntake');const a=actor(r),installation=(await deps.db.query<{version:string}>('SELECT version FROM record_agent_installations WHERE principal_id=$1 AND organization_id=$2 AND environment=$3',[a.principalId,a.merchantId,a.environment])).rows[0],v2=reconstructionFeatureEnabled('sourceIdentityV2')&&(!installation||typedCollectorVersionSupported(installation.version,TYPED_SOURCE_SCHEMA_V2));s.json({schema:SOURCE_CONTRACT_VERSION,profiles:v2?ALL_SOURCE_PROFILES:SOURCE_PROFILES,limits:TYPED_SOURCE_LIMITS,capabilities:{typedSourceBatchSchemas:v2?[TYPED_SOURCE_SCHEMA,TYPED_SOURCE_SCHEMA_V2]:[TYPED_SOURCE_SCHEMA],typedIntake:reconstructionFeatureEnabled('typedIntake'),sourceSubscriptions:reconstructionFeatureEnabled('sourceSubscriptions'),multiSourceAgent:reconstructionFeatureEnabled('multiSourceAgent')}});}));
+ router.post('/source-subscriptions/:subscriptionId/backfills/proposals',run(async(r,s)=>{const result=await proposeSourceBackfill(deps,actor(r),r.params.subscriptionId,r.body,r.header('Idempotency-Key'));s.setHeader('Idempotency-Replayed',String(result.replayed));s.status(202).json(result);}));
+ router.get('/source-subscriptions/:subscriptionId/backfills',run(async(r,s)=>{s.json(await listSourceBackfills(deps,actor(r),r.params.subscriptionId,r.query.cursor));}));
+ router.get('/source-backfills/:jobId',run(async(r,s)=>{s.json(await readSourceBackfill(deps,actor(r),r.params.jobId));}));
+ router.post('/source-backfills/:jobId/items/:itemId/bind',run(async(r,s)=>{s.json(await bindSourceBackfillReceipt(deps,actor(r),r.params.jobId,r.params.itemId,r.body,r.header('Idempotency-Key')));}));
  router.get('/source-subscriptions',run(async(r,s)=>{s.json(await listAgentSourceSubscriptions(deps.db,deps.clock,actor(r),r.query));}));
  router.post('/source-subscriptions/proposals',run(async(r,s)=>{s.status(202).json(await proposeAgentSourceSubscription(deps.db,deps.clock,actor(r),r.body,r.header('Idempotency-Key')));}));
  router.post('/source-subscriptions/:subscriptionId/heartbeat',run(async(r,s)=>{s.json(await heartbeatSourceSubscription(deps.db,deps.clock,actor(r),r.params.subscriptionId,r.body,r.header('Idempotency-Key')));}));

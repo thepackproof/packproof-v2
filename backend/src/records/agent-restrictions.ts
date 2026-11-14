@@ -160,6 +160,8 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
   // Scope strings and issuing a replacement credential cannot confer it.
   const sourceCapabilities=method==='GET'&&path==='/source-profiles';
   if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
+  const backfillRoute=(method==='GET'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+$/.test(path)))||(method==='POST'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills\/proposals$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+\/items\/[A-Za-z0-9_-]+\/bind$/.test(path)));
+  if(backfillRoute){if(row.status==='ready'||row.status==='active'){const version=(await db.query<{version:string}>('SELECT version FROM record_agent_installations WHERE id=$1',[row.id])).rows[0]?.version;if(version==='0.4.0'&&reconstructionFeatureEnabled('sourceBackfillJobs')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('typedIntake'))return;}throw unavailable();}
   const compaction=(method==='GET'&&path==='/agent/source-dispositions/compaction-commands')||(method==='POST'&&/^\/agent\/source-dispositions\/compaction-commands\/[A-Za-z0-9_-]+\/(?:ack|permit)$/.test(path));
   const typedRoute=(compaction&&reconstructionFeatureEnabled('sourceDisposition'))||(method==='GET'&&path==='/source-subscriptions')||
     (method==='POST'&&path==='/source-subscriptions/proposals')||

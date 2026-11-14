@@ -1,0 +1,2576 @@
+{
+  "schema": "packproof.csv-snapshot-boundary-corpus/v1",
+  "qualification": "Synthetic exporter-controlled CSV fixtures only; physical contents and real source semantics are not qualified.",
+  "cases": [
+    {
+      "name": "orders-ten-controlled-snapshot",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "416dea2edbbb339e359f260a55023073ba1d9b828ff6e4e64f30758d1a8200ff",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "416dea2edbbb339e359f260a55023073ba1d9b828ff6e4e64f30758d1a8200ff"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "loading-eight-controlled-snapshot",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "4c23869c4067cde5c3e09eccd9e177266827cd28d1059ccb63f6409666cd2be3",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,reportedLoadedQuantity,8,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "4c23869c4067cde5c3e09eccd9e177266827cd28d1059ccb63f6409666cd2be3"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "delivery-eight-controlled-snapshot",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "51af9071260cac32fdd679d61e17deb0a289162eaa09fef78f316be351b1912c",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,reportedReceivedQuantity,8,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "51af9071260cac32fdd679d61e17deb0a289162eaa09fef78f316be351b1912c"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "two-business-rows-one-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "6af0285f6746d3ff155a3c34997387d9d9d8e3f82b91290fb88dd0ad374d8299",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n0010482,005,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n",
+        "sha256": "6af0285f6746d3ff155a3c34997387d9d9d8e3f82b91290fb88dd0ad374d8299"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "semicolon-controls",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "81f69be10fc959002f85127034ee4433463ae9ac3243ccb5a5ead14e34c3f074",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order;Line;Shipment;Property;Amount;Unit;AsOf;SnapshotMarker;SnapshotAsOf;SnapshotRows\r\n0010482;004;S-0021;allocatedQuantity;10;each;2026-11-12T19:00:00Z;export-run-0042;2026-11-12T14:00:00-05:00;1\r\n",
+        "sha256": "81f69be10fc959002f85127034ee4433463ae9ac3243ccb5a5ead14e34c3f074"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "tab-controls-with-bom",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "b93c880acc6da2a55c4cbf18b9f5fb580cc7fc30019c8037d1e4e33b6bdbb0fc",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "﻿Order\tLine\tShipment\tProperty\tAmount\tUnit\tAsOf\tSnapshotMarker\tSnapshotAsOf\tSnapshotRows\r\n0010482\t004\tS-0021\tallocatedQuantity\t10\teach\t2026-11-12T19:00:00Z\texport-run-0042\t2026-11-12T14:00:00-05:00\t1\r\n",
+        "sha256": "b93c880acc6da2a55c4cbf18b9f5fb580cc7fc30019c8037d1e4e33b6bdbb0fc"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "exact-spaced-header-and-marker",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "f94e39d6fdb355e84f2d9fe5cc9d8dc63c3fff17243314d87f7545b9ea2aeac8",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          " Export mArKer ",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": " Export mArKer ",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf, Export mArKer ,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z, source marker with spaces ,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "f94e39d6fdb355e84f2d9fe5cc9d8dc63c3fff17243314d87f7545b9ea2aeac8"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": " source marker with spaces "
+        }
+      }
+    },
+    {
+      "name": "quoted-multiline-marker-is-one-business-row",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "8661563f87f18ed89bbbaf6afc546aad4365c9db3356b81ca070d4ab54224dad",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,\"export,\"\"run\"\"\n42\",2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "8661563f87f18ed89bbbaf6afc546aad4365c9db3356b81ca070d4ab54224dad"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export,\"run\"\n42"
+        }
+      }
+    },
+    {
+      "name": "future-source-boundary-preserved-not-qualified-by-parser",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "843db851121738d107a6f5568b2b3d943b1e90bd54c21c250b9589cfe6cad746",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2030-01-01T00:00:00Z,1\r\n",
+        "sha256": "843db851121738d107a6f5568b2b3d943b1e90bd54c21c250b9589cfe6cad746"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2030-01-01T00:00:00Z",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "empty-trailing-records-not-business-rows",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "2718d725f3941c7b1ec8c97ef40b9941dedab087dea2e8605cc7486e487b9303",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n\r\n\r\n",
+        "sha256": "2718d725f3941c7b1ec8c97ef40b9941dedab087dea2e8605cc7486e487b9303"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "export-run-0042"
+        }
+      }
+    },
+    {
+      "name": "empty-marker",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "340bc43828085bafdc4054b33c820d5ac69371d95b516587e7585249c1938b85",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "340bc43828085bafdc4054b33c820d5ac69371d95b516587e7585249c1938b85"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "whitespace-only-marker",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "42989d4a36f59ef03d42162bf5cdbcf0c9277fcc620905097dd36a700d671ec8",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,   ,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "42989d4a36f59ef03d42162bf5cdbcf0c9277fcc620905097dd36a700d671ec8"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "local-boundary-without-offset",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "ed994e3dabd8ec6244a06493ce6fcadeec95544e73bb03825fca8aad34cc0d82",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T19:00:00,1\r\n",
+        "sha256": "ed994e3dabd8ec6244a06493ce6fcadeec95544e73bb03825fca8aad34cc0d82"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "invalid-calendar-boundary",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "f5b4f59442ccda63da52ac82b1df392bcf1eb0800a22c96c78a4d14b316f5b6c",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-02-30T19:00:00Z,1\r\n",
+        "sha256": "f5b4f59442ccda63da52ac82b1df392bcf1eb0800a22c96c78a4d14b316f5b6c"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "submillisecond-boundary-not-qualified",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "487c3ffa2bf3cdc84207fd12a4dcf22c1b5d90c79c11659cd5dc93c0a564fb36",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T19:00:00.1234Z,1\r\n",
+        "sha256": "487c3ffa2bf3cdc84207fd12a4dcf22c1b5d90c79c11659cd5dc93c0a564fb36"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "invalid-offset-boundary",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "5498db02f316673e2b02b0799b6f7e8ebc020493b6ac39734b6f187b933f9a67",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T19:00:00+14:01,1\r\n",
+        "sha256": "5498db02f316673e2b02b0799b6f7e8ebc020493b6ac39734b6f187b933f9a67"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "negative-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "6763496a48460418d3b91d16834c2c3d54d8e5ba2ecc376f52a484ef3970bbd5",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,-1\r\n",
+        "sha256": "6763496a48460418d3b91d16834c2c3d54d8e5ba2ecc376f52a484ef3970bbd5"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "leading-zero-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "68c6546f3572b22099c74e639c9005823fe729650ee4a512211c2e34196c6026",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,01\r\n",
+        "sha256": "68c6546f3572b22099c74e639c9005823fe729650ee4a512211c2e34196c6026"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "decimal-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "138dfb920ada320b3114c9feff1926086e7f5a4e88354c18e196a55c9e509eee",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1.0\r\n",
+        "sha256": "138dfb920ada320b3114c9feff1926086e7f5a4e88354c18e196a55c9e509eee"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "exponent-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "b1fee18d783dfd96903851f7523a3cad1529943ea439f77109e24c5162696570",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1e0\r\n",
+        "sha256": "b1fee18d783dfd96903851f7523a3cad1529943ea439f77109e24c5162696570"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "empty-control-total",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "4e90eaacf135b492294ceb141196ad9839e7d8713d612f940d4ee6061510a75c",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,\r\n",
+        "sha256": "4e90eaacf135b492294ceb141196ad9839e7d8713d612f940d4ee6061510a75c"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "control-total-over-bound",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "84ab6a0e8d74aa2ddaea64818d24efb604fac66352f73c36f58c4b042ab3c796",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1001\r\n",
+        "sha256": "84ab6a0e8d74aa2ddaea64818d24efb604fac66352f73c36f58c4b042ab3c796"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "control-total-does-not-match-original",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "2cc7a318184b9004a3383863480d387920e79b520865651c4614799b90039efb",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n",
+        "sha256": "2cc7a318184b9004a3383863480d387920e79b520865651c4614799b90039efb"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "mixed-markers",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "c4e6d3d47ed2deccc344c23bdd0a369d90d652975e9667eefbf967c967fd2200",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,different-export,2026-11-12T14:00:00-05:00,2\r\n",
+        "sha256": "c4e6d3d47ed2deccc344c23bdd0a369d90d652975e9667eefbf967c967fd2200"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "same-instant-different-source-spelling",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "8c001a701134a7d2bacdb0c12ce0c1d5e6626140978bbd53030cf72582d2d815",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T19:00:00Z,2\r\n",
+        "sha256": "8c001a701134a7d2bacdb0c12ce0c1d5e6626140978bbd53030cf72582d2d815"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "mixed-control-totals",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "2faad3c8580acc44d12f457fe480230e8c3e78385de4f1abc8cccaa1d1447e6b",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,2\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,3\r\n",
+        "sha256": "2faad3c8580acc44d12f457fe480230e8c3e78385de4f1abc8cccaa1d1447e6b"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "extra-cell-in-business-row",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "790f402ccd821f11521473bbce3e982991e0118f0eb7c46f03c896582965d926",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1,unexpected\r\n",
+        "sha256": "790f402ccd821f11521473bbce3e982991e0118f0eb7c46f03c896582965d926"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "internal-empty-record-is-not-dropped",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "b1168f1e374e2a7efad3eda31f024f67c31044027d3bf95f96ba1e44fcc3bfc1",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1\r\n",
+        "sha256": "b1168f1e374e2a7efad3eda31f024f67c31044027d3bf95f96ba1e44fcc3bfc1"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "missing-control-header",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "0d731a7b979396db8ae145cc65ddc15c7c9dbaeb66615ff4ec58e19a49ede623",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00\r\n",
+        "sha256": "0d731a7b979396db8ae145cc65ddc15c7c9dbaeb66615ff4ec58e19a49ede623"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "duplicate-control-heading",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "shipmentId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "property": "Property",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "timeQuality": "snapshot_time_only"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "58eafa6b9f1a38ab929ce7e5cb19830ef1076849f1c30bc6b6f1705e58226e6b",
+        "expectedHeaders": [
+          "Order",
+          "Line",
+          "Shipment",
+          "Property",
+          "Amount",
+          "Unit",
+          "AsOf",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "shipment_line",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Order,Line,Shipment,Property,Amount,Unit,AsOf,SnapshotMarker,SnapshotAsOf,SnapshotRows,SnapshotRows\r\n0010482,004,S-0021,allocatedQuantity,10,each,2026-11-12T19:00:00Z,export-run-0042,2026-11-12T14:00:00-05:00,1,1\r\n",
+        "sha256": "58eafa6b9f1a38ab929ce7e5cb19830ef1076849f1c30bc6b6f1705e58226e6b"
+      },
+      "errorContains": "SOURCE_SNAPSHOT_BOUNDARY_INVALID"
+    },
+    {
+      "name": "event-inventory-can-declare-exporter-snapshot-controls",
+      "config": {
+        "batchSchema": "packproof.typed-source-batch/v2",
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "column"
+          },
+          "revision": {
+            "kind": "immutable_event"
+          }
+        },
+        "transport": "local_ntfs",
+        "displayName": "Source-controlled snapshot",
+        "sourceProfile": "packproof.operational-observations/v2",
+        "mappingVersion": "snapshot-controls/1",
+        "sourceNamespace": "snapshot-pilot",
+        "mapping": {
+          "sourceEventId": "Event",
+          "occurredAt": "OccurredAt",
+          "shipmentId": "Shipment",
+          "trackingId": "Tracking",
+          "property": "Property",
+          "value": "Value"
+        },
+        "constants": {
+          "observationKind": "event",
+          "timeQuality": "event_time"
+        },
+        "wholeFileConsent": true,
+        "folderDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initialFileName": "orders-controls.csv",
+        "initialOriginalSha256": "e389848b0d8266e40377e4d63f7a9019adfb9983d8031985e175789c42e8cac9",
+        "expectedHeaders": [
+          "Event",
+          "OccurredAt",
+          "Shipment",
+          "Tracking",
+          "Property",
+          "Value",
+          "SnapshotMarker",
+          "SnapshotAsOf",
+          "SnapshotRows"
+        ],
+        "historyFrom": "2026-11-01T00:00:00Z",
+        "historyTo": null,
+        "unknownTimePolicy": "quarantine",
+        "maxBytes": 2097152,
+        "maxRows": 1000,
+        "offlineWindowHours": 24,
+        "expectedIntervalSeconds": 86400,
+        "completenessPolicy": {
+          "kind": "snapshot",
+          "scope": "tracking_package",
+          "sourceOwnerQualified": true,
+          "qualificationReference": "synthetic-exporter-control-contract/1",
+          "fileBoundary": {
+            "schema": "packproof.csv-snapshot-boundary/v1",
+            "markerColumn": "SnapshotMarker",
+            "asOfColumn": "SnapshotAsOf",
+            "rowCountColumn": "SnapshotRows"
+          }
+        }
+      },
+      "original": {
+        "name": "orders-controls.csv",
+        "mediaType": "text/csv",
+        "content": "Event,OccurredAt,Shipment,Tracking,Property,Value,SnapshotMarker,SnapshotAsOf,SnapshotRows\r\nlabel-event-1,2026-11-12T18:30:00Z,S-0021,TRACK-001,labelStatus,CREATED,tracking-inventory-1,2026-11-12T19:00:00Z,1\r\n",
+        "sha256": "e389848b0d8266e40377e4d63f7a9019adfb9983d8031985e175789c42e8cac9"
+      },
+      "expected": {
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T19:00:00Z",
+          "marker": "tracking-inventory-1"
+        }
+      }
+    }
+  ]
+}

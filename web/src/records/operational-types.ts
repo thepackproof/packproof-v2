@@ -41,6 +41,8 @@ export interface CaseSourceHealth {
   connectionId: string; sourceNamespace: string; state: string; label: string; displayName?: string;
   lastReceivedAt: string | null; sourceAsOf: string | null; lastCheckedAt: string | null;
   expectedIntervalSeconds: number | null; coverage: 'qualified' | 'unknown'; nextAction: string;
+  collectorBacklog?: number | null; oldestPendingAt?: string | null;
+  collectorPendingAgeUnknownCount?: number | null; collectorRetainedBytes?: number | null;
   accountingAvailable?: boolean;
   accounting: { received: number; acceptedLinked: number; acceptedUnlinked: number; duplicate: number;
     conflict: number; quarantined: number; rejected: number; processing: number; reconciled: boolean };
@@ -48,6 +50,7 @@ export interface CaseSourceHealth {
 export type CaseSection = 'comparisons' | 'assertions' | 'relationships' | 'timeline' | 'caseLinks' | 'aliases' | 'identityRules' | 'proofs';
 export interface ProofPagination { section: 'proofs'; limit: number; total: number; returnedCount: number; hasMore: boolean; nextCursor: string | null; projectionVersion: string }
 export interface OperationalCaseDetail {
+  measuredAt?: string;
   proofPagination?: ProofPagination; proofs?: Array<{ id: string; proofId: string }>;
   schema: string; projectionVersion: string; projectionStatus?: { state: 'ready' | 'pending' | 'stale'; caseRevision: number; projectedRevision: number | null; reason?: string }; case: OperationalCaseSummary;
   assertions: CaseAssertion[]; comparisons: CaseComparison[]; relationships: CaseRelationship[];

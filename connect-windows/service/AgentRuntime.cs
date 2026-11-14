@@ -7,7 +7,7 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.3.0";
+    internal const string InstalledVersion="0.4.0";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
     private readonly Func<ISourceAdapter> sourceAdapterFactory=()=>new LocalNtfsSourceAdapter();
@@ -94,6 +94,7 @@ public sealed partial class AgentRuntime : IDisposable
             var p = payload ?? Json.Element(new { });
             switch (command)
             {
+                case "inspectBackfill":case "proposeBackfill":case "pauseBackfill":case "resumeBackfill":case "refreshBackfills":await BackfillCommand(command,p,ct);break;
                 case "beginSubscriptionSource": case "inspectSubscriptionDraft": case "proposeSubscription": await TypedDraftCommand(command,p,ct); break;
                 case "selectSubscriptionSource": case "inspectSubscriptionFile": case "previewSubscription": case "commitSubscription": case "verifySubscription": case "pauseSubscription": case "resumeSubscription": await TypedCommand(command,p,ct); break;
                 case "status": return Status();
@@ -266,6 +267,7 @@ public sealed partial class AgentRuntime : IDisposable
             if(networkOnline && state.GuidedSetup){ await AdvanceGuidedSetup(ct); return; }
             if (state.CredentialExpiresAt - DateTimeOffset.UtcNow < TimeSpan.FromDays(7)) { if (networkOnline) { if(typedSourceSubscriptions)state.LastScheduledSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledSourceId,ReconcileSubscriptionBeforeRenewal,ct,includePaused:true); await Renew(ct); } return; }
             if (typedSourceSubscriptions) { state.LastScheduledSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledSourceId,CollectSubscription,ct,includePaused:true); Save(); }
+            if(typedSourceSubscriptions&&BackfillAdvertised&&networkOnline){state.LastScheduledBackfillSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledBackfillSourceId,CollectBackfillSource,ct,includePaused:true,budget:1);Save();}
             if (!MayCollect(DateTimeOffset.UtcNow) || DateTimeOffset.UtcNow - lastScan < TimeSpan.FromSeconds(30) || CurrentCounts().Any(p=>p.Value>0&&p.Key is "preview_pending" or "commit_pending" or "server_processing")) return;
             if (state.Folder is null) return; lastScan = DateTimeOffset.UtcNow; _ = FolderSource.Inventory(state.Folder); state.LastScanAt = DateTimeOffset.UtcNow;
             var knownEntries = queue.Entries().Select(x => x.Id).ToHashSet();

@@ -21,8 +21,8 @@ public sealed class SourceSubscriptionTests:IDisposable
     [Fact]public void Protected_state_migration_does_not_reinterpret_legacy_approval_as_typed_authority()
     {
         var state=new LocalState{Token="keep-secret",Folder="C:\\Exports",FolderDigest="same-folder",ScanCursorFileName="00009.csv",LocalPaused=false,ServerConfig=Json.Element(new{state="active",configSha256="old-digest",configRevision=4,config=new{mapping=new{shipmentReference="Reference"}}})};
-        SourceStateMigration.SynchronizeLegacy(state);var source=Assert.Single(state.SourceSubscriptions);Assert.Equal(3,state.StateVersion);Assert.Equal("legacy",source.Id);Assert.False(source.CapabilityApproved);Assert.Equal("00009.csv",source.CursorFileName);Assert.Equal("old-digest",source.ConfigurationSha256);Assert.Equal("keep-secret",state.Token);Assert.False(source.LocalPaused);
-        state.StateVersion=4;Assert.Equal("LOCAL_STATE_UNSUPPORTED",Assert.Throws<ConnectException>(()=>SourceStateMigration.Validate(state)).Code);
+        SourceStateMigration.SynchronizeLegacy(state);var source=Assert.Single(state.SourceSubscriptions);Assert.Equal(4,state.StateVersion);Assert.Equal("legacy",source.Id);Assert.False(source.CapabilityApproved);Assert.Equal("00009.csv",source.CursorFileName);Assert.Equal("old-digest",source.ConfigurationSha256);Assert.Equal("keep-secret",state.Token);Assert.False(source.LocalPaused);
+        state.StateVersion=5;Assert.Equal("LOCAL_STATE_UNSUPPORTED",Assert.Throws<ConnectException>(()=>SourceStateMigration.Validate(state)).Code);
     }
     [Fact]public void Source_paging_due_work_and_counts_are_isolated_and_keep_old_authority()
     {

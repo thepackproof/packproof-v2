@@ -15,10 +15,10 @@ public sealed class SourceScheduler
         var start = afterId is null ? 0 : Array.FindIndex(all, s => string.CompareOrdinal(s.Id, afterId) > 0); if (start < 0) start = 0;
         return Enumerable.Range(0, Math.Min(budget, all.Length)).Select(n => all[(start + n) % all.Length]).ToArray();
     }
-    public static async Task<string?> Run(IEnumerable<SourceSubscriptionState> subscriptions, string? afterId, Func<SourceSubscriptionState, CancellationToken, Task> work, CancellationToken ct, bool includePaused = false)
+    public static async Task<string?> Run(IEnumerable<SourceSubscriptionState> subscriptions, string? afterId, Func<SourceSubscriptionState, CancellationToken, Task> work, CancellationToken ct, bool includePaused = false,int budget=3)
     {
         var last = afterId;
-        foreach (var source in Order(subscriptions, afterId, includePaused:includePaused))
+        foreach (var source in Order(subscriptions, afterId,budget:budget, includePaused:includePaused))
         {
             ct.ThrowIfCancellationRequested();
             try { await work(source, ct); }
@@ -52,7 +52,8 @@ public sealed class LocalNtfsSourceAdapter : ISourceAdapter
         if (digest != source.FolderDigest) throw new ConnectException("SOURCE_SCOPE_REVIEW_REQUIRED", "The local source differs from its approved folder. Review this source before reading files.");
         // Inventory enforces the dedicated-folder entry bound and NTFS/link rules.
         _ = FolderSource.Inventory(folder);
-        return FolderSource.ScanBatch(Directory.EnumerateFiles(folder, "*.csv", SearchOption.TopDirectoryOnly), source.CursorFileName).Select(Path.GetFileName).Cast<string>().ToArray();
+        var all=Directory.EnumerateFiles(folder,"*.csv",SearchOption.TopDirectoryOnly).ToArray();var unseen=all.Where(p=>!source.ExcludedFileNames.Contains(Path.GetFileName(p),StringComparer.OrdinalIgnoreCase)&&!source.PublishedFileDigests.ContainsKey(Path.GetFileName(p))).ToArray();
+        return FolderSource.ScanBatch(unseen.Length>0?unseen:all,source.CursorFileName).Select(Path.GetFileName).Cast<string>().ToArray();
     }
     public CollectedSourceFile Read(SourceSubscriptionState source, string name) => new(name, FolderSource.Snapshot(source.Folder ?? "", name));
     public void Dispose() { }

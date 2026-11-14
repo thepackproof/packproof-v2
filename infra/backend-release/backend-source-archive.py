@@ -3,7 +3,7 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
         raise ValueError('INVALID_SOURCE_COMMIT')
@@ -11,7 +11,9 @@ def archive(source,destination,profile,verify=False):
     probes=['infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']
     if profile=='reconstruction-v1':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs']
     if profile=='reconstruction-v2':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs']
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2'):paths+=probes
+    if profile=='reconstruction-v3':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs']
+    if profile=='reconstruction-v4':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs']
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -19,7 +21,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2') and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -63,6 +65,19 @@ def archive(source,destination,profile,verify=False):
         predecessor=[row for row in inventory if row['id'] not in additions]
         digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
         if len(inventory)!=115 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='eac1cf8a3e505fdee80d3888a4d504efc6266f610897997b46fef8bca62cfd8c':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v3':
+        # Explicit117 admission preserves every qualified116 predecessor byte.
+        additions={'117_source_backfill_jobs'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=116 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='343ff540ec79d5fe2446e3358e93cc7deac06f0bbc854fee834c2a65858cfa0f':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v4':
+        additions={'118_source_projection_rechecks'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=117 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='57d54b44d9f6d3e43db003da2159c4e1cf191cfc5d8acbe5e2c361939d91cf8b':
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':

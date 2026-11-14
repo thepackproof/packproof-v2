@@ -5,7 +5,8 @@ import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
-import {currentApprovalPath,currentSubscriptionApprovalPath,submitConfigurationForReview} from './approval-target';
+import {currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,submitConfigurationForReview} from './approval-target';
+import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {ConnectStatus} from '../ui/types';
 protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);app.enableSandbox();
@@ -18,6 +19,15 @@ function safeError(error:unknown){const message=error instanceof Error?error.mes
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);return {ok:true,value:await fn(...parsed)};}catch(error){return {ok:false,error:safeError(error)};}});}
 function setup(){
+ bind('chooseBackfillFiles',async input=>{
+  const current=await status(),source=current.sourceSubscriptions?.find(source=>source.id===input.id);
+  if(current.capabilities?.sourceBackfillJobs!==true||source?.backfillAvailable!==true||!source.folder||source.state!=='active'||source.localPaused)throw Error('Refresh and resume the current approved source before inspecting historical reports.');
+  const selected=await dialog.showOpenDialog(win!,{title:`Choose historical reports for ${source.displayName}`,defaultPath:source.folder,properties:['openFile','multiSelections','dontAddToRecent'],filters:[{name:'Completed CSV reports',extensions:['csv']}]});
+  if(selected.canceled)return current;
+  return mutate('inspectBackfill',{...input,fileNames:backfillFileNames(source.folder,selected.filePaths)});
+ });
+ for(const method of ['proposeBackfill','pauseBackfill','resumeBackfill'] as const)bind(method,input=>mutate(method,input));
+ bind('openBackfillApproval',async input=>open(approvalUrl(currentBackfillApprovalPath(await status(),input.id,input.jobId),config.webBaseUrl)));
  bind('chooseNewSubscriptionFolder',async()=>{
   const selected=await dialog.showOpenDialog(win!,{title:'Choose a dedicated existing export folder',defaultPath:preparedExportPath(config.channel,process.env.ProgramData),properties:['openDirectory','dontAddToRecent']});
   if(selected.canceled||selected.filePaths.length!==1)return status();

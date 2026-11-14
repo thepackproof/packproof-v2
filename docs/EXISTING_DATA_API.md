@@ -19,6 +19,7 @@ The operational flags default to off:
 | Qualified source rules | `PACKPROOF_SOURCE_HEALTH_ENABLED`, `PACKPROOF_RECONSTRUCTION_RULES_ENABLED`; `PACKPROOF_SOURCE_RULE_POLICIES_ENABLED` for source rule policies |
 | Investigation exports | `PACKPROOF_RECONSTRUCTION_EXPORTS_ENABLED`; signing additionally needs `PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED` and a qualified signing binding |
 | Source disposition and collector compaction | `PACKPROOF_SOURCE_DISPOSITION_ENABLED`, reviewed current authority and approved policy |
+| Resumable historical file jobs | `PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED`, matching `0.4.0` collector, active source and separate exact-manifest approval |
 
 The organization feature must also be enabled. Enabling flags does not satisfy the external release gates. A typed original is UTF-8 JSON or CSV, at most 2 MiB and 1,000 rows. Preserve the complete original, including unmapped columns and unrelated rows, with `wholeFileConsent:true`. Server-derived rows, locators, association policy and identity derivation cannot be submitted as substitute originals.
 
@@ -36,6 +37,39 @@ A qualified `0.3.0` installation can begin with an order-line export. It does no
 For a previously acknowledged `0.3.0` installation still in `setup`, the owner/admin can choose `approve_source_setup` through `/me/records/agent-installations/{installationId}/actions`. Supply the exact current `configRevision` and `configSha256`, including null when no legacy config exists. This explicit action rechecks the current administrator, operator and site; it permits source setup without approving any source bytes. Existing legacy versions retain their original setup/configuration flow.
 
 Neither `ready` nor a proposed source permits upload. Each actual source requires its own current approved configuration and grant. The installation still cannot use general case listing, unrelated Proofs or unrestricted intake.
+
+## Historical files alongside continuing collection
+
+A historical job has its own approval and finite inventory. It does not revise the source configuration, change its grant, transfer queued work to another credential, or authorize every old file in a folder. The collector preserves its ordinary selected-file/new-file policy for live collection.
+
+1. In the active source, explicitly select the historical files to inspect and a bounded source-time interval. Each original remains limited to 2 MiB and 1,000 rows; one job contains at most 100 originals and 200 MiB. The proposal freezes each filename, media type, exact byte size and SHA-256, the source configuration/grant/credential identity, and the approved snapshot or event semantics.
+2. Propose through `POST /v1/partner/source-subscriptions/{subscriptionId}/backfills/proposals`. A current owner/admin reviews the exact manifest through the browser, including its digest, interval, semantics and whole-original consent. Approval is separate from recurring source consent and expires within 24 hours. A changed source, grant or credential does not inherit the job approval.
+3. Read jobs through `/source-subscriptions/{subscriptionId}/backfills` and `/source-backfills/{jobId}` under the partner or human prefix. Full human manifest review requires a current owner/admin; ordinary case visibility does not grant this inventory. Lists return ten jobs per cursor page. The collector reserves live admission and processing capacity, then uses a separate bounded historical lane. Restart resumes the same manifest and retained submission identities. Missing, replaced or unqualified files remain blocked; they are never silently skipped as completed.
+4. New historical previews carry `collectionContext:{kind:'historical_backfill',jobId,itemId}` in the existing typed batch envelope. It is collection provenance, not a business identifier. The original bytes, approved source mapping and normal source event/revision rules remain authoritative. An older historical snapshot cannot supersede a newer live snapshot merely because it arrived later.
+5. Bind an exact existing source receipt with `POST /v1/partner/source-backfills/{jobId}/items/{itemId}/bind` when live collection already retained the same original. The server verifies its scope, approval identity, filename, digest and byte size. File and row progress comes from durable receipts; local counters do not establish server acceptance or completeness.
+
+Human lifecycle actions use `POST /me/records/source-backfills/{jobId}/actions` with the exact manifest digest, configuration/grant revisions, current `expectedDecisionId` (null for initial approval) and a reason. A stale review cannot override a later pause. Decision history is complete and bounded to 100 entries; the final slot is reserved for pausing. Further collection needs a separately reviewed job when that bound is reached. Pause/resume recheck current source and administrator authority. Paused, expired, revoked or incompatible jobs preserve queued originals and receipts. Source-reported event/snapshot time must be qualified and within the job interval; filesystem modification time and receipt time do not stand in for business time. Historical imports do not establish that uncollected stages were complete or create unsupported absence findings.
+
+Collector backlog, oldest known pending time and retained bytes are reported separately from reconciled server row outcomes. An older queue entry with no recorded capture time remains explicitly unknown. These measures are operational diagnostics, not exporter control totals.
+
+## Qualified CSV snapshot controls
+
+The matching `0.4.0` collector can use actual exporter controls in an explicitly approved local v2 CSV source. Configure them before the first source approval when available. Set `completenessPolicy.kind:'snapshot'`, `sourceOwnerQualified:true`, the applicable scope and an actual qualification reference, then add:
+
+```json
+{
+  "fileBoundary": {
+    "schema": "packproof.csv-snapshot-boundary/v1",
+    "markerColumn": "ExportId",
+    "asOfColumn": "ExportThrough",
+    "rowCountColumn": "ExportRows"
+  }
+}
+```
+
+These are three distinct existing headers in the exact approved original. Every raw business row must report the same nonempty exporter marker, explicit-offset boundary timestamp and integer control total. The reported total must match the whole original's raw row count, including rows needing interpretation review. The collector and server independently verify those values against the original; the collector sends them through the existing `completeness` object. A file hash, the last filename, a recent receipt, or PackProof's own observed row count does not create a completeness assertion.
+
+An inventory snapshot can contain event rows; inventory coverage and business observation kind remain distinct. Source-owner qualification must establish what the export covers. Missing, inconsistent, forged or unsupported controls do not qualify a source. Future timestamps remain reported clock uncertainty, and pending, rejected or unqualified current inputs still block complete-interval reasoning. An older historical file does not advance or replace a newer qualified live boundary merely by arriving later. Ordinary CSV sources without this optional binding continue to report coverage unknown.
 
 ## Preview, commit and verify
 

@@ -95,3 +95,9 @@ describe('explicitly approved v2 source identities',()=>{
   expect(()=>compositeSourceEventId(['orderId','orderLineId','shipmentId','property'],()=> 'α'.repeat(200))).toThrow(/1,024 UTF-8/);
  });
 });
+
+it('keeps explicit collection-job provenance outside immutable business identity',()=>{
+ const original=fixture('composite-order-no-dedicated-ids'),before=parseTypedSourceBatch(original),withContext=parseTypedSourceBatch({...original,collectionContext:{kind:'historical_backfill',jobId:'job-a',itemId:'item-a'}});
+ expect(withContext.collectionContext).toEqual({kind:'historical_backfill',jobId:'job-a',itemId:'item-a'});expect(withContext.rows.map(r=>r.payloadSha256)).toEqual(before.rows.map(r=>r.payloadSha256));expect(withContext.rows.map(r=>r.normalized)).toEqual(before.rows.map(r=>r.normalized));
+ for(const collectionContext of [{kind:'invented',jobId:'job-a',itemId:'item-a'},{kind:'historical_backfill',jobId:'job-a',itemId:'item-a',grantRevision:9},{kind:'historical_backfill',jobId:'',itemId:'item-a'}])expect(()=>parseTypedSourceBatch({...original,collectionContext})).toThrow();
+});

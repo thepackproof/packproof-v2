@@ -35,6 +35,12 @@ public sealed class SourceSubscriptionState
     public bool CapabilityApproved { get; set; }
     public string? SetupQueueId { get; set; }
     public string? VerifiedCaseId { get; set; }
+    public JsonElement? BackfillDraft { get; set; }
+    public string? BackfillDiscoveryCursor { get; set; }
+    public string? LastScheduledBackfillJobId { get; set; }
+    public string? LastReconciledBackfillQueueId { get; set; }
+    public bool BackfillReconcileNext { get; set; }
+    public List<SourceBackfillState> BackfillJobs { get; set; } = [];
     public string QueueConfigurationIdentity(string? installationId) => QueueConfigurationIdentity(installationId,GrantRevision);
     // Completed-original erasure uses a new current authorization while checking
     // the immutable capture identity. It never changes a queued work item's grant.
@@ -44,7 +50,7 @@ public sealed record QueueSourceIdentity(string SourceId, string SourceProfile, 
 
 public static class SourceStateMigration
 {
-    public const int Version = 3;
+    public const int Version = 4;
     public static void Validate(LocalState state)
     {
         if (state.StateVersion is < 1 or > Version || state.SourceSubscriptions is null || state.SourceSubscriptions.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != state.SourceSubscriptions.Count)
@@ -90,4 +96,12 @@ public sealed class SubscriptionDraftState
     public JsonElement? LocalPreview { get; set; }
     public JsonElement? Proposal { get; set; }
     public string? ApprovalPath { get; set; }
+}
+
+public sealed class SourceBackfillState
+{
+    public required string Id { get; set; }
+    public JsonElement Job { get; set; }
+    public bool LocalPaused { get; set; }
+    public string? LastErrorCode { get; set; }
 }

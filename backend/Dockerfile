@@ -53,6 +53,10 @@ COPY infra/backend-release/reconstruction-release-review.mjs /release/reconstruc
 COPY infra/backend-release/reconstruction-runtime-preflight.mjs /release/reconstruction-runtime-preflight.mjs
 COPY infra/backend-release/reconstruction-v2-release-review.mjs /release/reconstruction-v2-release-review.mjs
 COPY infra/backend-release/reconstruction-v2-runtime-preflight.mjs /release/reconstruction-v2-runtime-preflight.mjs
+COPY infra/backend-release/reconstruction-v3-release-review.mjs /release/reconstruction-v3-release-review.mjs
+COPY infra/backend-release/reconstruction-v3-runtime-preflight.mjs /release/reconstruction-v3-runtime-preflight.mjs
+COPY infra/backend-release/reconstruction-v4-release-review.mjs /release/reconstruction-v4-release-review.mjs
+COPY infra/backend-release/reconstruction-v4-runtime-preflight.mjs /release/reconstruction-v4-runtime-preflight.mjs
 COPY infra/backend-release/record-agent-previous-image-probe.mjs /release/record-agent-previous-image-probe.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs
 COPY backend/scripts/isolated-runtime-role-probe.mjs ./scripts/isolated-runtime-role-probe.mjs

@@ -113,7 +113,21 @@ const policy116={...policy113,
  record_source_compaction_acknowledgements:{api:{...select,insert:'*'},worker:select},
  record_source_compaction_permits:{api:{...select,insert:'*'},worker:select},
 };
-const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:policy;
+// Backfill manifests, human approvals and exact receipt links are append-only
+// API decisions. The existing typed worker observes them without minting new
+// jobs, changing their scope or approving historical capture.
+const policy117={...policy116,
+ record_source_backfill_jobs:{api:{...select,insert:'*'},worker:select},
+ record_source_backfill_decisions:{api:{...select,insert:'*'},worker:select},
+ record_source_backfill_receipts:{api:{...select,insert:'*'},worker:select},
+};
+// Preserve the117 INSERT set explicitly before adding one immutable, derived
+// CSV-control column. No worker or API UPDATE authority is added for it.
+const typedBatch117InsertColumns=['id','organization_id','environment','connection_id','location_id','subscription_id','configuration_revision','grant_revision','principal_id','credential_id','actor_context','operator_membership_id','source_profile','source_namespace','mapping_version','preview_version','source_control_revision','original_name','original_media_type','original_object_key','original_version_id','original_sha256','original_byte_size','contract','row_count','state','import_valid_rows','replay_requested','received_at','updated_at','lease_token','lease_expires_at','attempts','next_attempt_at','error_code'];
+const policy118={...policy117,
+ record_typed_batches:{api:{...policy117.record_typed_batches.api,insert:[...typedBatch117InsertColumns,'csv_snapshot_boundary_at']},worker:policy117.record_typed_batches.worker},
+};
+const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118?policy118:policy;
 
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -155,7 +169,7 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109,113,116].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ if(![108,109,113,116,117,118].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
  const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[01][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();

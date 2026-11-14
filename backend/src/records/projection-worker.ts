@@ -8,7 +8,7 @@ import {loadOperationalCaseProjection,readCaseSourceKeys,readCaseSourceCoverage,
 import {reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {readProjectionSourceCounter,reconcileProjectionSourceCounter,sourceProjectionSignature,projectionSourceDependencies} from './projection-store.js';
 import {identityMappingDependencies} from './identity-projection.js';
-import type {SourceCoverage} from './coverage.js';
+import {sourceWorkRecheckIntervalMs,type SourceCoverage} from './coverage.js';
 
 /** Derived worker state contains no original files or viewer-specific Proof
  * visibility. Active assertions, not retained timeline history, drive rules. */
@@ -19,7 +19,7 @@ export async function synchronizeOperationalCaseProjection(db:Database,clock:Clo
  await includePolicySourceCoverage(db,clock,w,c,sources);
  for(const source of sources)if(source.subscriptionId&&!(await readProjectionSourceCounter(db,source.subscriptionId)).ready)await reconcileProjectionSourceCounter(db,clock,source.subscriptionId);
  const projection=await loadOperationalCaseProjection(db,clock,w,caseId,{evaluation:true});
- const now=clock.now(),futureDeadlines=projection.comparisons.flatMap(c=>c.deadlineAt&&Date.parse(c.deadlineAt)>now.getTime()?[Date.parse(c.deadlineAt)]:[]),freshness=projection.sources.flatMap(s=>s.expectedIntervalSeconds&&s.coverage==='qualified'&&['current','quiet_checked'].includes(s.state)?[Math.min(...[s.lastCheckedAt,s.sourceAsOf,s.completeness.asOf].map(t=>Date.parse(t!)))+s.expectedIntervalSeconds*1000]:[]),validUntil=new Date(Math.min(now.getTime()+86400000,...(freshness.length?freshness:[now.getTime()+60000]),...futureDeadlines)).toISOString(),next=new Date(Math.min(now.getTime()+60000,Date.parse(validUntil))).toISOString();
+ const now=clock.now(),futureDeadlines=projection.comparisons.flatMap(c=>c.deadlineAt&&Date.parse(c.deadlineAt)>now.getTime()?[Date.parse(c.deadlineAt)]:[]),freshness=projection.sources.flatMap(s=>s.expectedIntervalSeconds&&s.coverage==='qualified'&&['current','quiet_checked'].includes(s.state)?[Math.min(...[s.lastCheckedAt,s.sourceAsOf,s.completeness.asOf].map(t=>Date.parse(t!)))+s.expectedIntervalSeconds*1000]:[]),validUntil=new Date(Math.min(now.getTime()+86400000,...(freshness.length?freshness:[now.getTime()+60000]),...futureDeadlines)).toISOString(),next=new Date(Math.min(now.getTime()+sourceWorkRecheckIntervalMs(projection.sources),Date.parse(validUntil))).toISOString();
  await db.transaction(async tx=>{
   await tx.query('SELECT pg_advisory_xact_lock(1347438167,hashtext($1))',[caseId]);
   await tx.query('SELECT id FROM record_cases WHERE id=$1 FOR UPDATE',[caseId]);

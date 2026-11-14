@@ -11,3 +11,5 @@
 @media(max-width:760px){.source-policy-grid{grid-template-columns:minmax(0,1fr)}.case-identity-review>.records-search{flex-direction:column;align-items:stretch}.case-identity-review>label{max-width:none}.case-identity-review .records-button{white-space:normal;text-align:left}}
 
 .case-proof-memberships{margin:18px 0}.case-proof-memberships>p{font-size:12px;line-height:1.8;margin:12px 0}.case-proof-memberships>.records-button{margin-top:14px}
+
+.source-backfill-files{max-width:100%;overflow-x:auto}.source-backfill-files:focus-visible{outline:2px solid var(--records-blue);outline-offset:3px}.source-backfill-files table{border-collapse:collapse;width:100%;font-size:12px}.source-backfill-files th,.source-backfill-files td{padding:12px 10px;border-bottom:1px solid var(--records-line);text-align:left;vertical-align:top}.source-backfill-files td:last-child{min-width:160px;max-width:280px}.source-backfill-files code{font-size:11px;overflow-wrap:anywhere;word-break:break-all}

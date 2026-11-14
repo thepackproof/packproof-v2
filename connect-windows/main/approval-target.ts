@@ -39,6 +39,17 @@ export function currentSubscriptionApprovalPath(status:ConnectStatus, id:string)
  if(source.verifiedCaseId&&source.receipt&&validId(source.receipt.id))query.set('initialBatchId',source.receipt.id);
  return `${route}?${query}`;
 }
+/** Reconstruct the exact manifest locator from current service state. */
+export function currentBackfillApprovalPath(status:ConnectStatus,id:string,jobId:string):string {
+ if(!validId(id)||!validId(jobId))throw Error('Refresh this installation before reviewing its historical import.');
+ const source=status.sourceSubscriptions?.find(source=>source.id===id);
+ const job=source?.backfillJobs?.find(job=>job.id===jobId);
+ if(!source||!job||job.subscriptionId!==id||!validId(job.installationId)||!validId(job.organizationId)||!['sandbox','live'].includes(job.environment)||!Number.isSafeInteger(job.configurationRevision)||job.configurationRevision<1||!/^[a-f0-9]{64}$/.test(job.manifestSha256))throw Error('Refresh the exact retained historical import before opening its review.');
+ // A retained job can be inspected after source revision or revocation. This
+ // locator identifies its original approval, never authority to collect again.
+ const query=new URLSearchParams({installationId:job.installationId,organizationId:job.organizationId,environment:job.environment,subscriptionId:id,configurationRevision:String(job.configurationRevision),backfillJobId:job.id,manifestSha256:job.manifestSha256});
+ return `${route}?${query}`;
+}
 /** Submission failure must never open a stale review. Browser failure must not discard a saved proposal. */
 export async function submitConfigurationForReview(submit:()=>Promise<ConnectStatus>,open:(url:string)=>Promise<void>,webOrigin:string):Promise<ConnectStatus>{
  const next=await submit();

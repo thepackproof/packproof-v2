@@ -96,7 +96,7 @@ jobs:
       - name: Verify database credential and session-option guards
         run: node --test ../infra/tests/admin-runtime-credentials.test.mjs
       - name: Verify reconstruction candidate inventory and read-only release review
-        run: node --test ../infra/backend-release/reconstruction-release-review.test.mjs ../infra/backend-release/reconstruction-v2-release-review.test.mjs
+        run: node --test ../infra/backend-release/reconstruction-release-review.test.mjs ../infra/backend-release/reconstruction-v2-release-review.test.mjs ../infra/backend-release/reconstruction-v3-release-review.test.mjs ../infra/backend-release/reconstruction-v4-release-review.test.mjs
       - name: Hash exact API build and migration set
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
@@ -147,6 +147,9 @@ jobs:
           cmp "$RUNNER_TEMP/web-first.json" "$RUNNER_TEMP/web-second.json"
       - name: Hash exact web build and source identity
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/web-bom.json" --web-dist dist --expected-sha "$GITHUB_SHA"
+      - name: Render synthetic source reviews at desktop and phone widths
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" node scripts/source-review-visual-check.mjs --out ../artifacts/WEB_ACCEPTANCE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -155,6 +158,7 @@ jobs:
             ${{ runner.temp }}/web-first.json
             ${{ runner.temp }}/web-second.json
             ${{ runner.temp }}/web-bom.json
+            artifacts/WEB_ACCEPTANCE
 
   mobile:
     name: Mobile

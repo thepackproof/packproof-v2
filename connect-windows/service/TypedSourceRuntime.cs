@@ -116,14 +116,19 @@ public sealed partial class AgentRuntime
             await api.Request("POST","/v1/partner/agent/source-dispositions/compaction-commands/"+Uri.EscapeDataString(command.GetProperty("id").GetString()!)+"/ack",new{permitId=compacted.CompactionPermitId,commandSha256=command.GetProperty("commandSha256").GetString(),batchId=entry.ImportId,originalSha256=entry.Digest,serverReceiptReconciled=true,localDisposition="compacted",compactedAt=compacted.CompactedAt!.Value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'",System.Globalization.CultureInfo.InvariantCulture)},state.Token,command.GetProperty("id").GetString()+"-"+command.GetProperty("commandSha256").GetString(),ct);
         }
     }
-    private object[] SubscriptionViews() => state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId).Select(source=>
+    private object[] SubscriptionViews()
+    {
+        var historyDisplayBytes=64*1024;
+        return state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId).Select(source=>
     {
         var config=source.ApprovedConfiguration;JsonElement? receipt=null;
         if(source.SetupQueueId is not null&&queue.Find(source.SetupQueueId) is { } setup)receipt=queue.Payload(setup).Receipt;
         object[] files=[];
         if(TypedInstallationMayRead&&source.CapabilityApproved&&(source.ServerState is "approved" or "active")&&source.Folder is not null)try{files=FolderSource.Inventory(source.Folder).Take(100).ToArray();}catch(ConnectException){ }
-        return (object)new {source.Id,source.SourceProfile,displayName=Optional(config,"displayName"),state=source.ServerState,source.LocalPaused,source.ConfigurationRevision,source.GrantRevision,source.Folder,source.FolderDigest,source.LastCheckAt,source.LastCollectedAt,source.LastReceiptAt,source.LastErrorCode,queue=queue.Counts(source.Id),source.VerifiedCaseId,source.SetupQueueId,files,selectedFileName=source.SelectedFileName,fileSha256=source.SelectedFileSha256,headers=Optional(source.LocalPreview,"headers"),rowCount=Optional(source.LocalPreview,"rowCount"),samples=Optional(source.LocalPreview,"samples"),receipt=receipt is null?null:new {id=Optional(receipt,"id"),state=Optional(receipt,"state"),counts=Optional(receipt,"counts"),caseIds=Optional(receipt,"caseIds"),original=Optional(receipt,"original")},approvalPath=$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(source.Id)}"};
+        var metrics=queue.Metrics(source.Id);var backfillJobs=BackfillViews(source,ref historyDisplayBytes);
+        return (object)new {pendingCount=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes,originalBytesKnown=metrics.OriginalBytesKnown,originalBytesUnknownCount=metrics.OriginalBytesUnknownCount,organizationId=Optional(source.ServerView,"organizationId"),environment=Optional(source.ServerView,"environment"),backfillAvailable=BackfillAvailable(source),backfillSemantics=Optional(Optional(source.ServerView,"capabilities"),"backfillSemantics"),backfillJobTotal=source.BackfillJobs.Count,backfillJobKnownTotal=source.BackfillJobs.Count,backfillJobsShown=backfillJobs.Length,backfillJobsTruncated=source.BackfillJobs.Count>backfillJobs.Length,backfillDraft=source.BackfillDraft,backfillJobs,source.Id,source.SourceProfile,displayName=Optional(config,"displayName"),state=source.ServerState,source.LocalPaused,source.ConfigurationRevision,source.GrantRevision,source.Folder,source.FolderDigest,source.LastCheckAt,source.LastCollectedAt,source.LastReceiptAt,source.LastErrorCode,queue=queue.Counts(source.Id),source.VerifiedCaseId,source.SetupQueueId,files,selectedFileName=source.SelectedFileName,fileSha256=source.SelectedFileSha256,headers=Optional(source.LocalPreview,"headers"),rowCount=Optional(source.LocalPreview,"rowCount"),samples=Optional(source.LocalPreview,"samples"),receipt=receipt is null?null:new {id=Optional(receipt,"id"),state=Optional(receipt,"state"),counts=Optional(receipt,"counts"),caseIds=Optional(receipt,"caseIds"),original=Optional(receipt,"original")},approvalPath=$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(source.Id)}"};
     }).ToArray();
+    }
     private void BindSubscriptionSource(SourceSubscriptionState source,string input)
     {
         RequireTypedInstallationRead();
@@ -153,21 +158,31 @@ public sealed partial class AgentRuntime
         }
         return rows;
     }
-    private JsonElement TypedRequest(SourceSubscriptionState source,string name,byte[] bytes)
+    private JsonElement TypedRequest(SourceSubscriptionState source,string name,byte[] bytes,object? collectionContext=null)
     {
         var config=SourceConfig(source);var view=source.ServerView!.Value;
         var schema=Optional(config,"batchSchema")?.GetString()??TypedSourceSemantics.Schema;
-        var request=new Dictionary<string,object?>{{"schema",schema},{"subscriptionId",source.Id},{"configurationRevision",source.ConfigurationRevision},{"grantRevision",source.GrantRevision},{"connectionId",view.GetProperty("connectionId").GetString()},{"locationId",view.GetProperty("locationId").GetString()},{"sourceProfile",source.SourceProfile},{"mappingVersion",config.GetProperty("mappingVersion").GetString()},{"sourceNamespace",config.GetProperty("sourceNamespace").GetString()},{"mapping",config.GetProperty("mapping")},{"constants",config.GetProperty("constants")},{"wholeFileConsent",true},{"original",new{name,mediaType="text/csv",content=new UTF8Encoding(false,true).GetString(bytes),sha256=Convert.ToHexStringLower(SHA256.HashData(bytes))}},{"completeness",new{kind="unknown"}}};
+        var request=new Dictionary<string,object?>{{"schema",schema},{"subscriptionId",source.Id},{"configurationRevision",source.ConfigurationRevision},{"grantRevision",source.GrantRevision},{"connectionId",view.GetProperty("connectionId").GetString()},{"locationId",view.GetProperty("locationId").GetString()},{"sourceProfile",source.SourceProfile},{"mappingVersion",config.GetProperty("mappingVersion").GetString()},{"sourceNamespace",config.GetProperty("sourceNamespace").GetString()},{"mapping",config.GetProperty("mapping")},{"constants",config.GetProperty("constants")},{"wholeFileConsent",true},{"original",new{name,mediaType="text/csv",content=new UTF8Encoding(false,true).GetString(bytes),sha256=Convert.ToHexStringLower(SHA256.HashData(bytes))}},{"completeness",TypedSourceSemantics.Completeness(bytes,config)}};
         if(schema==TypedSourceSemantics.SchemaV2)request["identityPolicy"]=config.GetProperty("identityPolicy");
+        if(collectionContext is not null)request["collectionContext"]=collectionContext;
         return Json.Element(request);
     }
-    private async Task ProcessTyped(SourceSubscriptionState source,QueueEntry entry,CancellationToken ct)
+    private async Task ProcessTyped(SourceSubscriptionState source,QueueEntry entry,CancellationToken ct,bool readOnly=false)
     {
         if(entry.SourceId!=source.Id||entry.SourceProfile!=source.SourceProfile||entry.GrantRevision!=source.GrantRevision||entry.ConfigDigest!=source.QueueConfigurationIdentity(state.InstallationId)||entry.CredentialGeneration!=Generation)throw new ConnectException("SOURCE_QUEUE_AUTHORITY_CHANGED","This original belongs to an earlier source approval or credential. Preserve it for explicit recovery.");
         if(!source.CapabilityApproved||source.ServerState is not("approved" or "active"))throw new ConnectException("SOURCE_AUTHORIZATION_REQUIRED","This source no longer has current approval.");
-        var payload=queue.Payload(entry);
+        if(readOnly&&entry.ImportId is null){queue.YieldRetry(entry);return;}
+        var payload=queue.Payload(entry);var historical=payload.PreviewBody.TryGetProperty("collectionContext",out _);
         try
         {
+            if(historical&&!readOnly)
+            {
+                var jobId=payload.PreviewBody.GetProperty("collectionContext").GetProperty("jobId").GetString()!;var local=source.BackfillJobs.SingleOrDefault(j=>j.Id==jobId);
+                // Exact-byte live overlap preserves this historical wire body.
+                // Its job pause and current approval still govern every replay.
+                readOnly=local?.LocalPaused==true||!BackfillCurrent(source,await FreshBackfill(source,jobId,ct));
+                if(readOnly&&entry.ImportId is null){queue.YieldRetry(entry);return;}
+            }
             JsonElement receipt;
             if(entry.ImportId is null)
             {
@@ -178,6 +193,7 @@ public sealed partial class AgentRuntime
             else{receipt=await api.Request("GET","/v1/partner/typed-imports/"+Uri.EscapeDataString(entry.ImportId),null,state.Token,null,ct);payload.Receipt=receipt;}
             RequireTypedReceipt(receipt,entry,source);
             var phase=receipt.GetProperty("state").GetString();
+            if(readOnly&&phase=="previewed"){queue.Save(entry,payload,entry.State);queue.YieldRetry(entry);return;}
             if(phase=="previewed")
             {
                 var local=ValidateTypedOriginal(source,Encoding.UTF8.GetBytes(payload.Csv));var server=receipt.GetProperty("rows").EnumerateArray().ToArray();
@@ -192,12 +208,12 @@ public sealed partial class AgentRuntime
             var next=phase switch{"succeeded"=>"complete","partially_succeeded"=>"partial","failed" or "blocked_policy"=>"action_needed","previewed"=>"awaiting_review",_=>"server_processing"};
             if(next=="complete")ValidateTypedAccounting(receipt);
             if(payload.OriginalCompacted&&payload.Receipt is { } compactedReceipt)payload.Receipt=DurableQueue.ReceiptWithoutRaw(compactedReceipt);
-            queue.Save(entry,payload,next);if(next=="complete")source.LastReceiptAt=DateTimeOffset.UtcNow;
+            queue.Save(entry,payload,next);if(readOnly&&next=="server_processing")queue.YieldRetry(entry);if(next=="complete")source.LastReceiptAt=DateTimeOffset.UtcNow;
         }
         catch(ApiException error){queue.Save(queue.Find(entry.Id)??entry,payload,error.Transient?entry.State:"action_needed",error:error.Code,failed:error.Transient,retryAfter:error.RetryAfter);source.LastErrorCode=error.Code;throw;}
-        catch(ConnectException error){queue.Save(queue.Find(entry.Id)??entry,payload,"action_needed",error:error.Code);source.LastErrorCode=error.Code;source.LocalPaused=true;throw;}
+        catch(ConnectException error){queue.Save(queue.Find(entry.Id)??entry,payload,"action_needed",error:error.Code);source.LastErrorCode=error.Code;if(!historical)source.LocalPaused=true;throw;}
         catch(Exception error)when(error is HttpRequestException or TaskCanceledException){queue.Save(queue.Find(entry.Id)??entry,payload,entry.State,error:"NETWORK_UNAVAILABLE",failed:true);networkOnline=false;throw;}
-        catch(Exception error)when(error is KeyNotFoundException or InvalidOperationException or FormatException){queue.Save(queue.Find(entry.Id)??entry,payload,"action_needed",error:"TYPED_RECEIPT_INVALID");source.LocalPaused=true;throw new ConnectException("TYPED_RECEIPT_INVALID","The source receipt is incomplete. Preserve the original and reconcile its durable outcomes before collection.");}
+        catch(Exception error)when(error is KeyNotFoundException or InvalidOperationException or FormatException){queue.Save(queue.Find(entry.Id)??entry,payload,"action_needed",error:"TYPED_RECEIPT_INVALID");if(!historical)source.LocalPaused=true;throw new ConnectException("TYPED_RECEIPT_INVALID","The source receipt is incomplete. Preserve the original and reconcile its durable outcomes before collection.");}
     }
     private static void RequireTypedReceipt(JsonElement receipt,QueueEntry entry,SourceSubscriptionState source)
     {
@@ -282,34 +298,48 @@ public sealed partial class AgentRuntime
     private async Task ReconcileSubscriptionBeforeRenewal(SourceSubscriptionState source,CancellationToken ct)
     {
         if(!networkOnline||!source.CapabilityApproved||!TypedInstallationMayRead)return;
-        var next=queue.NextDue(source.Id,Generation,source.QueueConfigurationIdentity(state.InstallationId),DateTimeOffset.UtcNow);
-        if(next is not null&&(!source.LocalPaused||next.State=="server_processing"))await ProcessTyped(source,next,ct);
+        var identity=source.QueueConfigurationIdentity(state.InstallationId);var now=DateTimeOffset.UtcNow;
+        var next=queue.NextDueLane(source.Id,Generation,identity,now,history:false)??queue.NextDueLane(source.Id,Generation,identity,now,history:true);
+        if(next is null||source.LocalPaused&&next.State!="server_processing")return;
+        try
+        {
+            await ProcessTyped(source,next,ct);
+        }
+        catch(ApiException error)when(error.Code.StartsWith("SOURCE_BACKFILL_",StringComparison.Ordinal)){source.LastErrorCode=error.Code;Save();}
+        catch(ConnectException error)when(error.Code.StartsWith("SOURCE_BACKFILL_",StringComparison.Ordinal)){source.LastErrorCode=error.Code;Save();}
     }
     private async Task CollectSubscription(SourceSubscriptionState source,CancellationToken ct)
     {
         var now=DateTimeOffset.UtcNow;
-        if(TypedInstallationMayRead && networkOnline && source.SetupQueueId is not null && source.CapabilityApproved && queue.Find(source.SetupQueueId) is {State:"server_processing"} setup && setup.NextAttemptAt<=now && setup.ConfigDigest==source.QueueConfigurationIdentity(state.InstallationId)) {await ProcessTyped(source,setup,ct);return;}
+        var processed=false;
+        if(TypedInstallationMayRead&&networkOnline&&source.SetupQueueId is not null&&source.CapabilityApproved&&queue.Find(source.SetupQueueId) is {State:"server_processing"} setup&&setup.NextAttemptAt<=now&&setup.ConfigDigest==source.QueueConfigurationIdentity(state.InstallationId)){await ProcessTyped(source,setup,ct);processed=true;}
         if(!SourcePolicyCurrent(source,now))return;
-        var identity=source.QueueConfigurationIdentity(state.InstallationId);var next=queue.NextDue(source.Id,Generation,identity,now);
-        if(next is not null&&networkOnline){await ProcessTyped(source,next,ct);return;}
-        if(source.LastCheckAt is not null&&now-source.LastCheckAt<TimeSpan.FromSeconds(30))return;
-        using var adapter=sourceAdapterFactory();var files=adapter.Inspect(source);var collected=false;
-        foreach(var name in files)
+        var identity=source.QueueConfigurationIdentity(state.InstallationId);var collected=false;
+        // Reserve live discovery even when old work is due. One actual live
+        // file read plus one due receipt operation bounds this source's turn.
+        if(source.LastCheckAt is null||now-source.LastCheckAt>=TimeSpan.FromSeconds(30))
         {
-            if(!SourcePolicyCurrent(source,DateTimeOffset.UtcNow))break;
-            if(source.ExcludedFileNames.Contains(name,StringComparer.OrdinalIgnoreCase)){source.CursorFileName=name;continue;}
-            var file=adapter.Read(source,name);var digest=Convert.ToHexStringLower(SHA256.HashData(file.Bytes));
-            if(source.PublishedFileDigests.TryGetValue(name,out var previousDigest)&&previousDigest==digest){source.CursorFileName=name;continue;}
-            QueueEntry staged;
-            try{if(previousDigest is not null)throw new ConnectException("SOURCE_FILE_REPLACED","An immutable published export was replaced. Ask its owner to review the source publication convention; both retained versions remain available.");_=ValidateTypedOriginal(source,file.Bytes);staged=queue.StageRequest(file.Bytes,name,TypedRequest(source,name,file.Bytes),Generation,identity,true,new(source.Id,source.SourceProfile,source.GrantRevision));}
-            catch(ConnectException error)when(!SourceScheduler.IsSharedSafetyFailure(error)){staged=queue.Quarantine(file.Bytes,name,Generation,identity,error.Code,new(source.Id,source.SourceProfile,source.GrantRevision));source.LastErrorCode=error.Code;source.LocalPaused=true;}
-            // The protected original and immutable submission identities are
-            // durable before the source cursor advances, then state is flushed.
-            source.PublishedFileDigests[name]=digest;source.CursorFileName=name;source.LastCollectedAt=DateTimeOffset.UtcNow;Save();collected=true;
-            if(staged.State=="action_needed")break;
+            using var adapter=sourceAdapterFactory();var files=adapter.Inspect(source);
+            foreach(var name in files)
+            {
+                if(!SourcePolicyCurrent(source,DateTimeOffset.UtcNow))break;
+                if(source.ExcludedFileNames.Contains(name,StringComparer.OrdinalIgnoreCase)){source.CursorFileName=name;continue;}
+                var file=adapter.Read(source,name);var digest=Convert.ToHexStringLower(SHA256.HashData(file.Bytes));
+                if(source.PublishedFileDigests.TryGetValue(name,out var previousDigest)&&previousDigest==digest){source.CursorFileName=name;break;}
+                QueueEntry staged;
+                try{if(previousDigest is not null)throw new ConnectException("SOURCE_FILE_REPLACED","A published immutable export was replaced; both retained versions require review.");_=ValidateTypedOriginal(source,file.Bytes);staged=queue.StageRequest(file.Bytes,name,TypedRequest(source,name,file.Bytes),Generation,identity,true,new(source.Id,source.SourceProfile,source.GrantRevision));}
+                catch(ConnectException error)when(!SourceScheduler.IsSharedSafetyFailure(error)){staged=queue.Quarantine(file.Bytes,name,Generation,identity,error.Code,new(source.Id,source.SourceProfile,source.GrantRevision));source.LastErrorCode=error.Code;source.LocalPaused=true;}
+                source.PublishedFileDigests[name]=digest;source.CursorFileName=name;source.LastCollectedAt=DateTimeOffset.UtcNow;Save();collected=true;break;
+            }
+            source.LastCheckAt=DateTimeOffset.UtcNow;Save();
+            if(networkOnline){var metrics=queue.Metrics(source.Id);await api.Request("POST","/v1/partner/source-subscriptions/"+Uri.EscapeDataString(source.Id)+"/heartbeat",new{configurationRevision=source.ConfigurationRevision,grantRevision=source.GrantRevision,state=source.LocalPaused?"mapping_drift":collected?"checked":"quiet",sourceAsOf=(string?)null,checkpoint=source.CursorFileName is null?null:Hash(source.CursorFileName),errorCode=source.LastErrorCode,backlog=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes},state.Token,Guid.NewGuid().ToString("N"),ct);}
         }
-        source.LastCheckAt=DateTimeOffset.UtcNow;Save();
-        if(networkOnline)await api.Request("POST","/v1/partner/source-subscriptions/"+Uri.EscapeDataString(source.Id)+"/heartbeat",new{configurationRevision=source.ConfigurationRevision,grantRevision=source.GrantRevision,state=source.LocalPaused?"mapping_drift":collected?"checked":"quiet",sourceAsOf=(string?)null,checkpoint=source.CursorFileName is null?null:Hash(source.CursorFileName),errorCode=source.LastErrorCode,backlog=queue.Counts(source.Id).Where(p=>p.Key!="complete").Sum(p=>p.Value),oldestPendingAt=(string?)null},state.Token,Guid.NewGuid().ToString("N"),ct);
+        if(!processed&&networkOnline&&SourcePolicyCurrent(source,DateTimeOffset.UtcNow)&&queue.NextDueLane(source.Id,Generation,identity,DateTimeOffset.UtcNow,history:false) is { } next)
+        {
+            try{await ProcessTyped(source,next,ct);}
+            catch(ApiException error)when(error.Code.StartsWith("SOURCE_BACKFILL_",StringComparison.Ordinal)){source.LastErrorCode=error.Code;Save();}
+            catch(ConnectException error)when(error.Code.StartsWith("SOURCE_BACKFILL_",StringComparison.Ordinal)){source.LastErrorCode=error.Code;Save();}
+        }
     }
     private async Task TypedCommand(string operation,JsonElement payload,CancellationToken ct)
     {

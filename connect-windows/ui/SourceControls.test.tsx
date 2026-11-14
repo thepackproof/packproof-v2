@@ -77,6 +77,18 @@ it("starts source setup with a native folder chooser and no raw configuration en
   expect(screen.queryByRole("textbox", { name: /JSON|API key|folder digest/i })).toBeNull();
   expect(bridge.proposeSubscription).not.toHaveBeenCalled();
 });
+it("labels measured collector backlog and preserves unknown ages and absent older-collector measurements", () => {
+  const status: ConnectStatus = { ...current, sourceSubscriptions: [{ ...source, pendingCount: 3, oldestPendingAt: null, pendingAgeUnknownCount: 3, retainedBytes: 2048, originalBytesKnown: 0, originalBytesUnknownCount: 3 }] };
+  const bridge = bridgeFor(status);
+  const view = render(<SourceControls status={status} bridge={bridge} disabled={false} action={run} external={() => {}}/>);
+  expect(screen.getByText("Retained pending inputs").nextElementSibling).toHaveTextContent("3");
+  expect(screen.getByText("Oldest known pending input").nextElementSibling).toHaveTextContent("Not reported");
+  expect(screen.getByText("Encrypted spool bytes, collector reported").nextElementSibling).toHaveTextContent("2,048");
+  expect(screen.getByText(/3 retained inputs have no capture timestamp/)).toBeVisible();
+  view.rerender(<SourceControls status={current} bridge={bridge} disabled={false} action={run} external={() => {}}/>);
+  expect(screen.getByText("Encrypted spool bytes, collector reported").nextElementSibling).toHaveTextContent("Not reported");
+  expect(screen.queryByText(/retained inputs have no capture timestamp/)).toBeNull();
+});
 it("submits a reviewed source mapping and an explicit UTC history policy from ordinary form controls", () => {
   const state: ConnectStatus = { ...current, subscriptionDraft: { folder: "New approved export folder", folderDigest: "b".repeat(64), selectedFileName: "new-orders.csv", fileSha256: "c".repeat(64), files: [{ name: "new-orders.csv", byteSize: 300 }], headers: ["Row", "Revision", "Order", "Line", "Qty", "Unit"], rowCount: 1 } };
   const bridge = bridgeFor(state);

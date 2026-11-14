@@ -652,6 +652,9 @@ caption {
 .source-steps { padding-left: 1.5rem; color: #53677f; }
 .source-card section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dce4ee; }
 .source-card > .source-caption { overflow-wrap: anywhere; }
+.source-backfill code, .source-backfill li { overflow-wrap: anywhere; }
+.source-backfill .connect-notice { margin-top: 1rem; }
+.source-backfill h4 { margin: .25rem 0 .75rem; }
 @media (max-width: 760px) { .source-form-grid { grid-template-columns: 1fr; } }
 @media (prefers-color-scheme: dark) {
   html { color: #edf2fa; background: #111c2b; }

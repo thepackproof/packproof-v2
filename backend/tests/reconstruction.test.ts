@@ -155,6 +155,33 @@ describe('source receipts to scoped operational reconstruction and issue history
   const history=await loadOperationalCaseIssueHistory(opened.db,clock,w,caseId);expect(history.evaluations.some(value=>(value.evaluation as {historyVisibility?:string}).historyVisibility==='restricted')).toBe(true);
   expect((await opened.db.query('SELECT 1 FROM record_case_members WHERE case_id=$1 AND proof_id=$2',[caseId,proof.proofId])).rows).toHaveLength(1);
  });
+ it.each([false,true])('preserves immutable health-cycle evaluations and replay with manual resolution %s',async(manuallyResolved)=>{
+  const root=manuallyResolved?'CYCLE-RESOLVED':'CYCLE-OPEN',w=await workspace();
+  const rows=(name:string)=>(JSON.parse((fixture(name).original as {content:string}).content.replaceAll('0010482',root).replaceAll('S-0021',`${root}-SHIP`).replaceAll('00071',`${root}-LOAD`)) as TypedSourceObservation[]).map(n=>({...n,sourceEventId:`${root}-${n.sourceEventId}`}));
+  const order=await ingest(envelope(rows('order-and-explicit-shipment-allocation'),'orders','packproof.order-lines/v1'),'orders',`${root}-orders`);await ingest(envelope(rows('loading-eight-revision-two'),'loading','packproof.operational-observations/v1'),'loading',`${root}-loading`);
+  const id=order.caseIds[0],before=await loadOperationalCaseProjection(opened.db,clock,w,id),key=before.comparisons.find(c=>c.category==='quantity_disagreement'&&c.outcome==='different')!.issueKey,revision=before.case.revision;
+  await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+  if(manuallyResolved)await actOnOperationalCaseIssue(opened.db,clock,w,id,key,{action:'resolve',reason:'Human reviewed this exact reported discrepancy'},`${root}-manual-resolve`);
+  currentTime+=1000;await check('loading','source_unreadable','SOURCE_UNREACHABLE');const unavailable=await loadOperationalCaseProjection(opened.db,clock,w,id);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+  expect(unavailable.case.revision).toBe(revision);expect(unavailable.projectionVersion).not.toBe(before.projectionVersion);
+  currentTime+=1000;await check('loading');const recovered=await loadOperationalCaseProjection(opened.db,clock,w,id);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+  expect(recovered.case.revision).toBe(revision);expect(recovered.projectionVersion).toBe(before.projectionVersion);
+  const history=await loadOperationalCaseIssueHistory(opened.db,clock,w,id),quantity=history.evaluations.filter(e=>e.issue_id===key).sort((a,b)=>Number(a.sequence)-Number(b.sequence));
+  expect(quantity.map(e=>e.outcome)).toEqual(['different','suppressed','different']);expect(quantity.map(e=>e.projection_version)).toEqual([before.projectionVersion,unavailable.projectionVersion,before.projectionVersion]);expect(new Set(quantity.map(e=>e.id)).size).toBe(3);
+  const current=(await listOperationalCaseIssues(opened.db,clock,w,id)).issues.find(i=>i.id===key)!;expect(current.evaluation?.outcome).toBe('different');expect(current.status).toBe(manuallyResolved?'resolved':'open');
+  expect((await synchronizeOperationalCaseIssues(opened.db,clock,w,id)).evaluationsRecorded).toBe(0);const replay=await loadOperationalCaseIssueHistory(opened.db,clock,w,id);expect(replay.evaluations).toHaveLength(history.evaluations.length);expect(replay.actions).toHaveLength(history.actions.length);
+  currentTime+=1000;await check('loading','source_unreadable','SOURCE_UNREACHABLE');await synchronizeOperationalCaseIssues(opened.db,clock,w,id);currentTime+=1000;await check('loading');await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+  const second=await loadOperationalCaseIssueHistory(opened.db,clock,w,id),coverage=second.issues.find(i=>i.category==='source_coverage')!;expect(coverage).toBeDefined();expect(second.evaluations.filter(e=>e.issue_id===coverage.id).sort((a,b)=>Number(a.sequence)-Number(b.sequence)).map(e=>e.outcome)).toEqual(['different','within_tolerance','different','within_tolerance']);
+  expect(second.actions.filter(a=>a.issue_id===coverage.id).sort((a,b)=>Number(a.sequence)-Number(b.sequence)).map(a=>a.action)).toEqual(['system_resolve','system_reopen','system_resolve']);
+  expect((await listOperationalCaseIssues(opened.db,clock,w,id)).issues.find(i=>i.id===key)?.status).toBe(manuallyResolved?'resolved':'open');
+  if(manuallyResolved){
+   expect(second.actions.filter(a=>a.issue_id===key).map(a=>a.action)).toEqual(['resolve']);
+   const next=rows('loading-eight-revision-two')[0];next.supersedes={sourceEventId:next.sourceEventId,sourceRevision:next.sourceRevision};next.sourceRevision='3';next.assertions=next.assertions.map(a=>({...a,value:{amount:'7',unit:'each'}}));currentTime+=1000;
+   await ingest(envelope([next],'loading','packproof.operational-observations/v1'),'loading',`${root}-new-fact`);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+   expect((await listOperationalCaseIssues(opened.db,clock,w,id)).issues.find(i=>i.id===key)?.status).toBe('open');expect((await loadOperationalCaseIssueHistory(opened.db,clock,w,id)).actions.filter(a=>a.issue_id===key).map(a=>a.action)).toEqual(['resolve','system_reopen']);
+  }
+  await expect(opened.db.query('DELETE FROM record_case_issue_evaluations WHERE issue_id=$1',[key])).rejects.toThrow(/immutable/i);
+ },60000);
  it('rebuilds accepted history under current case access after the original ingestion credential is revoked',async()=>{
   await opened.db.query('UPDATE platform_credentials SET revoked_at=$2 WHERE id=$1',[actor.credentialId,clock.now().toISOString()]);
   currentTime+=61000;

@@ -20,7 +20,7 @@ import {getPagedOperationalCase} from '../src/records/reconstruction-pages.js';
 import {actOnSourceRetention,readSourceRetentionReview} from '../src/records/source-retention.js';
 import {requestSourceDisposition,approveSourceDisposition,processSourceDispositions,readSourceDisposition,readCollectorCompactionCommands,authorizeCollectorCompactionPermit,ackCollectorCompactionCommand,createQualifiedSourceDispositionStore} from '../src/records/source-retention-disposition.js';
 
-describe('actual typed intake and unlinked replay under116 API and worker roles',()=>{
+describe('actual typed intake and unlinked replay under118 API and worker roles',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,dir:string,deps:TypedImportDeps,actor:PartnerActor,options:RecordsPrivilegeOptions,orderSource:string,loadingSource:string,account:string,w:RecordWorkspace,secondAdmin:RecordWorkspace;
  const suffix=randomBytes(6).toString('hex'),api=`typed_api_${suffix}`,worker=`typed_worker_${suffix}`,org=`org_${suffix}`,site=`site_${suffix}`,member=`member_${suffix}`,source='b'.repeat(40),clock={now:()=>new Date('2026-11-14T12:00:00Z')};
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
@@ -51,7 +51,7 @@ describe('actual typed intake and unlinked replay under116 API and worker roles'
    await opened.db.query(`GRANT INSERT ON platform_action_audit TO ${role}`);
   }
   await opened.db.query(`GRANT INSERT ON api_idempotency TO ${api}`);await opened.db.query(`GRANT UPDATE(response) ON api_idempotency TO ${api}`);
-  const inventory=await recordsMigrationInventory(116);options={runtimeRole:api,workerRole:worker,schema,reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256,throughMigration:116};
+  const inventory=await recordsMigrationInventory(118);options={runtimeRole:api,workerRole:worker,schema,reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256,throughMigration:118};
   const plan=await planRecordsRuntimePrivileges(opened.db,options);for(const sql of plan.statements)await opened.db.query(sql);
   dir=await mkdtemp(path.join(tmpdir(),'recon-role-flow-'));deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','synthetic-role-flow-secret'),devAuth:true};
  },60000);
@@ -75,7 +75,7 @@ describe('actual typed intake and unlinked replay under116 API and worker roles'
   expect((await opened.db.query('SELECT replay_requested FROM record_typed_batches WHERE id=$1',[loading])).rows[0]).toEqual({replay_requested:false});
   for(const role of [api,worker])await asRole(role,db=>verifyRecordsRuntimePrivileges(db,options));
  },30000);
- it('rejects missing effective platform lock columns before116 runtime admission',async()=>{
+ it('rejects missing effective platform lock columns before118 runtime admission',async()=>{
   const {inspectReconstructionPlatformLocks}=await import(new URL('../../infra/backend-release/reconstruction-v2-release-review.mjs',import.meta.url).href);
   const inspect=async()=>inspectReconstructionPlatformLocks((await asRole(worker,db=>db.query(`SELECT role,table_name AS table,has_column_privilege(role,format('%I.%I',current_schema(),table_name),'id','UPDATE') AS allowed,has_column_privilege(role,format('%I.%I',current_schema(),table_name),'id','UPDATE WITH GRANT OPTION') AS grantable FROM unnest($1::text[]) roles(role) CROSS JOIN (VALUES ('platform_memberships'),('proofs')) locks(table_name) ORDER BY role,table_name`,[[api,worker]]))).rows,{apiRole:api,workerRole:worker});
   expect((await inspect()).columns).toEqual(['platform_memberships.id','proofs.id']);
@@ -83,7 +83,7 @@ describe('actual typed intake and unlinked replay under116 API and worker roles'
   try{await expect(inspect()).rejects.toThrow('RECONSTRUCTION_PLATFORM_LOCK_PRIVILEGES_REQUIRED');}finally{await opened.db.query(`GRANT UPDATE(id) ON platform_memberships TO ${api}`);}
   await inspect();
  });
- it('materializes explicit cross-case partitions and bounded projections under the116 worker role',async()=>{
+ it('materializes explicit cross-case partitions and bounded projections under the118 worker role',async()=>{
   const references=(id:string):[TypedSourceReference,TypedSourceReference]=>[{namespace:'role-qualified-site',type:'order',externalId:id},{namespace:'role-qualified-site',type:'order_line',externalId:'004',parentExternalId:id}];
   const roots=['PHASE2-A','PHASE2-B'].map((id,index)=>{const [o,l]=references(id);return {...observation(`phase2-order-${index}`,'orderedQuantity'),references:[o,l],assertions:[{...observation('unused','orderedQuantity').assertions[0],subjectReference:l}],relationships:[{from:o,to:l,type:'has_line' as const,quantity:null}]};});
   for(let i=0;i<roots.length;i++)await submit(orderSource,'packproof.order-lines/v1',roots[i],`phase2-order-${i}`);
@@ -102,7 +102,7 @@ describe('actual typed intake and unlinked replay under116 API and worker roles'
   expect((await opened.db.query('SELECT * FROM record_typed_source_identities_v2 WHERE subscription_id=$1',[p.id])).rows).toHaveLength(1);
   for(const role of [api,worker])await asRole(role,db=>verifyRecordsRuntimePrivileges(db,options));
  },30000);
- it('executes independently approved exact-version disposition under the116 worker role',async()=>{
+ it('executes independently approved exact-version disposition under the118 worker role',async()=>{
   // A separately approved local source exercises receipt-bound compaction.
   const installation='role-installation-'+suffix,at=clock.now().toISOString();
   await opened.db.query(`INSERT INTO record_agent_installations(id,organization_id,environment,principal_id,credential_id,integration_account_id,operator_membership_id,location_id,source_name,device_name,version,status,config_revision,approval_user_id,enrollment_expires_at,enrollment_acknowledged_at,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$4,$5,$6,$7,'Role fixture local','Synthetic PC','0.3.0','ready',1,$8,'2026-11-15T12:00:00Z',$9,$9,$9)`,[installation,org,actor.principalId,actor.credentialId,account,member,site,w.userId,at]);

@@ -67,6 +67,30 @@ it('keeps a self-bound investigation rule on the exact proposed revision when an
   expect(config.mappingVersion).toBe('loading/4');
 });
 
+it('preserves approved CSV snapshot control bindings when a presence-rule policy is revised', async () => {
+  const self = { subscriptionId: source.id, sourceNamespace: source.config.sourceNamespace, configurationRevision: 2 };
+  const other = { subscriptionId: 'source-b', sourceNamespace: 'carrier-a', configurationRevision: 2 };
+  const boundary = { schema: 'packproof.csv-snapshot-boundary/v1' as const, markerColumn: 'ExportMarker', asOfColumn: 'Snapshot', rowCountColumn: 'ExportRows' };
+  const current: SourceSubscription = { ...source, config: { ...source.config, expectedHeaders: [...source.config.expectedHeaders, 'ExportMarker', 'ExportRows'],
+    completenessPolicy: { kind: 'snapshot', scope: 'tracking_package', sourceOwnerQualified: true, qualificationReference: 'export-owner/1', fileBoundary: boundary },
+    rulePolicies: { schema: 'packproof.source-rule-policies/v1', version: 'carrier/1', sourceOwnerQualified: true, qualificationReference: 'rule-owner/1',
+      labelAcceptance: { labelSource: self, acceptanceSource: other, subjectNamespace: 'packages', carrier: { code: 'carrier-a', accountReference: 'site-a', service: 'ground' },
+        windowSeconds: 3600, graceSeconds: 0, labelCreatedValues: ['CREATED'], labelVoidedValues: [], acceptedValues: ['ACCEPTED'] } } } };
+  const partner = { ...source, id: 'source-b', subscriptionId: 'source-b', state: 'approved', config: { ...source.config, sourceNamespace: 'carrier-a' } };
+  const request = vi.fn(async (_path: string, method?: string) => method === 'POST' ? { ...current, configurationRevision: 3 } : { subscriptions: [partner], nextCursor: null });
+  const user = userEvent.setup();
+  render(<SourcePolicies api={{ recordsRequest: request } as unknown as PackProofApi} source={current} organizationId="org-a" environment="live" onSaved={vi.fn()}/>);
+  await user.click(screen.getByText('Configure source-specific investigation rules'));
+  expect(await screen.findByText('The approved exporter snapshot control columns are preserved in this proposed revision.')).toBeVisible();
+  await user.click(screen.getByRole('checkbox', { name: /The source owner confirmed the exact status meanings/ }));
+  await user.click(screen.getByRole('checkbox', { name: 'Save these exact rules as a new source revision for separate approval.' }));
+  await user.click(screen.getByRole('button', { name: 'Save investigation policy for review' }));
+  const writes = request.mock.calls as unknown as Array<[string, string, { config: SourceSubscription['config'] }]>;
+  const config = writes.find(([, method]) => method === 'POST')![2].config;
+  expect(config.completenessPolicy).toEqual(current.config.completenessPolicy);
+  expect(config.rulePolicies!.labelAcceptance!.labelSource.configurationRevision).toBe(3);
+});
+
 it('requires explicit shared-source partition qualification before saving a cross-case policy', async () => {
   const current = { ...source, capabilities: { crossCase: true }, config: { ...source.config, identityPolicy: { schema: 'packproof.source-identity-policy/v1' as const, eventKey: { kind: 'column' as const }, revision: { kind: 'column' as const } } } };
   const request = vi.fn(async () => ({ ...current, configurationRevision: 3 })), user = userEvent.setup();

@@ -93,7 +93,7 @@ public sealed class RecoveryTests : IDisposable {
         var now=DateTimeOffset.Parse("2026-11-06T12:00:00Z");Assert.True(CollectionPolicy.IsWithinApprovedWindow(now,now.AddSeconds(-30),now.AddDays(1),0,true));Assert.False(CollectionPolicy.IsWithinApprovedWindow(now,now.AddSeconds(-30),now.AddDays(1),0,false));Assert.False(CollectionPolicy.IsWithinApprovedWindow(now,now.AddSeconds(-66),now.AddDays(1),0,true));
     }
     [Fact] public void Unknown_future_schema_is_rejected_before_queue_mutation(){
-        using(var q=new DurableQueue(Store())){}using(var db=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}")){db.Open();using var command=db.CreateCommand();command.CommandText="PRAGMA user_version=4";command.ExecuteNonQuery();}
+        using(var q=new DurableQueue(Store())){}using(var db=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}")){db.Open();using var command=db.CreateCommand();command.CommandText="PRAGMA user_version=5";command.ExecuteNonQuery();}
         Assert.Equal("QUEUE_SCHEMA_UNSUPPORTED",Assert.Throws<ConnectException>(()=>new DurableQueue(Store())).Code);
     }
     [Fact] public void Orphan_after_snapshot_write_is_retained_and_not_reported_as_queued(){

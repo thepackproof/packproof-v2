@@ -27,6 +27,7 @@ export interface TypedSourceBatch {
  original:{name:string;mediaType:'text/csv'|'application/json';content:string;sha256:string};
  mapping:Partial<Record<SourceCsvFieldV2,string>>;constants:Partial<Record<'observationKind'|'property'|'timeQuality',string>>;
  identityPolicy?:SourceIdentityPolicy;
+ collectionContext?:{kind:'historical_backfill';jobId:string;itemId:string};
  completeness:TypedSourceCompleteness;headers:string[];rows:TypedSourceRow[];
 }
 
@@ -35,7 +36,7 @@ import {strictBody} from '../platform/organizations.js';
 import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {quantity} from './quantities.js';
-import {parseCsv} from './csv.js';
+import {parseTypedCsvRecords} from './typed-csv.js';
 import {explicitInstant} from './csv-semantics.js';
 import {ALL_SOURCE_PROFILES,SOURCE_CONTRACT_VERSION,TYPED_SOURCE_LIMITS,SOURCE_ENTITY_TYPES,SOURCE_PROPERTIES,SOURCE_PROPERTIES_V2,SOURCE_QUANTITY_PROPERTIES,SOURCE_RELATIONSHIP_TYPES,TYPED_SOURCE_RULES,sourceProfilesForSchema,sourceCsvFieldsForSchema} from './source-profiles.js';
 export {SOURCE_CONTRACT_VERSION};
@@ -199,9 +200,10 @@ function rowResult(raw:unknown,candidate:unknown,index:number,rowNumber:number,n
 export function parseTypedSourceBatch(input:unknown):TypedSourceBatch {
  const requested=input&&typeof input==='object'&&!Array.isArray(input)?(input as Record<string,unknown>).schema:null;
  const v2=requested===TYPED_SOURCE_SCHEMA_V2;
- const b=strictBody(input,['schema','connectionId','locationId','sourceProfile','mappingVersion','sourceNamespace','subscriptionId','configurationRevision','grantRevision','wholeFileConsent','original','mapping','constants','completeness',...(v2?['identityPolicy']:[])]);
+ const b=strictBody(input,['schema','connectionId','locationId','sourceProfile','mappingVersion','sourceNamespace','subscriptionId','configurationRevision','grantRevision','wholeFileConsent','original','mapping','constants','completeness','collectionContext',...(v2?['identityPolicy']:[])]);
  if(b.schema!==TYPED_SOURCE_SCHEMA&&!v2)throw invalid('Use a supported explicitly versioned typed-source-batch schema.');
  const schema=b.schema as TypedSourceSchema,identityPolicy=v2?parseSourceIdentityPolicy(b.identityPolicy):undefined;
+ let collectionContext:TypedSourceBatch['collectionContext'];if(b.collectionContext!==undefined){const context=strictBody(b.collectionContext,['kind','jobId','itemId']);if(context.kind!=='historical_backfill')throw invalid('Choose the documented collection context.');collectionContext={kind:'historical_backfill',jobId:text(context.jobId,'collectionContext.jobId'),itemId:text(context.itemId,'collectionContext.itemId')};}
  if(b.wholeFileConsent!==true)throw new DomainError('WHOLE_FILE_CONSENT_REQUIRED','Approve preservation of the complete original, including unmapped columns and other rows.',400);
  const connectionId=text(b.connectionId,'connectionId'),locationId=text(b.locationId,'locationId'),sourceProfile=oneOf(b.sourceProfile,sourceProfilesForSchema(schema).map(p=>p.id),'sourceProfile'),mappingVersion=text(b.mappingVersion,'mappingVersion'),sourceNamespace=text(b.sourceNamespace,'sourceNamespace');
  if(v2&&(Buffer.byteLength(sourceNamespace,'utf8')>200||Buffer.byteLength(locationId,'utf8')>200))throw invalid('Version two source namespace and site identity are bounded to 200 UTF-8 bytes each.');
@@ -231,10 +233,7 @@ export function parseTypedSourceBatch(input:unknown):TypedSourceBatch {
   if(!Array.isArray(raw)||!raw.length||raw.length>TYPED_SOURCE_LIMITS.rows)throw invalid('The original JSON must contain 1 to 1,000 observation rows.');
   rows=raw.map((item,index)=>rowResult(item,item,index,index+1,sourceNamespace,sourceProfile,mediaType,schema));
  }else{
-  const source=original.content.replace(/^\uFEFF/,'');
-  const candidates=([',',';','\t'] as const).map(delimiter=>{try{const records=parseCsv(source,delimiter);return {records,score:records[0]?.length??0};}catch(error){return {records:null,score:-1,error};}}).sort((a,b)=>b.score-a.score);
-  if(!candidates[0].records)throw candidates[0].error;
-  const records=candidates[0].records!;if(records.length<2)throw invalid('Include a header and at least one source row.');
+  const records=parseTypedCsvRecords(original.content);if(records.length<2)throw invalid('Include a header and at least one source row.');
   headers=records[0];if(headers.some(h=>!h.trim()||h.length>200)||new Set(headers).size!==headers.length)throw invalid('Every source heading must be nonempty and unique.');
   const used=new Set<string>();for(const heading of Object.values(mapping)){if(!headers.includes(heading!))throw invalid('Every mapping must name an exact original heading.');if(used.has(heading!))throw invalid('One original column cannot be mapped to two semantic fields.');used.add(heading!);}
   if(identityPolicy)validateSourceIdentityMapping(identityPolicy,mapping,constants,sourceProfile);
@@ -256,5 +255,5 @@ export function parseTypedSourceBatch(input:unknown):TypedSourceBatch {
   row.normalized.identityDerivation={schema:'packproof.source-identity-derivation/v1',eventKey:{kind:identityPolicy.eventKey.kind,components:components.map(field=>({field,value:get(field),sourceLocator:locator(field),approvedConstant:!json&&!mapping[field as SourceCsvFieldV2]}))},revision:{kind:identityPolicy.revision.kind,sourceValue:revisionField?get(revisionField):null,sourceLocator:revisionField?locator(revisionField):null}};
   row.payloadSha256=sha256Hex(canonicalSourceObservation(row.normalized));
  }
- return {schema,connectionId,locationId,sourceProfile,mappingVersion,sourceNamespace,subscriptionId,configurationRevision,grantRevision,wholeFileConsent:true,original,mapping,constants,completeness,headers,...(identityPolicy?{identityPolicy}:{}),rows};
+ return {schema,connectionId,locationId,sourceProfile,mappingVersion,sourceNamespace,subscriptionId,configurationRevision,grantRevision,wholeFileConsent:true,original,mapping,constants,completeness,headers,...(identityPolicy?{identityPolicy}:{}),...(collectionContext?{collectionContext}:{}),rows};
 }

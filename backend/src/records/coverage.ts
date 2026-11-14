@@ -12,18 +12,18 @@ export interface SourceCoverageInput {
  state?:'approved'|'active'|'paused'|'revoked';
  lastReceivedAt:string|null;sourceAsOf:string|null;lastCheckedAt:string|null;
  expectedIntervalSeconds:number|null;errorCode?:string|null;
- reportedState?:string|null;collectorBacklog?:number|null;oldestPendingAt?:string|null;
+ reportedState?:string|null;collectorBacklog?:number|null;oldestPendingAt?:string|null;collectorPendingAgeUnknownCount?:number|null;collectorRetainedBytes?:number|null;
  completeness:TypedSourceCompleteness;
  completenessPolicy?:{kind:'unknown'|'snapshot'|'sequence';scope:SourceCompletenessScope;sourceOwnerQualified:boolean;qualificationReference?:string|null}|null;
  counts:SourceOutcomeCounts;
 }
 export interface SourceCoverage {
- displayName?:string;subscriptionId?:string|null;configurationRevision?:number|null;accountingGrain?:'source_subscription';caseAccounting?:SourceOutcomeCounts;
+ displayName?:string;subscriptionId?:string|null;configurationRevision?:number|null;accountingGrain?:'source_subscription';accountingAvailable?:boolean;caseAccounting?:SourceOutcomeCounts;
  connectionId:string;sourceNamespace:string;
  state:'current'|'quiet_checked'|'delayed'|'offline'|'mapping_drift'|'paused'|'coverage_unknown';
  label:string;lastReceivedAt:string|null;sourceAsOf:string|null;lastCheckedAt:string|null;
  expectedIntervalSeconds:number|null;coverage:'qualified'|'unknown';
- collectorBacklog:number|null;oldestPendingAt:string|null;
+ collectorBacklog:number|null;oldestPendingAt:string|null;collectorPendingAgeUnknownCount?:number|null;collectorRetainedBytes?:number|null;
  accounting:SourceOutcomeCounts&{reconciled:boolean};nextAction:string;
  rulePolicies?:SourceRulePolicies|null;
  completeness:{kind:TypedSourceCompleteness['kind'];marker:string|null;asOf:string|null;qualificationReference:string|null;scope?:SourceCompletenessScope};
@@ -35,6 +35,12 @@ export function reconcileSourceAccounting(counts:SourceOutcomeCounts) {
  const values=Object.values(counts);
  const total=counts.acceptedLinked+counts.acceptedUnlinked+counts.duplicate+counts.conflict+counts.quarantined+counts.rejected+counts.processing;
  return {...counts,reconciled:values.every(value=>Number.isSafeInteger(value)&&value>=0)&&total===counts.received};
+}
+
+/** Retry measured ingestion/counter work before routine cold-case maintenance.
+ * Other unavailable or incomplete source states retain their normal cadence. */
+export function sourceWorkRecheckIntervalMs(sources:readonly SourceCoverage[]):number {
+ return sources.some(source=>source.accounting.processing>0||source.accountingAvailable===false)?1000:60000;
 }
 
 function time(value:string|null):number|null {
@@ -52,7 +58,7 @@ export function deriveSourceCoverage(input:SourceCoverageInput,now:Date):SourceC
  const boundary=time(input.completeness.asOf),checked=time(input.lastCheckedAt),asOf=time(input.sourceAsOf);
  const validTimes=[boundary,checked,asOf].every(value=>value!==null&&value<=now.getTime());
  const qualified=!!policy&&policy.sourceOwnerQualified===true&&!!policy.qualificationReference?.trim()&&['shipment_line','tracking_package','handling_unit_set'].includes(policy.scope)&&policy.kind!=='unknown'&&policy.kind===input.completeness.kind&&!!input.completeness.marker&&validTimes;
- const base={connectionId:input.connectionId,sourceNamespace:input.sourceNamespace,lastReceivedAt:input.lastReceivedAt,sourceAsOf:input.sourceAsOf,lastCheckedAt:input.lastCheckedAt,expectedIntervalSeconds:interval,coverage:qualified?'qualified':'unknown',accounting,collectorBacklog:input.collectorBacklog??null,oldestPendingAt:input.oldestPendingAt??null,
+ const base={connectionId:input.connectionId,sourceNamespace:input.sourceNamespace,lastReceivedAt:input.lastReceivedAt,sourceAsOf:input.sourceAsOf,lastCheckedAt:input.lastCheckedAt,expectedIntervalSeconds:interval,coverage:qualified?'qualified':'unknown',accounting,collectorBacklog:input.collectorBacklog??null,oldestPendingAt:input.oldestPendingAt??null,collectorPendingAgeUnknownCount:input.collectorPendingAgeUnknownCount??null,collectorRetainedBytes:input.collectorRetainedBytes??null,
   completeness:{...input.completeness,qualificationReference:qualified?policy!.qualificationReference!:null,...(policy?{scope:policy.scope}:{})}} as const;
  if(input.state==='paused'||input.state==='revoked')return {...base,state:'paused',label:input.state==='revoked'?'Source authorization revoked':'Source paused',nextAction:'Ask a source administrator to review current authorization.'};
  if(input.reportedState==='mapping_drift'||input.errorCode&&/SCHEMA|MAPPING|DRIFT|QUARANTIN/i.test(input.errorCode))return {...base,state:'mapping_drift',label:'Source mapping needs review',nextAction:'Review the changed source contract. Other approved sources can continue.'};

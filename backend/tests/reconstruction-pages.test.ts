@@ -134,6 +134,75 @@ describe('bounded operational projection pages and complete worker findings',()=
   const id='empty-proof-membership-case';await opened.db.query("INSERT INTO record_cases(id,organization_id,environment,location_id,location_key,operator_membership_id,root_namespace,root_type,root_external_id,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$3,$4,'empty-proof-fixture','order','EMPTY-PROOFS',$5,$5)",[id,org,site,member,clock.now().toISOString()]);
   const page=await getOperationalCase(opened.db,clock,await workspace(),id,{section:'proofs',limit:25});expect(page.case.proofIds).toEqual([]);expect(page.proofs).toEqual([]);expect(page.case.proofCount).toBe(0);expect(page.case.restrictedMembers).toBe(false);expect(page.proofPagination).toMatchObject({total:0,returnedCount:0,hasMore:false,nextCursor:null});expect(page.pagination.total).toBe(0);
  });
+ it('retries measured pending work before cold-case maintenance and keeps offline checks at sixty seconds',async()=>{
+  const baseTime=currentTime,w=await workspace(),roots=['RECOVERY-COLD-A','RECOVERY-COLD-B','RECOVERY-AFFECTED'];
+  const adapt=(n:TypedSourceObservation,root:string,index:number):TypedSourceObservation=>{const change=(r:TypedSourceObservation['references'][number])=>({...r,...(r.type==='order'?{externalId:root}:r.type==='order_line'?{parentExternalId:root}:['shipment','load'].includes(r.type)?{externalId:`${root}-${r.type}`}:{})});return {...structuredClone(n),sourceEventId:`${root}-${index}`,references:n.references.map(change),assertions:n.assertions.map(a=>({...a,subjectReference:change(a.subjectReference)})),relationships:n.relationships.map(r=>({...r,from:change(r.from),to:change(r.to)}))};};
+  const orders=JSON.parse((fixture('order-and-explicit-shipment-allocation').original as {content:string}).content) as TypedSourceObservation[],loading=JSON.parse((fixture('loading-eight-revision-two').original as {content:string}).content) as TypedSourceObservation[];
+  const orderRows=roots.flatMap(root=>orders.map((n,i)=>adapt(n,root,i))),loadRows=roots.flatMap(root=>loading.map((n,i)=>adapt(n,root,i+orders.length)));
+  const created=await ingest(envelope(orderRows,'orders','packproof.order-lines/v1'),'orders','recovery-orders');await ingest(envelope(loadRows,'loading','packproof.operational-observations/v1'),'loading','recovery-loading');
+  const all=(await opened.db.query<{id:string}>('SELECT id FROM record_cases WHERE organization_id=$1 ORDER BY id',[org])).rows.map(r=>r.id);
+  for(const id of all){await synchronizeOperationalCaseProjection(opened.db,clock,w,id);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);}
+  const affected=(await opened.db.query<{id:string}>("SELECT id FROM record_cases WHERE organization_id=$1 AND root_external_id='RECOVERY-AFFECTED'",[org])).rows[0].id;
+  const cold=created.caseIds.filter(id=>id!==affected);expect(cold).toHaveLength(2);
+  currentTime+=5000;
+  const corrected=adapt(loading[0],'RECOVERY-AFFECTED',orders.length);corrected.sourceRevision='3';corrected.supersedes={sourceEventId:corrected.sourceEventId,sourceRevision:loading[0].sourceRevision};
+  await ingest(envelope([corrected],'loading','packproof.operational-observations/v1'),'loading','recovery-affected-correction');
+  const pending={...loading[0],sourceEventId:'recovery-pending-other-case',assertions:loading[0].assertions.map(a=>({...a,property:'status',value:'synthetic pending'}))};
+  const input={...envelope([pending],'loading','packproof.operational-observations/v1'),grantRevision:Number((await opened.db.query<{grant_revision:number}>('SELECT grant_revision FROM record_source_subscriptions WHERE id=$1',[subscriptions.get('loading')])).rows[0].grant_revision)},preview=await previewTypedImport(deps,actor,input,'recovery-pending-preview');
+  await commitTypedImport(deps,actor,preview.value.id,{previewVersion:preview.value.previewVersion,originalSha256:preview.value.original.sha256,importValidRows:false},'recovery-pending-commit');
+  await synchronizeOperationalCaseProjection(opened.db,clock,w,affected);await synchronizeOperationalCaseIssues(opened.db,clock,w,affected);
+  const pendingState=(await opened.db.query<{source_snapshot:Array<{accounting:{processing:number}}>;summary:{issueCount:number};next_check_at:Date|string}>('SELECT source_snapshot,summary,next_check_at FROM record_case_projection_state WHERE case_id=$1',[affected])).rows[0];
+  expect(pendingState.source_snapshot.some(s=>s.accounting.processing>0)).toBe(true);expect(pendingState.summary.issueCount).toBe(0);expect(new Date(pendingState.next_check_at).getTime()-currentTime).toBe(1000);
+  expect(new Date((await opened.db.query<{next_check_at:Date|string}>('SELECT next_check_at FROM record_case_rule_state WHERE case_id=$1',[affected])).rows[0].next_check_at).getTime()-currentTime).toBe(1000);
+  await processPendingTypedImports(deps,10);await synchronizeOperationalCaseProjection(opened.db,clock,w,caseId);await synchronizeOperationalCaseIssues(opened.db,clock,w,caseId);
+  const keep=[...cold,affected],future=new Date(currentTime+86400000).toISOString();await opened.db.query('UPDATE record_case_projection_state SET next_check_at=$2 WHERE NOT(case_id=ANY($1::text[]))',[keep,future]);await opened.db.query('UPDATE record_case_rule_state SET next_check_at=$2 WHERE NOT(case_id=ANY($1::text[]))',[keep,future]);
+  currentTime=baseTime+6000;
+  for(const worker of [processPendingCaseProjections,processPendingReconstructionIssues]){
+   expect(await worker(opened.db,clock,1)).toMatchObject({processed:1,blocked:0});
+   const table=worker===processPendingCaseProjections?'record_case_projection_state':'record_case_rule_state',field=worker===processPendingCaseProjections?'created_at':'checked_at';
+   const refreshed=(await opened.db.query<{case_id:string}>(`SELECT case_id FROM ${table} WHERE case_id=ANY($1::text[]) AND ${field}=$2`,[keep,clock.now().toISOString()])).rows.map(r=>r.case_id);
+   expect(refreshed).toEqual([affected]);
+  }
+  expect((await getOperationalCase(opened.db,clock,w,affected)).case.issueCount).toBe(1);
+  const issues=await listOperationalCaseIssues(opened.db,clock,w,affected);expect(issues.issues.filter(i=>i.category==='quantity_disagreement').map(i=>i.evaluation?.outcome)).toEqual(['different']);
+  await check('loading','source_unreadable');await synchronizeOperationalCaseProjection(opened.db,clock,w,affected);await synchronizeOperationalCaseIssues(opened.db,clock,w,affected);
+  const offline=(await opened.db.query<{source_snapshot:Array<{state:string;accounting:{processing:number}}>;next_check_at:Date|string}>('SELECT source_snapshot,next_check_at FROM record_case_projection_state WHERE case_id=$1',[affected])).rows[0];expect(offline.source_snapshot.some(s=>s.state==='offline'&&s.accounting.processing===0)).toBe(true);expect(new Date(offline.next_check_at).getTime()-currentTime).toBe(60000);
+  expect(new Date((await opened.db.query<{next_check_at:Date|string}>('SELECT next_check_at FROM record_case_rule_state WHERE case_id=$1',[affected])).rows[0].next_check_at).getTime()-currentTime).toBe(60000);await check('loading');
+  for(const id of all){await synchronizeOperationalCaseProjection(opened.db,clock,w,id);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);}
+ },60000);
+ it('retries a first issue pass after source counters become available without requiring an existing issue',async()=>{
+  const w=await workspace();for(const row of (await opened.db.query<{id:string}>('SELECT id FROM record_cases WHERE organization_id=$1',[org])).rows){await synchronizeOperationalCaseProjection(opened.db,clock,w,row.id);await synchronizeOperationalCaseIssues(opened.db,clock,w,row.id);}
+  await source('counter-orders','packproof.order-lines/v1');await source('counter-loading','packproof.operational-observations/v1');
+  const adapt=(name:string)=>{const rows=JSON.parse((fixture(name).original as {content:string}).content.replaceAll('0010482','RECOVERY-COUNTER').replaceAll('S-0021','RECOVERY-COUNTER-SHIP')) as TypedSourceObservation[];return rows.map(n=>({...n,sourceEventId:`counter-${n.sourceEventId}`}));};
+  const orders=await ingest(envelope(adapt('order-and-explicit-shipment-allocation'),'counter-orders','packproof.order-lines/v1'),'counter-orders','counter-orders');await activate('counter-orders',orders.id);
+  const loaded=await ingest(envelope(adapt('loading-eight-revision-two'),'counter-loading','packproof.operational-observations/v1'),'counter-loading','counter-loading');await activate('counter-loading',loaded.id);
+  const id=orders.caseIds[0];expect((await readProjectionSourceCounter(opened.db,subscriptions.get('counter-loading')!)).ready).toBe(false);
+  await synchronizeOperationalCaseIssues(opened.db,clock,w,id);expect((await listOperationalCaseIssues(opened.db,clock,w,id)).total).toBe(0);
+  await synchronizeOperationalCaseProjection(opened.db,clock,w,id);expect((await getOperationalCase(opened.db,clock,w,id)).case.issueCount).toBe(1);currentTime+=1000;
+  expect(await processPendingReconstructionIssues(opened.db,clock,1)).toEqual({processed:1,blocked:0});
+  expect((await listOperationalCaseIssues(opened.db,clock,w,id)).issues.filter(i=>i.category==='quantity_disagreement').map(i=>i.evaluation?.outcome)).toEqual(['different']);
+ },60000);
+ it.each([true,false])('evaluates newly qualified inputs without a case revision or existing issue (paged=%s)',async(paged)=>{
+  vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED',String(paged));
+  try{
+  const w=await workspace();for(const row of (await opened.db.query<{id:string}>('SELECT id FROM record_cases WHERE organization_id=$1',[org])).rows){await synchronizeOperationalCaseProjection(opened.db,clock,w,row.id);await synchronizeOperationalCaseIssues(opened.db,clock,w,row.id);}
+  const kind=paged?'paged':'legacy',orderSource=`qualification-orders-${kind}`,loadingSource=`qualification-loading-${kind}`,root=`QUALIFICATION-${kind.toUpperCase()}-FIRST-ISSUE`;
+  await source(orderSource,'packproof.order-lines/v1');await source(loadingSource,'packproof.operational-observations/v1');
+  const adapt=(name:string)=>{const rows=JSON.parse((fixture(name).original as {content:string}).content.replaceAll('0010482',root).replaceAll('S-0021',`${root}-SHIP`)) as TypedSourceObservation[];return rows.map(n=>({...n,sourceEventId:`qualification-${kind}-${n.sourceEventId}`}));};
+  const orders=await ingest(envelope(adapt('order-and-explicit-shipment-allocation'),orderSource,'packproof.order-lines/v1'),orderSource,orderSource),loaded=await ingest(envelope(adapt('loading-eight-revision-two'),loadingSource,'packproof.operational-observations/v1'),loadingSource,loadingSource);
+  // Recurring collection is approved, but no checked source boundary has been
+  // reported yet. Neither a quantity finding nor a coverage warning is qualified.
+  for(const [name,batchId] of [[orderSource,orders.id],[loadingSource,loaded.id]])await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,w,subscriptions.get(name)!,{action:'activate',configurationRevision:1,recurringConsent:true,initialBatchId:batchId},`activate-unchecked-${name}`));
+  const id=orders.caseIds[0];await synchronizeOperationalCaseProjection(opened.db,clock,w,id);await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+  const before=await getOperationalCase(opened.db,clock,w,id);expect(before.case.issueCount).toBe(0);expect(before.sources.every(s=>s.coverage==='unknown')).toBe(true);expect((await listOperationalCaseIssues(opened.db,clock,w,id)).total).toBe(0);
+  const prior=(await opened.db.query<{case_revision:number|string;projection_version:string;next_check_at:Date|string;checked_at:Date|string}>('SELECT case_revision,projection_version,next_check_at,checked_at FROM record_case_rule_state WHERE case_id=$1',[id])).rows[0];expect(new Date(prior.next_check_at).getTime()-new Date(prior.checked_at).getTime()).toBe(60000);
+  currentTime+=paged?1000:60000;await check(orderSource);await check(loadingSource);await synchronizeOperationalCaseProjection(opened.db,clock,w,id);
+  const qualified=await getOperationalCase(opened.db,clock,w,id);expect(qualified.case.revision).toBe(before.case.revision);expect(qualified.projectionVersion).not.toBe(before.projectionVersion);expect(qualified.case.issueCount).toBe(1);expect(qualified.comparisons.map(c=>c.outcome)).toEqual(['different']);expect((await listOperationalCaseIssues(opened.db,clock,w,id)).total).toBe(0);
+  await opened.db.query('UPDATE record_case_rule_state SET next_check_at=$2 WHERE case_id<>$1',[id,new Date(currentTime+86400000).toISOString()]);
+  expect(await processPendingReconstructionIssues(opened.db,clock,1)).toEqual({processed:1,blocked:0});
+  expect((await listOperationalCaseIssues(opened.db,clock,w,id)).issues.filter(i=>i.category==='quantity_disagreement').map(i=>i.evaluation?.outcome)).toEqual(['different']);
+  }finally{vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED','true');}
+ },60000);
  it('rebuilds retained source records under current operator authority after ingestion credentials expire',async()=>{
   await opened.db.query('UPDATE platform_credentials SET revoked_at=$2 WHERE id=$1',[actor.credentialId,clock.now().toISOString()]);currentTime+=61000;
   const rebuilt=await processPendingCaseProjections(opened.db,clock,10);expect(rebuilt.processed).toBeGreaterThanOrEqual(1);expect(rebuilt.blocked).toBe(0);

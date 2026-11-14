@@ -105,4 +105,26 @@ describe('qualified many-case source allocations and aliases',()=>{
   const w=await requireRecordWorkspace(opened.db,reviewer,org,'sandbox',true);await approveCaseEntityAlias(opened.db,clock,w,body,'cached-alias-authority');await opened.db.query('DELETE FROM record_membership_locations WHERE membership_id=$1 AND location_id=$2',[reviewerMember,site]);await expect(approveCaseEntityAlias(opened.db,clock,w,body,'cached-alias-authority')).rejects.toMatchObject({code:'CASE_NOT_FOUND'});await expect(readCaseIdentityMappingsForProjection(opened.db,clock,w,current.left_case_id)).rejects.toMatchObject({code:'CASE_NOT_FOUND'});
  });
 
+ it('evaluates only current multi-case memberships while historical corrections retain active flags',async()=>{
+  const left=await ingest(envelope([order('evaluation-create-A','EVALUATION-A')]),'evaluation-create-A'),right=await ingest(envelope([order('evaluation-create-B','EVALUATION-B')]),'evaluation-create-B'),sub=await v2Source('evaluation-correction'),w=await requireRecordWorkspace(opened.db,owner,org,'sandbox');
+  const adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,...(r.type==='order'&&['A','B'].includes(r.externalId)?{externalId:`EVALUATION-${r.externalId}`}:{}) ,...(r.type==='order_line'?{parentExternalId:`EVALUATION-${r.parentExternalId}`}:{})});
+  const original=shared('evaluation-shared');original.references=original.references.map(adapt);original.assertions=original.assertions.map(a=>({...a,subjectReference:adapt(a.subjectReference)}));original.relationships=original.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}));
+  const first=await ingest(v2Envelope(original,sub),'evaluation-shared-1');
+  const correction:TypedSourceObservation={...structuredClone(original),sourceRevision:'2',supersedes:{sourceEventId:original.sourceEventId,sourceRevision:'1'},assertions:original.assertions.map(a=>({...a,value:a.property==='reportedLoadedQuantity'?{amount:a.subjectReference.parentExternalId==='EVALUATION-A'?'6':'4',unit:'each'}:a.value}))};
+  const second=await ingest(v2Envelope(correction,sub),'evaluation-shared-2');
+  for(const [id,parent] of [[left.caseIds[0],'EVALUATION-A'],[right.caseIds[0],'EVALUATION-B']]){
+   const history=await loadOperationalCaseProjection(opened.db,clock,w,id),evaluation=await loadOperationalCaseProjection(opened.db,clock,w,id,{evaluation:true});
+   const oldAssertions=history.assertions.filter(a=>a.source.observationId===first.rows[0].id),newAssertions=history.assertions.filter(a=>a.source.observationId===second.rows[0].id);
+   expect(oldAssertions.length).toBeGreaterThan(0);expect(oldAssertions.every(a=>a.active===false)).toBe(true);
+   expect(newAssertions.filter(a=>a.property==='reportedLoadedQuantity')).toEqual([expect.objectContaining({active:true,subject:expect.objectContaining({parentExternalId:parent})})]);
+   const oldRelationships=history.relationships.filter(r=>r.sourceReceiptId===first.rows[0].id);expect(oldRelationships.length).toBeGreaterThan(0);expect(oldRelationships.every(r=>r.active===false)).toBe(true);
+   expect(history.relationships.filter(r=>r.sourceReceiptId===second.rows[0].id).length).toBeGreaterThan(0);
+   expect(evaluation.assertions.every(a=>a.active)).toBe(true);expect(evaluation.relationships.every(r=>r.active)).toBe(true);
+   expect(evaluation.assertions.map(a=>a.id).sort()).toEqual(history.assertions.filter(a=>a.active).map(a=>a.id).sort());
+   expect(evaluation.relationships.map(r=>r.id).sort()).toEqual(history.relationships.filter(r=>r.active).map(r=>r.id).sort());
+   expect(evaluation.relationships.flatMap(r=>[r.from,r.to]).filter(r=>r.type==='order_line').every(r=>r.parentExternalId===parent)).toBe(true);
+   expect(evaluation.case.shipmentCount).toBe(1);
+  }
+ });
+
 });

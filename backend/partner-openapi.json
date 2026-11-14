@@ -42913,6 +42913,15 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "pendingAgeUnknownCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "retainedBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
                   }
                 },
                 "required": [
@@ -45729,6 +45738,1271 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CaseCrosswalkApproval"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/source-subscriptions/{subscriptionId}/backfills/proposals": {
+      "post": {
+        "operationId": "operational_post__v1_partner_source_subscriptions__subscriptionId__backfills_proposals",
+        "summary": "Propose an exact finite historical-file manifest",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. sourceBackfillJobs activation and matching0.4.0 installation required. Separate human approval is mandatory. At most100 originals and200MiB; every original remains bounded to2MiB/1000rows. The immutable job binds the current source configuration, grant, installation and credential; proposal neither uploads nor activates history.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact merchant selector when required by the service credential; delegated source intake is not supported."
+          },
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceBackfillProposal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/source-subscriptions/{subscriptionId}/backfills": {
+      "get": {
+        "operationId": "operational_get__v1_partner_source_subscriptions__subscriptionId__backfills",
+        "summary": "List current source historical jobs and receipt-derived progress",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current source and workspace/installation authority is checked before paging and counts. Job progress is not an exporter completeness watermark.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact merchant selector when required by the service credential; delegated source intake is not supported."
+          },
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "schema": {
+                      "const": "packproof.source-backfills/v1"
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SourceBackfillJob"
+                      },
+                      "maxItems": 10
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "schema",
+                    "jobs",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/source-backfills/{jobId}": {
+      "get": {
+        "operationId": "operational_get__v1_partner_source_backfills__jobId_",
+        "summary": "Read the exact historical manifest, decisions and receipt accounting",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current authorized source only. Counts come from exact bound durable receipts. Unknown local timestamps, pending originals and unreceived files are not presented as completed.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact merchant selector when required by the service credential; delegated source intake is not supported."
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/source-subscriptions/{subscriptionId}/backfills": {
+      "get": {
+        "operationId": "operational_get__me_records_source_subscriptions__subscriptionId__backfills",
+        "summary": "List current source historical jobs and receipt-derived progress",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current source and workspace/installation authority is checked before paging and counts. Job progress is not an exporter completeness watermark.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "schema": {
+                      "const": "packproof.source-backfills/v1"
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SourceBackfillJob"
+                      },
+                      "maxItems": 10
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "schema",
+                    "jobs",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/source-backfills/{jobId}": {
+      "get": {
+        "operationId": "operational_get__me_records_source_backfills__jobId_",
+        "summary": "Read the exact historical manifest, decisions and receipt accounting",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current authorized source only. Counts come from exact bound durable receipts. Unknown local timestamps, pending originals and unreceived files are not presented as completed.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/source-backfills/{jobId}/actions": {
+      "post": {
+        "operationId": "operational_post__me_records_source_backfills__jobId__actions",
+        "summary": "Approve, pause or resume one exact historical manifest",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current owner/admin, exact manifest digest and configuration/grant revisions required. Approve/resume require wholeFileConsent=true, reason and explicit expiry within24hours. Decisions append immutable history; current source, grant, credential, installation and time are rechecked. No existing source grant is changed.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceBackfillJob"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceBackfillAction"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/source-backfills/{jobId}/items/{itemId}/bind": {
+      "post": {
+        "operationId": "operational_post__v1_partner_source_backfills__jobId__items__itemId__bind",
+        "summary": "Bind an exact existing source receipt to a historical manifest item",
+        "description": "Disabled-by-default operational candidate; implementation and sandbox tests do not establish customer qualification or production availability. Uses current organization/environment/site/operator and exact source grant authority. Current approved job and original source authority required. Original name/media type/hash/size and all capture scope must match. Binding preserves original batch authority and business outcomes, including overlap with live collection.",
+        "x-packproof-operational-candidate": true,
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "PackProof-Merchant-Id",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Exact merchant selector when required by the service credential; delegated source intake is not supported."
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently authorized response; Cache-Control private/no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "jobId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "itemId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "batchId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "jobId",
+                    "itemId",
+                    "batchId",
+                    "replayed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Stable domain code and problem details; retry only where appropriate.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "batchId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "manifestSha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "configurationRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "grantRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "batchId",
+                  "manifestSha256",
+                  "configurationRevision",
+                  "grantRevision"
+                ]
               }
             }
           }
@@ -53333,6 +54607,9 @@
           },
           "completeness": {
             "$ref": "#/components/schemas/TypedSourceCompleteness"
+          },
+          "collectionContext": {
+            "$ref": "#/components/schemas/SourceBackfillCollectionContext"
           }
         },
         "required": [
@@ -53487,6 +54764,9 @@
           },
           "identityPolicy": {
             "$ref": "#/components/schemas/SourceIdentityPolicyV1"
+          },
+          "collectionContext": {
+            "$ref": "#/components/schemas/SourceBackfillCollectionContext"
           }
         },
         "required": [
@@ -54150,6 +55430,9 @@
                     "type": "null"
                   }
                 ]
+              },
+              "fileBoundary": {
+                "$ref": "#/components/schemas/CsvSnapshotBoundaryBinding"
               }
             },
             "required": [
@@ -54157,6 +55440,30 @@
               "scope",
               "sourceOwnerQualified",
               "qualificationReference"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "fileBoundary"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "kind": {
+                      "const": "snapshot"
+                    },
+                    "sourceOwnerQualified": {
+                      "const": true
+                    },
+                    "qualificationReference": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  }
+                }
+              }
             ]
           }
         },
@@ -54217,6 +55524,33 @@
                     ]
                   }
                 ]
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "completenessPolicy"
+              ],
+              "properties": {
+                "completenessPolicy": {
+                  "required": [
+                    "fileBoundary"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "batchSchema"
+              ],
+              "properties": {
+                "batchSchema": {
+                  "const": "packproof.typed-source-batch/v2"
+                },
+                "transport": {
+                  "const": "local_ntfs"
+                }
               }
             }
           }
@@ -54335,6 +55669,46 @@
               "maximumRows": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "collectorSupported": {
+                "type": "boolean"
+              },
+              "collectorAdmitted": {
+                "type": "boolean"
+              },
+              "blockedReason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sourceBackfillJobs": {
+                "type": "boolean"
+              },
+              "backfillProposal": {
+                "type": "boolean"
+              },
+              "backfillSemantics": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "cumulative_snapshot",
+                      "event_delta"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "csvSnapshotBoundary": {
+                "type": "boolean"
               }
             }
           }
@@ -55631,6 +57005,740 @@
           "nextCursor",
           "projectionVersion"
         ]
+      },
+      "SourceBackfillCollectionContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "historical_backfill"
+          },
+          "jobId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "itemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "kind",
+          "jobId",
+          "itemId"
+        ]
+      },
+      "SourceBackfillOriginal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[^\\\\/:\\u0000]+\\.[cC][sS][vV]$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2097152
+          },
+          "mediaType": {
+            "const": "text/csv"
+          }
+        },
+        "required": [
+          "name",
+          "sha256",
+          "byteSize",
+          "mediaType"
+        ]
+      },
+      "SourceBackfillJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema": {
+            "const": "packproof.source-backfill/v1"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "subscriptionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "credentialId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "configurationRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "configurationSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "grantRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "manifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "historyFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          },
+          "historyTo": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          },
+          "semantics": {
+            "enum": [
+              "cumulative_snapshot",
+              "event_delta"
+            ]
+          },
+          "state": {
+            "enum": [
+              "proposed",
+              "approved",
+              "paused",
+              "expired",
+              "blocked_policy",
+              "completed"
+            ]
+          },
+          "approvalExpiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "originals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[^\\\\/:\\u0000]+\\.[cC][sS][vV]$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "byteSize": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2097152
+                },
+                "mediaType": {
+                  "const": "text/csv"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "batchId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "receiptState": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "counts": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "processing": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "acceptedLinked": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "acceptedUnlinked": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "duplicate": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "conflict": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "quarantined": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "rejected": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "processing",
+                        "acceptedLinked",
+                        "acceptedUnlinked",
+                        "duplicate",
+                        "conflict",
+                        "quarantined",
+                        "rejected"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "sha256",
+                "byteSize",
+                "mediaType",
+                "batchId",
+                "receiptState",
+                "counts"
+              ]
+            },
+            "maxItems": 100
+          },
+          "progress": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "files": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "received": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pending": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "processing": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "succeeded": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failed": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "total",
+                  "received",
+                  "pending",
+                  "processing",
+                  "succeeded",
+                  "failed"
+                ]
+              },
+              "rows": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "processing": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "acceptedLinked": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "acceptedUnlinked": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "duplicate": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "conflict": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "quarantined": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rejected": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "processing",
+                  "acceptedLinked",
+                  "acceptedUnlinked",
+                  "duplicate",
+                  "conflict",
+                  "quarantined",
+                  "rejected"
+                ]
+              },
+              "receivedRows": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "files",
+              "rows",
+              "receivedRows"
+            ]
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "action": {
+                  "enum": [
+                    "approve",
+                    "pause",
+                    "resume"
+                  ]
+                },
+                "wholeFileConsent": {
+                  "type": "boolean"
+                },
+                "expiresAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "actorUserId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "actorMembershipId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+                },
+                "supersedesId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "action",
+                "wholeFileConsent",
+                "expiresAt",
+                "reason",
+                "actorUserId",
+                "actorMembershipId",
+                "createdAt",
+                "supersedesId"
+              ]
+            },
+            "maxItems": 100
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "approve": {
+                "type": "boolean"
+              },
+              "pause": {
+                "type": "boolean"
+              },
+              "resume": {
+                "type": "boolean"
+              },
+              "collect": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "approve",
+              "pause",
+              "resume",
+              "collect"
+            ]
+          },
+          "blockReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          },
+          "approvalPath": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "principalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "connectionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "locationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "operatorMembershipId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "latestDecisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decisionLimit": {
+            "const": 100
+          },
+          "decisionsComplete": {
+            "const": true
+          }
+        },
+        "required": [
+          "schema",
+          "id",
+          "subscriptionId",
+          "installationId",
+          "credentialId",
+          "configurationRevision",
+          "configurationSha256",
+          "grantRevision",
+          "manifestSha256",
+          "historyFrom",
+          "historyTo",
+          "semantics",
+          "state",
+          "approvalExpiresAt",
+          "originals",
+          "progress",
+          "decisions",
+          "capabilities",
+          "blockReason",
+          "createdAt",
+          "approvalPath",
+          "organizationId",
+          "environment",
+          "principalId",
+          "connectionId",
+          "locationId",
+          "operatorMembershipId",
+          "latestDecisionId",
+          "decisionLimit",
+          "decisionsComplete"
+        ]
+      },
+      "SourceBackfillProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "configurationRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "grantRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "historyFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          },
+          "historyTo": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          },
+          "semantics": {
+            "enum": [
+              "cumulative_snapshot",
+              "event_delta"
+            ]
+          },
+          "originals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceBackfillOriginal"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "configurationRevision",
+          "grantRevision",
+          "historyFrom",
+          "historyTo",
+          "semantics",
+          "originals"
+        ]
+      },
+      "SourceBackfillAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "environment": {
+            "enum": [
+              "sandbox",
+              "live"
+            ]
+          },
+          "action": {
+            "enum": [
+              "approve",
+              "pause",
+              "resume"
+            ]
+          },
+          "manifestSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "configurationRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "grantRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expectedDecisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "wholeFileConsent": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Valid timestamp including seconds and an explicit UTC offset. Local wall clocks and invalid calendar dates are rejected."
+          }
+        },
+        "required": [
+          "action",
+          "manifestSha256",
+          "configurationRevision",
+          "grantRevision",
+          "expectedDecisionId",
+          "reason"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "approve",
+                    "resume"
+                  ]
+                }
+              },
+              "required": [
+                "action"
+              ]
+            },
+            "then": {
+              "required": [
+                "wholeFileConsent",
+                "expiresAt"
+              ],
+              "properties": {
+                "wholeFileConsent": {
+                  "const": true
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CsvSnapshotBoundaryBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema": {
+            "const": "packproof.csv-snapshot-boundary/v1"
+          },
+          "markerColumn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "asOfColumn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rowCountColumn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "schema",
+          "markerColumn",
+          "asOfColumn",
+          "rowCountColumn"
+        ],
+        "description": "Three distinct exact approved CSV headers containing exporter-reported snapshot marker, explicit-offset boundary timestamp and canonical integer control total. Values must repeat consistently on every raw row, and the reported total must match all raw business rows. No marker, timestamp or completeness claim is derived from a filename, receipt, hash or PackProof row count."
       }
     }
   },
@@ -55673,7 +57781,7 @@
     ]
   },
   "x-packproof-existing-data-profile": {
-    "version": "packproof.existing-data-candidate/v2",
+    "version": "packproof.existing-data-candidate/v3",
     "generatedBy": "scripts/generate-existing-data-openapi.mjs",
     "candidate": true,
     "productionQualified": false,
@@ -55687,7 +57795,8 @@
       "PACKPROOF_CROSS_CASE_ENABLED",
       "PACKPROOF_PAGED_PROJECTIONS_ENABLED",
       "PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED",
-      "PACKPROOF_SOURCE_DISPOSITION_ENABLED"
+      "PACKPROOF_SOURCE_DISPOSITION_ENABLED",
+      "PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED"
     ],
     "externalGate": "G0 source-owner/security/usability/load/restore/Windows qualification remains required. Candidate contracts are not a production activation claim."
   }

@@ -33,6 +33,7 @@ public sealed class LocalState
     public int StateVersion { get; set; } = 1;
     public List<SourceSubscriptionState> SourceSubscriptions { get; set; } = [];
     public string? LastScheduledSourceId { get; set; }
+    public string? LastScheduledBackfillSourceId { get; set; }
     public SubscriptionDraftState? SubscriptionDraft { get; set; }
     public JsonElement? LocalAnalysis { get; set; }
     public int DraftRevision { get; set; }

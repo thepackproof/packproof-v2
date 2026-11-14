@@ -10,7 +10,7 @@ namespace PackProof.Connect;
 public sealed record TypedSourceRowPreview(int RowNumber, bool Valid, JsonElement? Normalized, string? PayloadSha256);
 /// <summary>The local NTFS adapter supports the shared bounded CSV profiles.
 /// The server repeats all validation against the exact preserved original.</summary>
-public static class TypedSourceSemantics
+public static partial class TypedSourceSemantics
 {
     private static readonly JsonElement Rules = LoadRules();
     public static string Version => Rules.GetProperty("version").GetString()!;

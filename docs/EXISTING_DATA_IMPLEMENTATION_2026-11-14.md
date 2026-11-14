@@ -20,6 +20,8 @@ The PR163 Windows Server evidence does not demonstrate Windows 11 installation, 
 8. Durable issues retain evaluations and reasoned acknowledge, assign, note, resolve and reopen history. Worker actions have explicit system provenance rather than a fabricated human actor.
 9. The portal exposes cases, comparisons, source-specific health, supporting field extracts, first-record review and recurring-source decisions. Case access never authorizes downloading a complete multi-case original.
 10. The unsigned investigation JSON profile freezes the projection, assertions, association decisions, issue history, safe extracts, digest inventory, scope omissions and retention summary. Existing signed Proof and operational-snapshot profiles are unchanged. A separately qualified v2 wrapper adds an independently verified signature and frozen inventory without altering v1 bytes.
+11. A separately approved historical-file job freezes a finite manifest, source-time interval, update semantics and current capture authority. Protected job progress and independent queue lanes resume after restart while reserving admission and processing for live files. Exact overlap binds the existing receipt; file and row counts derive durable outcomes. Source diagnostics distinguish pending age, unknown capture times and retained bytes from exporter completeness.
+12. Qualified local v2 CSV sources can bind actual exporter snapshot-marker, boundary-time and control-total columns. Collector/server validation reads the exact original and agrees through a shared corpus. The owner must qualify those existing controls; ordinary files keep coverage unknown. Historical arrival order cannot replace a newer qualified live boundary or conceal unqualified current work.
 
 ## Source contracts
 
@@ -54,11 +56,11 @@ The synthetic contract corpus is shared by TypeScript and C# through `typed-sour
 | --- | --- |
 | API | Existing partner API plus opt-in typed batch and source subscription v1 profiles. |
 | Browser | Source-specific review and first-batch activation from this exact source candidate. |
-| Windows | Internal desktop/service `0.3.0`, explicitly negotiated v1/v2 source contracts; protected subscription state and queue schema v3. |
-| Database | Additive migrations 110–116; frozen 108/109/113 policies plus explicit 116 runtime privilege review. |
+| Windows | Internal desktop/service `0.4.0`, explicitly negotiated v1/v2 source contracts and separately enabled historical jobs; protected subscription state and queue schema v4. |
+| Database | Additive migrations 110–118; frozen 108/109/113/116/117 policies plus explicit 118 runtime privilege review. |
 | Legacy source lane | Existing scheduled CSV v1/v2 and PR163 validation retained. |
 
-The existing queue is migrated without deleting original bytes, keys, credentials or receipts. The old binary must refuse the schema-three queue rather than reset it. Rollback pauses the affected source and uses a compatible service or a roll-forward repair. Do not replace the executable with an older reader after migration, delete ProgramData, run a destructive down migration, or transfer queued bytes into a new source grant.
+The existing queue is migrated without deleting original bytes, keys, credentials or receipts. The old binary must refuse the schema-four queue rather than reset it. Newly staged originals have a recorded capture time; an older entry without that information stays unknown. Rollback pauses the affected source and uses a compatible service or a roll-forward repair. Do not replace the executable with an older reader after migration, delete ProgramData, run a destructive down migration, or transfer queued bytes into a new source grant.
 
 ## Independent switches
 
@@ -79,6 +81,7 @@ All switches require the literal value `true`; absent values remain disabled.
 | Bounded materialized case pages | `PACKPROOF_PAGED_PROJECTIONS_ENABLED` |
 | Qualified signed investigation profile | `PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED` |
 | Qualified source disposition and collector compaction | `PACKPROOF_SOURCE_DISPOSITION_ENABLED` |
+| Exact approved resumable historical-file jobs | `PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED` |
 
 The existing organization entitlement remains required. Disabling a reader or a rule does not delete accepted originals. Disabling admission stops new work without silently discarding retained work. See `infra/backend-release/reconstruction-candidate-runbook.md` for reviewed migrations, role separation, release checks and recovery.
 
@@ -92,6 +95,8 @@ The following requirements remain open and must not be described as completed:
 - **Source keys:** additive v2 policies and equivalent C#/TypeScript interpreters support approved grain-qualified composite identities, source-as-of snapshots and immutable events. These fixtures do not qualify the identifiers or publication semantics of an unknown real source.
 - **Rules:** label/carrier acceptance and expected handling-unit handoff rules are implemented behind separate qualified policy bindings. Exact source revisions, carrier account/service, explicit event/deadline times, source completeness and current coverage are prerequisites. Status vocabularies and windows require actual source-owner review.
 - **Scale:** ordinary case pages use SQL pagination and revision-bound cursors. Workers maintain complete versioned comparisons and derived source accounting; pending/stale projections suppress comparison totals. The reproducible retained-history workload and actual measured results are recorded separately; local fixture timing is not production PostgreSQL capacity qualification.
+- **Recovery evaluations:** immutable evaluation sequence records a healthy, suppressed and healthy-again transition even when its original projection content recurs. Rechecking an unchanged latest projection remains idempotent; a returning identical projection preserves a human resolution. Transient processing gets a bounded short retry ahead of ordinary maintenance, while offline and unresolved-source review keep their normal cadence.
+- **Historical collection:** the initial qualified job path is bounded local NTFS CSV on the matching `0.4.0` collector. Cumulative snapshots require approved v2 source-as-of ordering; event deltas require a supported stable event identity contract. Mixed or unknown semantics, out-of-interval/unknown times, changed originals and changed capture authority remain blocked. An approved job is not a source-completeness declaration or a reason to generate historical absence findings.
 - **WP10:** a separate v2 signed case package reuses the existing signing provider and independent trust registry. Runtime source/profile/org/env/key/time bindings are required; existing signed Proof/snapshot formats remain unchanged. Exact-version original disposition requires a separate worker-only privileged role and two independently authorized human decisions; collector compaction requires a reconciled completed receipt and matching scope/digest. Immutable normalized audit history remains preserved, and backup erasure is never claimed. Actual production key, role, storage retention and restore qualification remain required before activation.
 - **G4 / WP12:** production migration rehearsal, live role preflight, signed Windows distribution, external security/retention acceptance, one-site shadow operation and the 20-investigation value study remain open. No production schema, role, source, Site audience or deployment is changed by preparing this candidate.
 

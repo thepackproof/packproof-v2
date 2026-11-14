@@ -59,6 +59,48 @@ it('preserves the distinction between delayed information and a delivery outcome
   expect(screen.getByText('Accounting reconciled')).toBeVisible();
 });
 
+it('labels collector storage separately from row accounting and preserves unknown retained-work age', async () => {
+  const measured = { ...detail, sources: detail.sources.map(source => ({ ...source, collectorBacklog: 4,
+    oldestPendingAt: '2026-11-12T18:00:00Z', collectorPendingAgeUnknownCount: 2, collectorRetainedBytes: 4096 })) };
+  render(cases({ recordsRequest: vi.fn(async () => measured) } as unknown as PackProofApi));
+  await userEvent.setup().click(await screen.findByText('Retained work reported by the collector'));
+  expect(screen.getByText('Pending collector items').nextElementSibling).toHaveTextContent('4');
+  expect(screen.getByText('Pending items with unmeasured age').nextElementSibling).toHaveTextContent('2');
+  expect(screen.getByText('Retained local storage').nextElementSibling).toHaveTextContent('4,096 bytes');
+  expect(screen.getByText(/Some retained work predates capture-time measurement/)).toBeVisible();
+  expect(screen.getByText(/separate from server row outcomes/)).toBeVisible();
+});
+
+it('keeps missing collector measurements unknown while server row accounting remains available', async () => {
+  render(cases({ recordsRequest: vi.fn(async () => detail) } as unknown as PackProofApi));
+  await userEvent.setup().click(await screen.findByText('Retained work reported by the collector'));
+  expect(screen.getByText('Pending collector items').nextElementSibling).toHaveTextContent('Not reported');
+  expect(screen.getByText('Pending items with unmeasured age').nextElementSibling).toHaveTextContent('Not reported');
+  expect(screen.getByText('Retained local storage').nextElementSibling).toHaveTextContent('Not reported');
+});
+
+it('shows measured source watermark lag and duplicate/conflict rates using the received-row denominator', async () => {
+  const measured = { ...detail, measuredAt: '2026-11-12T19:10:00Z', sources: detail.sources.map(source => ({ ...source,
+    sourceAsOf: '2026-11-12T19:00:00Z', accounting: { ...source.accounting, received: 10, acceptedLinked: 5,
+      acceptedUnlinked: 2, duplicate: 2, conflict: 1 } })) };
+  render(cases({ recordsRequest: vi.fn(async () => measured) } as unknown as PackProofApi));
+  expect((await screen.findByText('Source watermark lag at evaluation')).nextElementSibling).toHaveTextContent('10 minutes');
+  await userEvent.setup().click(screen.getByText('Input accounting'));
+  expect(screen.getByText('Duplicate rate among received rows').nextElementSibling).toHaveTextContent('20%');
+  expect(screen.getByText('Conflict rate among received rows').nextElementSibling).toHaveTextContent('10%');
+});
+
+it('keeps future-clock lag unknown and avoids presenting an empty source as zero-percent conflicts', async () => {
+  const empty = { ...detail, measuredAt: '2026-11-12T19:00:00Z', sources: detail.sources.map(source => ({ ...source,
+    sourceAsOf: '2026-11-12T19:10:00Z', accounting: { received: 0, acceptedLinked: 0, acceptedUnlinked: 0,
+      duplicate: 0, conflict: 0, quarantined: 0, rejected: 0, processing: 0, reconciled: true } })) };
+  render(cases({ recordsRequest: vi.fn(async () => empty) } as unknown as PackProofApi));
+  expect(await screen.findByText('Unknown — source clock is ahead of the evaluation')).toBeVisible();
+  await userEvent.setup().click(screen.getByText('Input accounting'));
+  expect(screen.getByText('Duplicate rate among received rows').nextElementSibling).toHaveTextContent('No received rows');
+  expect(screen.getByText('Conflict rate among received rows').nextElementSibling).toHaveTextContent('No received rows');
+});
+
 it('keeps large collection totals and server pagination reachable with scoped filters', async () => {
   const onGo = vi.fn(), paged = { ...detail, pagination: { ...detail.pagination, total: 601, returnedCount: 50, hasMore: true, nextCursor: 'next-50' } };
   render(cases({ recordsRequest: vi.fn(async () => paged) } as unknown as PackProofApi, { onGo }));
@@ -134,7 +176,7 @@ it('keeps pending projection and unmeasured input accounting visibly unknown', a
   expect(await screen.findByText(/Accepted source reports are awaiting reconstruction/)).toHaveTextContent('Difference counts have not been evaluated');
   expect(screen.getByText('Not evaluated')).toBeVisible();
   await userEvent.setup().click(screen.getByText('Input accounting'));
-  expect(screen.getAllByText('Not measured')).toHaveLength(8);
+  expect(screen.getAllByText('Not measured')).toHaveLength(11);
   expect(screen.queryByText('0 differences to review')).not.toBeInTheDocument();
 });
 

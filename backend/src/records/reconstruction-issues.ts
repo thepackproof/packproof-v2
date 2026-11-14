@@ -12,6 +12,7 @@ import {requireCaseAccess,currentCaseAssertionSql} from './cases.js';
 import {loadOperationalCaseProjection} from './reconstruction.js';
 import {requireReconstructionFeature,reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {RECONSTRUCTION_RULE_VERSION,type ReconstructionComparison} from './reconstruction-rules.js';
+import {sourceWorkRecheckIntervalMs} from './coverage.js';
 
 interface IssueRow {id:string;case_id:string;category:string;rule_version:string;subject:unknown;created_at:string|Date}
 type Evaluation=Pick<ReconstructionComparison,'outcome'|'title'|'explanation'|'inputAssertionIds'>&{sourceHealth?:unknown;ruleVersion?:string;physicalCondition?:string};
@@ -67,32 +68,40 @@ export async function synchronizeOperationalCaseIssues(db:Database,clock:Clock,w
    const old=existing.find(issue=>issue.id===id);
    if(!old&&entry.value.outcome!=='different')continue;
    if(!old)await tx.query('INSERT INTO record_case_issues(id,case_id,category,rule_version,subject,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING',[id,caseId,entry.category,entry.value.ruleVersion??RECONSTRUCTION_RULE_VERSION,JSON.stringify(entry.subject),clock.now().toISOString()]);
-   const evaluationId=`case_eval_${sha256Hex(canonicalize({issueId:id,projectionVersion:projection.projectionVersion}))}`;
-   const sequence=Number((await tx.query<{n:number}>('SELECT COALESCE(MAX(sequence),0)+1 AS n FROM record_case_issue_evaluations WHERE issue_id=$1',[id])).rows[0].n);
-   const inserted=(await tx.query('INSERT INTO record_case_issue_evaluations(id,issue_id,case_id,projection_version,sequence,outcome,evaluation,created_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8) ON CONFLICT(issue_id,projection_version) DO NOTHING RETURNING id',[evaluationId,id,caseId,projection.projectionVersion,sequence,entry.value.outcome,JSON.stringify(entry.value),clock.now().toISOString()])).rows.length>0;
+   // A source-health cycle can revisit the same input fingerprint. Preserve
+   // that transition in history; only an immediate repeat is a replay.
+   const latest=(await tx.query<{sequence:number;projection_version:string;previously_seen:boolean}>(`SELECT e.sequence,e.projection_version,EXISTS(SELECT 1 FROM record_case_issue_evaluations seen WHERE seen.issue_id=$1 AND seen.projection_version=$2) AS previously_seen FROM record_case_issue_evaluations e WHERE e.issue_id=$1 ORDER BY e.sequence DESC LIMIT 1`,[id,projection.projectionVersion])).rows[0];
+   if(latest?.projection_version===projection.projectionVersion)continue;
+   const sequence=Number(latest?.sequence??0)+1,evaluationId=`case_eval_${sha256Hex(canonicalize({issueId:id,projectionVersion:projection.projectionVersion,sequence}))}`;
+   const inserted=(await tx.query('INSERT INTO record_case_issue_evaluations(id,issue_id,case_id,projection_version,sequence,outcome,evaluation,created_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8) ON CONFLICT(id) DO NOTHING RETURNING id',[evaluationId,id,caseId,projection.projectionVersion,sequence,entry.value.outcome,JSON.stringify(entry.value),clock.now().toISOString()])).rows.length>0;
    if(!inserted)continue;
    recorded++;
    const last=await currentAction(tx,id),resolved=['resolve','system_resolve'].includes(last);
+   // Reappearing identical evidence does not overturn a human disposition.
+   // A recurring warning that the system resolved can reopen automatically.
    if(entry.value.outcome==='within_tolerance'&&!resolved)await appendAction(tx,clock,caseId,id,'system_resolve','The current qualified source assertions no longer disagree. Earlier findings and their inputs remain in history.',null,null,`${evaluationId}:resolve`);
-   else if(entry.value.outcome==='different'&&resolved)await appendAction(tx,clock,caseId,id,'system_reopen','A new qualified input revision reports a disagreement after the prior resolution.',null,null,`${evaluationId}:reopen`);
+   else if(entry.value.outcome==='different'&&resolved&&(last==='system_resolve'||latest?.previously_seen!==true))await appendAction(tx,clock,caseId,id,'system_reopen',latest?.previously_seen?'The current source evaluation reports the finding again after its prior automatic resolution.':'A new qualified input revision reports a disagreement after the prior resolution.',null,null,`${evaluationId}:reopen`);
   }
   await tx.query('INSERT INTO record_case_rule_runs(id,case_id,case_revision,projection_version,created_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT(case_id,projection_version) DO NOTHING',[newId('case_rule_run'),caseId,projection.case.revision,projection.projectionVersion,clock.now().toISOString()]);
-  await tx.query('INSERT INTO record_case_rule_state(case_id,case_revision,projection_version,checked_at,next_check_at,error_code) VALUES($1,$2,$3,$4,$5,NULL) ON CONFLICT(case_id) DO UPDATE SET case_revision=EXCLUDED.case_revision,projection_version=EXCLUDED.projection_version,checked_at=EXCLUDED.checked_at,next_check_at=EXCLUDED.next_check_at,error_code=NULL',[caseId,projection.case.revision,projection.projectionVersion,clock.now().toISOString(),new Date(clock.now().getTime()+60000).toISOString()]);
+  const checkedAt=clock.now();
+  await tx.query('INSERT INTO record_case_rule_state(case_id,case_revision,projection_version,checked_at,next_check_at,error_code) VALUES($1,$2,$3,$4,$5,NULL) ON CONFLICT(case_id) DO UPDATE SET case_revision=EXCLUDED.case_revision,projection_version=EXCLUDED.projection_version,checked_at=EXCLUDED.checked_at,next_check_at=EXCLUDED.next_check_at,error_code=NULL',[caseId,projection.case.revision,projection.projectionVersion,checkedAt.toISOString(),new Date(checkedAt.getTime()+sourceWorkRecheckIntervalMs(projection.sources)).toISOString()]);
   await requireCaseAccess(tx,clock,w,caseId);
   return {caseId,projectionVersion:projection.projectionVersion,evaluationsRecorded:recorded};
  });
 }
 
-/** Bounded outbox-following rule work. Unchanged closed cases are not swept
- * repeatedly. Current source health is rechecked for cases with open findings;
- * a receipt or association revision always makes its case eligible again. */
+/** Bounded rule work follows changed case and paged projection inputs. Legacy
+ * successful states also receive periodic clock/source qualification checks so
+ * first findings do not depend on an existing issue. Paged work retries measured
+ * pending sources at the short cadence and open findings at the normal cadence. */
 export async function processPendingReconstructionIssues(db:Database,clock:Clock,limit=reconstructionFeatureEnabled('pagedProjections')?100:5) {
  if(!reconstructionFeatureEnabled('reconstruction')||!reconstructionFeatureEnabled('sourceHealth')||!reconstructionFeatureEnabled('rules'))return {processed:0,blocked:0};
- const n=Math.max(1,Math.min(reconstructionFeatureEnabled('pagedProjections')?100:20,Math.floor(limit))),now=clock.now().toISOString();
+ const paged=reconstructionFeatureEnabled('pagedProjections'),n=Math.max(1,Math.min(paged?100:20,Math.floor(limit))),now=clock.now().toISOString();
+ const projectionDirty=paged?`(p.case_revision=c.revision AND p.error_code IS NULL AND p.created_at>=state.checked_at AND p.projection_version IS DISTINCT FROM state.projection_version)`:'false',successfulRetry=paged?`(state.error_code IS NULL AND state.next_check_at=state.checked_at+interval '1 second')`:`state.error_code IS NULL`;
  const candidates=(await db.query<{id:string;revision:number;operator_membership_id:string;organization_id:string;environment:'sandbox'|'live'}>(`SELECT c.id,c.revision,c.operator_membership_id,c.organization_id,c.environment
-  FROM record_cases c LEFT JOIN record_case_rule_state state ON state.case_id=c.id
-  WHERE state.case_id IS NULL OR (state.case_revision<c.revision AND (state.error_code IS NULL OR state.next_check_at<=$1)) OR (state.next_check_at<=$1 AND EXISTS(SELECT 1 FROM record_case_issues i WHERE i.case_id=c.id AND COALESCE((SELECT a.action FROM record_case_issue_actions a WHERE a.issue_id=i.id AND a.action NOT IN ('note','assign') ORDER BY sequence DESC LIMIT 1),'reopen') NOT IN ('resolve','system_resolve')))
-  ORDER BY CASE WHEN state.case_id IS NULL OR state.case_revision<c.revision THEN 0 ELSE 1 END,COALESCE(state.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
+  FROM record_cases c LEFT JOIN record_case_rule_state state ON state.case_id=c.id ${paged?'LEFT JOIN record_case_projection_state p ON p.case_id=c.id':''}
+  WHERE state.case_id IS NULL OR ((state.case_revision<c.revision OR ${projectionDirty}) AND (state.error_code IS NULL OR state.next_check_at<=$1)) OR (state.next_check_at<=$1 AND (${successfulRetry} OR EXISTS(SELECT 1 FROM record_case_issues i WHERE i.case_id=c.id AND COALESCE((SELECT a.action FROM record_case_issue_actions a WHERE a.issue_id=i.id AND a.action NOT IN ('note','assign') ORDER BY sequence DESC LIMIT 1),'reopen') NOT IN ('resolve','system_resolve'))))
+  ORDER BY CASE WHEN state.case_id IS NULL OR state.case_revision<c.revision OR ${projectionDirty} THEN 0 ELSE 1 END,COALESCE(state.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
  let processed=0,blocked=0;
  for(const candidate of candidates){
   try{

@@ -38,6 +38,12 @@ describe('Connect approval deep-link sign-in return', () => {
     expect(consumeConnectApprovalReturn(sessionStorage)).toBe(destination);
   });
 
+  it('retains an exact historical manifest locator across sign-in without secret parameters', () => {
+    const destination = `/app/records/connect/approve?installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}`;
+    rememberConnectApprovalReturn(destination + '&token=PRIVATE', sessionStorage);
+    expect(consumeConnectApprovalReturn(sessionStorage)).toBe(destination);
+  });
+
   it.each([
     'installationId=install-a&subscriptionId=source-a&subscriptionId=source-b',
     'installationId=install-a&installationId=install-b&subscriptionId=source-a',
@@ -59,6 +65,13 @@ describe('Connect approval deep-link sign-in return', () => {
     'installationId=install-a&subscriptionId=source-a&configurationRevision=1.5',
     'installationId=install-a&subscriptionId=source-a&configurationRevision=2147483648',
     'installationId=install-a&subscriptionId=source-a&environment=unexpected',
+    'installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a',
+    `installationId=install-a&subscriptionId=source-a&configurationRevision=3&manifestSha256=${'a'.repeat(64)}`,
+    `installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a&manifestSha256=${'a'.repeat(63)}`,
+    `installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}&initialBatchId=batch-a`,
+    `installationId=install-a&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}`,
+    `installationId=install-a&subscriptionId=source-a&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}`,
+    `installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}&manifestSha256=${'b'.repeat(64)}`,
   ])('rejects an ambiguous or mixed source approval locator: %s', query => {
     expect(connectApprovalReturnPath('/app/records/connect/approve?' + query)).toBeNull();
   });
