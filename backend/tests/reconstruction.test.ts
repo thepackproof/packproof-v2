@@ -129,6 +129,14 @@ describe('source receipts to scoped operational reconstruction and issue history
  });
  it('hides stale Proof memberships and historical issue inputs after their source observation moves to another case',async()=>{
   const w=await workspace(),current=await loadOperationalCaseProjection(opened.db,clock,w,caseId),allocation=current.assertions.find(value=>value.property==='allocatedQuantity'&&value.active)!;
+  // An explicitly reported shipment may have a source assertion without a
+  // relationship row. All list and detail views must count that same entity.
+  const removedReference='SHIPMENT-ASSOCIATION-CORRECTED',shipment={namespace:'pilot-export',type:'shipment' as const,externalId:removedReference};
+  const sourceRow:TypedSourceObservation={sourceEventId:'assertion-only-shipment',sourceRevision:'1',observationKind:'snapshot',occurredAt:null,sourceAsOf:'2026-11-12T19:00:00Z',timeQuality:'snapshot_time_only',references:[{namespace:'pilot-export',type:'order',externalId:'0010482'},shipment],assertions:[{subjectReference:shipment,property:'status',value:'source-reported',sourceLocator:{row:1,field:'status'},assurance:'source_reported'}],relationships:[],supersedes:null,originSystem:'synthetic fixture',copiedFromSource:null};
+  const reported=await ingest(envelope([sourceRow],'loading','packproof.operational-observations/v1'),'loading','assertion-only-shipment');
+  const withShipment=await loadOperationalCaseProjection(opened.db,clock,w,caseId),listedBefore=await listOperationalCases(opened.db,clock,w,{q:removedReference});
+  expect(withShipment.case.shipmentCount).toBe(current.case.shipmentCount+1);
+  expect(listedBefore).toMatchObject({total:1,cases:[{id:caseId,shipmentCount:withShipment.case.shipmentCount}]});
   const proof=await importPartnerOrder(opened.db,clock,actor,{integrationAccountId:account,externalId:'MEMBERSHIP-REGRESSION',operatorMembershipId:member,transaction:{itemTitle:'Explicit source membership fixture',quantity:1}});
   await opened.db.query('INSERT INTO record_state(proof_id,organization_id,environment,location_id,updated_at) VALUES($1,$2,$3,$4,$5)',[proof.proofId,org,'sandbox',site,clock.now().toISOString()]);
   await opened.db.query('INSERT INTO record_case_members(case_id,proof_id,organization_id,environment,source_row_id,created_at) VALUES($1,$2,$3,$4,$5,$6)',[caseId,proof.proofId,org,'sandbox',allocation.source.observationId,clock.now().toISOString()]);
@@ -137,9 +145,13 @@ describe('source receipts to scoped operational reconstruction and issue history
   // correction. The historical assertion, issue and member ledger stay intact.
   const corrected='case-corrected-fixture';
   await opened.db.query("INSERT INTO record_cases(id,organization_id,environment,location_id,location_key,operator_membership_id,root_namespace,root_type,root_external_id,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$3,$4,'pilot-export','order','CORRECTED',$5,$5)",[corrected,org,site,member,clock.now().toISOString()]);
-  await opened.db.query('UPDATE record_typed_rows SET case_id=$2 WHERE id=$1',[allocation.source.observationId,corrected]);
+  await opened.db.query('UPDATE record_typed_rows SET case_id=$2 WHERE id=ANY($1::text[])',[[allocation.source.observationId,reported.rows[0].id],corrected]);
   const old=await loadOperationalCaseProjection(opened.db,clock,w,caseId);expect(old.case.proofIds).not.toContain(proof.proofId);expect(old.assertions.some(value=>value.id===allocation.id)).toBe(false);
-  expect((await listOperationalCases(opened.db,clock,w,{q:'0010482'})).cases[0].proofCount).toBe(0);
+  const listedAfter=(await listOperationalCases(opened.db,clock,w,{q:'0010482'})).cases[0];
+  expect(listedAfter.proofCount).toBe(0);expect(listedAfter.shipmentCount).toBe(old.case.shipmentCount);expect(old.case.shipmentCount).toBe(current.case.shipmentCount);
+  expect(await listOperationalCases(opened.db,clock,w,{q:removedReference})).toMatchObject({total:0,cases:[]});
+  expect(old.assertions.some(value=>value.subject.externalId===removedReference)).toBe(false);
+  expect((await opened.db.query('SELECT 1 FROM record_case_entities WHERE case_id=$1 AND external_id=$2',[caseId,removedReference])).rows).toHaveLength(1);
   const history=await loadOperationalCaseIssueHistory(opened.db,clock,w,caseId);expect(history.evaluations.some(value=>(value.evaluation as {historyVisibility?:string}).historyVisibility==='restricted')).toBe(true);
   expect((await opened.db.query('SELECT 1 FROM record_case_members WHERE case_id=$1 AND proof_id=$2',[caseId,proof.proofId])).rows).toHaveLength(1);
  });
