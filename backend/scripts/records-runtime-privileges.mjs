@@ -127,8 +127,15 @@ const typedBatch117InsertColumns=['id','organization_id','environment','connecti
 const policy118={...policy117,
  record_typed_batches:{api:{...policy117.record_typed_batches.api,insert:[...typedBatch117InsertColumns,'csv_snapshot_boundary_at']},worker:policy117.record_typed_batches.worker},
 };
+//120 permits only worker-derived shipment work; source authority and all
+// original observations retain the frozen118/119 policy.
+const shipmentWorkIdentity=['batch_id','case_id','organization_id','environment','connection_id','location_id','operator_membership_id','witness_observation_id','created_at'];
+const shipmentWorkProgress=['work_revision','state','cursor_key','case_revision','next_attempt_at','error_code','processed_groups','linked_groups','updated_at'];
+const policy120={...policy118,
+ record_typed_shipment_work:{api:select,worker:{...select,insert:[...shipmentWorkIdentity,...shipmentWorkProgress],update:shipmentWorkProgress}},
+};
 //119 adds only an index: its catalog columns and effective grants remain118.
-const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118||throughMigration===119?policy118:policy;
+const selectPolicy=throughMigration=>throughMigration===120?policy120:throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118||throughMigration===119?policy118:policy;
 
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -170,10 +177,10 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109,113,116,117,118,119].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ if(![108,109,113,116,117,118,119,120].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[01][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[012][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
  if(files.length!==throughMigration-95||new Set(files.map(f=>f.slice(0,3))).size!==throughMigration-95)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={};let tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);tableColumns=sourceColumns(sql,tableColumns);}
  if(Object.keys(selectedPolicy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!selectedPolicy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');

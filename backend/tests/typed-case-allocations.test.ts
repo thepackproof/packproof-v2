@@ -17,6 +17,7 @@ import {exportOperationalCase,readCaseAssertionSource} from '../src/records/reco
 import {importPartnerOrder,addPartnerBinding} from '../src/platform/partner-proofs.js';
 import {sha256Hex} from '../src/hash.js';
 import {canonicalize} from '../src/canonical.js';
+import {processPendingShipmentProjections} from '../src/records/shipment-projections.js';
 import type {TypedSourceBatch,TypedSourceObservation,TypedSourceReference} from '../src/records/source-contracts.js';
 
 describe('qualified many-case source allocations and aliases',()=>{
@@ -142,6 +143,41 @@ describe('qualified many-case source allocations and aliases',()=>{
   const before=new Map((await opened.db.query<{id:string;revision:number}>('SELECT id,revision FROM record_cases WHERE id=ANY($1::text[])',[[b.caseIds[0],c.caseIds[0],d.caseIds[0]]])).rows.map(r=>[r.id,Number(r.revision)]));await ingest(envelope([revision('RETAINED-A',2)]),'retained-a2');
   for(const id of [b.caseIds[0],d.caseIds[0]])expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[id])).rows[0].revision)).toBe(before.get(id)!+1);
   expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[c.caseIds[0]])).rows[0].revision)).toBe(before.get(c.caseIds[0]));
+ });
+
+ it('invalidates each shared case once across many null-pointer retained revisions',async()=>{
+  const event='many-retained-shared-revisions',roots=['MANY-RETAINED-A','MANY-RETAINED-B','MANY-RETAINED-C'];
+  const cases=[];for(const root of roots)cases.push((await ingest(envelope([order(`create-${root}`,root)]),`create-${root}`)).caseIds[0]);
+  const legacy=(number:number):TypedSourceObservation=>({...order(event,roots[2]),sourceRevision:String(number),supersedes:number===1?null:{sourceEventId:event,sourceRevision:String(number-1)}});
+  await ingest(envelope([legacy(1)]),'many-retained-legacy-1');
+  const sub=await v2Source('many-retained-shared'),adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,...(r.type==='order'&&['A','B'].includes(r.externalId)?{externalId:r.externalId==='A'?roots[0]:roots[1]}:{}),...(r.type==='order_line'?{parentExternalId:r.parentExternalId==='A'?roots[0]:roots[1]}:{})});
+  const base=shared(event);base.references=base.references.map(adapt);base.assertions=base.assertions.map(a=>({...a,subjectReference:adapt(a.subjectReference)}));base.relationships=base.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}));
+  for(let revision=1;revision<=6;revision++){
+   const n={...base,sourceRevision:String(revision),supersedes:revision===1?null:{sourceEventId:event,sourceRevision:String(revision-1)}},done=await ingest(v2Envelope(n,sub),`many-retained-shared-${revision}`);
+   expect(done.rows[0].caseId).toBeNull();expect(done.caseIds.sort()).toEqual(cases.slice(0,2).sort());
+  }
+  const before=(await opened.db.query<{id:string;revision:number;corrections:number}>(`SELECT c.id,c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id AND o.event_type='association.corrected') corrections FROM record_cases c WHERE c.id=ANY($1::text[])`,[cases.slice(0,2)])).rows;
+  const correction=await ingest(envelope([legacy(2)]),'many-retained-legacy-2');expect(correction.counts.acceptedLinked).toBe(1);
+  for(const old of before){const after=(await opened.db.query<{revision:number;corrections:number}>(`SELECT c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id AND o.event_type='association.corrected') corrections FROM record_cases c WHERE c.id=$1`,[old.id])).rows[0];expect(Number(after.revision)).toBe(Number(old.revision)+1);expect(after.corrections).toBe(old.corrections+1);}
+ });
+
+ it('keeps unchanged partial corrections stable during automatic replay after invalidating their first revision',async()=>{
+  const sub=await v2Source('stable-partial-correction','packproof.order-lines/v1'),base=shared('stable-partial-correction');
+  const adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,...(r.type==='order'&&['A','B'].includes(r.externalId)?{externalId:`STABLE-${r.externalId}`}:{}) ,...(r.type==='order_line'?{parentExternalId:`STABLE-${r.parentExternalId}`}:{})});
+  base.references=base.references.map(adapt);base.relationships=base.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}));base.assertions=base.assertions.slice(0,2).map(a=>({...a,subjectReference:adapt(a.subjectReference),property:'allocatedQuantity'}));
+  base.assertions.push({subjectReference:base.references.find(r=>r.type==='handling_unit')!,property:'allocatedQuantity',value:{amount:'10',unit:'each'},sourceLocator:{row:1,field:'unassigned aggregate'},assurance:'source_reported'});
+  const input=(n:TypedSourceObservation)=>({...envelope([n],sub,'packproof.order-lines/v1'),schema:'packproof.typed-source-batch/v2',identityPolicy:identity});
+  const first=await ingest(input(base),'stable-partial-1');expect(first.counts.acceptedUnlinked).toBe(1);expect(first.caseIds).toHaveLength(2);
+  const revisions=async()=> (await opened.db.query<{id:string;revision:number;events:number}>(`SELECT c.id,c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id) events FROM record_cases c WHERE c.id=ANY($1::text[]) ORDER BY c.id`,[first.caseIds])).rows;
+  const before=await revisions(),correction={...base,sourceRevision:'2',supersedes:{sourceEventId:base.sourceEventId,sourceRevision:'1'}};
+  const second=await ingest(input(correction),'stable-partial-2');expect(second.counts.acceptedUnlinked).toBe(1);
+  const after=await revisions();for(let i=0;i<after.length;i++){expect(Number(after[i].revision)).toBe(Number(before[i].revision)+2);expect(after[i].events).toBe(before[i].events+2);}
+  const work=async()=> (await opened.db.query('SELECT case_id,work_revision,state,case_revision,processed_groups FROM record_typed_shipment_work WHERE batch_id=$1 ORDER BY case_id',[second.id])).rows;
+  for(let i=0;i<10&&(await work()).some(w=>w.case_revision===null);i++)await processPendingShipmentProjections(deps,10);
+  const stableWork=await work();expect(stableWork).toHaveLength(2);expect(stableWork.every(w=>w.case_revision!==null)).toBe(true);
+  const heads=(await opened.db.query('SELECT id FROM record_case_row_projections WHERE observation_id=$1 ORDER BY id',[second.rows[0].id])).rows;
+  await replayPendingTypedRows(deps,25);await replayPendingTypedRows(deps,25);
+  expect(await revisions()).toEqual(after);expect(await work()).toEqual(stableWork);expect((await opened.db.query('SELECT id FROM record_case_row_projections WHERE observation_id=$1 ORDER BY id',[second.rows[0].id])).rows).toEqual(heads);
  });
 
  it('includes retained v1 history after an approved v2 upgrade without affecting another source stream',async()=>{

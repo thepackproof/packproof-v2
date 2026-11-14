@@ -27,6 +27,10 @@ describe('bounded operational projection pages and complete worker findings',()=
  const site='reconstruction-site';
  const subscriptions=new Map<string,string>();
  const workspace=()=>requireRecordWorkspace(opened.db,owner,org,'sandbox');
+ type ObservedQuery={sql:string;params:unknown[]};
+ const observe=(db:Database,queries:ObservedQuery[]):Database=>({query:<T>(sql:string,params:unknown[]=[])=>{queries.push({sql,params});return db.query<T>(sql,params);},transaction:fn=>db.transaction(tx=>fn(observe(tx,queries)))});
+ const caseAccountingReads=(queries:ObservedQuery[],id:string)=>queries.filter(q=>q.sql.startsWith('SELECT COUNT(*)::integer n FROM record_typed_rows r JOIN record_typed_batches b')&&q.sql.includes('b.subscription_id=$1 AND r.id IN')&&q.params[0]===id);
+ const counterReconciliations=(queries:ObservedQuery[])=>queries.filter(q=>q.sql.includes('COUNT(*)::text received_count'));
  const fixture=(name:string)=>structuredClone(corpus.find(value=>value.name===name)!.input);
  async function source(name:string,profile:string){
   const w=await workspace(),proposed=await opened.db.transaction(tx=>proposeSourceSubscription(tx,clock,w,{connectionId:account,principalId:actor.principalId,operatorMembershipId:member,locationId:site,installationId:null,config:{transport:'partner_api',displayName:name,sourceProfile:profile,mappingVersion:'synthetic-mapping/1',sourceNamespace:'pilot-export',mapping:{},constants:{},wholeFileConsent:true,folderDigest:null,initialFileName:null,initialOriginalSha256:null,expectedHeaders:[],historyFrom:'2026-11-01T00:00:00Z',historyTo:null,maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:86400,completenessPolicy:{kind:'snapshot',scope:'shipment_line',sourceOwnerQualified:true,qualificationReference:'synthetic-owner-acceptance/v1'}}},name));
@@ -74,10 +78,33 @@ describe('bounded operational projection pages and complete worker findings',()=
   expect(total).toBeGreaterThan(600);expect(seen.size).toBe(total);expect(Math.max(...observed)).toBeLessThanOrEqual(101);
  },60000);
  it('evaluates all active assertions once in the worker and serves the complete summary on every page',async()=>{
-  const result=await synchronizeOperationalCaseProjection(opened.db,clock,await workspace(),caseId);expect(result.comparisonCount).toBe(2);
+  const queries:ObservedQuery[]=[],result=await synchronizeOperationalCaseProjection(observe(opened.db,queries),clock,await workspace(),caseId);expect(result.comparisonCount).toBe(2);
+  for(const id of subscriptions.values())expect(caseAccountingReads(queries,id)).toHaveLength(2);
+  expect(counterReconciliations(queries)).toHaveLength(subscriptions.size);
+  const stored=(await opened.db.query<{source_snapshot:Array<{accountingAvailable:boolean}>;summary:{issueCount:number}}>('SELECT source_snapshot,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot.every(source=>source.accountingAvailable)).toBe(true);expect(stored.summary.issueCount).toBe(1);
   const counter=await readProjectionSourceCounter(opened.db,subscriptions.get('loading')!);expect(counter.ready).toBe(true);expect(counter.counts.received).toBe(603);expect(counter.counts.acceptedLinked).toBe(603);
   const first=await getOperationalCase(opened.db,clock,await workspace(),caseId,{limit:100});expect(first.projectionStatus.state).toBe('ready');expect(first.case.issueCount).toBe(1);expect(first.comparisons.map(c=>c.outcome).sort()).toEqual(['different','within_tolerance']);
   const next=await getOperationalCase(opened.db,clock,await workspace(),caseId,{limit:100,cursor:first.pagination.nextCursor});expect(next.case.issueCount).toBe(1);expect(next.assertions).toHaveLength(100);
+ },60000);
+ it('loads each ready source once per worker evaluation without repeating case accounting or counter readiness reads',async()=>{
+  const queries:ObservedQuery[]=[],result=await synchronizeOperationalCaseProjection(observe(opened.db,queries),clock,await workspace(),caseId);expect(result.comparisonCount).toBe(2);
+  for(const id of subscriptions.values()){
+   expect(caseAccountingReads(queries,id)).toHaveLength(1);
+   expect(queries.filter(q=>q.sql==='SELECT * FROM record_source_projection_counters WHERE subscription_id=$1'&&q.params[0]===id)).toHaveLength(1);
+  }
+  expect(counterReconciliations(queries)).toEqual([]);
+  const stored=(await opened.db.query<{source_snapshot:Array<{accountingAvailable:boolean}>;summary:{issueCount:number}}>('SELECT source_snapshot,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot.every(source=>source.accountingAvailable)).toBe(true);expect(stored.summary.issueCount).toBe(1);
+ },60000);
+ it('retains source counter initialization when source health is disabled',async()=>{
+  const w=await workspace(),rollback=new Error('rollback health-disabled worker fixture');vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');
+  try{await expect(opened.db.transaction(async tx=>{
+   // Only the fixture owner resets derived readiness; runtime has no reset path.
+   await tx.query('UPDATE record_source_projection_counters SET ready=false WHERE subscription_id=ANY($1::text[])',[[...subscriptions.values()]]);
+   const queries:ObservedQuery[]=[];expect((await synchronizeOperationalCaseProjection(observe(tx,queries),clock,w,caseId)).comparisonCount).toBe(0);
+   expect(counterReconciliations(queries)).toHaveLength(subscriptions.size);
+   for(const id of subscriptions.values())expect((await readProjectionSourceCounter(tx,id)).ready).toBe(true);
+   const stored=(await tx.query<{source_snapshot:unknown[];source_keys:string[];summary:{issueCount:number|null}}>('SELECT source_snapshot,source_keys,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot).toEqual([]);expect(stored.source_keys).toHaveLength(subscriptions.size);expect(stored.summary.issueCount).toBeNull();throw rollback;
+  })).rejects.toBe(rollback);}finally{vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','true');}
  },60000);
  it('rechecks cached comparison inputs against current allocation after an association repair',async()=>{
   const w=await workspace(),before=await getOperationalCase(opened.db,clock,w,caseId),input=before.comparisons.flatMap(c=>c.inputs).find(a=>a.property==='reportedLoadedQuantity')!;

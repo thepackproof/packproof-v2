@@ -19,6 +19,7 @@ import {processPendingTypedImports} from '../src/records/typed-imports.js';
 import {validateSourceBackfillRows} from '../src/records/source-backfills.js';
 import {loadOperationalCaseProjection} from '../src/records/reconstruction.js';
 import {sha256Hex} from '../src/hash.js';
+import type {Database} from '../src/db/database.js';
 
 const typedFlags=['PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SUBSCRIPTIONS_ENABLED','PACKPROOF_MULTI_SOURCE_AGENT_ENABLED'];
 describe('finite historical backfill authority and receipt accounting',()=>{
@@ -54,6 +55,32 @@ describe('finite historical backfill authority and receipt accounting',()=>{
  async function action(f:Fixture,j:any,kind:'approve'|'pause'|'resume',key:string,extra:Record<string,unknown>={}){return request(app).post(`/me/records/source-backfills/${j.id}/actions`).query(f.w.scope).set(human(f.w.user)).set('Idempotency-Key',key).send({action:kind,expectedDecisionId:j.latestDecisionId,manifestSha256:j.manifestSha256,configurationRevision:j.configurationRevision,grantRevision:j.grantRevision,reason:'Synthetic explicit historical review',...(kind!=='pause'?{wholeFileConsent:true,expiresAt:new Date(now+7200000).toISOString()}:{}),...extra});}
  const read=(f:Fixture,id:string)=>request(app).get(`/v1/partner/source-backfills/${id}`).set(f.service);
  const bind=(f:Fixture,j:any,item:any,batchId:string,key:string)=>request(app).post(`/v1/partner/source-backfills/${j.id}/items/${item.id}/bind`).set(f.service).set('Idempotency-Key',key).send({batchId,manifestSha256:j.manifestSha256,configurationRevision:j.configurationRevision,grantRevision:j.grantRevision});
+ it.each(['pause','expiry'] as const)('rechecks historical %s after a committed five-row prefix without rewriting captured rows',async boundary=>{
+  const savedNow=now;
+  try{
+   const f=await activeSource(),original=file(`chunked-${boundary}.csv`);
+   original.content='Order,Line,Property,Amount,Unit,AsOf\n'+Array.from({length:11},(_,i)=>`0010482,${String(i+20).padStart(3,'0')},orderedQuantity,8,each,2026-11-12T18:00:00Z\n`).join('');original.sha256=sha256Hex(original.content);original.byteSize=Buffer.byteLength(original.content);
+   const proposed=await propose(f,[original],`chunked-${boundary}-manifest`),approved=await action(f,proposed.body,'approve',`chunked-${boundary}-approve`,{expiresAt:new Date(now+60000).toISOString()});expect(approved.status,approved.text).toBe(200);
+   const captured=await preview(f,original,`chunked-${boundary}-preview`,{kind:'historical_backfill',jobId:approved.body.id,itemId:approved.body.originals[0].id});expect(captured.status,captured.text).toBe(201);await commit(f.service,captured.body,`chunked-${boundary}`);
+   const originals=()=>opened.db.query('SELECT id,source_values,normalized,errors,payload_sha256,source_event_id,source_revision,history_eligibility FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number',[captured.body.id]),before=(await originals()).rows;
+   let interrupted=false,currentJob=approved.body;
+   const observed:Database={query:opened.db.query.bind(opened.db),async transaction<T>(work:(tx:Database)=>Promise<T>){
+    let chunk=false;const result=await opened.db.transaction(tx=>work({query:async<R>(sql:string,params?:unknown[])=>{const value=await tx.query<R>(sql,params);if(sql.startsWith('UPDATE record_typed_batches SET lease_expires_at=')&&params?.[0]===captured.body.id)chunk=true;return value;},transaction:tx.transaction.bind(tx)}));
+    if(chunk&&!interrupted){
+     interrupted=true;const progress=(await opened.db.query<{status:string;n:number}>('SELECT status,COUNT(*)::integer n FROM record_typed_rows WHERE batch_id=$1 GROUP BY status ORDER BY status',[captured.body.id])).rows;expect(progress).toEqual([{status:'accepted_linked',n:5},{status:'processing',n:6}]);
+     if(boundary==='pause'){const paused=await action(f,currentJob,'pause',`chunked-${boundary}-pause`);expect(paused.status,paused.text).toBe(200);currentJob=paused.body;}else now+=61000;
+    }
+    return result;
+   }};
+   expect(await processPendingTypedImports({...deps,db:observed},1)).toMatchObject({processed:0,blocked:1});expect(interrupted).toBe(true);
+   const view=await request(app).get(`/v1/partner/typed-imports/${captured.body.id}`).set(f.service);expect(view.status,view.text).toBe(200);expect(view.body).toMatchObject({state:'blocked_policy',errorCode:boundary==='pause'?'SOURCE_BACKFILL_NOT_APPROVED':'SOURCE_BACKFILL_APPROVAL_EXPIRED',counts:{acceptedLinked:5,processing:6}});expect((await originals()).rows).toEqual(before);
+   const accepted=(await opened.db.query<{id:string}>('SELECT id FROM record_case_assertions WHERE batch_id=$1 ORDER BY id',[captured.body.id])).rows;expect(accepted).toHaveLength(5);await processPendingTypedImports(deps,1);expect((await originals()).rows).toEqual(before);
+   const renewed=await action(f,currentJob,'resume',`chunked-${boundary}-resume`);expect(renewed.status,renewed.text).toBe(200);
+   const resumed=await request(app).post(`/v1/partner/typed-imports/${captured.body.id}/reconcile`).set(f.service).set('Idempotency-Key',`chunked-${boundary}-receipt-resume`).send({});expect(resumed.status,resumed.text).toBe(202);
+   expect(await processPendingTypedImports(deps,1)).toMatchObject({processed:1,blocked:0});const final=await request(app).get(`/v1/partner/typed-imports/${captured.body.id}`).set(f.service);expect(final.body).toMatchObject({state:'succeeded',counts:{acceptedLinked:11,processing:0}});expect((await originals()).rows).toEqual(before);
+   const facts=(await opened.db.query<{id:string}>('SELECT id FROM record_case_assertions WHERE batch_id=$1 ORDER BY id',[captured.body.id])).rows;expect(facts).toHaveLength(11);for(const fact of accepted)expect(facts).toContainEqual(fact);
+  }finally{now=savedNow;}
+ });
  it('binds an existing pending live receipt, gives live its own budget, and keeps newer live snapshots current after older history',async()=>{
   const f=await activeSource(),live=file('live.csv',20,'12'),old=file('historical.csv',18,'8'),lp=await preview(f,live,'live-before-history');expect(lp.status,lp.text).toBe(201);
   const proposed=await propose(f,[live,old],'two-file-history');expect(proposed.status,proposed.text).toBe(202);expect(proposed.body).toMatchObject({state:'proposed',latestDecisionId:null,decisionsComplete:true,progress:{files:{total:2,received:0,pending:2},receivedRows:0}});expect(proposed.body.approvalPath).toContain(`organizationId=${f.w.org}`);expect(proposed.body.approvalPath).toContain('environment=sandbox');

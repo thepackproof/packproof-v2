@@ -8,9 +8,10 @@ import {canonicalize} from '../src/canonical.js';
 import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,addOrganizationMember,PARTNER_SCOPES,type PartnerActor} from '../src/platform/organizations.js';
 import {requireRecordWorkspace,type RecordWorkspace} from '../src/records/access.js';
 import {proposeSourceSubscription,actOnSourceSubscription} from '../src/records/source-subscriptions.js';
-import {previewTypedImport,commitTypedImport,processPendingTypedImports,readTypedImport} from '../src/records/typed-imports.js';
+import {previewTypedImport,commitTypedImport,processPendingTypedImports,readTypedImport,resumeTypedImport} from '../src/records/typed-imports.js';
 import {readSourceRetentionReview,actOnSourceRetention,getCaseRetentionSummary,parseSourceRetentionPolicy} from '../src/records/source-retention.js';
 import {readCaseAssertionSource} from '../src/records/reconstruction-exports.js';
+import {currentCaseObservationSql} from '../src/records/cases.js';
 import {MemoryObjectStore} from './memory-object-store.js';
 import {requestSourceDisposition,approveSourceDisposition,readSourceDisposition,processSourceDispositions,createQualifiedSourceDispositionStore,readCollectorCompactionCommands,authorizeCollectorCompactionPermit,ackCollectorCompactionCommand,type ExactVersionDispositionTransport} from '../src/records/source-retention-disposition.js';
 import type {AppDependencies} from '../src/app.js';
@@ -43,6 +44,9 @@ async function fixture(twoCases=false,shipments=false){
  return {batchId:complete.id,caseIds:complete.caseIds,key:meta.original_object_key,digest:meta.original_sha256};
 }
 async function act(batchId:string,action:string,extra:Record<string,unknown>={},key?:string){const review=await readSourceRetentionReview(deps,w,batchId);return actOnSourceRetention(deps,w,batchId,{action,reason:'Synthetic retention review',impactSha256:review.impactSha256,...extra},key??`retention-${++sequence}`);}
+async function shipmentWork(batchId:string,state:'pending'|'complete'|'unavailable'){
+ await opened.db.query(`INSERT INTO record_typed_shipment_work(batch_id,case_id,organization_id,environment,connection_id,location_id,operator_membership_id,witness_observation_id,created_at,state,next_attempt_at,updated_at) SELECT b.id,c.id,b.organization_id,b.environment,b.connection_id,b.location_id,b.operator_membership_id,r.id,$3,$2,$3,$3 FROM record_typed_batches b JOIN record_typed_rows r ON r.batch_id=b.id JOIN record_cases c ON ${currentCaseObservationSql('r','c.id')} WHERE b.id=$1 ORDER BY c.id,r.id LIMIT 1 ON CONFLICT(batch_id,case_id) DO UPDATE SET state=EXCLUDED.state,work_revision=record_typed_shipment_work.work_revision+1,updated_at=EXCLUDED.updated_at`,[batchId,state,clock.now().toISOString()]);
+}
 beforeAll(async()=>{
  for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED','PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SUBSCRIPTIONS_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_RECONSTRUCTION_EXPORTS_ENABLED'])vi.stubEnv(flag,'true');
  opened=await openIsolatedTestDatabase();await migrate(opened.db);
@@ -61,6 +65,36 @@ afterAll(async()=>{await opened?.close();vi.unstubAllEnvs();});
 function dispositionStore(transport:ExactVersionDispositionTransport,runtimeClock=clock){return createQualifiedSourceDispositionStore({clock:runtimeClock,activeSourceSha:'a'.repeat(40),testFixtures:true,binding:{schema:'packproof.source-disposition-binding/v1',sourceSha:'a'.repeat(40),organizationIds:[w.organizationId],environment:'sandbox',bucket:'synthetic-source-bucket',permittedPrefix:`evidence/${w.organizationId}/`,reviewedPolicyVersions:['disposition-fixture'],policyReviewReference:'Synthetic policy fixture only',qualificationReference:'Synthetic executor fixture only',reviewedAt:'2026-11-13T00:00:00Z',expiresAt:'2026-11-16T00:00:00Z',mode:'synthetic_test'},transport});}
 async function dispositionRequest(batchId:string){vi.stubEnv('PACKPROOF_SOURCE_DISPOSITION_ENABLED','true');await act(batchId,'policy_assigned',{policy:expiredPolicy('disposition-fixture')});const review=await readSourceRetentionReview(deps,w,batchId);return (await requestSourceDisposition(deps,w,batchId,{impactSha256:review.impactSha256,reason:'Synthetic complete shared-source impact review'},`disposition-${++sequence}`)).value;}
 async function dispositionApprove(request:Awaited<ReturnType<typeof dispositionRequest>>){return approveSourceDisposition(deps,secondAdmin,request.id,{impactSha256:request.impactSha256,reason:'Synthetic independent approval',approve:true},`disposition-approve-${++sequence}`);}
+it('preserves the legacy no-work impact hash for an existing request while pending dependencies still block independent approval',async()=>{
+ vi.stubEnv('PACKPROOF_SOURCE_DISPOSITION_ENABLED','true');const f=await fixture();await act(f.batchId,'policy_assigned',{policy:expiredPolicy('disposition-fixture')});
+ const review=await readSourceRetentionReview(deps,w,f.batchId),legacyIdentity=Object.fromEntries(['schema','batchId','source','original','relatedRecordProtection','rowCount','counts','cases','policyEventId','policy','events','retention'].map(key=>[key,review[key as keyof typeof review]])),legacyHash=sha256Hex(canonicalize(legacyIdentity));
+ expect(review.pendingOriginalWork).toMatchObject({pending:false,count:0});expect(review.impactSha256).toBe(legacyHash);
+ const request=(await requestSourceDisposition(deps,w,f.batchId,{impactSha256:legacyHash,reason:'Synthetic retained pre120 review hash'},`legacy-request-${++sequence}`)).value;
+ await shipmentWork(f.batchId,'pending');const pending=await readSourceRetentionReview(deps,w,f.batchId);expect(pending.impactSha256).not.toBe(legacyHash);expect(pending.retention.eligibleForDispositionReview).toBe(false);
+ await expect(dispositionApprove(request)).rejects.toMatchObject({code:'SOURCE_RETENTION_IMPACT_CHANGED'});
+ await shipmentWork(f.batchId,'unavailable');expect((await readSourceRetentionReview(deps,w,f.batchId)).impactSha256).toBe(legacyHash);await dispositionApprove(request);
+ let deleted=0;const qualified=dispositionStore({async headExact(t){const value=await store.get(t.key);return value?{versionId:'retention-original-version',sha256:sha256Hex(value.body),byteSize:value.body.length}:null;},async deleteExact(t){deleted++;store.unavailable.add(t.key);}});
+ await processSourceDispositions({...deps,sourceDisposition:qualified});expect(deleted).toBe(1);expect((await readSourceDisposition(deps,w,request.id)).state).toBe('succeeded');
+});
+it('protects the exact original while durable shipment work is pending and rechecks after independent approval',async()=>{
+ vi.stubEnv('PACKPROOF_SOURCE_DISPOSITION_ENABLED','true');const f=await fixture(),other=await fixture();await act(f.batchId,'policy_assigned',{policy:expiredPolicy('disposition-fixture')});
+ const before=await readSourceRetentionReview(deps,w,f.batchId);expect(before.retention.eligibleForDispositionReview).toBe(true);
+ await shipmentWork(other.batchId,'pending');expect((await readSourceRetentionReview(deps,w,f.batchId)).impactSha256).toBe(before.impactSha256);
+ await shipmentWork(f.batchId,'pending');const pending=await readSourceRetentionReview(deps,w,f.batchId);expect(pending.pendingOriginalWork).toMatchObject({pending:true,count:1});expect(pending.pendingOriginalWork.cases[0].caseId).toBe(f.caseIds[0]);expect(pending.impactSha256).not.toBe(before.impactSha256);
+ await expect(requestSourceDisposition(deps,w,f.batchId,{impactSha256:pending.impactSha256,reason:'Synthetic pending original protection'},'pending-work-request')).rejects.toMatchObject({code:'SOURCE_RETENTION_PROTECTED'});
+ for(const terminal of ['complete','unavailable'] as const){await shipmentWork(f.batchId,terminal);const review=await readSourceRetentionReview(deps,w,f.batchId);expect(review.pendingOriginalWork.pending).toBe(false);expect(review.retention.eligibleForDispositionReview).toBe(true);}
+ const request=await dispositionRequest(f.batchId);await dispositionApprove(request);await shipmentWork(f.batchId,'pending');let deleted=0;
+ const qualified=dispositionStore({async headExact(t){const value=await store.get(t.key);return value?{versionId:'retention-original-version',sha256:sha256Hex(value.body),byteSize:value.body.length}:null;},async deleteExact(){deleted++;}});
+ await processSourceDispositions({...deps,sourceDisposition:qualified});expect(deleted).toBe(0);expect((await readSourceDisposition(deps,w,request.id)).state).toBe('blocked');expect(await store.get(f.key)).not.toBeNull();await shipmentWork(other.batchId,'unavailable');await shipmentWork(f.batchId,'unavailable');
+});
+it('preserves an approved original when real receipt reconciliation queues a replay before execution',async()=>{
+ const f=await fixture(),request=await dispositionRequest(f.batchId);await dispositionApprove(request);
+ const replay=await resumeTypedImport(deps,actor,f.batchId,`retention-reconcile-${++sequence}`);expect(replay.value).toMatchObject({state:'queued',counts:{acceptedLinked:1,processing:0}});
+ const review=await readSourceRetentionReview(deps,w,f.batchId);expect(review.retention.eligibleForDispositionReview).toBe(false);expect(review.retention.reasons).toContain('Reconcile the complete source receipt before original disposition');expect(review.impactSha256).not.toBe(request.impactSha256);
+ let deleted=0;const qualified=dispositionStore({async headExact(t){const value=await store.get(t.key);return value?{versionId:'retention-original-version',sha256:sha256Hex(value.body),byteSize:value.body.length}:null;},async deleteExact(){deleted++;}});
+ await processSourceDispositions({...deps,sourceDisposition:qualified});expect(deleted).toBe(0);expect((await readSourceDisposition(deps,w,request.id)).state).toBe('blocked');expect(await store.get(f.key)).not.toBeNull();
+ await processPendingTypedImports(deps,1);expect((await readTypedImport(deps,actor,f.batchId)).state).toBe('succeeded');
+});
 it('requires independent approval and never turns a request into deletion without a qualified executor',async()=>{
  const f=await fixture(),request=await dispositionRequest(f.batchId);
  expect(request.state).toBe('requested');expect(request.executionAvailable).toBe(false);
@@ -168,6 +202,7 @@ it('delivers and acknowledges only the completed v2 collector receipt under its 
  await processSourceDispositions({...deps,sourceDisposition:qualified});expect((await readSourceDisposition(deps,w,pending.id)).localSpool.state).toBe('pending');
  const inventory=await readCollectorCompactionCommands(deps,actor);expect(inventory.commands).toHaveLength(1);const command=inventory.commands[0],{commandSha256,...unsignedCommand}=command;expect(commandSha256).toBe(sha256Hex(canonicalize(unsignedCommand)));expect(command).toMatchObject({batchId:preview.value.id,installationId:installation,principalId:actor.principalId,receiptGrantRevision:approved.grantRevision,grantRevision:active.grantRevision,originalSha256:csv.original.sha256});expect(command.receiptGrantRevision).not.toBe(command.grantRevision);
  const permitInput={commandSha256,batchId:command.batchId,originalSha256:command.originalSha256};
+ await shipmentWork(command.batchId,'pending');await expect(authorizeCollectorCompactionPermit(deps,actor,command.id,permitInput,'compaction-pending-shipment-work')).rejects.toMatchObject({code:'SOURCE_RETENTION_PROTECTED'});await shipmentWork(command.batchId,'unavailable');
  await expect(authorizeCollectorCompactionPermit(deps,actor,command.id,{...permitInput,batchId:'unrelated-receipt'},'compaction-wrong-receipt')).rejects.toMatchObject({code:'SOURCE_COMPACTION_COMMAND_CHANGED'});
  const otherPrincipal=await createServicePrincipal(opened.db,clock,w.userId,w.organizationId,{name:'Unrelated compaction source'},'compaction-other-principal'),otherCredential=await issuePartnerCredential(opened.db,clock,w.userId,w.organizationId,otherPrincipal.id,{scopes:[...PARTNER_SCOPES],expiresAt:'2026-12-10T00:00:00Z'},'compaction-other-credential'),otherActor=await authenticatePartner(opened.db,clock,`Bearer ${otherCredential.token}`,w.organizationId,undefined,'compaction-other');
  await expect(authorizeCollectorCompactionPermit(deps,otherActor,command.id,permitInput,'compaction-other-source')).rejects.toMatchObject({code:'SOURCE_COMPACTION_NOT_FOUND'});

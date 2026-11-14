@@ -19,8 +19,9 @@ import {synchronizeOperationalCaseProjection} from '../src/records/projection-wo
 import {getPagedOperationalCase} from '../src/records/reconstruction-pages.js';
 import {actOnSourceRetention,readSourceRetentionReview} from '../src/records/source-retention.js';
 import {requestSourceDisposition,approveSourceDisposition,processSourceDispositions,readSourceDisposition,readCollectorCompactionCommands,authorizeCollectorCompactionPermit,ackCollectorCompactionCommand,createQualifiedSourceDispositionStore} from '../src/records/source-retention-disposition.js';
+import {processPendingShipmentProjections} from '../src/records/shipment-projections.js';
 
-describe('actual typed intake and unlinked replay under119 API and worker roles',()=>{
+describe('actual typed intake and unlinked replay under120 API and worker roles',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,dir:string,deps:TypedImportDeps,actor:PartnerActor,options:RecordsPrivilegeOptions,orderSource:string,loadingSource:string,account:string,w:RecordWorkspace,secondAdmin:RecordWorkspace;
  const suffix=randomBytes(6).toString('hex'),api=`typed_api_${suffix}`,worker=`typed_worker_${suffix}`,org=`org_${suffix}`,site=`site_${suffix}`,member=`member_${suffix}`,source='b'.repeat(40),clock={now:()=>new Date('2026-11-14T12:00:00Z')};
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
@@ -51,7 +52,7 @@ describe('actual typed intake and unlinked replay under119 API and worker roles'
    await opened.db.query(`GRANT INSERT ON platform_action_audit TO ${role}`);
   }
   await opened.db.query(`GRANT INSERT ON api_idempotency TO ${api}`);await opened.db.query(`GRANT UPDATE(response) ON api_idempotency TO ${api}`);
-  const inventory=await recordsMigrationInventory(119);options={runtimeRole:api,workerRole:worker,schema,reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256,throughMigration:119};
+  const inventory=await recordsMigrationInventory(120);options={runtimeRole:api,workerRole:worker,schema,reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256,throughMigration:120};
   const plan=await planRecordsRuntimePrivileges(opened.db,options);for(const sql of plan.statements)await opened.db.query(sql);
   dir=await mkdtemp(path.join(tmpdir(),'recon-role-flow-'));deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','synthetic-role-flow-secret'),devAuth:true};
  },60000);
@@ -75,7 +76,17 @@ describe('actual typed intake and unlinked replay under119 API and worker roles'
   expect((await opened.db.query('SELECT replay_requested FROM record_typed_batches WHERE id=$1',[loading])).rows[0]).toEqual({replay_requested:false});
   for(const role of [api,worker])await asRole(role,db=>verifyRecordsRuntimePrivileges(db,options));
  },30000);
- it('rejects missing effective platform lock columns before119 runtime admission',async()=>{
+ it('retries optional original-dependent work under the120 worker role without reopening its accepted receipt',async()=>{
+  const target=(await opened.db.query<{batch_id:string;case_id:string}>('SELECT work.batch_id,work.case_id FROM record_typed_shipment_work work JOIN record_typed_batches b ON b.id=work.batch_id WHERE b.subscription_id=$1 ORDER BY work.batch_id,work.case_id LIMIT 1',[orderSource])).rows[0];expect(target).toBeDefined();
+  await asRole(worker,db=>db.query("UPDATE record_typed_shipment_work SET state='pending',next_attempt_at='2000-01-01T00:00:00Z',work_revision=work_revision+1 WHERE batch_id=$1 AND case_id=$2",[target.batch_id,target.case_id]));
+  const unavailable=vi.spyOn(deps.objectStore,'get').mockRejectedValueOnce(new Error('Synthetic transient exact-original read failure'));
+  try{expect(await asRole(worker,db=>processPendingShipmentProjections({...deps,db},1))).toEqual({processed:0,blocked:1});}finally{unavailable.mockRestore();}
+  const retry=(await asRole(api,db=>db.query<{state:string;error_code:string;next_attempt_at:Date|string;work_revision:number|string}>('SELECT state,error_code,next_attempt_at,work_revision FROM record_typed_shipment_work WHERE batch_id=$1 AND case_id=$2',[target.batch_id,target.case_id]))).rows[0];expect(retry.state).toBe('pending');expect(retry.error_code).toBe('SHIPMENT_PROJECTION_RETRY_REQUIRED');expect(new Date(retry.next_attempt_at).getTime()).toBeGreaterThan(clock.now().getTime());
+  const later={now:()=>new Date(new Date(retry.next_attempt_at).getTime()+1)};expect(await asRole(worker,db=>processPendingShipmentProjections({...deps,db,clock:later},1))).toEqual({processed:1,blocked:0});
+  const completed=(await asRole(api,db=>db.query<{state:string;work_revision:number|string}>('SELECT state,work_revision FROM record_typed_shipment_work WHERE batch_id=$1 AND case_id=$2',[target.batch_id,target.case_id]))).rows[0];expect(['complete','unavailable']).toContain(completed.state);expect(Number(completed.work_revision)).toBe(Number(retry.work_revision)+1);
+  expect(await asRole(api,db=>readTypedImport({...deps,db},actor,target.batch_id))).toMatchObject({state:'succeeded',counts:{acceptedLinked:1,processing:0}});for(const role of [api,worker])await asRole(role,db=>verifyRecordsRuntimePrivileges(db,options));
+ });
+ it('rejects missing effective platform lock columns before120 runtime admission',async()=>{
   const {inspectReconstructionPlatformLocks}=await import(new URL('../../infra/backend-release/reconstruction-v2-release-review.mjs',import.meta.url).href);
   const inspect=async()=>inspectReconstructionPlatformLocks((await asRole(worker,db=>db.query(`SELECT role,table_name AS table,has_column_privilege(role,format('%I.%I',current_schema(),table_name),'id','UPDATE') AS allowed,has_column_privilege(role,format('%I.%I',current_schema(),table_name),'id','UPDATE WITH GRANT OPTION') AS grantable FROM unnest($1::text[]) roles(role) CROSS JOIN (VALUES ('platform_memberships'),('proofs')) locks(table_name) ORDER BY role,table_name`,[[api,worker]]))).rows,{apiRole:api,workerRole:worker});
   expect((await inspect()).columns).toEqual(['platform_memberships.id','proofs.id']);
@@ -83,7 +94,7 @@ describe('actual typed intake and unlinked replay under119 API and worker roles'
   try{await expect(inspect()).rejects.toThrow('RECONSTRUCTION_PLATFORM_LOCK_PRIVILEGES_REQUIRED');}finally{await opened.db.query(`GRANT UPDATE(id) ON platform_memberships TO ${api}`);}
   await inspect();
  });
- it('materializes explicit cross-case partitions and bounded projections under the119 worker role',async()=>{
+ it('materializes explicit cross-case partitions and bounded projections under the120 worker role',async()=>{
   const references=(id:string):[TypedSourceReference,TypedSourceReference]=>[{namespace:'role-qualified-site',type:'order',externalId:id},{namespace:'role-qualified-site',type:'order_line',externalId:'004',parentExternalId:id}];
   const roots=['PHASE2-A','PHASE2-B'].map((id,index)=>{const [o,l]=references(id);return {...observation(`phase2-order-${index}`,'orderedQuantity'),references:[o,l],assertions:[{...observation('unused','orderedQuantity').assertions[0],subjectReference:l}],relationships:[{from:o,to:l,type:'has_line' as const,quantity:null}]};});
   for(let i=0;i<roots.length;i++)await submit(orderSource,'packproof.order-lines/v1',roots[i],`phase2-order-${i}`);
@@ -102,7 +113,7 @@ describe('actual typed intake and unlinked replay under119 API and worker roles'
   expect((await opened.db.query('SELECT * FROM record_typed_source_identities_v2 WHERE subscription_id=$1',[p.id])).rows).toHaveLength(1);
   for(const role of [api,worker])await asRole(role,db=>verifyRecordsRuntimePrivileges(db,options));
  },30000);
- it('executes independently approved exact-version disposition under the119 worker role',async()=>{
+ it('executes independently approved exact-version disposition under the120 worker role',async()=>{
   // A separately approved local source exercises receipt-bound compaction.
   const installation='role-installation-'+suffix,at=clock.now().toISOString();
   await opened.db.query(`INSERT INTO record_agent_installations(id,organization_id,environment,principal_id,credential_id,integration_account_id,operator_membership_id,location_id,source_name,device_name,version,status,config_revision,approval_user_id,enrollment_expires_at,enrollment_acknowledged_at,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$4,$5,$6,$7,'Role fixture local','Synthetic PC','0.3.0','ready',1,$8,'2026-11-15T12:00:00Z',$9,$9,$9)`,[installation,org,actor.principalId,actor.credentialId,account,member,site,w.userId,at]);

@@ -18,6 +18,8 @@ import {importPartnerOrder,addPartnerBinding} from '../src/platform/partner-proo
 import {sha256Hex} from '../src/hash.js';
 import {canonicalize} from '../src/canonical.js';
 import type {TypedSourceBatch,TypedSourceObservation,TypedSourceReference} from '../src/records/source-contracts.js';
+import type {Database,QueryResult} from '../src/db/database.js';
+import {readProjectionSourceCounter,reconcileProjectionSourceCounter} from '../src/records/projection-store.js';
 
 describe('typed source receipts and operational case writes',()=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,dir:string,deps:TypedImportDeps,owner:string,org:string,member:string,account:string,actor:PartnerActor,otherActor:PartnerActor,subscription:string;
@@ -188,4 +190,116 @@ describe('typed source receipts and operational case writes',()=>{
   // cases can use it; production revocation requires a new explicit source.
   await opened.db.query("UPDATE record_source_subscriptions SET state='approved' WHERE id=$1",[subscription]);
  });
+
+ async function queueChunkReceipt(key:string,count=12,sub=subscription,ns=namespace){
+  const adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,namespace:ns});
+  const rows=Array.from({length:count},(_,i)=>{const n=order(`${key}-${i}`,`${key}-ORDER-${i}`);return {...n,references:n.references.map(adapt),assertions:n.assertions.map(a=>({...a,subjectReference:adapt(a.subjectReference)})),relationships:n.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}))};}),p=await previewTypedImport(deps,actor,envelope(rows,sub,'packproof.order-lines/v1',site,ns),`preview-${key}`);
+  await commitTypedImport(deps,actor,p.value.id,{previewVersion:p.value.previewVersion,originalSha256:p.value.original.sha256,importValidRows:false},`commit-${key}`);
+  return p.value.id;
+ }
+ function observeChunkDatabase(db:Database,afterCommit:(accepted:string[])=>Promise<void>=async()=>{},afterQuery?:(sql:string,params:unknown[]|undefined,result:QueryResult<unknown>)=>Promise<void>,onlyBatchId?:string):Database {
+  return {query:db.query.bind(db),async transaction<T>(work:(tx:Database)=>Promise<T>){
+   const accepted:string[]=[];let renewed=false;
+   const result=await db.transaction(tx=>work({query:async<T>(sql:string,params?:unknown[])=>{
+    // Fault fixtures may select one real queued receipt; all production
+    // eligibility, source authority, row locks and lease checks still execute.
+    const claim=onlyBatchId&&sql.startsWith('SELECT * FROM record_typed_batches WHERE ((state=');
+    const result=await tx.query<T>(claim?sql.replace(' ORDER BY received_at,id LIMIT 1 FOR UPDATE SKIP LOCKED',' AND id=$3 ORDER BY received_at,id LIMIT 1 FOR UPDATE SKIP LOCKED'):sql,claim?[...params!,onlyBatchId]:params);
+    if(sql.startsWith('UPDATE record_typed_batches SET lease_expires_at='))renewed=true;
+    if(sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'"))accepted.push(String(params![0]));
+    await afterQuery?.(sql,params,result);return result;
+   },transaction:tx.transaction.bind(tx)}));
+   if(renewed)await afterCommit(accepted);return result;
+  }};
+ }
+ it('commits at most five rows per prefix, retaining processing accounting and one fenced renewable lease',async()=>{
+  const id=await queueChunkReceipt('CHUNK-PROGRESS'),snapshots:Array<{accepted:number;processing:number;state:string;lease:string|null;expires:number;counterProcessing:number}>=[];
+  await reconcileProjectionSourceCounter(opened.db,clock,subscription);const baseline=(await readProjectionSourceCounter(opened.db,subscription)).counts.processing-12;
+  let instant=clock.now().getTime();const liveClock={now:()=>new Date(instant)};
+  const db=observeChunkDatabase(opened.db,async accepted=>{
+   expect(accepted.length).toBeLessThanOrEqual(5);const view=await readTypedImport({...deps,clock:liveClock},actor,id),row=(await opened.db.query<{lease_token:string;lease_expires_at:Date|string}>('SELECT lease_token,lease_expires_at FROM record_typed_batches WHERE id=$1',[id])).rows[0];
+   snapshots.push({accepted:view.counts.acceptedLinked,processing:view.counts.processing,state:view.state,lease:row.lease_token,expires:row.lease_expires_at?new Date(row.lease_expires_at).getTime():0,counterProcessing:(await readProjectionSourceCounter(opened.db,subscription)).counts.processing});
+   if(view.state==='running')instant+=90000;
+  });
+  expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
+  expect(snapshots.map(s=>[s.accepted,s.processing,s.state])).toEqual([[5,7,'running'],[10,2,'running'],[12,0,'succeeded']]);
+  expect(snapshots.map(s=>s.counterProcessing)).toEqual([baseline+7,baseline+2,baseline]);expect(snapshots[0].lease).toBe(snapshots[1].lease);expect(snapshots[1].expires).toBeGreaterThan(snapshots[0].expires);
+ });
+ for(const fault of ['raw','payload','missing'] as const)it(`validates ${fault} on the final retained row before committing any accepted prefix`,async()=>{
+  const key=`CHUNK-PREVALIDATE-${fault}`,id=await queueChunkReceipt(key);let injected=false;
+  const db=observeChunkDatabase(opened.db,undefined,async(sql,params,result)=>{if(!injected&&sql==='SELECT * FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number'&&params?.[0]===id){injected=true;const last=result.rows.at(-1) as {source_values:unknown;payload_sha256:string};if(fault==='raw')last.source_values={corrupted:'last retained row'};if(fault==='payload')last.payload_sha256='f'.repeat(64);if(fault==='missing')result.rows.pop();}});
+  expect(await processPendingTypedImports({...deps,db},1)).toMatchObject({processed:0,blocked:1});expect(injected).toBe(true);
+  expect(await readTypedImport(deps,actor,id)).toMatchObject({state:'blocked_policy',errorCode:fault==='missing'?'TYPED_RECEIPT_ACCOUNTING_FAILED':'TYPED_ORIGINAL_INTEGRITY_FAILED',counts:{acceptedLinked:0,processing:12}});
+  expect((await opened.db.query('SELECT 1 FROM record_cases WHERE root_external_id LIKE $1',[`${key}-ORDER-%`])).rows).toHaveLength(0);
+ });
+ it('rolls back a failed chunk and resumes its durable prefix without duplicate case or outbox effects',async()=>{
+  const id=await queueChunkReceipt('CHUNK-RETRY'),ids=(await opened.db.query<{id:string}>('SELECT id FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number',[id])).rows.map(r=>r.id);let injected=false,instant=clock.now().getTime();const liveClock={now:()=>new Date(instant)};
+  const db=observeChunkDatabase(opened.db,undefined,async(sql,params)=>{if(!injected&&sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'")&&params?.[0]===ids[5]){injected=true;throw new Error('Synthetic mid-chunk retry');}});
+  expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:1});
+  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'queued',counts:{acceptedLinked:5,processing:7}});
+  const before=(await opened.db.query<{id:string;revision:number;n:number}>(`SELECT c.id,c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id)n FROM record_cases c WHERE c.root_external_id LIKE 'CHUNK-RETRY-ORDER-%' ORDER BY c.id`)).rows;expect(before).toHaveLength(5);
+  instant+=2000;expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
+  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'succeeded',counts:{acceptedLinked:12,processing:0}});
+  for(const old of before){const after=(await opened.db.query<{revision:number;n:number}>('SELECT c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id)n FROM record_cases c WHERE c.id=$1',[old.id])).rows[0];expect(after).toEqual({revision:old.revision,n:old.n});}
+  expect((await opened.db.query('SELECT id FROM record_case_assertions WHERE batch_id=$1',[id])).rows).toHaveLength(12);
+ });
+ for(const mode of ['expired','replaced'] as const)it(`leaves an ${mode} worker lease untouched and resumes the committed prefix safely`,async()=>{
+  const id=await queueChunkReceipt(`CHUNK-${mode.toUpperCase()}`);let instant=clock.now().getTime(),intervened=false;const liveClock={now:()=>new Date(instant)};
+  const db=observeChunkDatabase(opened.db,async()=>{if(intervened)return;intervened=true;instant+=121000;if(mode==='replaced')await opened.db.query("UPDATE record_typed_batches SET lease_token='synthetic-new-worker',lease_expires_at=$2 WHERE id=$1",[id,new Date(instant+120000).toISOString()]);});
+  expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:0});
+  const held=(await opened.db.query<{state:string;lease_token:string;error_code:string|null}>('SELECT state,lease_token,error_code FROM record_typed_batches WHERE id=$1',[id])).rows[0];expect(held.state).toBe('running');expect(held.error_code).toBeNull();if(mode==='replaced')expect(held.lease_token).toBe('synthetic-new-worker');
+  expect((await readTypedImport({...deps,clock:liveClock},actor,id)).counts).toMatchObject({acceptedLinked:5,processing:7});
+  instant+=121000;expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});expect((await readTypedImport({...deps,clock:liveClock},actor,id)).counts).toMatchObject({acceptedLinked:12,processing:0});
+ });
+ for(const boundary of ['authorization','audit'] as const)it(`rolls back when lease expiry occurs during final ${boundary} checks`,async()=>{
+  const count=boundary==='audit'?2:12,id=await queueChunkReceipt(`CHUNK-END-EXPIRY-${boundary}`,count);let instant=clock.now().getTime(),accepted=0,expired=false;const liveClock={now:()=>new Date(instant)};
+  const db=observeChunkDatabase(opened.db,undefined,async(sql)=>{
+   if(sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'"))accepted++;
+   if(!expired&&(boundary==='authorization'&&accepted===5&&sql.startsWith('SELECT control_revision,paused FROM record_connection_state')||boundary==='audit'&&accepted===2&&sql.startsWith('INSERT INTO platform_action_audit'))){expired=true;instant+=121000;}
+  });
+  expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:0});expect(expired).toBe(true);
+  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'running',errorCode:null,counts:{acceptedLinked:0,processing:count}});
+  expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
+ });
+ for(const mode of ['source_grant','credential','principal','site'] as const)it(`checks ${mode} authority again before accepting the next chunk`,async()=>{
+  const savedActor=actor,savedMember=member;let revoked=false;
+  try{
+   let sub=subscription,ns=namespace;
+   if(mode==='credential'||mode==='principal'){
+    const principal=mode==='principal'?(await createServicePrincipal(opened.db,clock,owner,org,{name:'Synthetic revoked chunk principal'},'chunk-revoked-principal')).id:actor.principalId;
+    const token=await issuePartnerCredential(opened.db,clock,owner,org,principal,{scopes:[...PARTNER_SCOPES],expiresAt:'2026-11-15T12:00:00Z'},`chunk-revoked-${mode}`);actor=await authenticatePartner(opened.db,clock,`Bearer ${token.token}`,org,undefined,`chunk-revoked-${mode}`);
+    if(mode==='principal'){ns='chunk-revoked-principal';sub=await source('packproof.order-lines/v1',site,ns);}
+   }
+   if(mode==='source_grant'){ns='chunk-revoked-source-grant';sub=await source('packproof.order-lines/v1',site,ns);}
+   if(mode==='site'){
+    const user=await insertUser(opened.db,clock);member='chunk-location-operator';await opened.db.query("INSERT INTO platform_memberships(id,organization_id,user_id,role,location_scoped,created_at) VALUES($1,$2,$3,'OPERATOR',true,$4)",[member,org,user,clock.now().toISOString()]);await opened.db.query('INSERT INTO record_membership_locations(membership_id,organization_id,location_id) VALUES($1,$2,$3)',[member,org,site]);ns='chunk-revoked-location';sub=await source('packproof.order-lines/v1',site,ns);
+   }
+   const id=await queueChunkReceipt(`CHUNK-REVOKE-${mode}`,12,sub,ns),activeActor=actor,activeMember=member;
+   const db=observeChunkDatabase(opened.db,async()=>{if(revoked)return;
+    if(mode==='source_grant')await opened.db.query('UPDATE record_source_subscriptions SET grant_revision=grant_revision+1 WHERE id=$1',[sub]);
+    if(mode==='credential')await opened.db.query('UPDATE platform_credentials SET revoked_at=$2 WHERE id=$1',[activeActor.credentialId,clock.now().toISOString()]);
+    if(mode==='principal')await opened.db.query('UPDATE platform_principals SET revoked_at=$2 WHERE id=$1',[activeActor.principalId,clock.now().toISOString()]);
+    if(mode==='site')await opened.db.query('DELETE FROM record_membership_locations WHERE membership_id=$1 AND organization_id=$2 AND location_id=$3',[activeMember,org,site]);revoked=true;
+   });
+   expect(await processPendingTypedImports({...deps,db},1)).toMatchObject({processed:0,blocked:1});const row=(await opened.db.query<{state:string;accepted:number;processing:number}>(`SELECT b.state,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='accepted_linked')accepted,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='processing')processing FROM record_typed_batches b WHERE b.id=$1`,[id])).rows[0];expect(row).toEqual({state:'blocked_policy',accepted:5,processing:7});
+  }finally{
+   // Revoked principals, credentials and source/site grants stay revoked.
+   // Each test uses its own grant; only local fixture variables are restored.
+   actor=savedActor;member=savedMember;
+  }
+ });
+ it('keeps an explicit replay atomic when a later reassociation fails',async()=>{
+  const id=await queueChunkReceipt('CHUNK-ATOMIC-REPLAY');await processPendingTypedImports({...deps,db:observeChunkDatabase(opened.db,undefined,undefined,id)},1);const original=await readTypedImport(deps,actor,id);
+  // An explicit external-system crosswalk preserves the source order parent;
+  // a different order in the same namespace correctly remains a conflict.
+  const targetNs='chunk-replay-target',targetSub=await source('packproof.order-lines/v1',site,targetNs),targetId=await queueChunkReceipt('CHUNK-REPLAY-TARGET',1,targetSub,targetNs);await processPendingTypedImports({...deps,db:observeChunkDatabase(opened.db,undefined,undefined,targetId)},1);const target=await readTypedImport(deps,actor,targetId),w=await requireRecordWorkspace(opened.db,owner,org,'sandbox',true);
+  expect(original).toMatchObject({state:'succeeded',counts:{acceptedLinked:12,processing:0}});
+  for(let i=0;i<12;i++)await approveCaseCrosswalk(opened.db,clock,w,{caseId:target.caseIds[0],locationId:site,namespace,type:'order',externalId:`CHUNK-ATOMIC-REPLAY-ORDER-${i}`,ruleVersion:'chunk-replay/1',reason:'Synthetic owner-approved atomic replay target'},`chunk-replay-map-${i}`);
+  await resumeTypedImport(deps,actor,id,'chunk-atomic-replay');const before=(await opened.db.query<{id:string;revision:number}>('SELECT id,revision FROM record_cases WHERE id=ANY($1::text[])',[original.caseIds])).rows;let injected=false;const statusWrites:string[]=[];let claimedId:string|null=null;
+  const db=observeChunkDatabase(opened.db,async()=>{throw new Error('Explicit replay must not enter chunk renewal');},async(sql,params,result)=>{if(sql.startsWith('SELECT * FROM record_typed_batches WHERE ((state='))claimedId=String((result.rows[0] as {id?:string}|undefined)?.id??'none');if(sql.startsWith('UPDATE record_typed_rows SET status='))statusWrites.push(`${sql.slice(0,100)}:${String(params?.[0])}`);if(!injected&&sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'")&&params?.[0]===original.rows[6].id){injected=true;throw new Error('Synthetic later replay failure');}},id);
+  expect(await processPendingTypedImports({...deps,db},1),JSON.stringify({claimedId,expected:id,target:original.rows[6].id,statusWrites})).toMatchObject({processed:0,blocked:1});expect(injected).toBe(true);
+  expect((await readTypedImport(deps,actor,id)).rows.map(r=>r.caseId)).toEqual(original.rows.map(r=>r.caseId));expect((await opened.db.query<{id:string;revision:number}>('SELECT id,revision FROM record_cases WHERE id=ANY($1::text[])',[original.caseIds])).rows).toEqual(before);
+  expect((await opened.db.query('SELECT id FROM record_case_assertions WHERE batch_id=$1 AND case_id=$2',[id,target.caseIds[0]])).rows).toHaveLength(0);
+ });
+
 });

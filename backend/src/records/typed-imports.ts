@@ -7,11 +7,12 @@ import {newId} from '../ids.js';
 import {idempotent} from '../platform/idempotency.js';
 import {reauthorizePartner,auditOrganization,strictBody,type PartnerActor} from '../platform/organizations.js';
 import {parseTypedSourceBatch,type TypedSourceBatch,type TypedSourceObservation,type TypedSourceRow} from './source-contracts.js';
-import {applyOperationalObservation,attachQualifiedShipmentProofs,currentCaseObservationSql,observationCaseCandidatesSql,currentCaseObservationProjectionSql,currentCaseAssertionSql,currentCaseRelationshipSql,caseObservationSupersededSql} from './cases.js';
+import {applyOperationalObservation,currentCaseObservationSql,observationCaseCandidatesSql,currentCaseObservationProjectionSql,currentCaseAssertionSql,currentCaseRelationshipSql,caseObservationSupersededSql} from './cases.js';
 import {requireTypedSourceAuthority,type SourceSubscriptionConfig} from './source-subscriptions.js';
 import {assertSourceSnapshotBoundary} from './snapshot-boundary.js';
 import {requireReconstructionFeature,reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {validateSourceBackfillAdmission,recordSourceBackfillReceipt,requireSourceBackfillCollection} from './source-backfills.js';
+import {enqueueShipmentProjectionWork,processPendingShipmentProjections} from './shipment-projections.js';
 
 export type TypedImportDeps=Pick<AppDependencies,'db'|'clock'|'objectStore'|'devAuth'>;
 type Outcome='processing'|'accepted_linked'|'accepted_unlinked'|'duplicate'|'conflict'|'quarantined'|'rejected';
@@ -148,9 +149,20 @@ export async function commitTypedImport(deps:TypedImportDeps,a:PartnerActor,id:s
  return {value:await readTypedImport(deps,a,result.value.id),replayed:result.replayed};
 }
 
+async function retainedDerivationSignature(db:Database,batchId:string,rowId:string) {
+ const state=(await db.query(`SELECT r.status,r.case_id,r.supersedes_id,
+  EXISTS(SELECT 1 FROM record_typed_snapshot_versions snapshot WHERE snapshot.observation_id=r.id) snapshot_version,
+  ARRAY(SELECT d.id FROM record_case_association_decisions d WHERE d.observation_id=r.id AND NOT EXISTS(SELECT 1 FROM record_case_association_decisions successor WHERE successor.supersedes_id=d.id) ORDER BY d.id) association_heads,
+  ARRAY(SELECT p.id FROM record_case_row_projections p WHERE p.observation_id=r.id AND NOT EXISTS(SELECT 1 FROM record_case_row_projections successor WHERE successor.supersedes_id=p.id) ORDER BY p.id) projection_heads
+  FROM record_typed_rows r WHERE r.id=$1 AND r.batch_id=$2`,[rowId,batchId])).rows[0];
+ return canonicalize(state);
+}
 async function projectRow(deps:TypedImportDeps,db:Database,j:TypedBatchRow,row:Item,config:SourceSubscriptionConfig) {
  const n=row.normalized!;
  const snapshotPolicy=j.contract.schema==='packproof.typed-source-batch/v2'&&j.contract.identityPolicy?.revision.kind==='source_as_of'&&canonicalize(config.identityPolicy??null)===canonicalize(j.contract.identityPolicy)&&['snapshot','correction','tombstone'].includes(n.observationKind)&&n.sourceAsOf!==null;
+ // New processing rows always invalidate predecessor cases. Accepted replay
+ // needs an actual derivation change; clock-driven retries are not new facts.
+ const beforeDerivation=(snapshotPolicy||n.supersedes)&&['accepted_linked','accepted_unlinked'].includes(row.status)?await retainedDerivationSignature(db,j.id,row.id):null;
  const v2=j.contract.schema==='packproof.typed-source-batch/v2',ledger=v2?'record_typed_source_identities_v2':'record_typed_identities';
  const columns=['organization_id','environment','connection_id','location_id',...(v2?['subscription_id','source_namespace']:[]),'source_event_id','source_revision'];
  const sourceScope=[j.organization_id,j.environment,j.connection_id,j.location_id,...(v2?[j.subscription_id,j.source_namespace]:[])],identity=[...sourceScope,n.sourceEventId,n.sourceRevision],eventParameter=sourceScope.length+1,revisionParameter=sourceScope.length+2;
@@ -183,13 +195,18 @@ async function projectRow(deps:TypedImportDeps,db:Database,j:TypedBatchRow,row:I
  }
  if(!reconstructionFeatureEnabled('reconstruction')){await db.query("UPDATE record_typed_rows SET status='accepted_unlinked',error_code='PROJECTION_DISABLED' WHERE id=$1",[row.id]);return;}
  await applyOperationalObservation(db,deps.clock,{organizationId:j.organization_id,environment:j.environment,locationId:j.location_id,operatorMembershipId:j.operator_membership_id,actor:j.actor_context,batchId:j.id,rowId:row.id,rowNumber:row.row_number,receivedAt:iso(row.received_at),source:j.contract as TypedSourceBatch,casePolicy:config.crossCasePolicy??null},n);
- if(snapshotPolicy||prior){
+ if((snapshotPolicy||prior)&&(beforeDerivation===null||beforeDerivation!==await retainedDerivationSignature(db,j.id,row.id))){
+  // Resolve each candidate case once, then stop at its first eligible retained
+  // predecessor. The witness keeps the complete source and membership checks.
   const affected=(await db.query<{id:string}>(`WITH scoped_old AS MATERIALIZED (
    SELECT old.id,old.case_id,old.status,old.batch_id,b.operator_membership_id AS batch_operator_membership_id FROM record_typed_rows old JOIN record_typed_batches b ON b.id=old.batch_id
    WHERE b.organization_id=$1 AND b.environment=$2 AND b.connection_id=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 AND old.source_event_id=$6 AND old.id<>$7 AND ($8::boolean=false OR (b.subscription_id=$9 AND b.source_namespace=$10)) AND old.status IN ('accepted_linked','accepted_unlinked')
-  ) SELECT DISTINCT c.id FROM scoped_old old CROSS JOIN LATERAL ${observationCaseCandidatesSql('old')} AS candidate_cases(case_id)
-   JOIN record_cases c ON c.id=candidate_cases.case_id AND c.operator_membership_id=old.batch_operator_membership_id
-   WHERE ${currentCaseObservationSql('old','c.id')} AND (${caseObservationSupersededSql('old.id','c.id')})`,[j.organization_id,j.environment,j.connection_id,j.location_id,j.operator_membership_id,n.sourceEventId,row.id,v2,j.subscription_id,j.source_namespace])).rows;
+  ), candidate_case_ids AS MATERIALIZED (
+   SELECT DISTINCT candidate_cases.case_id FROM scoped_old old CROSS JOIN LATERAL ${observationCaseCandidatesSql('old')} AS candidate_cases(case_id)
+  ) SELECT c.id FROM candidate_case_ids candidate_cases
+   CROSS JOIN LATERAL (SELECT c.id,c.operator_membership_id FROM record_cases c WHERE c.id=candidate_cases.case_id OFFSET 0) c
+   WHERE EXISTS(SELECT 1 FROM scoped_old old WHERE c.operator_membership_id=old.batch_operator_membership_id AND c.id IN ${observationCaseCandidatesSql('old')}
+    AND ${currentCaseObservationSql('old','c.id')} AND (${caseObservationSupersededSql('old.id','c.id')}))`,[j.organization_id,j.environment,j.connection_id,j.location_id,j.operator_membership_id,n.sourceEventId,row.id,v2,j.subscription_id,j.source_namespace])).rows;
   for(const c of affected){const updated=(await db.query<{revision:number}>(`UPDATE record_cases SET revision=revision+1,updated_at=$2 WHERE id=$1 RETURNING revision`,[c.id,deps.clock.now().toISOString()])).rows[0];await db.query(`INSERT INTO record_case_outbox(id,case_id,revision,event_type,observation_id,created_at) VALUES($1,$2,$3,'association.corrected',$4,$5)`,[newId('case_event'),c.id,updated.revision,row.id,deps.clock.now().toISOString()]);}
  }
 }
@@ -201,9 +218,44 @@ async function verifyOriginal(deps:TypedImportDeps,j:TypedBatchRow) {
  if(parsed.rows.length!==Number(j.row_count))fail('TYPED_ORIGINAL_INTEGRITY_FAILED','The retained original has inconsistent row accounting',503);
  return parsed;
 }
+/** Shared with the durable shipment bridge; every invocation checks current
+ * authority. A verified original is data integrity evidence, not authority. */
+export function authorizeRetainedTypedImport(deps:TypedImportDeps,db:Database,a:PartnerActor,j:TypedBatchRow,operation:'preview'|'read'|'commit'|'replay'='replay',original?:TypedSourceBatch) {return current(deps,db,a,j,operation,original);}
+export function verifyRetainedTypedOriginal(deps:TypedImportDeps,j:TypedBatchRow) {return verifyOriginal(deps,j);}
 function checkLease(j:TypedBatchRow,token:string,deps:TypedImportDeps) {if(j.state!=='running'||j.lease_token!==token||!j.lease_expires_at||new Date(j.lease_expires_at).getTime()<=deps.clock.now().getTime())fail('TYPED_IMPORT_LEASE_LOST','The worker lease has expired or changed');}
-/** Bounded worker: durable acceptance is independent of projection success.
- * All row outcomes and case/outbox changes commit in the same transaction. */
+function assertRetainedRow(row:Item,original:TypedSourceRow|undefined,config:SourceSubscriptionConfig) {
+ if(!original||original.payloadSha256!==row.payload_sha256||canonicalize(original.normalized)!==canonicalize(row.normalized)||canonicalize(original.raw)!==canonicalize(row.source_values)||canonicalize(original.errors)!==canonicalize(row.errors)||row.source_event_id!==(original.normalized?.sourceEventId??null)||row.source_revision!==(original.normalized?.sourceRevision??null)||row.history_eligibility!==(original.normalized?historyEligibility(original.normalized,config):'unknown'))fail('TYPED_ORIGINAL_INTEGRITY_FAILED','A retained row no longer matches its exact original',503);
+}
+function assertRetainedReceipt(j:TypedBatchRow,rows:Item[],parsed:TypedSourceBatch,config:SourceSubscriptionConfig) {
+ if(rows.length!==Number(j.row_count)||parsed.rows.length!==Number(j.row_count)||new Set(rows.map(row=>row.row_number)).size!==rows.length)fail('TYPED_RECEIPT_ACCOUNTING_FAILED','Source receipt rows are missing or repeated',503);
+ const originals=new Map(parsed.rows.map(row=>[row.rowNumber,row]));
+ for(const row of rows)assertRetainedRow(row,originals.get(row.row_number),config);
+ return originals;
+}
+async function applyRetainedRows(deps:TypedImportDeps,tx:Database,j:TypedBatchRow,rows:Item[],originals:Map<number,TypedSourceRow>,config:SourceSubscriptionConfig) {
+ const projected:string[]=[];
+ for(const row of rows){
+  assertRetainedRow(row,originals.get(row.row_number),config);
+  const history=row.normalized?historyError(row.normalized,config):'SOURCE_ROW_INVALID';
+  if(history){await tx.query("UPDATE record_typed_rows SET status='quarantined',error_code=$2 WHERE id=$1",[row.id,history]);continue;}
+  await projectRow(deps,tx,j,row,config);projected.push(row.id);
+ }
+ if(reconstructionFeatureEnabled('reconstruction')&&projected.length)await enqueueShipmentProjectionWork(tx,deps.clock,j,projected,j.replay_requested);
+}
+async function finishRetainedReceipt(deps:TypedImportDeps,tx:Database,j:TypedBatchRow,token:string,parsed:TypedSourceBatch) {
+ checkLease(j,token,deps);const approved=await current(deps,tx,j.actor_context,j,'replay',parsed);
+ const final=await items(tx,j.id);assertRetainedReceipt(j,final,parsed,approved.config);
+ if(final.some(row=>row.status==='processing'))fail('TYPED_RECEIPT_ACCOUNTING_FAILED','Source receipt still has unfinished rows',503);
+ const bad=final.some(row=>['rejected','quarantined','conflict'].includes(row.status)),good=final.some(row=>['accepted_linked','accepted_unlinked','duplicate'].includes(row.status));
+ checkLease(j,token,deps);
+ await tx.query('UPDATE record_typed_batches SET state=$2,lease_token=NULL,lease_expires_at=NULL,replay_requested=false,updated_at=$3 WHERE id=$1',[j.id,bad?(good?'partially_succeeded':'failed'):'succeeded',deps.clock.now().toISOString()]);
+ await auditOrganization(tx,deps.clock,{actor:j.actor_context,requestId:j.id,operation:'TYPED_SOURCE_PROCESSED',resourceId:j.id});
+ checkLease(j,token,deps);
+}
+/** Fresh receipts expose durable accepted prefixes while their remaining rows
+ * and source counters stay processing. Historical collections recheck their
+ * job authority at every boundary; explicit replays retain the atomic path.
+ * Shipment synthesis runs from separate durable work. */
 export async function processPendingTypedImports(deps:TypedImportDeps,limit=2) {
  if(!reconstructionFeatureEnabled('typedIntake'))return {processed:0,blocked:0,replayed:0};
  let processed=0,blocked=0;
@@ -217,31 +269,44 @@ export async function processPendingTypedImports(deps:TypedImportDeps,limit=2) {
   if(!claimed){if(historical)break;continue;}
   try{
    const parsed=await verifyOriginal(deps,claimed);
-   await deps.db.transaction(async tx=>{
-    await current(deps,tx,claimed.actor_context,claimed,'replay',parsed);await tx.query('SELECT pg_advisory_xact_lock(1347438158,hashtext($1))',[claimed.id]);const j=await batch(tx,claimed.id,true);checkLease(j,token,deps);const approved=await current(deps,tx,j.actor_context,j,'replay',parsed);
-    const rs=await items(tx,j.id);if(rs.length!==j.row_count)fail('TYPED_RECEIPT_ACCOUNTING_FAILED','Source receipt rows are missing',503);
-    for(const row of rs){
-     if(row.status!=='processing'&&!(j.replay_requested&&['accepted_linked','accepted_unlinked'].includes(row.status)))continue;
-     const original=parsed.rows.find(r=>r.rowNumber===row.row_number);
-     if(!original||original.payloadSha256!==row.payload_sha256||canonicalize(original.normalized)!==canonicalize(row.normalized))fail('TYPED_ORIGINAL_INTEGRITY_FAILED','A retained row no longer matches its exact original',503);
-     const history=row.normalized?historyError(row.normalized,approved.config):'SOURCE_ROW_INVALID';
-     if(history){await tx.query("UPDATE record_typed_rows SET status='quarantined',error_code=$2 WHERE id=$1",[row.id,history]);continue;}
-     await projectRow(deps,tx,j,row,approved.config);
-    }
-    if(reconstructionFeatureEnabled('reconstruction'))await attachQualifiedShipmentProofs(tx,deps.clock,j.actor_context,j.id);
-    checkLease(j,token,deps);await current(deps,tx,j.actor_context,j,'replay',parsed);
-    const final=await items(tx,j.id),bad=final.some(r=>['rejected','quarantined','conflict'].includes(r.status)),good=final.some(r=>['accepted_linked','accepted_unlinked','duplicate'].includes(r.status));
-    await tx.query('UPDATE record_typed_batches SET state=$2,lease_token=NULL,lease_expires_at=NULL,replay_requested=false,updated_at=$3 WHERE id=$1',[j.id,bad?(good?'partially_succeeded':'failed'):'succeeded',deps.clock.now().toISOString()]);
-    await auditOrganization(tx,deps.clock,{actor:j.actor_context,requestId:j.id,operation:'TYPED_SOURCE_PROCESSED',resourceId:j.id});
-   });processed++;
+   if(claimed.replay_requested){
+    await deps.db.transaction(async tx=>{
+     await current(deps,tx,claimed.actor_context,claimed,'replay',parsed);await tx.query('SELECT pg_advisory_xact_lock(1347438158,hashtext($1))',[claimed.id]);const j=await batch(tx,claimed.id,true);checkLease(j,token,deps);const approved=await current(deps,tx,j.actor_context,j,'replay',parsed);
+     const rs=await items(tx,j.id),originals=assertRetainedReceipt(j,rs,parsed,approved.config);
+     await applyRetainedRows(deps,tx,j,rs.filter(row=>row.status==='processing'||j.replay_requested&&['accepted_linked','accepted_unlinked'].includes(row.status)),originals,approved.config);
+     await finishRetainedReceipt(deps,tx,j,token,parsed);
+    });
+   }else{
+    let originals:Map<number,TypedSourceRow>|null=null,finished=false;
+    while(!finished)await deps.db.transaction(async tx=>{
+     // Authorization locks precede the receipt and site locks on every chunk.
+     await current(deps,tx,claimed.actor_context,claimed,'replay',parsed);await tx.query('SELECT pg_advisory_xact_lock(1347438158,hashtext($1))',[claimed.id]);const j=await batch(tx,claimed.id,true);checkLease(j,token,deps);const approved=await current(deps,tx,j.actor_context,j,'replay',parsed);
+     await tx.query('SELECT pg_advisory_xact_lock(1347438153,hashtext($1))',[canonicalize([j.organization_id,j.environment,j.location_id])]);
+     // Validate the entire retained receipt before committing any prefix. Later
+     // chunks validate each selected row again against the same exact original.
+     if(!originals)originals=assertRetainedReceipt(j,await items(tx,j.id),parsed,approved.config);
+     const now=deps.clock.now().toISOString(),expires=new Date(deps.clock.now().getTime()+120000).toISOString();
+     const renewal=(await tx.query<{lease_expires_at:Date|string}>(`UPDATE record_typed_batches SET lease_expires_at=$3,updated_at=$4 WHERE id=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>$4 RETURNING lease_expires_at`,[j.id,token,expires,now])).rows[0];
+     if(!renewal)fail('TYPED_IMPORT_LEASE_LOST','The worker lease has expired or changed');j.lease_expires_at=renewal.lease_expires_at;
+     const pending=(await tx.query<Item>("SELECT * FROM record_typed_rows WHERE batch_id=$1 AND status='processing' ORDER BY row_number LIMIT 6",[j.id])).rows;
+     const finalChunk=pending.length<=5,selected=finalChunk?pending:pending.slice(0,5);
+     await applyRetainedRows(deps,tx,j,selected,originals!,approved.config);
+     checkLease(j,token,deps);
+     if(finalChunk)await finishRetainedReceipt(deps,tx,j,token,parsed);else await current(deps,tx,j.actor_context,j,'replay',parsed);
+     checkLease(j,token,deps);
+     finished=finalChunk;
+    });
+   }
+   processed++;
   }catch(error){
    const code=error instanceof DomainError?error.code:'TYPED_IMPORT_RETRY_REQUIRED';
    const retryable=!(error instanceof DomainError)||error.httpStatus>=500&&!['TYPED_ORIGINAL_INTEGRITY_FAILED','TYPED_RECEIPT_ACCOUNTING_FAILED'].includes(code);
    const retry=retryable&&Number(claimed.attempts)<5,at=deps.clock.now().toISOString(),next=new Date(deps.clock.now().getTime()+Math.min(300000,1000*2**Number(claimed.attempts))).toISOString();
-   await deps.db.query('UPDATE record_typed_batches SET state=$3,error_code=$4,lease_token=NULL,lease_expires_at=NULL,updated_at=$5,next_attempt_at=$6 WHERE id=$1 AND lease_token=$2',[claimed.id,token,retry?'queued':'blocked_policy',code,at,next]);blocked++;
+   const changed=await deps.db.query("UPDATE record_typed_batches SET state=$3,error_code=$4,lease_token=NULL,lease_expires_at=NULL,updated_at=$5,next_attempt_at=$6 WHERE id=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>$5",[claimed.id,token,retry?'queued':'blocked_policy',code,at,next]);if(changed.rowCount)blocked++;
   }
  }
  const replayed=await replayPendingTypedRows(deps,25);
+ if(reconstructionFeatureEnabled('reconstruction'))await processPendingShipmentProjections(deps,2);
  return {processed,blocked,replayed};
 }
 /** Indexed, bounded replay. Current source authority is checked again; a
@@ -256,6 +321,7 @@ export async function replayPendingTypedRows(deps:TypedImportDeps,limit=25) {
    const row=(await tx.query<Item>('SELECT * FROM record_typed_rows WHERE id=$1 FOR UPDATE',[r.id])).rows[0];if(!row||row.status!=='accepted_unlinked')return;
    if(approved.verifiedOriginal){const actual=approved.verifiedOriginal.rows.find(r=>r.rowNumber===row.row_number);if(!actual||actual.payloadSha256!==row.payload_sha256||canonicalize(actual.normalized)!==canonicalize(row.normalized))fail('TYPED_ORIGINAL_INTEGRITY_FAILED','A retained row no longer matches its exact original',503);}
    await projectRow(deps,tx,j,row,approved.config);
+   await enqueueShipmentProjectionWork(tx,deps.clock,j,[row.id]);
    const after=(await tx.query<{status:Outcome}>('SELECT status FROM record_typed_rows WHERE id=$1',[row.id])).rows[0];if(after.status==='accepted_linked')linked++;
   });}catch{/* Preserve the accepted row and its original authority for explicit recovery. */}
   await deps.db.query('UPDATE record_typed_rows SET resolution_attempts=resolution_attempts+1 WHERE id=$1',[r.id]);

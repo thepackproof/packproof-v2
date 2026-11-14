@@ -130,8 +130,8 @@ test('reconstruction119 archive refuses the frozen118 source instead of widening
  const directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v5-predecessor-'));
  try{assert.throws(()=>execFileSync('python',[path.join(backfillRoot,'infra/backend-release/backend-source-archive.py'),'c8e3e3e9430edb0354c4af9192c9214fee663b0e',path.join(directory,'source.zip'),'reconstruction-v5'],{cwd:backfillRoot,encoding:'utf8',stdio:'pipe'}),/CONNECT_PROBES_REQUIRED|EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);}finally{rmSync(directory,{recursive:true,force:true});}
 });
-test('exact committed119 Git archive supplies all v5 Docker inputs while frozen118 rejects it',{skip:!committedLookupIndex&&'Requires the exact committed119 candidate; local working files cannot qualify a Git archive'},()=>{
- const root=backfillRoot,head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v5-source-'));
+test('exact frozen119 Git archive supplies all v5 Docker inputs while frozen118 rejects it',{skip:!committedLookupIndex&&'Requires the exact committed119 candidate; local working files cannot qualify a Git archive'},()=>{
+ const root=backfillRoot,head='88150a1f6efcd8c801c5f8071ad7ff1f21574f3b',directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v5-source-'));
  try{
   const archive=path.join(directory,'source.zip'),script=path.join(root,'infra/backend-release/backend-source-archive.py'),run=extra=>JSON.parse(execFileSync('python',[script,head,archive,'reconstruction-v5',...extra],{cwd:root,encoding:'utf8'}));
   const created=run([]),verified=run(['--verify']);assert.deepEqual(verified,created);assert.equal(verified.migrationCount,118);assert.equal(verified.allGitBlobBytesVerified,true);
@@ -139,5 +139,23 @@ test('exact committed119 Git archive supplies all v5 Docker inputs while frozen1
   const names=JSON.parse(execFileSync('python',['-c','import json,sys,zipfile; print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))',archive],{encoding:'utf8'})),dockerfile=execFileSync('git',['show',`${head}:backend/Dockerfile`],{cwd:root,encoding:'utf8'});
   for(const line of dockerfile.split('\n').filter(line=>line.startsWith('COPY ')&&!line.includes('--from=')))for(const input of line.trim().split(/\s+/).slice(1,-1))assert.ok(names.some(name=>name===input||name.startsWith(input+'/')),`missing Docker COPY input ${input}`);
   for(const name of ['reconstruction-v5-release-review.mjs','reconstruction-v5-runtime-preflight.mjs'])assert.ok(names.includes('infra/backend-release/'+name));
+ }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+let committedShipmentWork=false;
+try{execFileSync('git',['cat-file','-e','HEAD:backend/migrations/120_typed_shipment_projection_work.sql'],{cwd:backfillRoot,stdio:'ignore'});committedShipmentWork=true;}catch{}
+test('reconstruction120 archive refuses the frozen119 source instead of widening its profile',()=>{
+ const directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v6-predecessor-'));
+ try{assert.throws(()=>execFileSync('python',[path.join(backfillRoot,'infra/backend-release/backend-source-archive.py'),'88150a1f6efcd8c801c5f8071ad7ff1f21574f3b',path.join(directory,'source.zip'),'reconstruction-v6'],{cwd:backfillRoot,encoding:'utf8',stdio:'pipe'}),/CONNECT_PROBES_REQUIRED|EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);}finally{rmSync(directory,{recursive:true,force:true});}
+});
+test('exact committed120 Git archive supplies all v6 Docker inputs while frozen119 rejects it',{skip:!committedShipmentWork&&'Requires the exact committed120 candidate; local working files cannot qualify a Git archive'},()=>{
+ const root=backfillRoot,head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v6-source-'));
+ try{
+  const archive=path.join(directory,'source.zip'),script=path.join(root,'infra/backend-release/backend-source-archive.py'),run=extra=>JSON.parse(execFileSync('python',[script,head,archive,'reconstruction-v6',...extra],{cwd:root,encoding:'utf8'}));
+  const created=run([]),verified=run(['--verify']);assert.deepEqual(verified,created);assert.equal(verified.migrationCount,119);assert.equal(verified.allGitBlobBytesVerified,true);
+  for(const profile of ['connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5'])assert.throws(()=>execFileSync('python',[script,head,path.join(directory,profile+'.zip'),profile],{cwd:root,encoding:'utf8',stdio:'pipe'}),/EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
+  const names=JSON.parse(execFileSync('python',['-c','import json,sys,zipfile; print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))',archive],{encoding:'utf8'})),dockerfile=execFileSync('git',['show',`${head}:backend/Dockerfile`],{cwd:root,encoding:'utf8'});
+  for(const line of dockerfile.split('\n').filter(line=>line.startsWith('COPY ')&&!line.includes('--from=')))for(const input of line.trim().split(/\s+/).slice(1,-1))assert.ok(names.some(name=>name===input||name.startsWith(input+'/')),`missing Docker COPY input ${input}`);
+  for(const name of ['reconstruction-v6-release-review.mjs','reconstruction-v6-runtime-preflight.mjs'])assert.ok(names.includes('infra/backend-release/'+name));
  }finally{rmSync(directory,{recursive:true,force:true});}
 });

@@ -281,65 +281,79 @@ async function applyPartitionedObservation(db:Database,clock:Clock,x:CaseWriteCo
  return primary;
 }
 
-/** Bridge qualified source shipment snapshots through the existing Proof
- * commands. Sparse/fractional/mixed-unit cases remain cases: the legacy
- * transaction contract cannot represent those quantities without invention. */
-export async function attachQualifiedShipmentProofs(db:Database,clock:Clock,a:PartnerActor,batchId:string) {
- await db.query('SELECT pg_advisory_xact_lock(1347438158,hashtext($1))',[batchId]);
- const batch=(await db.query<{organization_id:string;environment:string;connection_id:string;location_id:string;operator_membership_id:string;source_profile:string;contract:{completeness:{kind:string}};qualified:boolean}>(`SELECT b.organization_id,b.environment,b.connection_id,b.location_id,b.operator_membership_id,b.source_profile,b.contract,(s.configuration->'completenessPolicy'->>'sourceOwnerQualified')::boolean AS qualified FROM record_typed_batches b JOIN record_source_subscription_revisions s ON s.subscription_id=b.subscription_id AND s.revision=b.configuration_revision WHERE b.id=$1 AND b.organization_id=$2 AND b.environment=$3`,[batchId,a.merchantId,a.environment])).rows[0];
- if(!batch||!['packproof.order-lines/v1','packproof.shipment-handling-units/v1'].includes(batch.source_profile))return;
- await db.query('SELECT pg_advisory_xact_lock(1347438153,hashtext($1))',[canonicalize([batch.organization_id,batch.environment,batch.location_id])]);
- const cases=(await db.query<{case_id:string}>(`SELECT DISTINCT c.id case_id FROM record_cases c JOIN record_typed_rows r ON c.id IN ${observationCaseCandidatesSql('r')} AND ${currentCaseObservationSql('r','c.id')} WHERE r.batch_id=$1 AND c.organization_id=$2 AND c.environment=$3 AND c.location_id=$4 AND c.operator_membership_id=$5`,[batchId,a.merchantId,a.environment,batch.location_id,batch.operator_membership_id])).rows;
- for(const {case_id:caseId}of cases){
-  const observations=(await db.query<{id:string;batch_id:string;normalized:TypedSourceObservation}>(`SELECT r.id,r.batch_id,${currentCaseObservationProjectionSql('r','$1')} normalized FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE ${currentCaseObservationSql('r','$1')} AND b.connection_id=$2 AND b.organization_id=$3 AND b.environment=$4 AND b.location_id=$5 AND b.operator_membership_id=$6 AND NOT(${caseObservationSupersededSql('r.id','$1')})`,[caseId,batch.connection_id,a.merchantId,a.environment,batch.location_id,batch.operator_membership_id])).rows;
-  const descriptions=new Map<string,Set<string>>(),shipments=new Map<string,{ref:TypedSourceReference;lines:Map<string,Map<string,{amount:string;unit:string}>>;rows:Set<string>}>();
-  for(const row of observations){const n=row.normalized;
-   for(const value of n.assertions)if(value.property==='description'&&typeof value.value==='string'){const key=refKey(value.subjectReference),set=descriptions.get(key)??new Set<string>();set.add(value.value);descriptions.set(key,set);}
-   for(const shipment of n.references.filter(r=>r.type==='shipment')){
-    const group=shipments.get(refKey(shipment))??{ref:shipment,lines:new Map(),rows:new Set<string>()};
-    for(const relation of n.relationships.filter(r=>r.type==='fulfills'&&refKey(r.from)===refKey(shipment)&&r.to.type==='order_line')){
-     const key=refKey(relation.to),values=group.lines.get(key)??new Map();
-     for(const value of n.assertions.filter(v=>v.property==='allocatedQuantity'&&refKey(v.subjectReference)===key&&typeof v.value==='object'))values.set(canonicalize(value.value),value.value as {amount:string;unit:string});
-     group.lines.set(key,values);group.rows.add(row.id);
-    }
-    shipments.set(refKey(shipment),group);
+/** One optional legacy-shipment projection unit. Source cases remain the
+ * primary record; this bounded bridge may explicitly decline large cases. */
+export interface ShipmentProofStepInput {
+ caseId:string;afterShipmentKey:string|null;caseRevision:number|null;check:()=>void;
+ maxRows?:number;maxBytes?:number;maxGroups?:number;
+}
+export interface ShipmentProofStepResult {
+ state:'progress'|'complete'|'unavailable';cursorKey:string|null;caseRevision:number;
+ processedGroups:number;linkedGroups:number;errorCode:string|null;resetProgress:boolean;
+}
+export async function attachQualifiedShipmentProofs(db:Database,clock:Clock,a:PartnerActor,batchId:string,input:ShipmentProofStepInput):Promise<ShipmentProofStepResult> {
+ const check=input.check,query=async<T>(sql:string,params:unknown[]=[])=>{check();const result=await db.query<T>(sql,params);check();return result;};
+ const maxRows=input.maxRows??1000,maxBytes=input.maxBytes??8*1024*1024,maxGroups=input.maxGroups??1000;
+ const batch=(await query<{organization_id:string;environment:string;connection_id:string;location_id:string;operator_membership_id:string;source_profile:string;contract:{completeness:{kind:string}};qualified:boolean}>(`SELECT b.organization_id,b.environment,b.connection_id,b.location_id,b.operator_membership_id,b.source_profile,b.contract,(s.configuration->'completenessPolicy'->>'sourceOwnerQualified')::boolean AS qualified FROM record_typed_batches b JOIN record_source_subscription_revisions s ON s.subscription_id=b.subscription_id AND s.revision=b.configuration_revision WHERE b.id=$1 AND b.organization_id=$2 AND b.environment=$3`,[batchId,a.merchantId,a.environment])).rows[0];
+ const c=batch?(await query<{revision:string|number}>(`SELECT revision FROM record_cases WHERE id=$1 AND organization_id=$2 AND environment=$3 AND location_id=$4 AND operator_membership_id=$5`,[input.caseId,batch.organization_id,batch.environment,batch.location_id,batch.operator_membership_id])).rows[0]:undefined;
+ const revision=Number(c?.revision??1),result=(state:ShipmentProofStepResult['state'],cursorKey:string|null,errorCode:string|null=null,processedGroups=0,linkedGroups=0,caseRevision=revision):ShipmentProofStepResult=>({state,cursorKey,errorCode,processedGroups,linkedGroups,caseRevision,resetProgress:input.caseRevision!==null&&input.caseRevision!==revision});
+ if(!batch||!c)return result('unavailable',null,'SHIPMENT_PROJECTION_SCOPE_CHANGED');
+ if(!['packproof.order-lines/v1','packproof.shipment-handling-units/v1'].includes(batch.source_profile))return result('complete',null);
+ const scoped=[input.caseId,batch.connection_id,batch.organization_id,batch.environment,batch.location_id,batch.operator_membership_id];
+ const candidates=`(SELECT p.observation_id FROM record_case_row_projections p WHERE p.case_id=$1 AND p.state='linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections successor WHERE successor.supersedes_id=p.id) UNION SELECT old.id FROM record_typed_rows old WHERE old.case_id=$1 AND old.status='accepted_linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections any_projection WHERE any_projection.observation_id=old.id))`;
+ const where=`r.id IN ${candidates} AND ${currentCaseObservationSql('r','$1')} AND b.connection_id=$2 AND b.organization_id=$3 AND b.environment=$4 AND b.location_id=$5 AND b.operator_membership_id=$6 AND NOT(${caseObservationSupersededSql('r.id','$1')})`;
+ const projection=currentCaseObservationProjectionSql('r','$1');
+ // Measure the complete active input before transferring any normalized rows.
+ const bounds=(await query<{n:string;bytes:string;groups:string}>(`WITH eligible AS MATERIALIZED (SELECT ${projection} normalized FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE ${where}) SELECT COUNT(*)::text n,COALESCE(SUM(octet_length(normalized::text)),0)::text bytes,(SELECT COUNT(DISTINCT (ref->>'namespace',ref->>'externalId'))::text FROM eligible e CROSS JOIN LATERAL jsonb_array_elements(e.normalized->'references') ref WHERE ref->>'type'='shipment') groups FROM eligible`,scoped)).rows[0];
+ if(BigInt(bounds.n)>BigInt(maxRows)||BigInt(bounds.bytes)>BigInt(maxBytes)||BigInt(bounds.groups)>BigInt(maxGroups))return result('unavailable',null,'SHIPMENT_PROJECTION_CASE_LIMIT');
+ const observations=(await query<{id:string;batch_id:string;normalized:TypedSourceObservation}>(`SELECT r.id,r.batch_id,${projection} normalized FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE ${where} ORDER BY r.id LIMIT $7`,[...scoped,maxRows+1])).rows;
+ if(observations.length>maxRows)return result('unavailable',null,'SHIPMENT_PROJECTION_CASE_LIMIT');
+ const descriptions=new Map<string,Set<string>>(),shipments=new Map<string,{ref:TypedSourceReference;lines:Map<string,Map<string,{amount:string;unit:string}>>;rows:Set<string>}>();
+ let bytes=0;
+ for(const row of observations){check();const n=row.normalized;bytes+=Buffer.byteLength(canonicalize(n));if(bytes>maxBytes)return result('unavailable',null,'SHIPMENT_PROJECTION_CASE_LIMIT');
+  for(const value of n.assertions){check();if(value.property==='description'&&typeof value.value==='string'){const key=refKey(value.subjectReference),set=descriptions.get(key)??new Set<string>();set.add(value.value);descriptions.set(key,set);}}
+  for(const shipment of n.references.filter(r=>r.type==='shipment')){check();const key=operationalShipmentKey(shipment,batch.location_id),group=shipments.get(key)??{ref:shipment,lines:new Map(),rows:new Set<string>()};
+   for(const relation of n.relationships){check();if(relation.type!=='fulfills'||refKey(relation.from)!==refKey(shipment)||relation.to.type!=='order_line')continue;const line=refKey(relation.to),values=group.lines.get(line)??new Map();
+    for(const value of n.assertions){check();if(value.property==='allocatedQuantity'&&refKey(value.subjectReference)===line&&typeof value.value==='object')values.set(canonicalize(value.value),value.value as {amount:string;unit:string});}
+    group.lines.set(line,values);group.rows.add(row.id);
    }
-  }
-  for(const group of shipments.values()){
-   await reauthorizePartner(db,clock,a,'proofs:write');
-   const binding=(await db.query<{proof_id:string}>(`SELECT b.proof_id FROM platform_external_bindings b JOIN platform_proof_ownership o ON o.proof_id=b.proof_id JOIN record_state s ON s.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id=$4 AND s.location_id=$5 AND o.operator_membership_id=$6`,[a.merchantId,a.environment,batch.connection_id,operationalShipmentKey(group.ref,batch.location_id),batch.location_id,batch.operator_membership_id])).rows;
-   let proofId=binding.length===1?binding[0].proof_id:null;
-   if(binding.length>1)continue;
-   if(!proofId){
-    // A physical shipment shared by orders cannot be synthesized from one
-    // order's allocation subset. Existing qualified whole-shipment bindings
-    // can still be members of every authorized case.
-    if((await db.query(`SELECT 1 FROM record_case_row_projections p WHERE p.observation_id=ANY($1::text[]) AND p.state='linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections successor WHERE successor.supersedes_id=p.id) GROUP BY p.observation_id HAVING COUNT(DISTINCT p.case_id)>1 LIMIT 1`,[[...group.rows]])).rows[0])continue;
-    if(!batch.qualified||batch.contract.completeness.kind==='unknown'||(await db.query("SELECT 1 FROM record_typed_rows WHERE batch_id=$1 AND status NOT IN ('accepted_linked','duplicate') LIMIT 1",[batchId])).rows[0])continue;
-    if(!group.lines.size||[...group.lines.values()].some(v=>v.size!==1))continue;
-    const quantities=[...group.lines.values()].map(v=>[...v.values()][0]);
-    if(quantities.some(q=>q.unit!=='each'||!/^\d+$/.test(q.amount)||BigInt(q.amount)<1n))continue;
-    const total=quantities.reduce((sum,q)=>sum+BigInt(q.amount),0n);if(total>100000n)continue;
-    const shipmentDescriptions=descriptions.get(refKey(group.ref));
-    let title:string|null=null;
-    if(shipmentDescriptions?.size===1)title=[...shipmentDescriptions][0];
-    else {
-     const lineTitles=[...group.lines.keys()].sort().map(key=>descriptions.get(key));
-     if(lineTitles.some(t=>!t||t.size!==1))continue;
-     title=lineTitles.map(t=>[...t!][0]).join('; ');
-    }
-    if(!title||title.length>200)continue;
-    const externalId=`typed-shipment:${sha256Hex(canonicalize([batch.connection_id,batch.location_id,group.ref.namespace,group.ref.externalId]))}`;
-    const created=await importPartnerOrder(db,clock,a,{integrationAccountId:batch.connection_id,externalId,operatorMembershipId:batch.operator_membership_id,transaction:{itemTitle:title,quantity:Number(total)}});proofId=created.proofId;
-    const now=clock.now().toISOString(),hash=sha256Hex(canonicalize({batchId,rows:[...group.rows].sort(),title,quantity:String(total)}));
-    await db.query("INSERT INTO platform_external_bindings(merchant_id,environment,integration_account_id,resource_type,external_id,proof_id,snapshot_sha256,created_at) VALUES($1,$2,$3,'SHIPMENT',$4,$5,$6,$7)",[a.merchantId,a.environment,batch.connection_id,operationalShipmentKey(group.ref,batch.location_id),proofId,hash,now]);
-    await db.query('INSERT INTO record_state(proof_id,organization_id,environment,title,reference,location_id,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(proof_id) DO NOTHING',[proofId,a.merchantId,a.environment,title,group.ref.externalId,batch.location_id,now]);
-    await appendAudit(db,{proofId,actorUserId:a.actorUserId,eventType:'TYPED_SOURCE_SHIPMENT_IMPORTED',eventData:{batchId,caseId,sourceRows:[...group.rows].sort(),sourceNamespace:group.ref.namespace,shipmentReference:group.ref.externalId,quantityBasis:'sum_of_explicit_each_allocations',descriptionBasis:shipmentDescriptions?.size===1?'source_shipment_description':'source_line_descriptions'},at:clock.now()});
-   }
-   await authorizePartnerProof(db,clock,a,proofId,'proofs:read');
-   for(const sourceRowId of group.rows)await db.query('INSERT INTO record_case_members(case_id,proof_id,organization_id,environment,source_row_id,created_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING',[caseId,proofId,a.merchantId,a.environment,sourceRowId,clock.now().toISOString()]);
+   shipments.set(key,group);if(shipments.size>maxGroups)return result('unavailable',null,'SHIPMENT_PROJECTION_CASE_LIMIT');
   }
  }
+ const keys=[...shipments.keys()].sort(),after=input.caseRevision===revision?input.afterShipmentKey:null,key=keys.find(k=>after===null||k>after);
+ if(!key)return result('complete',after);
+ const group=shipments.get(key)!,last=key===keys.at(-1),advance=(linked=false,caseRevision=revision)=>result(last?'complete':'progress',key,null,1,Number(linked),caseRevision);
+ await reauthorizePartner(db,clock,a,'proofs:write');check();
+ const binding=(await query<{proof_id:string}>(`SELECT b.proof_id FROM platform_external_bindings b JOIN platform_proof_ownership o ON o.proof_id=b.proof_id JOIN record_state s ON s.proof_id=b.proof_id WHERE b.merchant_id=$1 AND b.environment=$2 AND b.integration_account_id=$3 AND b.resource_type='SHIPMENT' AND b.external_id=$4 AND s.location_id=$5 AND o.operator_membership_id=$6`,[a.merchantId,a.environment,batch.connection_id,key,batch.location_id,batch.operator_membership_id])).rows;
+ if(binding.length>1)return advance();
+ let proofId=binding[0]?.proof_id??null,created=false;
+ if(!proofId){
+  // A physical shipment can span different one-case rows. Inspect only an
+  // opaque existence result across the exact connection/namespace/site/operator scope.
+  const shared=(await query<{shared:boolean}>(`SELECT EXISTS(SELECT 1 FROM record_case_entities e JOIN record_cases peer ON peer.id=e.case_id JOIN record_typed_rows r ON r.id IN (SELECT p.observation_id FROM record_case_row_projections p WHERE p.case_id=peer.id AND p.state='linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections s WHERE s.supersedes_id=p.id) UNION SELECT source.id FROM record_typed_rows source WHERE source.case_id=peer.id AND source.status='accepted_linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections p WHERE p.observation_id=source.id)) JOIN record_typed_batches peer_row_batch ON peer_row_batch.id=r.batch_id AND peer_row_batch.connection_id=$8 WHERE e.organization_id=$1 AND e.environment=$2 AND e.entity_type='shipment' AND e.namespace=$3 AND e.external_id=$4 AND peer.id<>$5 AND peer.organization_id=$1 AND peer.environment=$2 AND peer.location_id=$6 AND peer.operator_membership_id=$7 AND ${currentCaseObservationSql('r','peer.id')} AND NOT ${caseObservationSupersededSql('r.id','peer.id')} AND EXISTS(SELECT 1 FROM jsonb_array_elements(${currentCaseObservationProjectionSql('r','peer.id')}->'references') ref WHERE ref->>'type'='shipment' AND ref->>'namespace'=$3 AND ref->>'externalId'=$4)) shared`,[batch.organization_id,batch.environment,group.ref.namespace,group.ref.externalId,input.caseId,batch.location_id,batch.operator_membership_id,batch.connection_id])).rows[0];
+  if(shared.shared)return advance();
+  if((await query(`SELECT 1 FROM record_case_row_projections p WHERE p.observation_id=ANY($1::text[]) AND p.state='linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections successor WHERE successor.supersedes_id=p.id) GROUP BY p.observation_id HAVING COUNT(DISTINCT p.case_id)>1 LIMIT 1`,[[...group.rows]])).rows[0])return advance();
+  if(!batch.qualified||batch.contract.completeness.kind==='unknown'||(await query("SELECT 1 FROM record_typed_rows WHERE batch_id=$1 AND status NOT IN ('accepted_linked','duplicate') LIMIT 1",[batchId])).rows[0])return advance();
+  if(!group.lines.size||[...group.lines.values()].some(v=>v.size!==1))return advance();
+  const quantities=[...group.lines.values()].map(v=>[...v.values()][0]);
+  if(quantities.some(q=>q.unit!=='each'||!/^\d+$/.test(q.amount)||BigInt(q.amount)<1n))return advance();
+  const total=quantities.reduce((sum,q)=>sum+BigInt(q.amount),0n);if(total>100000n)return advance();
+  const shipmentDescriptions=descriptions.get(refKey(group.ref));let title:string|null=null;
+  if(shipmentDescriptions?.size===1)title=[...shipmentDescriptions][0];
+  else {const lineTitles=[...group.lines.keys()].sort().map(k=>descriptions.get(k));if(lineTitles.some(t=>!t||t.size!==1))return advance();title=lineTitles.map(t=>[...t!][0]).join('; ');}
+  if(!title||title.length>200)return advance();
+  const externalId=`typed-shipment:${sha256Hex(canonicalize([batch.connection_id,batch.location_id,group.ref.namespace,group.ref.externalId]))}`;
+  const imported=await importPartnerOrder(db,clock,a,{integrationAccountId:batch.connection_id,externalId,operatorMembershipId:batch.operator_membership_id,transaction:{itemTitle:title,quantity:Number(total)}});check();proofId=imported.proofId;created=true;
+  const now=clock.now().toISOString(),hash=sha256Hex(canonicalize({batchId,rows:[...group.rows].sort(),title,quantity:String(total)}));
+  await query("INSERT INTO platform_external_bindings(merchant_id,environment,integration_account_id,resource_type,external_id,proof_id,snapshot_sha256,created_at) VALUES($1,$2,$3,'SHIPMENT',$4,$5,$6,$7)",[a.merchantId,a.environment,batch.connection_id,key,proofId,hash,now]);
+  await query('INSERT INTO record_state(proof_id,organization_id,environment,title,reference,location_id,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(proof_id) DO NOTHING',[proofId,a.merchantId,a.environment,title,group.ref.externalId,batch.location_id,now]);
+  await appendAudit(db,{proofId,actorUserId:a.actorUserId,eventType:'TYPED_SOURCE_SHIPMENT_IMPORTED',eventData:{batchId,caseId:input.caseId,sourceRows:[...group.rows].sort(),sourceNamespace:group.ref.namespace,shipmentReference:group.ref.externalId,quantityBasis:'sum_of_explicit_each_allocations',descriptionBasis:shipmentDescriptions?.size===1?'source_shipment_description':'source_line_descriptions'},at:clock.now()});check();
+ }
+ await authorizePartnerProof(db,clock,a,proofId,'proofs:read');check();
+ const members=await query(`INSERT INTO record_case_members(case_id,proof_id,organization_id,environment,source_row_id,created_at) SELECT $1,$2,$3,$4,row_id,$5 FROM unnest($6::text[]) source(row_id) ON CONFLICT DO NOTHING`,[input.caseId,proofId,a.merchantId,a.environment,clock.now().toISOString(),[...group.rows]]);
+ let finalRevision=revision;
+ if(created||members.rowCount){await bump(db,clock,input.caseId,null,'case.updated');check();finalRevision=Number((await query<{revision:number|string}>('SELECT revision FROM record_cases WHERE id=$1',[input.caseId])).rows[0].revision);}
+ return advance(true,finalRevision);
 }
 
 /** Explicit human crosswalk. A revision may correct a previous decision;
