@@ -41,7 +41,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(cdp, expression) { for (let count = 0; count < 100; count++) { if (await cdp.evaluate(expression)) return; await delay(100); } throw Error(`Synthetic render timed out: ${expression}`); }
 const control = name => `([...document.querySelectorAll('label')].find(label => [...label.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() === ${JSON.stringify(name)})?.querySelector('input,select,textarea'))`;
 const button = name => `([...document.querySelectorAll('button')].find(button => button.textContent.trim() === ${JSON.stringify(name)}))`;
-async function press(cdp, key) { const code = { Tab: 9, Enter: 13, ' ': 32 }[key]; for (const type of ['keyDown', 'keyUp']) await cdp.send('Input.dispatchKeyEvent', { type, key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code }); }
+async function press(cdp, key) { const code = { Tab: 9, Enter: 13, ' ': 32 }[key]; for (const type of ['keyDown', 'keyUp']) await cdp.send('Input.dispatchKeyEvent', { type, key, code: key === ' ' ? 'Space' : key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code, ...(type === 'keyDown' && key === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}) }); }
 async function focus(cdp, expression) { await cdp.evaluate(`(${expression}).focus()`); }
 async function fill(cdp, name, value) { await cdp.evaluate(`(() => { const element = ${control(name)}; if (!element) throw Error('Missing labeled control'); const prototype = element.tagName === 'SELECT' ? HTMLSelectElement.prototype : element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, ${JSON.stringify(value)}); element.dispatchEvent(new Event(element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); })()`); }
 async function tabTo(cdp, expression) { for (let count = 0; count < 30; count++) { if (await cdp.evaluate(`document.activeElement === (${expression})`)) return; await press(cdp, 'Tab'); } throw Error(`Control not keyboard reachable: ${expression}`); }
@@ -102,9 +102,11 @@ try {
         await until(cdp, `!!${submit} && !${submit}.disabled`); await tabTo(cdp, submit);
         const layout = await cdp.evaluate(`({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, focused: document.activeElement === ${submit}, focusOutline: getComputedStyle(${submit}).outlineStyle, focusOutlineWidth: getComputedStyle(${submit}).outlineWidth, offscreenControls: [...document.querySelectorAll('input,select,textarea,button,summary')].filter(element => { const box = element.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1); }).map(element => ({ tag: element.tagName, label: (element.getAttribute('aria-label') || element.textContent || '').trim().slice(0,100) })) })`);
         await screenshot(cdp, path.join(out, `${scenario}-${width}-full.png`), true); await screenshot(cdp, path.join(out, `${scenario}-${width}-keyboard.png`), false);
-        await press(cdp, 'Enter'); await until(cdp, 'window.__writes?.length === 1');
-        const writes = await cdp.evaluate('window.__writes');
-        report.results.push({ scenario, width, layout, runtimeErrors, blockedRequests, writes });
+        const result = { scenario, width, layout, runtimeErrors, blockedRequests, writes: [], afterEnter: null }; report.results.push(result);
+        await press(cdp, 'Enter'); result.writes = await cdp.evaluate('window.__writes');
+        result.afterEnter = await cdp.evaluate(`({ activeTag: document.activeElement?.tagName, activeLabel: document.activeElement?.textContent?.trim().slice(0,160), openDisclosures: [...document.querySelectorAll('details[open]>summary')].map(summary => summary.textContent.trim()) })`);
+        await until(cdp, 'window.__writes?.length === 1');
+        const writes = result.writes = await cdp.evaluate('window.__writes');
         assert.equal(runtimeErrors.length, 0, 'Synthetic component runtime exceptions'); assert.equal(blockedRequests.length, 0, 'Fixture attempted a nonlocal request');
         assert.ok(Math.abs(layout.viewport - width) <= 1, `${scenario}/${width}: emulated CSS viewport is incorrect`);
         assert.ok(layout.documentWidth <= width + 1, `${scenario}/${width}: page overflows horizontally`); assert.equal(layout.offscreenControls.length, 0, 'A control is clipped horizontally');
