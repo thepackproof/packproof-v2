@@ -30,6 +30,11 @@ public sealed record HostConfiguration(string Environment, string ApiOrigin, str
 }
 public sealed class LocalState
 {
+    public int StateVersion { get; set; } = 1;
+    public List<SourceSubscriptionState> SourceSubscriptions { get; set; } = [];
+    public string? LastScheduledSourceId { get; set; }
+    public string? LastScheduledBackfillSourceId { get; set; }
+    public SubscriptionDraftState? SubscriptionDraft { get; set; }
     public JsonElement? LocalAnalysis { get; set; }
     public int DraftRevision { get; set; }
     public string[]? ExcludedFileNames { get; set; }
@@ -74,7 +79,7 @@ public sealed class LocalState
     public DateTimeOffset? CredentialRecoveryConfirmedAt { get; set; }
     public bool RecoveryPrepared { get; set; }
 }
-public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath);
+public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath, string SourceId = SourceSubscriptionState.LegacyId, string SourceProfile = SourceSubscriptionState.LegacyProfile, int GrantRevision = 0);
 public sealed class QueuePayload
 {
     public required string FileName { get; set; }
@@ -88,6 +93,10 @@ public sealed class QueuePayload
     public bool CommitApproved { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public bool OriginalCompacted { get; set; }
+    public string? CompactionCommandId { get; set; }
+    public string? CompactionCommandSha256 { get; set; }
+    public string? CompactionPermitId { get; set; }
+    public DateTimeOffset? CompactedAt { get; set; }
     public byte[]? QuarantinedOriginalBytes { get; set; }
 }
 public sealed record PipeRequest(int Version, string Id, string Operation, JsonElement? Payload);

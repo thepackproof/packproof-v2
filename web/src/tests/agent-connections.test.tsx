@@ -106,3 +106,60 @@ it('invalidates whole-batch consent when the displayed original changes', async 
   expect(screen.getByRole('checkbox', { name: /approve this exact whole-batch/ })).not.toBeChecked();
   expect(screen.getByRole('button', { name: 'Authorize this batch' })).toBeDisabled();
 });
+
+it('enables separately approved source setup without a legacy CSV configuration or verification import', async () => {
+  let current = { id: 'source-agent', deviceName: 'Source setup PC', version: '0.3.0', state: 'setup', configRevision: 1, configSha256: 'setup-digest', capabilities: { sourceSetupApproval: true, typedSourceSubscriptions: true }, health: { serviceOnline: true } };
+  const request = vi.fn(async (_path: string, method?: string) => { if (method === 'POST') current = { ...current, state: 'ready', capabilities: { sourceSetupApproval: false, typedSourceSubscriptions: true } }; return current; });
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'source-agent' })} canManage/>);
+  const enable = await screen.findByRole('button', { name: 'Enable source setup' });
+  expect(enable).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Approve automatic collection' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: /I approve source setup on Source setup PC/ }));
+  fireEvent.click(enable);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/agent-installations/source-agent/actions?organizationId=org-a&environment=sandbox', 'POST', { organizationId: 'org-a', environment: 'sandbox', action: 'approve_source_setup', configRevision: 1, configSha256: 'setup-digest' }, expect.objectContaining({ 'Idempotency-Key': expect.any(String) })));
+  expect(await screen.findByText(/Source setup is enabled. Return to PackProof Connect/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Enable source setup' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Approve automatic collection' })).not.toBeInTheDocument();
+});
+
+it.each([{ state: 'setup', sourceSetupApproval: false }, { state: 'paused', sourceSetupApproval: true }, { state: 'ready', sourceSetupApproval: true }])('does not show source setup approval for $state with capability $sourceSetupApproval', async ({ state, sourceSetupApproval }) => {
+  const request = vi.fn(async () => ({ id: 'source-agent', deviceName: 'Source setup PC', version: '0.3.0', state, configRevision: 1, configSha256: 'setup-digest', capabilities: { sourceSetupApproval } }));
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'source-agent' })} canManage/>);
+  expect(await screen.findByRole('heading', { name: 'Source setup PC' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Enable source setup' })).not.toBeInTheDocument();
+});
+
+it('offers source setup approval from the current administrator computer card', async () => {
+  const current = { id: 'source-agent', deviceName: 'Source setup PC', version: '0.3.0', state: 'setup', configRevision: 1, configSha256: 'setup-digest', capabilities: { sourceSetupApproval: true }, health: { serviceOnline: true } };
+  const request = vi.fn(async (_path: string, method?: string) => method === 'POST' ? { ...current, state: 'ready' } : { installations: [current] });
+  render(<AgentConnections api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" canManage/>);
+  const enable = await screen.findByRole('button', { name: 'Enable source setup' });
+  expect(enable).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /I approve source setup on Source setup PC/ }));
+  fireEvent.click(enable);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/agent-installations/source-agent/actions?organizationId=org-a&environment=sandbox', 'POST', expect.objectContaining({ action: 'approve_source_setup', configRevision: 1, configSha256: 'setup-digest' }), expect.any(Object)));
+});
+
+it('explicitly creates the first local file connection during eligible enrollment with no existing source accounts', async () => {
+  const eligible = { ...enrollment, version: '0.3.0', capabilities: { createLocalSource: true }, choices: { ...enrollment.choices, integrationAccounts: [] } };
+  const request = vi.fn(async (_path: string, method?: string) => method === 'POST' ? { state: 'approved' } : eligible);
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ enrollmentId: 'enroll-a' })} canManage/>);
+  const approve = await screen.findByRole('button', { name: 'Approve setup only' });
+  expect(screen.queryByText(/A source account and responsible teammate must be prepared/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Code shown in the application'), { target: { value: 'ABC-123' } });
+  fireEvent.change(screen.getByLabelText('Responsible teammate'), { target: { value: 'member-a' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /compared the code/ }));
+  expect(approve).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Authorized source'), { target: { value: '__new_file_connection__' } });
+  expect(screen.getByText(/This creates a file connection for approved export sources/)).toBeVisible();
+  expect(approve).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /compared the code/ }));
+  fireEvent.click(approve);
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/agent-enrollments/enroll-a/decision?organizationId=org-a&environment=sandbox', 'POST', { organizationId: 'org-a', environment: 'sandbox', decision: 'approve', comparisonCode: 'ABC-123', integrationAccountId: null, createLocalSource: true, operatorMembershipId: 'member-a', locationId: null, sourceName: 'File exports from this computer' }, expect.objectContaining({ 'Idempotency-Key': expect.any(String) })));
+});
+
+it('keeps the original source choice contract when local connection creation is not advertised', async () => {
+  render(<AgentApproval api={{ recordsRequest: vi.fn(async () => enrollment) } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ enrollmentId: 'enroll-a' })} canManage/>);
+  await screen.findByRole('button', { name: 'Approve setup only' });
+  expect(screen.queryByRole('option', { name: 'New file connection for this computer' })).not.toBeInTheDocument();
+});

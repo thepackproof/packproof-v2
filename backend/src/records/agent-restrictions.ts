@@ -7,6 +7,7 @@ import { canonicalize } from '../canonical.js';
 import { strictBody } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
 import { CSV_RULES, analyzeColumns, headerKey, explicitInstant, eligibleHeader, type SemanticField } from './csv-semantics.js';
+import {reconstructionFeatureEnabled} from './reconstruction-features.js';
 
 export interface ScheduledCsvSourceContract {
   schema: 'packproof.scheduled-csv/v1'|'packproof.scheduled-csv/v2';
@@ -154,6 +155,26 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
     // successor must be durably saved and acknowledged before data operations.
     if (actor.credentialId === row.credential_id ? !(config || renewal) : !(config || heartbeat)) throw unavailable();
     return;
+  }
+  // A separately approved versioned source grant is necessary for typed routes.
+  // Scope strings and issuing a replacement credential cannot confer it.
+  const sourceCapabilities=method==='GET'&&path==='/source-profiles';
+  if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
+  const backfillRoute=(method==='GET'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+$/.test(path)))||(method==='POST'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills\/proposals$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+\/items\/[A-Za-z0-9_-]+\/bind$/.test(path)));
+  if(backfillRoute){if(row.status==='ready'||row.status==='active'){const version=(await db.query<{version:string}>('SELECT version FROM record_agent_installations WHERE id=$1',[row.id])).rows[0]?.version;if(version==='0.4.0'&&reconstructionFeatureEnabled('sourceBackfillJobs')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('typedIntake'))return;}throw unavailable();}
+  const compaction=(method==='GET'&&path==='/agent/source-dispositions/compaction-commands')||(method==='POST'&&/^\/agent\/source-dispositions\/compaction-commands\/[A-Za-z0-9_-]+\/(?:ack|permit)$/.test(path));
+  const typedRoute=(compaction&&reconstructionFeatureEnabled('sourceDisposition'))||(method==='GET'&&path==='/source-subscriptions')||
+    (method==='POST'&&path==='/source-subscriptions/proposals')||
+    (method==='POST'&&/^\/source-subscriptions\/[A-Za-z0-9_-]+\/heartbeat$/.test(path))||
+    (method==='POST'&&path==='/typed-imports/preview')||
+    (method==='GET'&&/^\/typed-imports\/[A-Za-z0-9_-]+$/.test(path))||
+    (method==='GET'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/record$/.test(path))||
+    (method==='POST'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/reconcile$/.test(path))||
+    (method==='POST'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/commit$/.test(path));
+  if(typedRoute&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('sourceSubscriptions')){
+    if(method==='POST'&&path==='/source-subscriptions/proposals')return;
+    const grant=(await db.query('SELECT 1 FROM record_source_subscriptions WHERE installation_id=$1 AND principal_id=$2 AND organization_id=$3 AND environment=$4 LIMIT 1',[row.id,actor.principalId,actor.merchantId,actor.environment])).rows[0];
+    if(grant)return; // Domain intake rechecks the exact current source revision.
   }
   const allowed = config || heartbeat || renewal ||
     (method === 'POST' && path === '/agent/config-proposals') ||

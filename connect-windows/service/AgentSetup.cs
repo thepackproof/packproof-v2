@@ -92,7 +92,7 @@ public sealed partial class AgentRuntime
         entry=SetupEntry();if(entry.State!="complete"){state.GuidedPhase="first_import_pending";Save();return;}
         if(state.VerifiedRecordId is null){await Verify(ct);await Refresh(ct);}
         if(Optional(state.ServerConfig,"verifiedImportId")?.GetString()!=state.VerifiedSetupImportId){
-            state.ServerConfig=await api.Request("POST","/v1/partner/agent/heartbeat",new{version=InstalledVersion,queueCount=CurrentEntries().Count(x=>x.State!="complete"),verifiedImportId=state.VerifiedSetupImportId},state.Token,null,ct);
+            state.ServerConfig=await api.Request("POST","/v1/partner/agent/heartbeat",new{version=InstalledVersion,queueCount=CurrentPendingCount(),verifiedImportId=state.VerifiedSetupImportId},state.Token,null,ct);
             state.LastPolicyCheckAt=DateTimeOffset.UtcNow;Save();
         }
         state.GuidedPhase="recurring_approval_pending";Save();

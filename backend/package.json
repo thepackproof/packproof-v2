@@ -24,6 +24,7 @@
     "@aws-sdk/client-s3": "^3.864.0",
     "@aws-sdk/client-secrets-manager": "^3.864.0",
     "@aws-sdk/client-sqs": "3.1120.0",
+    "@aws-sdk/client-sts": "3.1120.0",
     "@aws-sdk/s3-request-presigner": "^3.864.0",
     "@electric-sql/pglite": "^0.3.7",
     "asn1js": "3.0.10",

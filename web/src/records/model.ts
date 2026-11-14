@@ -2,17 +2,17 @@ export const RECORD_VIEWS = [
   ['all', 'All records'], ['missing', 'Missing required evidence'], ['handoffs', 'Recent handoffs'],
   ['processing', 'Processing problems'], ['delayed', 'Data delayed'], ['ready', 'Ready to export'], ['site', 'My site'],
 ] as const;
-export type RecordsSection = 'records' | 'attention' | 'connections' | 'exports' | 'settings' | 'setup';
+export type RecordsSection = 'records' | 'cases' | 'attention' | 'connections' | 'exports' | 'settings' | 'setup';
 export function recordsRoute(href: string): { section: RecordsSection; id: string | null; params: URLSearchParams } {
   const url = new URL(href, 'https://packproof.local');
-  const match = url.pathname.match(/^\/app\/records\/([A-Za-z0-9_-]{1,160})$/);
-  const section: RecordsSection = url.pathname.startsWith('/app/needs-attention') ? 'attention' : url.pathname.startsWith('/app/connections') ? 'connections' : url.pathname.startsWith('/app/exports') ? 'exports' : url.pathname.startsWith('/app/settings') ? 'settings' : url.pathname.startsWith('/app/setup') ? 'setup' : 'records';
+  const match = url.pathname.match(/^\/app\/(?:records|cases)\/([A-Za-z0-9_-]{1,160})$/);
+  const section: RecordsSection = url.pathname.startsWith('/app/cases') ? 'cases' : url.pathname.startsWith('/app/needs-attention') ? 'attention' : url.pathname.startsWith('/app/connections') ? 'connections' : url.pathname.startsWith('/app/exports') ? 'exports' : url.pathname.startsWith('/app/settings') ? 'settings' : url.pathname.startsWith('/app/setup') ? 'setup' : 'records';
   return { section, id: match?.[1] ?? null, params: url.searchParams };
 }
 export function recordsPath(section: RecordsSection, params: URLSearchParams, updates: Record<string, string | null> = {}, id?: string): string {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(updates)) value ? next.set(key, value) : next.delete(key);
-  const base = section === 'records' ? `/app/records${id ? `/${encodeURIComponent(id)}` : ''}` : `/app/${section === 'attention' ? 'needs-attention' : section}`;
+  const base = section === 'records' || section === 'cases' ? `/app/${section}${id ? `/${encodeURIComponent(id)}` : ''}` : `/app/${section === 'attention' ? 'needs-attention' : section}`;
   return `${base}${next.size ? `?${next}` : ''}`;
 }
 export function displayState(value: unknown): string { return typeof value === 'string' && value ? value.replace(/[_-]+/g, ' ').toLowerCase().replace(/^./, letter => letter.toUpperCase()) : 'Unknown'; }
