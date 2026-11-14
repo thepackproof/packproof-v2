@@ -10,6 +10,8 @@ import { ImportWizard } from './ImportWizard';
 import { RecordMedia, RecordPackageDownload } from './RecordMedia';
 import { SourceArtifacts } from './SourceArtifacts';
 import { OperationalSnapshots } from './OperationalSnapshots';
+import { OperationalCases } from './OperationalCases';
+import { SourceSubscriptions } from './SourceSubscriptions';
 import { CanonicalExports, CanonicalExportHistory } from './CanonicalExports';
 import { SnapshotShares } from './SnapshotShares';
 import {RequirementTemplates} from './RequirementTemplates';
@@ -194,7 +196,7 @@ export default function RecordsPortal({ api, session, href, onGo, onSignOut, adm
   const selectedLocation = params.get('locationId'), locationAllowed = !selectedLocation || !!organization?.locations.some(location => location.id === selectedLocation);
   const scopedParams = new URLSearchParams(params); if (organization) { scopedParams.set('organizationId', organization.id); scopedParams.set('environment', organization.environment); }
   const refresh = () => setRevision(value => value + 1);
-  const nav: Array<[RecordsSection, string, string]> = [['records', 'Records', 'file'], ['attention', 'Needs attention', 'alert'], ['connections', 'Connections', 'link'], ['exports', 'Exports', 'download'], ['settings', 'Settings', 'settings']];
+  const nav: Array<[RecordsSection, string, string]> = [['records', 'Records', 'file'], ...(context.data?.capabilities.reconstruction ? [['cases', 'Operational cases', 'grid'] as [RecordsSection, string, string]] : []), ['attention', 'Needs attention', 'alert'], ['connections', 'Connections', 'link'], ['exports', 'Exports', 'download'], ['settings', 'Settings', 'settings']];
   const leaveTour = () => { setTour(null); setTourDone(true); try { localStorage.setItem(tourKey, 'done'); } catch { /* Optional preference. */ } };
   const goSection = (target: RecordsSection) => recordsPath(target, scopedParams, { cursor: null });
   return <div className="records-shell">
@@ -206,8 +208,10 @@ export default function RecordsPortal({ api, session, href, onGo, onSignOut, adm
           {!connectApproval && !tourDone && section === 'records' && !id && <div className="records-welcome"><div><strong>New to your evidence workspace?</strong><p>Take a short tour, then connect or import your first shipment.</p></div><div className="records-actions"><button className="records-button secondary" onClick={() => setTour(0)}>Show me around</button><button className="records-text-button" onClick={leaveTour}>Dismiss</button></div></div>}
           {connectApproval && <AgentApproval key={`${organization.id}.${organization.environment}.${params.get('enrollmentId') || params.get('installationId')}`} api={api} organizationId={organization.id} environment={organization.environment} params={scopedParams} canManage={['OWNER', 'ADMIN'].includes(organization.role)}/>}
           {!connectApproval && section === 'records' && (id ? <RecordDetailScreen key={`${organization.id}.${organization.environment}.${id}`} api={api} organization={organization} params={scopedParams} id={id} revision={revision} onRefresh={refresh} onGo={onGo} storageScope={`${session.apiBaseUrl}.${session.userId}`}/> : <RecordsListScreen api={api} organization={organization} params={scopedParams} revision={revision} onGo={onGo} onRefresh={refresh}/>)}
+          {section === 'cases' && <OperationalCases api={api} organization={organization} params={scopedParams} id={id} revision={revision} onGo={onGo} onRefresh={refresh} enabled={context.data.capabilities.reconstruction === true} exportsEnabled={context.data.capabilities.reconstructionExports === true}/>}
           {section === 'attention' && <AttentionScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/>}
           {section === 'connections' && <><ConnectionsScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/><AgentConnections key={`${organization.id}.${organization.environment}`} api={api} organizationId={organization.id} environment={organization.environment} canManage={['OWNER','ADMIN'].includes(organization.role)}/></>}
+          {section === 'connections' && context.data.capabilities.sourceSubscriptions && <SourceSubscriptions key={`${organization.id}.${organization.environment}`} api={api} organizationId={organization.id} environment={organization.environment} canManage={['OWNER','ADMIN'].includes(organization.role)} revision={revision}/>}
           {(section === 'attention' || section === 'connections') && <SourceAssociations key={`${organization.id}.${organization.environment}`} api={api} organization={organization} revision={revision} onUpdated={refresh}/>}
           {section === 'exports' && <ExportsScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/>}
           {section === 'setup' && <SetupScreen api={api} organization={organization} session={session} params={scopedParams} canImport={!!context.data.capabilities.import} onGo={onGo}/>}

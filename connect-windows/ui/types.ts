@@ -77,11 +77,72 @@ export interface Configuration {
   offlineWindowHours: number;
   sourceContract?: SourceContract;
 }
+export interface SourceSubscriptionStatus {
+  id: string;
+  sourceProfile: string;
+  displayName: string;
+  state: string;
+  localPaused: boolean;
+  configurationRevision: number;
+  grantRevision: number;
+  folder?: string;
+  folderDigest?: string;
+  lastCheckAt?: string;
+  lastCollectedAt?: string;
+  lastReceiptAt?: string;
+  lastErrorCode?: string;
+  sourceAsOf?: string;
+  freshness?: "current" | "delayed" | "unknown";
+  queue: Record<string, number>;
+  verifiedCaseId?: string;
+  setupQueueId?: string;
+  approvalPath?: string;
+  files?: Array<{ name: string; byteSize: number; lastWriteAt?: string }>;
+  selectedFileName?: string;
+  fileSha256?: string;
+  headers?: string[];
+  rowCount?: number;
+  samples?: Array<Record<string, string>>;
+  receipt?: {
+    id: string;
+    state: string;
+    counts: Record<string, number>;
+    caseIds?: string[];
+    original?: { sha256: string; byteSize?: number };
+  };
+}
+export interface SubscriptionDraft {
+  folder: string;
+  folderDigest: string;
+  files: Array<{ name: string; byteSize: number; lastWriteAt?: string }>;
+  selectedFileName?: string;
+  fileSha256?: string;
+  headers?: string[];
+  rowCount?: number;
+  samples?: Array<Record<string, string>>;
+  proposal?: { id: string; subscriptionId?: string };
+  approvalPath?: string;
+}
+export interface SubscriptionProposal {
+  displayName: string;
+  sourceProfile: string;
+  sourceNamespace: string;
+  mappingVersion: string;
+  mapping: Record<string, string>;
+  constants: Record<string, string>;
+  historyFrom: string; unknownTimePolicy?: "quarantine" | "retain_unknown";
+  historyTo?: string | null;
+  expectedIntervalSeconds?: number | null;
+  wholeFileUploadApproved: true;
+}
 export interface ConnectStatus {
   state: string;
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
-  capabilities?: { sourceContracts: string[]; rulesVersion: string };
+  capabilities?: { sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean };
+  sourceCapabilities?: { typedCollection: boolean };
+  sourceSubscriptions?: SourceSubscriptionStatus[];
+  subscriptionDraft?: SubscriptionDraft;
   installedVersion?: string;
   installationId?: string;
   environment: string;
@@ -168,6 +229,18 @@ export interface ConnectStatus {
   approvalPath?: string;
 }
 export interface ConnectBridge {
+  chooseNewSubscriptionFolder(): Promise<ConnectStatus>;
+  inspectSubscriptionDraft(fileName: string): Promise<ConnectStatus>;
+  proposeSubscription(input: SubscriptionProposal): Promise<ConnectStatus>;
+  chooseSubscriptionFolder(id: string): Promise<ConnectStatus>;
+  inspectSubscriptionFile(input: { id: string; fileName: string }): Promise<ConnectStatus>;
+  previewSubscription(input: { id: string; fileName: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
+  commitSubscription(input: { id: string; wholeBatchApproved: true }): Promise<ConnectStatus>;
+  verifySubscription(id: string): Promise<ConnectStatus>;
+  pauseSubscription(id: string): Promise<ConnectStatus>;
+  resumeSubscription(id: string): Promise<ConnectStatus>;
+  openSubscriptionApproval(id: string): Promise<unknown>;
+  openSubscriptionCase(id: string): Promise<unknown>;
   getStatus(): Promise<ConnectStatus>;
   checkComputer(): Promise<ConnectStatus>;
   beginEnrollment(): Promise<ConnectStatus>;

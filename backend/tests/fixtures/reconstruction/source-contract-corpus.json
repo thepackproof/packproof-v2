@@ -1,0 +1,1688 @@
+{
+  "schema": "packproof.synthetic-source-contract-corpus/v1",
+  "qualification": "Synthetic only. No customer source meanings, cadence or completeness have been qualified.",
+  "cases": [
+    {
+      "name": "order-and-explicit-shipment-allocation",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"order-0010482-line-004\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"orderedQuantity\",\"value\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null},{\"sourceEventId\":\"order-0010482-line-004-S0021\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"allocatedQuantity\",\"value\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "d4cec22159932be7082d636dbd78b1d92f87d162d12b8cfd0971ddeab5db4ced"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 2,
+        "validRows": 2,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "order-0010482-line-004",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "dcf0a5ea620c11bb351de171fbba01662bbbec430549f82ff035631da0a75b36",
+            "errors": []
+          },
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "order-0010482-line-004-S0021",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "allocatedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/1/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": {
+                    "amount": "10",
+                    "unit": "each"
+                  }
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "b7c23e1e182c538d34d9eaa2e07a4cea314ec5e03f1762483ad27fec72b97eb9",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "loading-eight-revision-two",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-loading-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "e4a207f7f35e943f802b763d48eac064957f1e4498bfab83f74b382b9109e641"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "load-00071-line-004",
+              "sourceRevision": "2",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "load",
+                  "externalId": "00071"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedLoadedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "load",
+                    "externalId": "00071"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "c613a0c061eb321be8ed2c090cee111fe5bf774ca867f7d3e461b6ff34d106a5",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "delivery-eight",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-delivery-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"ticket-DT-91-line-004\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"stop\",\"externalId\":\"STOP-9\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedReceivedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"stop\",\"externalId\":\"STOP-9\"},\"type\":\"delivered_at\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "a91a5eb018a59f40ddb8d17738a660865735b0d49ff2132bdcc29fde88763684"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "ticket-DT-91-line-004",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "stop",
+                  "externalId": "STOP-9"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedReceivedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "stop",
+                    "externalId": "STOP-9"
+                  },
+                  "type": "delivered_at",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "99b281d3083d2c1d39a9edbed6705774f177f41cf64a3186e13bb2a6ec30f0e9",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "loading-correction-to-ten",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-loading-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"3\",\"observationKind\":\"correction\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\"},\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "6ba5a1ed54ff9c2dfc4d516a3ab347c8fb58361f729dfe12c863dc96ca83c891"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "load-00071-line-004",
+              "sourceRevision": "3",
+              "observationKind": "correction",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "load",
+                  "externalId": "00071"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedLoadedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "load",
+                    "externalId": "00071"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                }
+              ],
+              "supersedes": {
+                "sourceEventId": "load-00071-line-004",
+                "sourceRevision": "2"
+              },
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "114e24bfe8191055a88b4152a5b9bd57091340f673b4999fd255fa2382fda57a",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "split-fulfillment-eight-plus-two",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"order-0010482-line-004\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"orderedQuantity\",\"value\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null},{\"sourceEventId\":\"order-0010482-line-004-S0021\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"allocatedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null},{\"sourceEventId\":\"order-0010482-line-004-S0022\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0022\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"allocatedQuantity\",\"value\":{\"amount\":\"2\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0022\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":{\"amount\":\"2\",\"unit\":\"each\"}}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "3dde1935026c0b0d36c9d493cdeb13ed82f1daa0d166d6cb065599b8b3e7ee12"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 3,
+        "validRows": 3,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "order-0010482-line-004",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "dcf0a5ea620c11bb351de171fbba01662bbbec430549f82ff035631da0a75b36",
+            "errors": []
+          },
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "order-0010482-line-004-S0021",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "allocatedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/1/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": {
+                    "amount": "8",
+                    "unit": "each"
+                  }
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "d69dfe05b79a0a4eb9519ef6f3f87067edb2600884bb2ef4ae84dd5c3cbabc1b",
+            "errors": []
+          },
+          {
+            "rowNumber": 3,
+            "normalized": {
+              "sourceEventId": "order-0010482-line-004-S0022",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0022"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "allocatedQuantity",
+                  "value": {
+                    "amount": "2",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/2/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0022"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": {
+                    "amount": "2",
+                    "unit": "each"
+                  }
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "76a75325f1e65fc8a5709f55ceff82189b2660a847e300117bb7358dddb24e97",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "explicit-return-quantity",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-return-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"return-001-line-004\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"return\",\"externalId\":\"R-001\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedReturnedQuantity\",\"value\":{\"amount\":\"1\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"return\",\"externalId\":\"R-001\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"return_of\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "7cfc38c8632cac4319e6377c958523739d81f808e76697dc4d06120006211a0f"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "return-001-line-004",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "return",
+                  "externalId": "R-001"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedReturnedQuantity",
+                  "value": {
+                    "amount": "1",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "return",
+                    "externalId": "R-001"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "return_of",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "9b16b591e699759519a05589b1c7ac4391a4724d1a4e413fa36bf379cd6e0053",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "unknown-event-time-preserved",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":null,\"timeQuality\":\"unknown\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "fbdda81c2177cbf91e6be45e63249bdf3b444b23cde8ddb32e78c63736d75358"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "load-00071-line-004",
+              "sourceRevision": "2",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": null,
+              "timeQuality": "unknown",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "load",
+                  "externalId": "00071"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedLoadedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "load",
+                    "externalId": "00071"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "10e1d8820077ba57e6aad5298bcebcaeb1e42778c48257d6f21dea2d0590fd7b",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "order-line-is-not-product-sku",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"order-0010482-line-004\",\"sourceRevision\":\"1\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"orderedQuantity\",\"value\":{\"amount\":\"10\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"has_line\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "cd11657036968c01deec78bd1276025e0373489ec4ef3c140d51ea9378938d9a"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "packproof.order-lines/v1 requires an explicit order_line reference."
+            ]
+          }
+        ],
+        "errorContains": [
+          "order_line"
+        ]
+      }
+    },
+    {
+      "name": "unknown-unit-is-retained-without-conversion",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"case-of-unknown-size\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "c1ce40dfebdc95c83c19380438ef8fa7ecba739fd2a1cd5f423e135079752f89"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": {
+              "sourceEventId": "load-00071-line-004",
+              "sourceRevision": "2",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "load",
+                  "externalId": "00071"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedLoadedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "case-of-unknown-size"
+                  },
+                  "sourceLocator": {
+                    "row": 1,
+                    "field": "assertions[0].value",
+                    "jsonPointer": "/0/assertions/0/value"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "load",
+                    "externalId": "00071"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": "synthetic-pilot-export",
+              "copiedFromSource": null
+            },
+            "payloadSha256": "8225ba462711581cb41b093bd4f399589bb214a457470e491838dcee1cb3bf30",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "snapshot-time-is-not-event-time",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"event\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "276663dbe605c898a8ea6dcb3c5e812d773683be340f4e0e9e08ee5c146822e2"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "Events require a source-reported occurredAt; snapshots cannot invent a physical event time."
+            ]
+          }
+        ],
+        "errorContains": [
+          "Events require"
+        ]
+      }
+    },
+    {
+      "name": "correction-needs-explicit-supersession",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"correction\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"pilot-export\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "d534a94b6bc5c665428be718c10212322c3bca30c86c4e20ed0f92bfec565a96"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "Corrections and tombstones require an explicit superseded source identity and revision."
+            ]
+          }
+        ],
+        "errorContains": [
+          "superseded"
+        ]
+      }
+    },
+    {
+      "name": "foreign-namespace-cannot-be-submitted-as-local",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-source.json",
+          "mediaType": "application/json",
+          "content": "[{\"sourceEventId\":\"load-00071-line-004\",\"sourceRevision\":\"2\",\"observationKind\":\"snapshot\",\"occurredAt\":null,\"sourceAsOf\":\"2026-11-12T14:00:00-05:00\",\"timeQuality\":\"snapshot_time_only\",\"references\":[{\"namespace\":\"other-site\",\"type\":\"order\",\"externalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"}],\"assertions\":[{\"subjectReference\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"property\":\"reportedLoadedQuantity\",\"value\":{\"amount\":\"8\",\"unit\":\"each\"}}],\"relationships\":[{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"order_line\",\"externalId\":\"004\",\"parentExternalId\":\"0010482\"},\"type\":\"fulfills\",\"quantity\":null},{\"from\":{\"namespace\":\"pilot-export\",\"type\":\"shipment\",\"externalId\":\"S-0021\"},\"to\":{\"namespace\":\"pilot-export\",\"type\":\"load\",\"externalId\":\"00071\"},\"type\":\"loaded_on\",\"quantity\":null}],\"supersedes\":null,\"originSystem\":\"synthetic-pilot-export\",\"copiedFromSource\":null}]",
+          "sha256": "96add61f89d0be51caa57c5a26f54d5145fd36500085e31ace098704cf5b21fd"
+        },
+        "mapping": {},
+        "constants": {},
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 1,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "References must use the approved source namespace; cross-source links require an approved crosswalk."
+            ]
+          }
+        ],
+        "errorContains": [
+          "namespace"
+        ]
+      }
+    },
+    {
+      "name": "csv-leading-zero-identities-and-exact-locator",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-order-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-order.csv",
+          "mediaType": "text/csv",
+          "content": "EventId,Revision,OrderId,LineId,ShipmentId,Amount,Unit,AsOf\r\nO004,1,0010482,004,S-0021,10,each,2026-11-12T14:00:00-05:00\r\n",
+          "sha256": "7298644f6e65480e62a7bbdc09eca08ea2ce9c173051bfca6fb27ccdf616162a"
+        },
+        "mapping": {
+          "sourceEventId": "EventId",
+          "sourceRevision": "Revision",
+          "orderId": "OrderId",
+          "orderLineId": "LineId",
+          "shipmentId": "ShipmentId",
+          "amount": "Amount",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "O004",
+              "sourceRevision": "1",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Amount"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null
+            },
+            "payloadSha256": "3f877c6fdb717a8013c24c508362591cc611a2bf9cf95a28997b6987b41afb1f",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    },
+    {
+      "name": "csv-loading",
+      "input": {
+        "schema": "packproof.typed-source-batch/v1",
+        "connectionId": "synthetic-loading-export",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v1",
+        "mappingVersion": "synthetic-pilot/1",
+        "sourceNamespace": "pilot-export",
+        "subscriptionId": "synthetic-subscription",
+        "configurationRevision": 1,
+        "grantRevision": 2,
+        "wholeFileConsent": true,
+        "original": {
+          "name": "synthetic-load.csv",
+          "mediaType": "text/csv",
+          "content": "Event,Revision,Order,Line,Shipment,Load,Qty,Unit,AsOf\nL004,2,0010482,004,S-0021,00071,8,each,2026-11-12T14:00:00-05:00\n",
+          "sha256": "489382fd77c1d2a5337acd601dc2d35ac79688a67a6f0819b452ae9e8b79ab43"
+        },
+        "mapping": {
+          "sourceEventId": "Event",
+          "sourceRevision": "Revision",
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "shipmentId": "Shipment",
+          "loadId": "Load",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "reportedLoadedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "completeness": {
+          "kind": "snapshot",
+          "asOf": "2026-11-12T14:00:00-05:00",
+          "marker": "synthetic-complete-snapshot-1"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "L004",
+              "sourceRevision": "2",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "pilot-export",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "shipment",
+                  "externalId": "S-0021"
+                },
+                {
+                  "namespace": "pilot-export",
+                  "type": "load",
+                  "externalId": "00071"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "reportedLoadedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "fulfills",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "pilot-export",
+                    "type": "shipment",
+                    "externalId": "S-0021"
+                  },
+                  "to": {
+                    "namespace": "pilot-export",
+                    "type": "load",
+                    "externalId": "00071"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null
+            },
+            "payloadSha256": "d4f2e3047a1d9351661bdb710d80795b856f10d1ae6aa9c1d02ed28108cf2a48",
+            "errors": []
+          }
+        ],
+        "errorContains": []
+      }
+    }
+  ]
+}

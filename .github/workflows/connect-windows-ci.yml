@@ -1,10 +1,10 @@
 name: Connect Windows candidate
 on:
   pull_request:
-    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/tests/fixtures/connect-csv-corpus.json', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   push:
     branches: [main]
-    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/tests/fixtures/connect-csv-corpus.json', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   workflow_dispatch:
 permissions:
   contents: read

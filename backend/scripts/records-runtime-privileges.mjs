@@ -65,6 +65,32 @@ const policy={...policy108,
  record_issues:{...policy108.record_issues,worker:{...select,insert:'*'}},
 };
 
+// Explicit opt-in for the reconstruction candidate. Historical108/109 policy
+// objects and defaults stay frozen; this planner never applies live grants.
+const policy113={...policy,
+ record_cases:{api:{...select,update:['revision','updated_at']},worker:{...select,insert:'*',update:['revision','updated_at']}},
+ record_typed_batches:{api:{...select,insert:'*',update:['state','import_valid_rows','updated_at','next_attempt_at','error_code']},worker:{...select,update:['state','lease_token','lease_expires_at','attempts','next_attempt_at','error_code','updated_at']}},
+ record_typed_rows:{api:{...select,insert:'*'},worker:{...select,update:['status','case_id','duplicate_of','supersedes_id','error_code']}},
+ record_typed_identities:{api:select,worker:{...select,insert:'*'}},
+ record_case_entities:{api:select,worker:{...select,insert:'*'}},
+ record_case_members:{api:select,worker:{...select,insert:'*'}},
+ record_case_assertions:{api:select,worker:{...select,insert:'*'}},
+ record_case_relations:{api:select,worker:{...select,insert:'*'}},
+ record_case_crosswalks:{api:{...select,insert:'*'},worker:select},
+ record_case_outbox:{api:select,worker:{...select,insert:'*'}},
+ record_case_association_decisions:{api:{...select,insert:'*'},worker:{...select,insert:'*'}},
+ record_source_subscriptions:{api:{...select,insert:'*',update:['configuration_revision','grant_revision','state','approved_by','recurring_approved_by','verified_batch_id','last_check_at','source_as_of','heartbeat','updated_at']},worker:select},
+ record_source_subscription_revisions:{api:{...select,insert:'*'},worker:select},
+ record_reconstruction_exports:{api:{...select,insert:'*'},worker:{}},
+ record_typed_retention_events:{api:{...select,insert:'*'},worker:select},
+ record_case_issues:{api:select,worker:{...select,insert:'*'}},
+ record_case_issue_evaluations:{api:select,worker:{...select,insert:'*'}},
+ record_case_issue_actions:{api:{...select,insert:'*'},worker:{...select,insert:['id','issue_id','case_id','sequence','action','reason','created_at']}},
+ record_case_rule_runs:{api:select,worker:{...select,insert:'*'}},
+ record_case_rule_state:{api:{...select,insert:'*',update:['case_revision','projection_version','checked_at','next_check_at','error_code']},worker:{...select,insert:'*',update:['case_revision','projection_version','checked_at','next_check_at','error_code']}},
+};
+const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:policy;
+
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
 const sequenceName='record_issue_actions_sequence_seq';
@@ -105,10 +131,10 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
- const selectedPolicy=throughMigration===108?policy108:policy;
+ if(![108,109,113].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|10[0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[01][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
  if(files.length!==throughMigration-95||new Set(files.map(f=>f.slice(0,3))).size!==throughMigration-95)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={};let tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);tableColumns=sourceColumns(sql,tableColumns);}
  if(Object.keys(selectedPolicy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!selectedPolicy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');
@@ -122,7 +148,7 @@ async function options(input){
  if(!/^[a-f0-9]{40}$/.test(reviewedSourceCommit??''))fail('RECORDS_REVIEWED_SOURCE_REQUIRED');
  const source=await recordsMigrationInventory(input.throughMigration??109);
  if(!/^[a-f0-9]{64}$/.test(reviewedMigrationSha256??'')||reviewedMigrationSha256!==source.migrationSha256)fail('RECORDS_SOURCE_REVIEW_MISMATCH');
- return {...input,...source,policy:input.throughMigration===108?policy108:policy,roles:{api:runtimeRole,worker:workerRole}};
+ return {...input,...source,policy:selectPolicy(input.throughMigration??109),roles:{api:runtimeRole,worker:workerRole}};
 }
 async function inspect(db,o,actualCaller){
  const identity=(await db.query('SELECT current_user AS caller,session_user AS session_caller,current_schema() AS schema')).rows[0];

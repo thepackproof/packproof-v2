@@ -29,6 +29,16 @@ export function currentApprovalPath(status:ConnectStatus, now=Date.now()):string
  }
  return `${route}?${query}`;
 }
+/** Source review is reconstructed from live protected service state. Renderer
+ * callers choose a source ID, never a URL, file path or stale batch locator. */
+export function currentSubscriptionApprovalPath(status:ConnectStatus, id:string):string {
+ if(status.state==='revoked'||!validId(status.installationId)||!validId(id))throw Error('Refresh this installation before reviewing its source approval.');
+ const source=status.sourceSubscriptions?.find(s=>s.id===id);
+ if(!source||source.state==='revoked')throw Error('This source is unavailable for approval. Refresh its current state.');
+ const query=new URLSearchParams({installationId:status.installationId,subscriptionId:id,configurationRevision:String(source.configurationRevision)});
+ if(source.verifiedCaseId&&source.receipt&&validId(source.receipt.id))query.set('initialBatchId',source.receipt.id);
+ return `${route}?${query}`;
+}
 /** Submission failure must never open a stale review. Browser failure must not discard a saved proposal. */
 export async function submitConfigurationForReview(submit:()=>Promise<ConnectStatus>,open:(url:string)=>Promise<void>,webOrigin:string):Promise<ConnectStatus>{
  const next=await submit();

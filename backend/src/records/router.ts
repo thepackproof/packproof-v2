@@ -6,6 +6,7 @@ import { assertPolicyAccessSafe } from '../domain/policy-recovery.js';
 import { requireHumanActor } from '../platform/organization-access.js';
 import { authorizePartnerProof,reauthorizePartner,type PartnerActor } from '../platform/organizations.js';
 import { partnerProblem } from '../platform/partner-router.js';
+import {reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {listRecordReviewers,assignRecordIssue} from './issue-assignments.js';
 import {resolveRecordEntityReference} from './service.js';
 import { requireRecordWorkspace,listRecordLocations,requireRecordAccess,type RecordWorkspace } from './access.js';
@@ -36,7 +37,7 @@ export function createRecordsRouter(deps:AppDependencies) {
     const selected=organizations.find(o=>o.id===r.query.organizationId)??organizations.find(o=>o.enabled)??organizations[0];
     if(r.query.organizationId&&!organizations.some(o=>o.id===r.query.organizationId))throw new DomainError('ORGANIZATION_NOT_FOUND','Organization not found',404);
     s.json({schema:'packproof.records/v1',organizations,selectedOrganizationId:selected?.id??null,environment:selected?.environment??null,
-      capabilities:{records:!!selected?.enabled,import:!!selected?.enabled&&selected.role!=='REVIEWER',review:!!selected?.enabled&&selected.role!=='REVIEWER',manage:!!selected?.enabled&&['OWNER','ADMIN'].includes(selected.role)},
+      capabilities:{records:!!selected?.enabled,import:!!selected?.enabled&&selected.role!=='REVIEWER',review:!!selected?.enabled&&selected.role!=='REVIEWER',manage:!!selected?.enabled&&['OWNER','ADMIN'].includes(selected.role),reconstruction:!!selected?.enabled&&reconstructionFeatureEnabled('reconstruction'),reconstructionExports:!!selected?.enabled&&reconstructionFeatureEnabled('reconstruction')&&reconstructionFeatureEnabled('exports'),sourceSubscriptions:!!selected?.enabled&&reconstructionFeatureEnabled('sourceSubscriptions')},
       activation:featureEnabled?'organization_entitlement':'platform_activation_pending'});
   }));
   router.get('/',run(async(r,s)=>{const w=await workspace(r);s.json(await listRecords(deps.db,deps.clock,w,r.query));}));
