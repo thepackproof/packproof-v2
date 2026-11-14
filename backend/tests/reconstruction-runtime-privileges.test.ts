@@ -35,12 +35,12 @@ describe('reconstruction113 API and worker database separation',()=>{
   expect((await planRecordsRuntimePrivileges(opened.db,options)).statements.some(sql=>/CREATE ROLE|ALTER ROLE|GRANT ALL|DEFAULT PRIVILEGES/.test(sql))).toBe(false);
  });
  it('permits only worker processing columns and preserves immutable original fields',async()=>{
-  await asRole(worker,db=>db.query('UPDATE record_typed_batches SET state=state,attempts=attempts,next_attempt_at=next_attempt_at WHERE false'));
-  await asRole(worker,db=>db.query('UPDATE record_typed_rows SET status=status,case_id=case_id,supersedes_id=supersedes_id WHERE false'));
-  await asRole(api,db=>db.query('UPDATE record_typed_batches SET state=state,import_valid_rows=import_valid_rows WHERE false'));
+  await asRole(worker,db=>db.query('UPDATE record_typed_batches SET state=state,attempts=attempts,next_attempt_at=next_attempt_at,replay_requested=replay_requested WHERE false'));
+  await asRole(worker,db=>db.query('UPDATE record_typed_rows SET status=status,case_id=case_id,supersedes_id=supersedes_id,resolution_attempts=resolution_attempts WHERE false'));
+  await asRole(api,db=>db.query('UPDATE record_typed_batches SET state=state,import_valid_rows=import_valid_rows,replay_requested=replay_requested WHERE false'));
   for(const role of [api,worker]){
    for(const column of ['original_sha256','original_object_key','original_version_id','actor_context','subscription_id','configuration_revision','contract','received_at'])await expect(asRole(role,db=>db.query(`UPDATE record_typed_batches SET ${column}=${column} WHERE false`))).rejects.toMatchObject({code:'42501'});
-   for(const column of ['source_values','normalized','payload_sha256','errors','source_revision'])await expect(asRole(role,db=>db.query(`UPDATE record_typed_rows SET ${column}=${column} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   for(const column of ['source_values','normalized','payload_sha256','errors','source_revision','history_eligibility'])await expect(asRole(role,db=>db.query(`UPDATE record_typed_rows SET ${column}=${column} WHERE false`))).rejects.toMatchObject({code:'42501'});
    for(const table of ['record_typed_batches','record_typed_rows','record_case_assertions','record_case_relations','record_case_association_decisions','record_case_issue_actions'])await expect(asRole(role,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
   }
  });

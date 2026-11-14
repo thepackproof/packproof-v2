@@ -45,28 +45,30 @@ test('invalid profile/source pins cannot create a build request',()=>{
  assert.throws(()=>connectImageBuildRequest({profile:'rollback',sourceSha,zipSha256:'latest'}),/INVALID_BUILD_PINS/);
  assert.throws(()=>connectImageBuildRequest({profile:'candidate',sourceSha,zipSha256,sourceVersion:'null'}),/INVALID_S3_VERSION/);
 });
-test('exact current Git archive supplies Docker inputs while rejecting the frozen Connect108 profile',()=>{
+test('exact reconstruction113 Git archive supplies Docker inputs while frozen108 and109 profiles reject it',()=>{
  const root=fileURLToPath(new URL('../../',import.meta.url));
  const head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
  const directory=mkdtempSync(path.join(tmpdir(),'connect-source-'));
  try{
   const archive=path.join(directory,'source.zip'),script=path.join(root,'infra/backend-release/backend-source-archive.py');
-  const run=extra=>JSON.parse(execFileSync('python',[script,head,archive,'zero-touch-v1',...extra],{cwd:root,encoding:'utf8'}));
+  const run=extra=>JSON.parse(execFileSync('python',[script,head,archive,'reconstruction-v1',...extra],{cwd:root,encoding:'utf8'}));
   const created=run([]),verified=run(['--verify']);
   assert.deepEqual(verified,created);
   assert.equal(verified.allGitBlobBytesVerified,true);
   const current=JSON.parse(readFileSync(new URL('../../backend/scripts/source-association-migration-manifest.json',import.meta.url),'utf8'));
-  assert.equal(verified.migrationCount,108);
-  assert.equal(verified.migrationInventorySha256,current.inventorySha256);
+  assert.equal(verified.migrationCount,112);
+  assert.notEqual(verified.migrationInventorySha256,current.inventorySha256);
+  assert.match(verified.migrationInventorySha256,/^[a-f0-9]{64}$/);
   assert.equal(CONNECT_IMAGE_INVENTORY.count,107);
   assert.equal(CONNECT_IMAGE_INVENTORY.sha256,'ac0f0b11921f57e6dffeba0561c3e8e0991e63f9b6eaa1870ce5c7246d5a5921');
   assert.throws(()=>execFileSync('python',[script,head,path.join(directory,'wrong-profile.zip'),'connect-v1'],{cwd:root,encoding:'utf8',stdio:'pipe'}),/EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
+  assert.throws(()=>execFileSync('python',[script,head,path.join(directory,'wrong109-profile.zip'),'zero-touch-v1'],{cwd:root,encoding:'utf8',stdio:'pipe'}),/EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
   const names=JSON.parse(execFileSync('python',['-c','import json,sys,zipfile; print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))',archive],{encoding:'utf8'}));
   const dockerfile=execFileSync('git',['show',`${head}:backend/Dockerfile`],{cwd:root,encoding:'utf8'});
   for(const line of dockerfile.split('\n').filter(line=>line.startsWith('COPY ')&&!line.includes('--from='))){
    for(const input of line.trim().split(/\s+/).slice(1,-1))
     assert.ok(names.some(name=>name===input||name.startsWith(input+'/')),`missing Docker COPY input ${input}`);
   }
-  assert.deepEqual(names.filter(name=>name.startsWith('infra/')).sort(),['infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']);
+  assert.deepEqual(names.filter(name=>name.startsWith('infra/')).sort(),['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']);
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
