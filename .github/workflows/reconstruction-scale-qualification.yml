@@ -48,6 +48,7 @@ jobs:
           PACKPROOF_SCALE_BURST_RATE: '100'
           PACKPROOF_SCALE_BURST_SECONDS: '10'
           PACKPROOF_SCALE_SAMPLES: '30'
+          PACKPROOF_SCALE_BOOTSTRAP_CONCURRENCY: '4'
           PACKPROOF_SCALE_ENFORCE_TARGETS: 'true'
         run: node --import tsx scripts/reconstruction-scale.ts ../artifacts/reconstruction-scale-postgres.json
       - uses: actions/upload-artifact@v4
