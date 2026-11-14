@@ -60,20 +60,21 @@ describe('authorized accepted-prefix receipt context and frozen packages',()=>{
   for(const paged of ['true','false']){vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED',paged);expect(incomplete(await getOperationalCase(opened.db,clock,w,a))).toEqual([]);}
   vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');const before=await exportOperationalCase({...deps,reconstructionSigning:signing},w,a);expect(incomplete(JSON.parse(before.bytes.toString()))).toEqual([]);expect(before.bytes.toString()).not.toContain(unrelated);
   expect((await processPendingTypedImports(deps,1)).blocked).toBe(0);
-  const receipt=await queue('VISIBLE-A',6);let signal!:()=>void,release!:()=>void,paused=false;
+  const receipt=await queue('VISIBLE-A',6);let signal!:()=>void,release!:()=>void,paused=false,prefixState:{state:string;accepted:number;processing:number}|null=null;
   const reached=new Promise<void>(resolve=>{signal=resolve;}),resume=new Promise<void>(resolve=>{release=resolve;});
   const observed:Database={query:(sql,params)=>opened.db.query(sql,params),transaction:async fn=>{
    const result=await opened.db.transaction(fn);
-   if(!paused){const state=(await opened.db.query<{state:string;accepted:number;processing:number}>(`SELECT b.state,COUNT(*) FILTER(WHERE r.status='accepted_linked')::integer accepted,COUNT(*) FILTER(WHERE r.status='processing')::integer processing FROM record_typed_batches b JOIN record_typed_rows r ON r.batch_id=b.id WHERE b.id=$1 GROUP BY b.state`,[receipt])).rows[0];if(state.state==='running'&&state.accepted>0&&state.processing>0){paused=true;signal();await resume;}}
+   if(!paused){const state=(await opened.db.query<{state:string;accepted:number;processing:number}>(`SELECT b.state,COUNT(*) FILTER(WHERE r.status='accepted_linked')::integer accepted,COUNT(*) FILTER(WHERE r.status='processing')::integer processing FROM record_typed_batches b JOIN record_typed_rows r ON r.batch_id=b.id WHERE b.id=$1 GROUP BY b.state`,[receipt])).rows[0];if(state.state==='running'&&state.accepted>0&&state.processing>0){paused=true;prefixState=state;signal();await resume;}}
    return result;
   }};
   const worker=processPendingTypedImports({...deps,db:observed},1);let unsigned!:Awaited<ReturnType<typeof exportOperationalCase>>,signed!:Awaited<ReturnType<typeof exportSignedOperationalCase>>;
   try{
    await Promise.race([reached,worker.then(()=>{throw new Error('Worker finished without a visible committed prefix');})]);
+   expect(prefixState).toEqual({state:'running',accepted:2,processing:4});
    for(const health of ['true','false'])for(const paged of ['true','false']){
     vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED',health);vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED',paged);
-    const visible=await getOperationalCase(opened.db,clock,w,a);expect(incomplete(visible)).toHaveLength(1);expect(visible.assertions.some(value=>value.source.receiptId===receipt)).toBe(true);
-    if(health==='true'){expect(visible.sources[0].accounting.processing).toBeGreaterThan(0);expect(visible.sources[0].caseAccounting?.processing).toBe(0);}
+    const visible=await getOperationalCase(opened.db,clock,w,a);expect(incomplete(visible)).toHaveLength(1);expect(visible.assertions.filter(value=>value.source.receiptId===receipt)).toHaveLength(2);
+    if(health==='true'){expect(visible.sources[0].accounting.processing).toBe(4);expect(visible.sources[0].caseAccounting?.processing).toBe(0);}
     expect(incomplete(await getOperationalCase(opened.db,clock,w,b))).toEqual([]);
    }
    vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');
@@ -87,7 +88,7 @@ describe('authorized accepted-prefix receipt context and frozen packages',()=>{
     expect(incomplete(JSON.parse((await exportOperationalCase({...deps,db:tx,reconstructionSigning:signing},w,a)).bytes.toString()))).toHaveLength(1);throw rollback;
    })).rejects.toBe(rollback);
    unsigned=await exportOperationalCase({...deps,reconstructionSigning:signing},w,a);signed=await exportSignedOperationalCase({...deps,reconstructionSigning:signing},w,a);
-   const frozen=JSON.parse(unsigned.bytes.toString()),signedPackage=JSON.parse(signed.bytes.toString());expect(frozen.schema).toBe('packproof.reconstruction-investigation/v1');expect(incomplete(frozen)).toHaveLength(1);expect(incomplete(frozen.projection)).toHaveLength(1);expect(frozen.sourceHealthMeasuredAt).toBe(clock.now().toISOString());
+   const frozen=JSON.parse(unsigned.bytes.toString()),signedPackage=JSON.parse(signed.bytes.toString());expect(frozen.schema).toBe('packproof.reconstruction-investigation/v1');expect(incomplete(frozen)).toHaveLength(1);expect(incomplete(frozen.projection)).toHaveLength(1);expect(frozen.sourceHealthMeasuredAt).toBe(clock.now().toISOString());expect(frozen.projection.assertions.filter((value:{source:{receiptId:string}})=>value.source.receiptId===receipt)).toHaveLength(2);
    expect(signedPackage.profile).toBe('packproof.reconstruction-investigation/v2');expect(incomplete(signedPackage.content)).toHaveLength(1);expect(signedPackage.manifest.content.sha256).toBe(sha256Hex(canonicalize(signedPackage.content)));expect(unsigned.bytes.toString()).not.toContain(unrelated);expect(signed.bytes.toString()).not.toContain(unrelated);
    await expect(getOperationalCase(opened.db,clock,{...w,organizationId:'unrelated-organization'},a)).rejects.toMatchObject({httpStatus:404});
   }finally{release();expect((await worker).blocked).toBe(0);}

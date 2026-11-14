@@ -16,6 +16,7 @@ import {enqueueShipmentProjectionWork,processPendingShipmentProjections} from '.
 
 export type TypedImportDeps=Pick<AppDependencies,'db'|'clock'|'objectStore'|'devAuth'>;
 type Outcome='processing'|'accepted_linked'|'accepted_unlinked'|'duplicate'|'conflict'|'quarantined'|'rejected';
+const FRESH_IMPORT_CHUNK_ROWS=2;
 export interface TypedBatchRow {
  id:string;organization_id:string;environment:'sandbox'|'live';connection_id:string;location_id:string;subscription_id:string;
  configuration_revision:string|number;grant_revision:string|number;principal_id:string;credential_id:string;actor_context:PartnerActor;operator_membership_id:string;
@@ -297,8 +298,8 @@ export async function processPendingTypedImports(deps:TypedImportDeps,limit=2) {
      const now=deps.clock.now().toISOString(),expires=new Date(deps.clock.now().getTime()+120000).toISOString();
      const renewal=(await tx.query<{lease_expires_at:Date|string}>(`UPDATE record_typed_batches SET lease_expires_at=$3,updated_at=$4 WHERE id=$1 AND state='running' AND lease_token=$2 AND lease_expires_at>$4 RETURNING lease_expires_at`,[j.id,token,expires,now])).rows[0];
      if(!renewal)fail('TYPED_IMPORT_LEASE_LOST','The worker lease has expired or changed');j.lease_expires_at=renewal.lease_expires_at;
-     const pending=(await tx.query<Item>("SELECT * FROM record_typed_rows WHERE batch_id=$1 AND status='processing' ORDER BY row_number LIMIT 6",[j.id])).rows;
-     const finalChunk=pending.length<=5,selected=finalChunk?pending:pending.slice(0,5);
+     const pending=(await tx.query<Item>("SELECT * FROM record_typed_rows WHERE batch_id=$1 AND status='processing' ORDER BY row_number LIMIT $2",[j.id,FRESH_IMPORT_CHUNK_ROWS+1])).rows;
+     const finalChunk=pending.length<=FRESH_IMPORT_CHUNK_ROWS,selected=finalChunk?pending:pending.slice(0,FRESH_IMPORT_CHUNK_ROWS);
      await applyRetainedRows(deps,tx,j,selected,originals!,approved.config);
      checkLease(j,token,deps);
      if(finalChunk)await finishRetainedReceipt(deps,tx,j,token,parsed);else await current(deps,tx,j.actor_context,j,'replay',parsed);

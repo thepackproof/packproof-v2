@@ -165,7 +165,7 @@ describe('bounded durable legacy shipment projection work',()=>{
   const batch=await queue(orderSource,[observation('WAIT-FOR-OPERATIONAL','WAIT-SHIP','waiting-order')]),orderWorker=startReceipt(batch);let operationalWorker:ReturnType<typeof startReceipt>|undefined;
   try{
    await orderWorker.terminal();const original=await readTypedImport(deps,actor,batch),caseId=original.caseIds[0],opRows=Array.from({length:6},(_,i)=>{const row=observation('WAIT-FOR-OPERATIONAL','WAIT-SHIP',`operational-prefix-${i}`);row.assertions=[{...row.assertions[0],property:'reportedLoadedQuantity'}];return row;}),operational=await queue(operationalSource,opRows);operationalWorker=startReceipt(operational,true);await operationalWorker.prefix();
-   expect((await readTypedImport(deps,actor,operational)).counts.processing).toBe(1);await unit(batch);expect((await work(batch))[0]).toMatchObject({state:'pending',cursor_key:null,processed_groups:0,error_code:'SHIPMENT_SOURCE_RECEIPT_PENDING'});expect(await proofs(caseId)).toBe(0);
+   expect((await readTypedImport(deps,actor,operational)).counts.processing).toBe(4);await unit(batch);expect((await work(batch))[0]).toMatchObject({state:'pending',cursor_key:null,processed_groups:0,error_code:'SHIPMENT_SOURCE_RECEIPT_PENDING'});expect(await proofs(caseId)).toBe(0);
    const rollback=Error('rollback reassociated explicit-successor fixture');
    await expect(opened.db.transaction(async tx=>{
     await tx.query("UPDATE record_typed_rows SET case_id=$2,supersedes_id=CASE WHEN row_number=1 THEN $3 ELSE NULL END WHERE batch_id=$1 AND status='accepted_linked'",[operational,neighbor,original.rows[0].id]);
