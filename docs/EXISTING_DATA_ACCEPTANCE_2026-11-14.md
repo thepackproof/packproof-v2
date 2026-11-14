@@ -15,7 +15,7 @@ The implementation is an internal candidate stacked on draft PR163. Automated be
 | WP09 portal | Cases, why-linked mappings, issue history, authorized source extracts, source policy and full-impact retention reviews, signed profile availability | Keyboard/assistive-technology/scaling and five representative user setup/investigation acceptance |
 | WP10 export/retention | Frozen unsigned content; additive verified signed inventory; scoped extracts/omissions; independent original disposition approval; worker-only exact-version transport; receipt-bound local compaction | Actual KMS/trust/IAM/bucket/hold/restore policy review; backups separately governed; normalized audit history remains preserved |
 | WP11 adapter | Existing authorized file and partner API source boundary | Deferred by plan until an actual non-file provider/version and authorized access are selected |
-| WP12 release | Frozen historical policies, additive114–116, explicit116 least-privilege review, candidate packaging and qualification workflow | Production migration/restore rehearsal, signed distribution, one-site shadow operation and20-investigation value study |
+| WP12 release | Frozen historical policies, additive110–119, explicit119 inventory with unchanged118 privileges, reconstruction-v5 archive/preflight, candidate packaging and qualification workflow | Production migration/restore rehearsal, signed distribution, one-site shadow operation and20-investigation value study |
 
 ## Reproducible automated evidence
 
@@ -26,7 +26,7 @@ The implementation is an internal candidate stacked on draft PR163. Automated be
 - `backend/tests/reconstruction-pages.test.ts` and `identity-projection.test.ts`: bounded SQL pages, complete versioned comparisons, revision cursors, current identity decisions and restricted neighbors.
 - `backend/tests/operational-presence-rules.test.ts`: exact qualified policy bindings and suppression for absent, stale, copied or unknown prerequisites.
 - `backend/tests/source-retention.test.ts`, `reconstruction-signing.test.ts`, `source-disposition-s3.test.ts`: immutable decisions, scope/time/hold changes, frozen signing inventory and exact owner/version-bound SDK operations; synthetic transports perform no live cloud deletion.
-- `backend/tests/reconstruction-runtime-privileges.test.ts` and `reconstruction-worker-roles.test.ts`: frozen113 and explicit116 role boundaries, actual restricted SQL-role command flow, real PostgreSQL CI gate.
+- `backend/tests/reconstruction-runtime-privileges.test.ts` and `reconstruction-worker-roles.test.ts`: frozen113/116/117/118 privilege profiles, explicit119 inventory with unchanged118 API/worker permissions, restricted SQL-role command flow and real PostgreSQL CI gate.
 - Windows service/shared corpus/compaction suites and desktop checks: stable legacy/v2 interpretation and refusal to discard mismatched or pending work.
 - Historical job and collector lane suites: exact manifest approval, current source/credential/revision checks, receipt-bound overlap, later live snapshot preservation, independent budgets and restart without changing retained submission identities. Historical observations do not qualify uncollected stages or exporter completeness.
 - Portal component tests and production build: visible pending/restricted/unavailable states, explicit source policy and mapping approvals, accurate signed-export availability.

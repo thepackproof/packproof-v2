@@ -185,7 +185,7 @@ async function projectRow(deps:TypedImportDeps,db:Database,j:TypedBatchRow,row:I
  await applyOperationalObservation(db,deps.clock,{organizationId:j.organization_id,environment:j.environment,locationId:j.location_id,operatorMembershipId:j.operator_membership_id,actor:j.actor_context,batchId:j.id,rowId:row.id,rowNumber:row.row_number,receivedAt:iso(row.received_at),source:j.contract as TypedSourceBatch,casePolicy:config.crossCasePolicy??null},n);
  if(snapshotPolicy||prior){
   const affected=(await db.query<{id:string}>(`WITH scoped_old AS MATERIALIZED (
-   SELECT old.*,b.operator_membership_id AS batch_operator_membership_id FROM record_typed_rows old JOIN record_typed_batches b ON b.id=old.batch_id
+   SELECT old.id,old.case_id,old.status,old.batch_id,b.operator_membership_id AS batch_operator_membership_id FROM record_typed_rows old JOIN record_typed_batches b ON b.id=old.batch_id
    WHERE b.organization_id=$1 AND b.environment=$2 AND b.connection_id=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 AND old.source_event_id=$6 AND old.id<>$7 AND ($8::boolean=false OR (b.subscription_id=$9 AND b.source_namespace=$10)) AND old.status IN ('accepted_linked','accepted_unlinked')
   ) SELECT DISTINCT c.id FROM scoped_old old CROSS JOIN LATERAL ${observationCaseCandidatesSql('old')} AS candidate_cases(case_id)
    JOIN record_cases c ON c.id=candidate_cases.case_id AND c.operator_membership_id=old.batch_operator_membership_id

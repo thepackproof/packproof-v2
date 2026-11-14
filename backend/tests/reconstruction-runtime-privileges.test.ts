@@ -5,21 +5,21 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import { openIsolatedTestDatabase } from './isolated-test-database.js';
-import { migrate } from '../src/db/migrate.js';
+import { migrate,migrationInventory } from '../src/db/migrate.js';
 import { insertUser } from '../src/domain/users.js';
 import {createServicePrincipal,issuePartnerCredential,createIntegrationAccount,PARTNER_SCOPES} from '../src/platform/organizations.js';
 import {canonicalize} from '../src/canonical.js';
 import {sha256Hex} from '../src/hash.js';
 import { recordsMigrationInventory, planRecordsRuntimePrivileges, verifyRecordsRuntimePrivileges, type RecordsPrivilegeOptions } from '../scripts/records-runtime-privileges.mjs';
 
-describe.each([113,116,117,118] as const)('reconstruction%s API and worker database separation',profile=>{
+describe.each([113,116,117,118,119] as const)('reconstruction%s API and worker database separation',profile=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,options:RecordsPrivilegeOptions,user:string,historicalDirectory:string|undefined;
  const suffix=randomBytes(6).toString('hex'),api=`recon_api_${suffix}`,worker=`recon_worker_${suffix}`,broad=`recon_broad_${suffix}`,source='a'.repeat(40),at='2026-11-14T12:00:00Z';
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
  const asRole=async<T>(role:string,fn:(db:typeof opened.db)=>Promise<T>)=>{try{return await opened.db.transaction(async tx=>{await tx.query(`SET LOCAL SESSION AUTHORIZATION ${role}`);return fn(tx);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);opened=await openIsolatedTestDatabase();
-  if(profile<118){historicalDirectory=await mkdtemp(path.join(tmpdir(),'reconstruction-historical-catalog-'));const directory=fileURLToPath(new URL('../migrations/',import.meta.url));for(const file of (await readdir(directory)).filter(name=>name.endsWith('.sql')&&Number(name.slice(0,3))<=117))await copyFile(path.join(directory,file),path.join(historicalDirectory,file));}
+  if(profile<119){historicalDirectory=await mkdtemp(path.join(tmpdir(),'reconstruction-historical-catalog-'));const directory=fileURLToPath(new URL('../migrations/',import.meta.url)),through=profile<118?117:118;for(const file of (await readdir(directory)).filter(name=>name.endsWith('.sql')&&Number(name.slice(0,3))<=through))await copyFile(path.join(directory,file),path.join(historicalDirectory,file));}
   await migrate(opened.db,historicalDirectory);
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
@@ -46,7 +46,7 @@ describe.each([113,116,117,118] as const)('reconstruction%s API and worker datab
   const plan=await planRecordsRuntimePrivileges(opened.db,options);expect(plan.statements.some(sql=>/CREATE ROLE|ALTER ROLE|GRANT ALL|DEFAULT PRIVILEGES/.test(sql))).toBe(false);
   if(profile<117)expect(plan.policySha256).toBe(profile===113?'685cd9ec9aef2aab15de3316a37518321b5c692f0461cac8f2154ccaa84875f3':'19c8a2cfe8841666de82b92a1478ff0452b54e5eb2d443c9ecc91054fec0dc0c');
   else if(profile===117){expect(plan.policySha256).toBe('ced17ca1a4fadd3b74959b7f0b0b5a21279f24404eb44e747231751c7c18e9e0');expect(Object.keys((await recordsMigrationInventory(117)).migrations)).toHaveLength(22);}
-  else {expect(plan.policySha256).toBe('0b8927e8893dcf7cb1da8e176d3a97765eb97014d3d7d565dcfe3572fb2fb300');expect(Object.keys((await recordsMigrationInventory(118)).migrations)).toHaveLength(23);const prior=(await recordsMigrationInventory(117)).tableColumns.record_typed_batches,current=(await recordsMigrationInventory(118)).tableColumns.record_typed_batches;expect(current).toEqual([...prior,'csv_snapshot_boundary_at']);}
+  else {expect(plan.policySha256).toBe('0b8927e8893dcf7cb1da8e176d3a97765eb97014d3d7d565dcfe3572fb2fb300');expect(Object.keys((await recordsMigrationInventory(profile)).migrations)).toHaveLength(profile-95);const prior=(await recordsMigrationInventory(117)).tableColumns.record_typed_batches,current=(await recordsMigrationInventory(118)).tableColumns.record_typed_batches;expect(current).toEqual([...prior,'csv_snapshot_boundary_at']);if(profile===119)expect((await recordsMigrationInventory(119)).tableColumns).toEqual((await recordsMigrationInventory(118)).tableColumns);}
  });
  it('permits only worker processing columns and preserves immutable original fields',async()=>{
   await asRole(worker,db=>db.query('UPDATE record_typed_batches SET state=state,attempts=attempts,next_attempt_at=next_attempt_at,replay_requested=replay_requested WHERE false'));
@@ -133,7 +133,7 @@ describe.each([113,116,117,118] as const)('reconstruction%s API and worker datab
   await expect(asRole(worker,db=>db.query(`INSERT INTO record_source_backfill_decisions SELECT * FROM record_source_backfill_decisions WHERE false`))).rejects.toMatchObject({code:'42501'});
   await expect(asRole(worker,db=>db.query(`INSERT INTO record_source_backfill_receipts SELECT * FROM record_source_backfill_receipts WHERE false`))).rejects.toMatchObject({code:'42501'});
   await expect(asRole(api,db=>db.query('INSERT INTO record_source_backfill_receipts(job_id,item_id,batch_id,created_at) VALUES($1,$2,$3,$4)',[job,'unapproved-manifest-item',batch,at]))).rejects.toThrow(/manifest and authority/);
-  if(profile===118){
+  if(profile>=118){
    expect((await asRole(api,db=>db.query('SELECT csv_snapshot_boundary_at FROM record_typed_batches WHERE id=$1',[batch]))).rows[0].csv_snapshot_boundary_at).toBeNull();
    const boundary='2026-11-10T00:00:00Z',contract={schema:'packproof.typed-source-batch/v2',completeness:{kind:'snapshot',asOf:boundary,marker:'synthetic-verified-control'}},boundedBatch=batch+'-bounded';
    const insertBoundary=(id:string,value:unknown,bound:string,mediaType='text/csv')=>asRole(api,db=>db.query(`INSERT INTO record_typed_batches SELECT (jsonb_populate_record(NULL::record_typed_batches,to_jsonb(b)||jsonb_build_object('id',$2::text,'contract',$3::jsonb,'csv_snapshot_boundary_at',$4::timestamptz,'original_media_type',$5::text))).* FROM record_typed_batches b WHERE b.id=$1`,[batch,id,JSON.stringify(value),bound,mediaType]));
@@ -145,6 +145,17 @@ describe.each([113,116,117,118] as const)('reconstruction%s API and worker datab
    for(const role of [api,worker])await expect(asRole(role,db=>db.query('UPDATE record_typed_batches SET csv_snapshot_boundary_at=csv_snapshot_boundary_at WHERE false'))).rejects.toMatchObject({code:'42501'});
    await expect(asRole(worker,db=>db.query('INSERT INTO record_typed_batches(id,csv_snapshot_boundary_at) SELECT id,csv_snapshot_boundary_at FROM record_typed_batches WHERE false'))).rejects.toMatchObject({code:'42501'});
    await expect(opened.db.query('UPDATE record_typed_batches SET csv_snapshot_boundary_at=csv_snapshot_boundary_at WHERE id=$1',[boundedBatch])).rejects.toThrow(/immutable/i);
+  }
+  if(profile===119){
+   const rowId='retained-event-'+suffix,eventId='retained-event-identity-'+suffix;
+   await opened.db.query(`INSERT INTO record_typed_rows(id,batch_id,row_number,source_event_id,source_revision,payload_sha256,source_values,normalized,errors,status,history_eligibility,received_at) VALUES($1,$2,1,$3,'1',$4,'{"preserved":"original"}','{"preserved":"assertion"}','[]','accepted_unlinked','within_bounds',$5)`,[rowId,batch,eventId,'a'.repeat(64),at]);
+   const indexName='record_typed_rows_accepted_event_batch',index=()=>opened.db.query<{indisunique:boolean;indisvalid:boolean;indisready:boolean;indnkeyatts:number;first_key:string;second_key:string;predicate:string}>(`SELECT i.indisunique,i.indisvalid,i.indisready,i.indnkeyatts,pg_get_indexdef(i.indexrelid,1,true) first_key,pg_get_indexdef(i.indexrelid,2,true) second_key,pg_get_expr(i.indpred,i.indrelid) predicate FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname=$1`,[indexName]);
+   const meta=(await index()).rows[0];expect(meta).toMatchObject({indisunique:false,indisvalid:true,indisready:true,indnkeyatts:2,first_key:'source_event_id',second_key:'batch_id'});expect(meta.predicate).toContain('accepted_linked');expect(meta.predicate).toContain('accepted_unlinked');expect(meta.predicate).not.toContain('processing');
+   const retained=()=>opened.db.query('SELECT to_jsonb(r) row FROM record_typed_rows r WHERE id=$1',[rowId]),catalog=()=>opened.db.query(`SELECT 'constraint' kind,c.conname name,pg_get_constraintdef(c.oid) definition FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname=current_schema() AND t.relname='record_typed_rows' UNION ALL SELECT 'trigger',g.tgname,pg_get_triggerdef(g.oid) FROM pg_trigger g JOIN pg_class t ON t.oid=g.tgrelid JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname=current_schema() AND t.relname='record_typed_rows' ORDER BY kind,name`),acls=()=>opened.db.query(`SELECT a.attname,c.relacl::text table_acl,a.attacl::text column_acl FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped WHERE n.nspname=current_schema() AND c.relname='record_typed_rows' ORDER BY a.attnum`);
+   const before={rows:(await retained()).rows,catalog:(await catalog()).rows,acls:(await acls()).rows},sql=(await migrationInventory()).find(m=>m.id==='119_accepted_source_event_lookup')!.sql;
+   await opened.db.transaction(async tx=>{await tx.query(`DROP INDEX ${indexName}`);await tx.query(sql);});
+   expect((await retained()).rows).toEqual(before.rows);expect((await catalog()).rows).toEqual(before.catalog);expect((await acls()).rows).toEqual(before.acls);expect((await index()).rows[0]).toEqual(meta);
+   expect((await asRole(worker,db=>db.query("SELECT id FROM record_typed_rows WHERE source_event_id=$1 AND batch_id=$2 AND status IN ('accepted_linked','accepted_unlinked')",[eventId,batch]))).rows).toEqual([{id:rowId}]);
   }
   await asRole(worker,db=>verifyRecordsRuntimePrivileges(db,options));await asRole(api,db=>verifyRecordsRuntimePrivileges(db,options));
  });

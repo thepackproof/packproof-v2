@@ -127,7 +127,8 @@ const typedBatch117InsertColumns=['id','organization_id','environment','connecti
 const policy118={...policy117,
  record_typed_batches:{api:{...policy117.record_typed_batches.api,insert:[...typedBatch117InsertColumns,'csv_snapshot_boundary_at']},worker:policy117.record_typed_batches.worker},
 };
-const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118?policy118:policy;
+//119 adds only an index: its catalog columns and effective grants remain118.
+const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118||throughMigration===119?policy118:policy;
 
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -169,7 +170,7 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109,113,116,117,118].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ if(![108,109,113,116,117,118,119].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
  const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[01][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();

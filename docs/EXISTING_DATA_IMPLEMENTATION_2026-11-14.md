@@ -54,10 +54,10 @@ The synthetic contract corpus is shared by TypeScript and C# through `typed-sour
 
 | Component | Candidate contract |
 | --- | --- |
-| API | Existing partner API plus opt-in typed batch and source subscription v1 profiles. |
+| API | Existing partner API with explicitly negotiated typed batch v1/v2, source-subscription v1 and separately approved historical-job v1 routes. |
 | Browser | Source-specific review and first-batch activation from this exact source candidate. |
 | Windows | Internal desktop/service `0.4.0`, explicitly negotiated v1/v2 source contracts and separately enabled historical jobs; protected subscription state and queue schema v4. |
-| Database | Additive migrations 110–118; frozen 108/109/113/116/117 policies plus explicit 118 runtime privilege review. |
+| Database | Additive migrations 110–119; frozen 108/109/113/116/117/118 policies plus explicit119 inventory using unchanged118 runtime privileges and reconstruction-v5 archive/preflight. |
 | Legacy source lane | Existing scheduled CSV v1/v2 and PR163 validation retained. |
 
 The existing queue is migrated without deleting original bytes, keys, credentials or receipts. The old binary must refuse the schema-four queue rather than reset it. Newly staged originals have a recorded capture time; an older entry without that information stays unknown. Rollback pauses the affected source and uses a compatible service or a roll-forward repair. Do not replace the executable with an older reader after migration, delete ProgramData, run a destructive down migration, or transfer queued bytes into a new source grant.

@@ -38,11 +38,19 @@ export function currentCaseObservationProjectionSql(rowAlias:string,caseExpressi
 export function caseObservationSupersededSql(rowIdExpression:string,caseExpression:string) {
  return `(EXISTS(SELECT 1 FROM record_typed_rows observation_successor WHERE observation_successor.supersedes_id=${rowIdExpression} AND observation_successor.status IN ('accepted_linked','accepted_unlinked')) OR EXISTS(SELECT 1 FROM record_typed_snapshot_versions snapshot_current JOIN record_typed_snapshot_versions snapshot_later ON snapshot_later.organization_id=snapshot_current.organization_id AND snapshot_later.environment=snapshot_current.environment AND snapshot_later.connection_id=snapshot_current.connection_id AND snapshot_later.location_id=snapshot_current.location_id AND snapshot_later.subscription_id=snapshot_current.subscription_id AND snapshot_later.source_namespace=snapshot_current.source_namespace AND snapshot_later.source_event_id=snapshot_current.source_event_id AND snapshot_later.source_as_of>snapshot_current.source_as_of JOIN record_typed_rows snapshot_row ON snapshot_row.id=snapshot_later.observation_id WHERE snapshot_current.observation_id=${rowIdExpression} AND snapshot_row.status IN ('accepted_linked','accepted_unlinked')))`;
 }
+/** Partition checks alone require currentCaseObservationSql to have already
+ * proved this same row's status, case membership and original source scope. */
+export function currentCaseAssertionPartitionSql(assertionAlias:string,rowAlias:string,caseExpression:string) {
+ return `(NOT EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection_any WHERE assertion_projection_any.observation_id=${rowAlias}.id) OR EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection WHERE assertion_projection.observation_id=${rowAlias}.id AND assertion_projection.case_id=${caseExpression} AND assertion_projection.state='linked' AND assertion_projection.assertion_ids ? ${assertionAlias}.id AND NOT EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection_successor WHERE assertion_projection_successor.supersedes_id=assertion_projection.id)))`;
+}
+export function currentCaseRelationshipPartitionSql(relationshipAlias:string,rowAlias:string,caseExpression:string) {
+ return `(NOT EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection_any WHERE relationship_projection_any.observation_id=${rowAlias}.id) OR EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection WHERE relationship_projection.observation_id=${rowAlias}.id AND relationship_projection.case_id=${caseExpression} AND relationship_projection.state='linked' AND relationship_projection.relationship_ids ? ${relationshipAlias}.id AND NOT EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection_successor WHERE relationship_projection_successor.supersedes_id=relationship_projection.id)))`;
+}
 export function currentCaseAssertionSql(assertionAlias:string,rowAlias:string,caseExpression:string) {
- return `(${currentCaseObservationSql(rowAlias,caseExpression)} AND (NOT EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection_any WHERE assertion_projection_any.observation_id=${rowAlias}.id) OR EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection WHERE assertion_projection.observation_id=${rowAlias}.id AND assertion_projection.case_id=${caseExpression} AND assertion_projection.state='linked' AND assertion_projection.assertion_ids ? ${assertionAlias}.id AND NOT EXISTS(SELECT 1 FROM record_case_row_projections assertion_projection_successor WHERE assertion_projection_successor.supersedes_id=assertion_projection.id))))`;
+ return `(${currentCaseObservationSql(rowAlias,caseExpression)} AND ${currentCaseAssertionPartitionSql(assertionAlias,rowAlias,caseExpression)})`;
 }
 export function currentCaseRelationshipSql(relationshipAlias:string,rowAlias:string,caseExpression:string) {
- return `(${currentCaseObservationSql(rowAlias,caseExpression)} AND (NOT EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection_any WHERE relationship_projection_any.observation_id=${rowAlias}.id) OR EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection WHERE relationship_projection.observation_id=${rowAlias}.id AND relationship_projection.case_id=${caseExpression} AND relationship_projection.state='linked' AND relationship_projection.relationship_ids ? ${relationshipAlias}.id AND NOT EXISTS(SELECT 1 FROM record_case_row_projections relationship_projection_successor WHERE relationship_projection_successor.supersedes_id=relationship_projection.id))))`;
+ return `(${currentCaseObservationSql(rowAlias,caseExpression)} AND ${currentCaseRelationshipPartitionSql(relationshipAlias,rowAlias,caseExpression)})`;
 }
 
 /** Entity history follows its currently retained per-case assertion or edge. */
@@ -93,14 +101,20 @@ async function candidates(db:Database,x:CaseWriteContext,n:TypedSourceObservatio
    if(approved.length>20)throw new DomainError('CASE_IDENTITY_MAPPING_LIMIT','Narrow the active approved namespace mappings before resolving this source',409);
    for(const mapping of approved){
     const namespace=mapping.left_namespace===r.namespace?mapping.right_namespace:mapping.left_namespace;
-    const mapped=(await db.query<{id:string}>(`SELECT DISTINCT c.id FROM record_cases c LEFT JOIN record_case_entities e ON e.case_id=c.id WHERE c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.operator_membership_id=$4 AND ((c.root_namespace=$5 AND c.root_type=$6 AND c.root_external_id=$7 AND $8='') OR (e.namespace=$5 AND e.entity_type=$6 AND e.external_id=$7 AND e.parent_external_id=$8)) LIMIT 3`,[x.organizationId,x.environment,x.locationId,x.operatorMembershipId,namespace,r.type,r.externalId,r.parentExternalId??''])).rows;
+    const mapped=(await db.query<{id:string}>(`SELECT c.id FROM record_cases c
+     WHERE c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.location_key=$3 AND c.operator_membership_id=$4 AND c.root_namespace=$5 AND c.root_type=$6 AND c.root_external_id=$7 AND $8=''
+     UNION SELECT c.id FROM record_case_entities e JOIN record_cases c ON c.id=e.case_id
+     WHERE e.organization_id=$1 AND e.environment=$2 AND e.namespace=$5 AND e.entity_type=$6 AND e.external_id=$7 AND e.parent_external_id=$8
+      AND c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.operator_membership_id=$4 LIMIT 3`,[x.organizationId,x.environment,x.locationId,x.operatorMembershipId,namespace,r.type,r.externalId,r.parentExternalId??''])).rows;
     for(const row of mapped){found.add(row.id);crosswalks.push({id:mapping.id,caseId:row.id,ruleVersion:mapping.rule_version,reference:r,kind:'approved_exact_namespace_rule',parentScope:r.parentExternalId??null});}
    }
   }
   if(['order','shipment','return'].includes(r.type)){
-   const rows=(await db.query<{id:string}>(`SELECT DISTINCT c.id FROM record_cases c LEFT JOIN record_case_entities e ON e.case_id=c.id
-    WHERE c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.operator_membership_id=$7 AND
-    ((c.root_namespace=$4 AND c.root_type=$5 AND c.root_external_id=$6) OR (e.namespace=$4 AND e.entity_type=$5 AND e.external_id=$6)) LIMIT 3`,[x.organizationId,x.environment,x.locationId,r.namespace,r.type,r.externalId,x.operatorMembershipId])).rows;
+   const rows=(await db.query<{id:string}>(`SELECT c.id FROM record_cases c
+    WHERE c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.location_key=$3 AND c.operator_membership_id=$7 AND c.root_namespace=$4 AND c.root_type=$5 AND c.root_external_id=$6
+    UNION SELECT c.id FROM record_case_entities e JOIN record_cases c ON c.id=e.case_id
+    WHERE e.organization_id=$1 AND e.environment=$2 AND e.namespace=$4 AND e.entity_type=$5 AND e.external_id=$6
+     AND c.organization_id=$1 AND c.environment=$2 AND c.location_id=$3 AND c.operator_membership_id=$7 LIMIT 3`,[x.organizationId,x.environment,x.locationId,r.namespace,r.type,r.externalId,x.operatorMembershipId])).rows;
    for(const row of rows)found.add(row.id);
   }
  }
