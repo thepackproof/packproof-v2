@@ -19,6 +19,13 @@ import { processPendingRecordImports } from './records/imports.js';
 import { processRecordConnectionOperations } from './records/connections.js';
 import { processSourceIngestions } from './records/ingestions.js';
 import { processSourceAssociations } from './records/source-associations.js';
+import {processPendingTypedImports} from './records/typed-imports.js';
+import {reconstructionFeatureEnabled} from './records/reconstruction-features.js';
+import {initializeReconstructionSigningRuntime} from './records/reconstruction-signing.js';
+import {processPendingCaseProjections,operationalProjectionWorkerConfig} from './records/projection-worker.js';
+import {initializeAwsSourceDispositionRuntime} from './records/source-disposition-s3.js';
+import {processSourceDispositions} from './records/source-retention-disposition.js';
+import {processPendingReconstructionIssues} from './records/reconstruction-issues.js';
 import { processPendingPartnerImports } from './records/partner-imports.js';
 import { processPendingCanonicalExports } from './records/partner-exports.js';
 import { processSourceArtifactCompletions } from './records/source-artifacts.js';
@@ -74,6 +81,7 @@ const rnd=rndConfigFromEnv();
 assertResearchRuntimeIsolation(config,rnd);
 // Validate signing configuration before opening the database or starting workers.
 const manifestSigning = await initializeManifestSigningRuntime(systemClock);
+const reconstructionSigning=initializeReconstructionSigningRuntime({clock:systemClock,manifestSigning,activeSourceSha:config.release.commit??''});
 const envelopeTrustPublication = initializeEnvelopeTrustPublication(systemClock);
 const opened = await openDatabase(config);
 if(config.migrateOnStart) await migrate(opened.db);
@@ -91,6 +99,7 @@ if(billing){
     throw new Error('Configured billing requires an explicit UTC reconciliation baseline');
 }
 const objectStore = createObjectStore(config);
+const sourceDisposition=await initializeAwsSourceDispositionRuntime({clock:systemClock,activeSourceSha:config.release.commit??'',processRole:config.processRole??'combined',sourceStore:{kind:config.objectStore,bucket:process.env.PACKPROOF_COMMITTED_S3_BUCKET??config.awsS3Bucket,region:config.awsRegion}});
 const webhookConfig = webhookConfigFromEnv();
 const recoveryPublisher=await initializeRecoveryPublisher(config,systemClock);
 const recipientPreservation=initializeRecipientPreservation(config,systemClock);
@@ -158,6 +167,8 @@ const app = config.processRole==='worker'?express():createServerApp({
   observationConfig:observationConfigFromEnv(process.env),
   webhookConfig,
   manifestSigning,
+  reconstructionSigning,
+  sourceDisposition,
   envelopeTrustPublication,
   envelopes:envelopes?.access,
   operationalSnapshots,
@@ -184,12 +195,17 @@ const server = app.listen(config.port, config.release.environment==='research'?"
   );
 });
 const jobs:ScheduledJob[]=createIntakeMailJobs(opened.db,systemClock);
+const projectionWorkerConfig=reconstructionFeatureEnabled('pagedProjections')?operationalProjectionWorkerConfig():null;
 if(process.env.PACKPROOF_ORGANIZATIONS_ENABLED==='true'){
   jobs.push({name:'record-imports',intervalMs:5000,run:()=>processPendingRecordImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-connections',intervalMs:5000,run:()=>processRecordConnectionOperations(opened.db,systemClock)});
   jobs.push({name:'source-ingestions',intervalMs:5000,run:()=>processSourceIngestions(opened.db,systemClock)});
   jobs.push({name:'source-associations',intervalMs:5000,run:()=>processSourceAssociations(opened.db,systemClock)});
   jobs.push({name:'partner-record-imports',intervalMs:5000,run:()=>processPendingPartnerImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
+  if(reconstructionFeatureEnabled('typedIntake'))jobs.push({name:'typed-source-imports',intervalMs:5000,run:()=>processPendingTypedImports({db:opened.db,clock:systemClock,objectStore,devAuth:isDevLoginEnabled(config)})});
+  if(projectionWorkerConfig)jobs.push({name:'case-projections',intervalMs:projectionWorkerConfig.intervalMs,run:()=>processPendingCaseProjections(opened.db,systemClock,projectionWorkerConfig.maxCasesPerPass)});
+  if(reconstructionFeatureEnabled('sourceDisposition'))jobs.push({name:'source-dispositions',intervalMs:5000,run:()=>processSourceDispositions({db:opened.db,clock:systemClock,objectStore,sourceDisposition})});
+  if(reconstructionFeatureEnabled('rules'))jobs.push({name:'case-reconstruction-issues',intervalMs:projectionWorkerConfig?.intervalMs??5000,run:()=>processPendingReconstructionIssues(opened.db,systemClock,projectionWorkerConfig?.maxCasesPerPass??5)});
   jobs.push({name:'record-canonical-exports',intervalMs:5000,run:()=>processPendingCanonicalExports({db:opened.db,clock:systemClock,objectStore,envelopes:envelopes?.access,devAuth:isDevLoginEnabled(config)})});
   jobs.push({name:'record-source-artifacts',intervalMs:5000,run:()=>processSourceArtifactCompletions(opened.db,systemClock,objectStore)});
 }

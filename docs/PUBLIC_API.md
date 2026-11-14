@@ -2,6 +2,8 @@
 
 The public contract translates a confirmed merchant order into the same authoritative Proof used by the mobile and web applications. It does not create a separate partner evidence system. Machine-readable contract: [`backend/openapi.json`](../backend/openapi.json), also served without authentication at `GET /v1/openapi.json`.
 
+The separately gated [existing-data API candidate](EXISTING_DATA_API.md) documents approved typed originals, source subscriptions, composite identities and operational case paging. Its additive operations are described in `backend/partner-openapi.json`; they do not change the frozen Proof API or establish production activation.
+
 ## Start in the sandbox
 
 Use Node 22 and Python 3 (only for independent package verification). From the repository:

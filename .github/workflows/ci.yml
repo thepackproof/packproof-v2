@@ -95,6 +95,8 @@ jobs:
       - run: npm run build
       - name: Verify database credential and session-option guards
         run: node --test ../infra/tests/admin-runtime-credentials.test.mjs
+      - name: Verify reconstruction candidate inventory and read-only release review
+        run: node --test ../infra/backend-release/reconstruction-release-review.test.mjs ../infra/backend-release/reconstruction-v2-release-review.test.mjs ../infra/backend-release/reconstruction-v3-release-review.test.mjs ../infra/backend-release/reconstruction-v4-release-review.test.mjs
       - name: Hash exact API build and migration set
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
@@ -145,6 +147,9 @@ jobs:
           cmp "$RUNNER_TEMP/web-first.json" "$RUNNER_TEMP/web-second.json"
       - name: Hash exact web build and source identity
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/web-bom.json" --web-dist dist --expected-sha "$GITHUB_SHA"
+      - name: Render synthetic source reviews at desktop and phone widths
+        run: |
+          CHROME_BIN="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" node scripts/source-review-visual-check.mjs --out ../artifacts/WEB_ACCEPTANCE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -153,6 +158,7 @@ jobs:
             ${{ runner.temp }}/web-first.json
             ${{ runner.temp }}/web-second.json
             ${{ runner.temp }}/web-bom.json
+            artifacts/WEB_ACCEPTANCE
 
   mobile:
     name: Mobile
@@ -292,7 +298,7 @@ jobs:
           PACKPROOF_RELEASE_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/packproof_test
           PACKPROOF_REQUIRE_POSTGRES_RELEASE_GATES: '1'
-        run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts tests/records-migrate.test.ts tests/records-runtime-privileges.test.ts tests/record-agent-migrate.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
+        run: npm test -- tests/migrations.test.ts tests/release-postgres.integration.test.ts tests/records-migrate.test.ts tests/records-runtime-privileges.test.ts tests/reconstruction-runtime-privileges.test.ts tests/reconstruction-worker-roles.test.ts tests/source-contracts.test.ts tests/source-subscriptions.test.ts tests/typed-imports.test.ts tests/reconstruction.test.ts tests/reconstruction-app.test.ts tests/record-agent-migrate.test.ts --reporter=default --reporter=junit --outputFile="$RUNNER_TEMP/postgres-release-tests.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -379,6 +385,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22

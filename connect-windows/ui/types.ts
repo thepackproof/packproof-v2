@@ -77,11 +77,117 @@ export interface Configuration {
   offlineWindowHours: number;
   sourceContract?: SourceContract;
 }
+export interface SourceSubscriptionStatus {
+  id: string;
+  sourceProfile: string;
+  displayName: string;
+  state: string;
+  localPaused: boolean;
+  configurationRevision: number;
+  grantRevision: number;
+  folder?: string;
+  folderDigest?: string;
+  lastCheckAt?: string;
+  lastCollectedAt?: string;
+  lastReceiptAt?: string;
+  lastErrorCode?: string;
+  sourceAsOf?: string;
+  freshness?: "current" | "delayed" | "unknown";
+  queue: Record<string, number>;
+  pendingCount?: number;
+  oldestPendingAt?: string | null;
+  pendingAgeUnknownCount?: number;
+  retainedBytes?: number;
+  originalBytesKnown?: number;
+  originalBytesUnknownCount?: number;
+  verifiedCaseId?: string;
+  setupQueueId?: string;
+  approvalPath?: string;
+  files?: Array<{ name: string; byteSize: number; lastWriteAt?: string }>;
+  selectedFileName?: string;
+  fileSha256?: string;
+  headers?: string[];
+  rowCount?: number;
+  samples?: Array<Record<string, string>>;
+  backfillDraft?: BackfillInspection | null;
+  backfillJobs?: BackfillJob[];
+  backfillAvailable?: boolean;
+  backfillSemantics?: BackfillSemantics | null;
+  backfillJobTotal?: number;
+  backfillJobsShown?: number;
+  backfillJobKnownTotal?: number;
+  backfillJobsTruncated?: boolean;
+  receipt?: {
+    id: string;
+    state: string;
+    counts: Record<string, number>;
+    caseIds?: string[];
+    original?: { sha256: string; byteSize?: number };
+  };
+}
+export type BackfillSemantics = "cumulative_snapshot" | "event_delta";
+export interface BackfillInspection {
+  configurationRevision: number; configurationSha256: string; grantRevision: number;
+  inspectionSha256: string; historyFrom: string; historyTo: string; semantics: BackfillSemantics;
+  originals: Array<{ name: string; sha256: string; byteSize: number; mediaType: "text/csv" }>;
+  originalCount: number; totalBytes: number; inspectedAt: string;
+}
+export interface BackfillJob {
+  schema: "packproof.source-backfill/v1"; id: string; organizationId: string; environment: "sandbox" | "live"; subscriptionId: string; installationId: string;
+  configurationRevision: number; grantRevision: number; manifestSha256: string;
+  historyFrom: string; historyTo: string; semantics: BackfillSemantics;
+  state: "proposed" | "approved" | "paused" | "expired" | "blocked_policy" | "completed";
+  approvalExpiresAt: string | null; createdAt: string; approvalPath: string; blockReason: string | null;
+  originals: Array<{ id: string; name: string; sha256: string; byteSize: number; mediaType: "text/csv"; batchId: string | null; receiptState: string | null; counts: BackfillRowCounts | null }>;
+  originalsShown?: number; originalsTotal?: number; originalsTruncated?: boolean;
+  progress: { files: { total: number; received: number; pending: number; processing: number; succeeded: number; failed: number }; rows: BackfillRowCounts; receivedRows: number };
+  capabilities: { approve: boolean; pause: boolean; resume: boolean; collect: boolean };
+  configurationSha256?: string; principalId?: string; connectionId?: string; locationId?: string; operatorMembershipId?: string;
+  latestDecisionId?: string | null;
+  localPaused?: boolean; lastErrorCode?: string | null;
+  localItems?: Array<{ itemId: string; queueId?: string; errorCode?: string }>;
+}
+export interface BackfillRowCounts { processing: number; acceptedLinked: number; acceptedUnlinked: number; duplicate: number; conflict: number; quarantined: number; rejected: number }
+export interface BackfillInspectionRequest { id: string; historyFrom: string; historyTo: string; semantics: BackfillSemantics }
+export interface SubscriptionDraft {
+  folder: string;
+  folderDigest: string;
+  files: Array<{ name: string; byteSize: number; lastWriteAt?: string }>;
+  selectedFileName?: string;
+  fileSha256?: string;
+  headers?: string[];
+  rowCount?: number;
+  samples?: Array<Record<string, string>>;
+  proposal?: { id: string; subscriptionId?: string };
+  approvalPath?: string;
+}
+export interface SubscriptionIdentityPolicy {
+  schema: "packproof.source-identity-policy/v1";
+  eventKey: { kind: "column" } | { kind: "composite"; fields: string[] };
+  revision: { kind: "column" | "source_as_of" | "immutable_event" };
+}
+export interface SubscriptionProposal {
+  batchSchema?: "packproof.typed-source-batch/v2";
+  identityPolicy?: SubscriptionIdentityPolicy;
+  displayName: string;
+  sourceProfile: string;
+  sourceNamespace: string;
+  mappingVersion: string;
+  mapping: Record<string, string>;
+  constants: Record<string, string>;
+  historyFrom: string; unknownTimePolicy?: "quarantine" | "retain_unknown";
+  historyTo?: string | null;
+  expectedIntervalSeconds?: number | null;
+  wholeFileUploadApproved: true;
+}
 export interface ConnectStatus {
   state: string;
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
-  capabilities?: { sourceContracts: string[]; rulesVersion: string };
+  capabilities?: { sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[]; sourceBackfillJobs?: boolean };
+  sourceCapabilities?: { typedCollection: boolean };
+  sourceSubscriptions?: SourceSubscriptionStatus[];
+  subscriptionDraft?: SubscriptionDraft;
   installedVersion?: string;
   installationId?: string;
   environment: string;
@@ -168,6 +274,23 @@ export interface ConnectStatus {
   approvalPath?: string;
 }
 export interface ConnectBridge {
+  chooseBackfillFiles(input: BackfillInspectionRequest): Promise<ConnectStatus>;
+  proposeBackfill(input: { id: string; inspectionSha256: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
+  pauseBackfill(input: { id: string; jobId: string }): Promise<ConnectStatus>;
+  resumeBackfill(input: { id: string; jobId: string }): Promise<ConnectStatus>;
+  openBackfillApproval(input: { id: string; jobId: string }): Promise<unknown>;
+  chooseNewSubscriptionFolder(): Promise<ConnectStatus>;
+  inspectSubscriptionDraft(fileName: string): Promise<ConnectStatus>;
+  proposeSubscription(input: SubscriptionProposal): Promise<ConnectStatus>;
+  chooseSubscriptionFolder(id: string): Promise<ConnectStatus>;
+  inspectSubscriptionFile(input: { id: string; fileName: string }): Promise<ConnectStatus>;
+  previewSubscription(input: { id: string; fileName: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
+  commitSubscription(input: { id: string; wholeBatchApproved: true }): Promise<ConnectStatus>;
+  verifySubscription(id: string): Promise<ConnectStatus>;
+  pauseSubscription(id: string): Promise<ConnectStatus>;
+  resumeSubscription(id: string): Promise<ConnectStatus>;
+  openSubscriptionApproval(id: string): Promise<unknown>;
+  openSubscriptionCase(id: string): Promise<unknown>;
   getStatus(): Promise<ConnectStatus>;
   checkComputer(): Promise<ConnectStatus>;
   beginEnrollment(): Promise<ConnectStatus>;

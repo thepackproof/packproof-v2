@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SourceControls } from "./SourceControls";
 import {
   GUIDED_STAGES,
   guidedStage,
@@ -96,6 +97,7 @@ export function ConnectApp({
 }) {
   const [status, setStatus] = useState<ConnectStatus | null>(null),
     [stage, setStage] = useState(0),
+    [legacySetup, setLegacySetup] = useState(false),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [details, setDetails] = useState(false),
@@ -249,6 +251,7 @@ export function ConnectApp({
     status?.setup?.running,
   ]);
   const disabled = !bridge || !!busy;
+  const sourceHome = !!status?.capabilities?.typedSourceSubscriptions && !legacySetup;
   const compatible =
     !!analysis &&
     status?.capabilities?.rulesVersion === analysis.binding.rulesVersion;
@@ -332,7 +335,7 @@ export function ConnectApp({
             PackProof<small>CONNECT</small>
           </span>
         </div>
-        <nav aria-label="Setup progress">
+        <nav aria-label="Setup progress" hidden={sourceHome}>
           <ol>
             {GUIDED_STAGES.map((name, index) => (
               <li
@@ -383,9 +386,9 @@ export function ConnectApp({
         </header>
         <main id="connect-content" aria-busy={!!busy}>
           <div className="connect-heading">
-            <span className="eyebrow">STAGE {stage + 1} OF 3</span>
+            <span className="eyebrow">{sourceHome ? "EXISTING DATA CONNECTIONS" : `STAGE ${stage + 1} OF 3`}</span>
             <h1 ref={heading} tabIndex={-1}>
-              {active
+              {sourceHome ? "Your sources" : active
                 ? "Your connection is active"
                 : stage === 0
                   ? "Let's connect your shipment records."
@@ -394,7 +397,7 @@ export function ConnectApp({
                     : "Ready to connect these shipments?"}
             </h1>
             <p>
-              {active
+              {sourceHome ? "Connect the existing reports that describe orders, loading and delivery. Each source keeps its own scope and approval." : active
                 ? "New eligible reports are collected by the approved background service."
                 : stage === 0
                   ? "Choose your shipment folder. We’ll check the report before anything is uploaded."
@@ -503,7 +506,9 @@ export function ConnectApp({
               </button>
             </section>
           )}
-          {stage === 0 && (
+          {sourceHome && status && bridge && <SourceControls status={status} bridge={bridge} disabled={disabled} action={action} external={external}/>}
+          {status?.capabilities?.typedSourceSubscriptions && <div className="connect-actions"><button className="quiet" disabled={disabled} onClick={() => setLegacySetup(value => !value)}>{legacySetup ? "Return to sources" : "Manage the existing shipment connection"}</button></div>}
+          {!sourceHome && stage === 0 && (
             <section className="connect-card">
               {!status?.installationId ? (
                 <>
@@ -660,7 +665,7 @@ export function ConnectApp({
               )}
             </section>
           )}
-          {stage === 1 && (
+          {!sourceHome && stage === 1 && (
             <section className="connect-card">
               {analysis ? (
                 <>
@@ -931,7 +936,7 @@ export function ConnectApp({
               )}
             </section>
           )}
-          {stage === 2 && (
+          {!sourceHome && stage === 2 && (
             <section className="connect-card">
               {active ? (
                 <>
@@ -1199,7 +1204,7 @@ export function ConnectApp({
             >
               Save and exit
             </button>
-            {stage > 0 && !active && (
+            {!sourceHome && stage > 0 && !active && (
               <button
                 className="secondary"
                 disabled={disabled || status?.setup?.running}
@@ -1226,7 +1231,7 @@ export function ConnectApp({
             >
               <summary>Support and connection details</summary>
               <p>
-                Windows 11 x64 · one local NTFS folder · UTF-8 CSV · at most 2
+                Windows 11 x64 · approved local NTFS export folders · UTF-8 CSV · at most 2
                 MiB, 1,000 rows and 50 columns per report. Collection pauses
                 during sleep or shutdown.
               </p>

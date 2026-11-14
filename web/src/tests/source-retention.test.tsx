@@ -1,0 +1,34 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { PackProofApi } from '../api/client';
+import { SourceRetention, type SourceRetentionReview } from '../records/SourceRetention';
+const review: SourceRetentionReview = { batchId: 'batch-a', impactSha256: 'a'.repeat(64), original: { name: 'shared.csv', sha256: 'b'.repeat(64), byteSize: 300, versionBound: true, availability: 'available' }, cases: [{ id: 'case-a', reference: '0010482', root_type: 'order' }], rowCount: 2, policy: null, activeHolds: [], retention: { eligibleForDispositionReview: false, reasons: ['No retention policy is assigned'] }, executionAvailable: false };
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+it('loads complete source impact only after opening retention review and never calls an unqualified executor', async () => {
+  const request = vi.fn(async () => review), user = userEvent.setup();
+  render(<SourceRetention api={{ recordsRequest: request } as unknown as PackProofApi} batchId="batch-a" organizationId="org-a" environment="live"/>);
+  expect(request).not.toHaveBeenCalled();
+  await user.click(screen.getByText('Review this original’s retention and disposition'));
+  expect(await screen.findByText('shared.csv · 2 rows')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Request disposition review' })).toBeDisabled();
+  expect(screen.getByText(/This API has no deletion capability/)).toBeVisible();
+  await user.type(screen.getByRole('textbox', { name: 'Reason for the retention decision' }), 'Preserve for review');
+  await user.click(screen.getByRole('checkbox', { name: /I reviewed this exact complete-source impact/ }));
+  await user.click(screen.getByRole('button', { name: 'Place preservation hold' }));
+  const writes = request.mock.calls as unknown as Array<[string, string, { impactSha256: string; action: string }]>;
+  await waitFor(() => expect(writes.some(([, method]) => method === 'POST')).toBe(true));
+  expect(writes.find(([, method]) => method === 'POST')![2]).toMatchObject({ impactSha256: review.impactSha256, action: 'hold', reason: 'Preserve for review' });
+});
+it('requires a new current impact after a changed retention decision', async () => {
+  const request = vi.fn(async (_path: string, method?: string) => { if (method === 'POST') throw new Error('Refresh the complete source impact before recording this decision'); return review; }), user = userEvent.setup();
+  render(<SourceRetention api={{ recordsRequest: request } as unknown as PackProofApi} batchId="batch-a" organizationId="org-a" environment="live"/>);
+  await user.click(screen.getByText('Review this original’s retention and disposition'));
+  await user.type(await screen.findByRole('textbox', { name: 'Reason for the retention decision' }), 'Preserve for review');
+  await user.click(screen.getByRole('checkbox', { name: /I reviewed this exact complete-source impact/ }));
+  await user.click(screen.getByRole('button', { name: 'Place preservation hold' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Refresh the complete source impact');
+  await user.click(screen.getByRole('button', { name: 'Refresh retention impact' }));
+  expect(screen.getByRole('checkbox', { name: /I reviewed this exact complete-source impact/ })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Place preservation hold' })).toBeDisabled();
+});

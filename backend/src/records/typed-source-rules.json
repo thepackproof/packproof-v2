@@ -1,0 +1,290 @@
+{
+  "version": "packproof.source-contracts/v1",
+  "schema": "packproof.typed-source-batch/v1",
+  "limits": {
+    "bytes": 2097152,
+    "rows": 1000,
+    "columns": 50,
+    "assertionsPerRow": 25,
+    "referencesPerRow": 20,
+    "relationshipsPerRow": 30,
+    "fieldLength": 10000
+  },
+  "profiles": [
+    {
+      "id": "packproof.order-lines/v1",
+      "grain": "order_line",
+      "requiredReferences": [
+        "order",
+        "order_line"
+      ],
+      "allowedProperties": [
+        "orderedQuantity",
+        "allocatedQuantity",
+        "canceledQuantity",
+        "backorderedQuantity",
+        "description",
+        "status"
+      ],
+      "description": "Source-scoped order and stable line identities with explicit optional fulfillment allocations; no shipment is inferred."
+    },
+    {
+      "id": "packproof.shipment-handling-units/v1",
+      "grain": "shipment_line_allocation",
+      "requiredReferences": [
+        "shipment",
+        "order_line"
+      ],
+      "allowedProperties": [
+        "allocatedQuantity",
+        "description",
+        "status"
+      ],
+      "description": "Explicit shipment-line allocations with optional carton, pallet, load and stop relationships."
+    },
+    {
+      "id": "packproof.operational-observations/v1",
+      "grain": "source_observation",
+      "requiredReferences": [],
+      "allowedProperties": [
+        "reportedPickedQuantity",
+        "reportedPackedQuantity",
+        "reportedLoadedQuantity",
+        "reportedReceivedQuantity",
+        "reportedReturnedQuantity",
+        "serial",
+        "status",
+        "trackingNumber"
+      ],
+      "description": "Source-reported snapshots and events with explicit time quality and no physical-truth inference."
+    }
+  ],
+  "quantityProperties": [
+    "orderedQuantity",
+    "allocatedQuantity",
+    "canceledQuantity",
+    "backorderedQuantity",
+    "reportedPickedQuantity",
+    "reportedPackedQuantity",
+    "reportedLoadedQuantity",
+    "reportedReceivedQuantity",
+    "reportedReturnedQuantity"
+  ],
+  "properties": [
+    "orderedQuantity",
+    "allocatedQuantity",
+    "canceledQuantity",
+    "backorderedQuantity",
+    "reportedPickedQuantity",
+    "reportedPackedQuantity",
+    "reportedLoadedQuantity",
+    "reportedReceivedQuantity",
+    "reportedReturnedQuantity",
+    "description",
+    "status",
+    "serial",
+    "trackingNumber"
+  ],
+  "csvFields": [
+    "sourceEventId",
+    "sourceRevision",
+    "observationKind",
+    "supersedesRevision",
+    "orderId",
+    "orderLineId",
+    "shipmentId",
+    "handlingUnitId",
+    "loadId",
+    "stopId",
+    "returnId",
+    "productId",
+    "serialId",
+    "trackingId",
+    "property",
+    "amount",
+    "unit",
+    "value",
+    "occurredAt",
+    "sourceAsOf",
+    "timeQuality",
+    "originSystem",
+    "copiedFromSource"
+  ],
+  "entityTypes": [
+    "order",
+    "order_line",
+    "shipment",
+    "handling_unit",
+    "load",
+    "stop",
+    "return",
+    "product",
+    "serialized_unit",
+    "tracking"
+  ],
+  "relationshipTypes": [
+    "has_line",
+    "fulfills",
+    "allocated_to",
+    "contains",
+    "loaded_on",
+    "delivered_at",
+    "return_of",
+    "tracks",
+    "same_as"
+  ],
+  "csvReferenceFields": {
+    "orderId": "order",
+    "orderLineId": "order_line",
+    "shipmentId": "shipment",
+    "handlingUnitId": "handling_unit",
+    "loadId": "load",
+    "stopId": "stop",
+    "returnId": "return",
+    "productId": "product",
+    "serialId": "serialized_unit",
+    "trackingId": "tracking"
+  },
+  "csvRelationships": [
+    {
+      "from": "order",
+      "to": "order_line",
+      "type": "has_line"
+    },
+    {
+      "from": "shipment",
+      "to": "order_line",
+      "type": "fulfills"
+    },
+    {
+      "from": "order_line",
+      "to": "handling_unit",
+      "type": "allocated_to"
+    },
+    {
+      "from": [
+        "handling_unit",
+        "shipment"
+      ],
+      "to": "load",
+      "type": "loaded_on"
+    },
+    {
+      "from": "shipment",
+      "to": "stop",
+      "type": "delivered_at"
+    },
+    {
+      "from": "return",
+      "to": "order_line",
+      "type": "return_of"
+    },
+    {
+      "from": "tracking",
+      "to": "shipment",
+      "type": "tracks"
+    }
+  ],
+  "schemaV2": "packproof.typed-source-batch/v2",
+  "contractVersionV2": "packproof.source-contracts/v2",
+  "propertiesV2": [
+    "orderedQuantity",
+    "allocatedQuantity",
+    "canceledQuantity",
+    "backorderedQuantity",
+    "reportedPickedQuantity",
+    "reportedPackedQuantity",
+    "reportedLoadedQuantity",
+    "reportedReceivedQuantity",
+    "reportedReturnedQuantity",
+    "description",
+    "status",
+    "serial",
+    "trackingNumber",
+    "labelStatus",
+    "carrierCode",
+    "carrierAccountReference",
+    "carrierService",
+    "carrierAcceptanceStatus",
+    "expectedHandoffStatus",
+    "loadingHandoffStatus",
+    "receiptHandoffStatus",
+    "expectedHandoffAt"
+  ],
+  "csvFieldsV2": [
+    "sourceEventId",
+    "sourceRevision",
+    "observationKind",
+    "supersedesRevision",
+    "orderId",
+    "orderLineId",
+    "shipmentId",
+    "handlingUnitId",
+    "loadId",
+    "stopId",
+    "returnId",
+    "productId",
+    "serialId",
+    "trackingId",
+    "property",
+    "amount",
+    "unit",
+    "value",
+    "occurredAt",
+    "sourceAsOf",
+    "timeQuality",
+    "originSystem",
+    "copiedFromSource",
+    "sourceSequence"
+  ],
+  "identityFieldsV2": [
+    "sourceEventId",
+    "sourceSequence",
+    "orderId",
+    "orderLineId",
+    "shipmentId",
+    "handlingUnitId",
+    "loadId",
+    "stopId",
+    "returnId",
+    "productId",
+    "serialId",
+    "trackingId",
+    "property"
+  ],
+  "profilesV2": [
+    {
+      "id": "packproof.operational-observations/v2",
+      "grain": "source_observation",
+      "requiredReferences": [],
+      "allowedProperties": [
+        "reportedPickedQuantity",
+        "reportedPackedQuantity",
+        "reportedLoadedQuantity",
+        "reportedReceivedQuantity",
+        "reportedReturnedQuantity",
+        "serial",
+        "status",
+        "trackingNumber",
+        "labelStatus",
+        "carrierCode",
+        "carrierAccountReference",
+        "carrierService",
+        "carrierAcceptanceStatus",
+        "expectedHandoffStatus",
+        "loadingHandoffStatus",
+        "receiptHandoffStatus",
+        "expectedHandoffAt"
+      ],
+      "description": "Explicit package-label, carrier acceptance and individual handling-unit handoff assertions; unknown timing and physical contents remain unknown."
+    }
+  ],
+  "identityRulesV2": {
+    "schema": "packproof.source-identity-policy/v1",
+    "prefix": "composite:v1:",
+    "immutableRevision": "immutable-event/v1",
+    "maxKeyBytes": 1024,
+    "minimumFields": 2,
+    "maximumFields": 8
+  }
+}

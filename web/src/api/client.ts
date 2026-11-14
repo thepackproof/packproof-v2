@@ -69,6 +69,14 @@ export interface ProofEmailSubscriptionView {
 }
 
 export class PackProofApi {
+  async recordsReconstructionExport(caseId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment });
+    return this.download(`/me/records/cases/${encodeURIComponent(caseId)}/export?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
+  async recordsSignedReconstructionExport(caseId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
+    const scope = new URLSearchParams({ organizationId, environment, profile: 'packproof.reconstruction-investigation/v2' });
+    return this.download(`/me/records/cases/${encodeURIComponent(caseId)}/export?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });
+  }
   async recordsCanonicalExport(exportId: string, organizationId: string, environment: string, options: RecordDownloadOptions = {}): Promise<Blob> {
     const scope = new URLSearchParams({ organizationId, environment });
     return this.download(`/me/records/canonical-exports/${encodeURIComponent(exportId)}/package?${scope}`, true, { ...options, maxBytes: RECORD_DOWNLOAD_LIMIT });

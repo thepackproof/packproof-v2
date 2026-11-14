@@ -5,7 +5,8 @@ import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
-import {currentApprovalPath,submitConfigurationForReview} from './approval-target';
+import {currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,submitConfigurationForReview} from './approval-target';
+import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {ConnectStatus} from '../ui/types';
 protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);app.enableSandbox();
@@ -18,6 +19,47 @@ function safeError(error:unknown){const message=error instanceof Error?error.mes
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);return {ok:true,value:await fn(...parsed)};}catch(error){return {ok:false,error:safeError(error)};}});}
 function setup(){
+ bind('chooseBackfillFiles',async input=>{
+  const current=await status(),source=current.sourceSubscriptions?.find(source=>source.id===input.id);
+  if(current.capabilities?.sourceBackfillJobs!==true||source?.backfillAvailable!==true||!source.folder||source.state!=='active'||source.localPaused)throw Error('Refresh and resume the current approved source before inspecting historical reports.');
+  const selected=await dialog.showOpenDialog(win!,{title:`Choose historical reports for ${source.displayName}`,defaultPath:source.folder,properties:['openFile','multiSelections','dontAddToRecent'],filters:[{name:'Completed CSV reports',extensions:['csv']}]});
+  if(selected.canceled)return current;
+  return mutate('inspectBackfill',{...input,fileNames:backfillFileNames(source.folder,selected.filePaths)});
+ });
+ for(const method of ['proposeBackfill','pauseBackfill','resumeBackfill'] as const)bind(method,input=>mutate(method,input));
+ bind('openBackfillApproval',async input=>open(approvalUrl(currentBackfillApprovalPath(await status(),input.id,input.jobId),config.webBaseUrl)));
+ bind('chooseNewSubscriptionFolder',async()=>{
+  const selected=await dialog.showOpenDialog(win!,{title:'Choose a dedicated existing export folder',defaultPath:preparedExportPath(config.channel,process.env.ProgramData),properties:['openDirectory','dontAddToRecent']});
+  if(selected.canceled||selected.filePaths.length!==1)return status();
+  return mutate('beginSubscriptionSource',{folder:selected.filePaths[0]});
+ });
+ bind('inspectSubscriptionDraft',fileName=>mutate('inspectSubscriptionDraft',{fileName}));
+ bind('proposeSubscription',async input=>{
+  const next=await mutate('proposeSubscription',input);
+  // A source-specific saved locator, returned only after successful proposal,
+  // opens the same trusted browser flow without replacing an enrollment.
+  const proposalId=next.subscriptionDraft?.proposal?.id??next.subscriptionDraft?.proposal?.subscriptionId;
+  const proposed=next.sourceSubscriptions?.find(s=>s.id===proposalId&&s.state==='proposed');
+  if(proposed){try{await open(approvalUrl(currentSubscriptionApprovalPath(next,proposed.id),config.webBaseUrl));}catch{return {...next,authorizationNotice:'The source proposal was saved. Select Review source in browser to reopen the exact approval.'};}}
+  return next;
+ });
+ bind('chooseSubscriptionFolder',async id=>{
+  const current=await status(),source=current.sourceSubscriptions?.find(s=>s.id===id);
+  if(!source||source.state==='revoked')throw Error('Refresh the current source approval before selecting its folder.');
+  const selected=await dialog.showOpenDialog(win!,{title:`Choose the approved folder for ${source.displayName}`,defaultPath:source.folder||preparedExportPath(config.channel,process.env.ProgramData),properties:['openDirectory','dontAddToRecent']});
+  if(selected.canceled||selected.filePaths.length!==1)return current;
+  return mutate('selectSubscriptionSource',{id,folder:selected.filePaths[0]});
+ });
+ bind('inspectSubscriptionFile',input=>mutate('inspectSubscriptionFile',input));
+ bind('previewSubscription',input=>mutate('previewSubscription',input));
+ bind('commitSubscription',input=>mutate('commitSubscription',input));
+ for(const method of ['verifySubscription','pauseSubscription','resumeSubscription'] as const)bind(method,id=>mutate(method,{id}));
+ bind('openSubscriptionApproval',async id=>open(approvalUrl(currentSubscriptionApprovalPath(await status(),id),config.webBaseUrl)));
+ bind('openSubscriptionCase',async id=>{
+  const source=(await status()).sourceSubscriptions?.find(s=>s.id===id);
+  if(!source?.verifiedCaseId||!/^[A-Za-z0-9_-]{1,160}$/.test(source.verifiedCaseId))throw Error('Retrieve and verify the first real case before opening it.');
+  await open(new URL(`/app/records/cases/${encodeURIComponent(source.verifiedCaseId)}`,config.webBaseUrl).href);
+ });
  bind('getStatus',async()=>{try{await bridge.request('refresh');return status();}catch{const cached=await status();return {...cached,state:cached.state==='revoked'?'revoked':'action_needed',verification:{complete:false},authorizationNotice:'Current PackProof approval could not be refreshed. Check service network access, or begin approved recovery when access has expired or been revoked.'};}});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown};return {...await status(),checks:result.checks};});
  for(const [method,operation] of Object.entries({pollEnrollment:'pollEnrollment',verifyImport:'verify',proposeActivation:'proposeActivation',activate:'activate',pause:'pause',resume:'resume',refresh:'refresh'}))bind(method as Method,()=>mutate(operation));
  bind('chooseFolder',async()=>{

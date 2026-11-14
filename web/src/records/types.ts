@@ -1,6 +1,6 @@
 export type RecordEnvironment = 'live' | 'sandbox' | string;
 export interface RecordOrganization { id: string; name: string; environment: RecordEnvironment; enabled: boolean; role: string; locations: Array<{ id: string; name: string }> }
-export interface RecordsContext { schema: string; organizations: RecordOrganization[]; selectedOrganizationId: string | null; environment: RecordEnvironment; capabilities: { records: boolean; import: boolean; review: boolean; manage: boolean } }
+export interface RecordsContext { schema: string; organizations: RecordOrganization[]; selectedOrganizationId: string | null; environment: RecordEnvironment; capabilities: { records: boolean; import: boolean; review: boolean; manage: boolean; reconstruction?: boolean; reconstructionExports?: boolean; sourceSubscriptions?: boolean; crossCase?: boolean; signedCaseExports?: boolean; sourceDisposition?: boolean; sourceIdentityV2?: boolean; sourceRulePolicies?: boolean } }
 export interface RecordSummary {
   id: string; proofId: string; organizationId: string; environment: string; reference: string | null; title: string | null;
   trackingNumber: string | null; carrier: string | null; createdAt: string; updatedAt: string; revision: number;
