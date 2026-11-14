@@ -21,8 +21,8 @@ public sealed class SourceSubscriptionTests:IDisposable
     [Fact]public void Protected_state_migration_does_not_reinterpret_legacy_approval_as_typed_authority()
     {
         var state=new LocalState{Token="keep-secret",Folder="C:\\Exports",FolderDigest="same-folder",ScanCursorFileName="00009.csv",LocalPaused=false,ServerConfig=Json.Element(new{state="active",configSha256="old-digest",configRevision=4,config=new{mapping=new{shipmentReference="Reference"}}})};
-        SourceStateMigration.SynchronizeLegacy(state);var source=Assert.Single(state.SourceSubscriptions);Assert.Equal(2,state.StateVersion);Assert.Equal("legacy",source.Id);Assert.False(source.CapabilityApproved);Assert.Equal("00009.csv",source.CursorFileName);Assert.Equal("old-digest",source.ConfigurationSha256);Assert.Equal("keep-secret",state.Token);Assert.False(source.LocalPaused);
-        state.StateVersion=3;Assert.Equal("LOCAL_STATE_UNSUPPORTED",Assert.Throws<ConnectException>(()=>SourceStateMigration.Validate(state)).Code);
+        SourceStateMigration.SynchronizeLegacy(state);var source=Assert.Single(state.SourceSubscriptions);Assert.Equal(3,state.StateVersion);Assert.Equal("legacy",source.Id);Assert.False(source.CapabilityApproved);Assert.Equal("00009.csv",source.CursorFileName);Assert.Equal("old-digest",source.ConfigurationSha256);Assert.Equal("keep-secret",state.Token);Assert.False(source.LocalPaused);
+        state.StateVersion=4;Assert.Equal("LOCAL_STATE_UNSUPPORTED",Assert.Throws<ConnectException>(()=>SourceStateMigration.Validate(state)).Code);
     }
     [Fact]public void Source_paging_due_work_and_counts_are_isolated_and_keep_old_authority()
     {
@@ -48,9 +48,9 @@ public sealed class SourceSubscriptionTests:IDisposable
         var sources=new[]{new SourceSubscriptionState{Id="a",CapabilityApproved=true,LocalPaused=false},new SourceSubscriptionState{Id="b",CapabilityApproved=true,LocalPaused=false}};var seen=new List<string>();
         var error=await Assert.ThrowsAsync<ConnectException>(()=>SourceScheduler.Run(sources,null,(source,_)=>{seen.Add(source.Id);throw new ConnectException("SPOOL_CAPACITY_REACHED","Storage pressure");},default));Assert.Equal("SPOOL_CAPACITY_REACHED",error.Code);Assert.Equal(new[]{"a"},seen);
     }
-    [Fact]public void Shared_CSV_fixtures_have_identical_local_and_hosted_normalization_and_business_hashes()
+    [Theory][InlineData("source-contract-corpus.json")][InlineData("source-contract-corpus-v2.json")]public void Shared_CSV_fixtures_have_identical_local_and_hosted_normalization_and_business_hashes(string corpusName)
     {
-        using var corpus=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"source-contract-corpus.json")));var exercised=0;
+        using var corpus=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,corpusName)));var exercised=0;
         foreach(var fixture in corpus.RootElement.GetProperty("cases").EnumerateArray())
         {
             var input=fixture.GetProperty("input");if(input.GetProperty("original").GetProperty("mediaType").GetString()!="text/csv")continue;
@@ -82,7 +82,7 @@ public sealed class SourceSubscriptionTests:IDisposable
     }
     private sealed class Replies(Func<HttpRequestMessage,Task<HttpResponseMessage>> reply):HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>reply(request); }
-    [Theory][InlineData(false)][InlineData(true)]public async Task Runtime_collects_three_approved_feeds_without_UI_and_isolates_schema_drift(bool driftingMiddleSource)
+    [Theory][InlineData(false,"active")][InlineData(true,"active")][InlineData(false,"ready")]public async Task Runtime_collects_three_approved_feeds_without_UI_and_isolates_schema_drift(bool driftingMiddleSource,string installationState)
     {
         using var corpus=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"source-contract-corpus.json")));
         var input=corpus.RootElement.GetProperty("cases").EnumerateArray().First(f=>f.GetProperty("name").GetString()=="csv-loading").GetProperty("input");
@@ -96,7 +96,7 @@ public sealed class SourceSubscriptionTests:IDisposable
             views.Add(new{id,installationId="installation",connectionId=id,locationId="site-a",configurationRevision=1,grantRevision=2,configurationSha256=id+"-config",config,state="active",capabilities=new{typedCollection=true,preview=true},updatedAt="2026-11-14T00:00:00Z"});
             files[id]=Encoding.UTF8.GetBytes(driftingMiddleSource&&id=="source-b"?content.Replace("Order,","ChangedOrder,"):content);
         }
-        var policy=Json.Element(new{state="active",config=(object?)null,configSha256="none",configRevision=0,capabilities=new{typedSourceSubscriptions=true,sourceSubscriptionsSchema="packproof.source-subscriptions/v1"}});
+        var policy=Json.Element(new{state=installationState,config=(object?)null,configSha256="none",configRevision=0,capabilities=new{typedSourceSubscriptions=true,sourceSubscriptionsSchema="packproof.source-subscriptions/v1"}});
         var previews=new Dictionary<string,JsonElement>();var commits=0;
         var handler=new Replies(async request=>
         {

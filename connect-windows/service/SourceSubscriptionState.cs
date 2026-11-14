@@ -35,13 +35,16 @@ public sealed class SourceSubscriptionState
     public bool CapabilityApproved { get; set; }
     public string? SetupQueueId { get; set; }
     public string? VerifiedCaseId { get; set; }
-    public string QueueConfigurationIdentity(string? installationId) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{installationId ?? "unenrolled"}:{Id}:{ConfigurationSha256}:{ConfigurationRevision}:{GrantRevision}")));
+    public string QueueConfigurationIdentity(string? installationId) => QueueConfigurationIdentity(installationId,GrantRevision);
+    // Completed-original erasure uses a new current authorization while checking
+    // the immutable capture identity. It never changes a queued work item's grant.
+    internal string QueueConfigurationIdentity(string? installationId,int receiptGrantRevision) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{installationId ?? "unenrolled"}:{Id}:{ConfigurationSha256}:{ConfigurationRevision}:{receiptGrantRevision}")));
 }
 public sealed record QueueSourceIdentity(string SourceId, string SourceProfile, int GrantRevision);
 
 public static class SourceStateMigration
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public static void Validate(LocalState state)
     {
         if (state.StateVersion is < 1 or > Version || state.SourceSubscriptions is null || state.SourceSubscriptions.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != state.SourceSubscriptions.Count)

@@ -3,12 +3,15 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2'):
         raise ValueError('INVALID_SOURCE_PROFILE')
+    if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
+        raise ValueError('INVALID_SOURCE_COMMIT')
     paths=['backend'] if profile=='bridge' else ['backend','packages/evidence-contracts','config/rnd/research-build.json','.dockerignore']
     probes=['infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']
     if profile=='reconstruction-v1':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs']
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1'):paths+=probes
+    if profile=='reconstruction-v2':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs']
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -16,7 +19,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1') and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -52,6 +55,14 @@ def archive(source,destination,profile,verify=False):
         predecessor=[row for row in inventory if row['id'] not in additions]
         digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
         if len(inventory)!=manifest['sourceCount']+4 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!=manifest['inventorySha256']:
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v2':
+        # Explicit116 review binds the entire frozen113 predecessor. The old
+        #108/109/113 profiles above remain unchanged and reject this source.
+        additions={'114_operational_case_allocations','115_operational_projection_indexes','116_case_export_retention'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=115 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='eac1cf8a3e505fdee80d3888a4d504efc6266f610897997b46fef8bca62cfd8c':
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':

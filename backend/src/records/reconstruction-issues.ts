@@ -8,7 +8,7 @@ import {idempotent} from '../platform/idempotency.js';
 import {strictBody,auditOrganization} from '../platform/organizations.js';
 import {textField} from '../platform/tenants.js';
 import {requireRecordWorkspace,type RecordWorkspace} from './access.js';
-import {requireCaseAccess} from './cases.js';
+import {requireCaseAccess,currentCaseAssertionSql} from './cases.js';
 import {loadOperationalCaseProjection} from './reconstruction.js';
 import {requireReconstructionFeature,reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {RECONSTRUCTION_RULE_VERSION,type ReconstructionComparison} from './reconstruction-rules.js';
@@ -22,7 +22,7 @@ const iso=(value:Date|string)=>new Date(value).toISOString();
  * to another case. Exports explicitly inventory these restricted evaluations. */
 async function restrictEvaluations(db:Database,caseId:string,values:Array<Evaluation|null>) {
  const ids=[...new Set(values.flatMap(value=>value?.inputAssertionIds??[]))];
- const allowed=new Set(ids.length?(await db.query<{id:string}>(`SELECT a.id FROM record_case_assertions a JOIN record_typed_rows r ON r.id=a.observation_id WHERE a.case_id=$1 AND r.case_id=a.case_id AND r.status='accepted_linked' AND a.id=ANY($2::text[])`,[caseId,ids])).rows.map(row=>row.id):[]);
+ const allowed=new Set(ids.length?(await db.query<{id:string}>(`SELECT a.id FROM record_case_assertions a JOIN record_typed_rows r ON r.id=a.observation_id WHERE a.case_id=$1 AND ${currentCaseAssertionSql('a','r','a.case_id')} AND a.id=ANY($2::text[])`,[caseId,ids])).rows.map(row=>row.id):[]);
  return values.map(value=>{
   if(value===null||value.inputAssertionIds.every(id=>allowed.has(id)))return value;
   return {outcome:'not_comparable',title:'Historical inputs have restricted visibility',explanation:'This evaluation was created under an earlier association. One or more inputs are no longer within this case current authorized scope. The immutable history is retained with source details withheld.',inputAssertionIds:value.inputAssertionIds.filter(id=>allowed.has(id)),historyVisibility:'restricted',omissions:['Source values, row details and source identifiers outside the current case association are withheld.']} as Evaluation&{historyVisibility:'restricted';omissions:string[]};
@@ -42,7 +42,7 @@ async function currentAction(db:Database,id:string){return (await db.query<{acti
  * Replaying the same input revision never duplicates an issue or action. */
 export async function synchronizeOperationalCaseIssues(db:Database,clock:Clock,w:RecordWorkspace,caseId:string) {
  requireReconstructionFeature('rules');requireReconstructionFeature('sourceHealth');
- const projection=await loadOperationalCaseProjection(db,clock,w,caseId);
+ const projection=await loadOperationalCaseProjection(db,clock,w,caseId,{evaluation:true});
  return db.transaction(async tx=>{
   await tx.query('SELECT pg_advisory_xact_lock(1347438157,hashtext($1))',[caseId]);
   await tx.query('SELECT id FROM record_cases WHERE id=$1 FOR UPDATE',[caseId]);
@@ -66,7 +66,7 @@ export async function synchronizeOperationalCaseIssues(db:Database,clock:Clock,w
   for(const [id,entry]of [...evaluations].sort(([a],[b])=>a.localeCompare(b))){
    const old=existing.find(issue=>issue.id===id);
    if(!old&&entry.value.outcome!=='different')continue;
-   if(!old)await tx.query('INSERT INTO record_case_issues(id,case_id,category,rule_version,subject,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING',[id,caseId,entry.category,RECONSTRUCTION_RULE_VERSION,JSON.stringify(entry.subject),clock.now().toISOString()]);
+   if(!old)await tx.query('INSERT INTO record_case_issues(id,case_id,category,rule_version,subject,created_at) VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT DO NOTHING',[id,caseId,entry.category,entry.value.ruleVersion??RECONSTRUCTION_RULE_VERSION,JSON.stringify(entry.subject),clock.now().toISOString()]);
    const evaluationId=`case_eval_${sha256Hex(canonicalize({issueId:id,projectionVersion:projection.projectionVersion}))}`;
    const sequence=Number((await tx.query<{n:number}>('SELECT COALESCE(MAX(sequence),0)+1 AS n FROM record_case_issue_evaluations WHERE issue_id=$1',[id])).rows[0].n);
    const inserted=(await tx.query('INSERT INTO record_case_issue_evaluations(id,issue_id,case_id,projection_version,sequence,outcome,evaluation,created_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8) ON CONFLICT(issue_id,projection_version) DO NOTHING RETURNING id',[evaluationId,id,caseId,projection.projectionVersion,sequence,entry.value.outcome,JSON.stringify(entry.value),clock.now().toISOString()])).rows.length>0;
@@ -86,13 +86,13 @@ export async function synchronizeOperationalCaseIssues(db:Database,clock:Clock,w
 /** Bounded outbox-following rule work. Unchanged closed cases are not swept
  * repeatedly. Current source health is rechecked for cases with open findings;
  * a receipt or association revision always makes its case eligible again. */
-export async function processPendingReconstructionIssues(db:Database,clock:Clock,limit=5) {
+export async function processPendingReconstructionIssues(db:Database,clock:Clock,limit=reconstructionFeatureEnabled('pagedProjections')?100:5) {
  if(!reconstructionFeatureEnabled('reconstruction')||!reconstructionFeatureEnabled('sourceHealth')||!reconstructionFeatureEnabled('rules'))return {processed:0,blocked:0};
- const n=Math.max(1,Math.min(20,Math.floor(limit))),now=clock.now().toISOString();
+ const n=Math.max(1,Math.min(reconstructionFeatureEnabled('pagedProjections')?100:20,Math.floor(limit))),now=clock.now().toISOString();
  const candidates=(await db.query<{id:string;revision:number;operator_membership_id:string;organization_id:string;environment:'sandbox'|'live'}>(`SELECT c.id,c.revision,c.operator_membership_id,c.organization_id,c.environment
   FROM record_cases c LEFT JOIN record_case_rule_state state ON state.case_id=c.id
-  WHERE (state.case_id IS NULL OR state.next_check_at<=$1) AND (state.case_id IS NULL OR state.case_revision<c.revision OR EXISTS(SELECT 1 FROM record_case_issues i WHERE i.case_id=c.id AND COALESCE((SELECT a.action FROM record_case_issue_actions a WHERE a.issue_id=i.id AND a.action NOT IN ('note','assign') ORDER BY sequence DESC LIMIT 1),'reopen') NOT IN ('resolve','system_resolve')))
-  ORDER BY COALESCE(state.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
+  WHERE state.case_id IS NULL OR (state.case_revision<c.revision AND (state.error_code IS NULL OR state.next_check_at<=$1)) OR (state.next_check_at<=$1 AND EXISTS(SELECT 1 FROM record_case_issues i WHERE i.case_id=c.id AND COALESCE((SELECT a.action FROM record_case_issue_actions a WHERE a.issue_id=i.id AND a.action NOT IN ('note','assign') ORDER BY sequence DESC LIMIT 1),'reopen') NOT IN ('resolve','system_resolve')))
+  ORDER BY CASE WHEN state.case_id IS NULL OR state.case_revision<c.revision THEN 0 ELSE 1 END,COALESCE(state.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
  let processed=0,blocked=0;
  for(const candidate of candidates){
   try{
@@ -108,7 +108,7 @@ export async function processPendingReconstructionIssues(db:Database,clock:Clock
    // A failed rule pass never changes or deletes accepted source data. Backoff
    // keeps unavailable case memberships from blocking independently authorized cases.
    const code=error instanceof DomainError?error.code:'RECONSTRUCTION_RULE_RETRY';
-   await db.query('INSERT INTO record_case_rule_state(case_id,case_revision,projection_version,checked_at,next_check_at,error_code) VALUES($1,$2,NULL,$3,$4,$5) ON CONFLICT(case_id) DO UPDATE SET checked_at=EXCLUDED.checked_at,next_check_at=EXCLUDED.next_check_at,error_code=EXCLUDED.error_code',[candidate.id,0,now,new Date(clock.now().getTime()+300000).toISOString(),code]);blocked++;
+   await db.query('INSERT INTO record_case_rule_state(case_id,case_revision,projection_version,checked_at,next_check_at,error_code) VALUES($1,$2,NULL,$3,$4,$5) ON CONFLICT(case_id) DO UPDATE SET checked_at=EXCLUDED.checked_at,next_check_at=EXCLUDED.next_check_at,error_code=EXCLUDED.error_code',[candidate.id,0,now,new Date(clock.now().getTime()+(code==='CASE_PROJECTION_CHANGED'?250:300000)).toISOString(),code]);blocked++;
   }
  }
  return {processed,blocked};
@@ -160,7 +160,7 @@ export async function pageOperationalCaseIssueHistory(db:Database,clock:Clock,w:
  const rows=(await db.query<Record<string,unknown>&{sequence:number}>(`SELECT * FROM ${table} WHERE issue_id=$1 AND case_id=$2 AND sequence>$3 ORDER BY sequence LIMIT $4`,[issueId,caseId,after,limit+1])).rows;
  let entries=rows.slice(0,limit);
  if(section==='evaluations'){const scoped=await restrictEvaluations(db,caseId,entries.map(row=>row.evaluation as Evaluation));entries=entries.map((row,index)=>({...row,evaluation:scoped[index]}));}
- else {const all=(await db.query<{evaluation:Evaluation}>('SELECT evaluation FROM record_case_issue_evaluations WHERE issue_id=$1 AND case_id=$2',[issueId,caseId])).rows,scoped=await restrictEvaluations(db,caseId,all.map(row=>row.evaluation));if(scoped.some(value=>(value as {historyVisibility?:string}|null)?.historyVisibility==='restricted'))entries=entries.map(row=>({...row,reason:'Earlier review action retained. Its source details are restricted after an association correction.',historyVisibility:'restricted'}));}
+ else {const restricted=(await db.query<{restricted:boolean}>(`SELECT EXISTS(SELECT 1 FROM record_case_issue_evaluations evaluation CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(evaluation.evaluation->'inputAssertionIds','[]'::jsonb)) input(id) WHERE evaluation.issue_id=$1 AND evaluation.case_id=$2 AND NOT EXISTS(SELECT 1 FROM record_case_assertions a JOIN record_typed_rows r ON r.id=a.observation_id WHERE a.id=input.id AND a.case_id=$2 AND ${currentCaseAssertionSql('a','r','a.case_id')})) restricted`,[issueId,caseId])).rows[0].restricted;if(restricted)entries=entries.map(row=>({...row,reason:'Earlier review action retained. Its source details are restricted after an association correction.',historyVisibility:'restricted'}));}
  await requireCaseAccess(db,clock,w,caseId);
  return {issueId,caseId,section,entries,total,returnedCount:entries.length,hasMore:rows.length>limit,nextAfter:rows.length>limit?Number(entries.at(-1)!.sequence):null};
 }

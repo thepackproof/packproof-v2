@@ -1,5 +1,5 @@
 import type {Database} from '../src/db/database.js';
-export interface RecordsPrivilegeOptions {runtimeRole:string;workerRole:string;schema:string;reviewedSourceCommit:string;reviewedMigrationSha256:string;throughMigration?:108|109|113;}
-export function recordsMigrationInventory(throughMigration?:108|109|113):Promise<{migrations:Record<string,string>;migrationSha256:string}>;
+export interface RecordsPrivilegeOptions {runtimeRole:string;workerRole:string;schema:string;reviewedSourceCommit:string;reviewedMigrationSha256:string;throughMigration?:108|109|113|116;}
+export function recordsMigrationInventory(throughMigration?:108|109|113|116):Promise<{migrations:Record<string,string>;migrationSha256:string}>;
 export function verifyRecordsRuntimePrivileges(db:Database,options:RecordsPrivilegeOptions):Promise<{schema:string;sourceCommit:string;databaseSchema:string;caller:string;runtimeRole:string;workerRole:string;migrations:Record<string,string>;migrationSha256:string;policySha256:string;effectivePrivilegesSha256:string}>;
 export function planRecordsRuntimePrivileges(db:Database,options:RecordsPrivilegeOptions):Promise<{schema:string;sourceCommit:string;databaseSchema:string;runtimeRole:string;workerRole:string;migrations:Record<string,string>;migrationSha256:string;policySha256:string;statementsSha256:string;statements:string[]}>;

@@ -10,8 +10,16 @@ public sealed partial class AgentRuntime
     private SourceSubscriptionState Subscription(string id) => state.SourceSubscriptions.SingleOrDefault(s=>s.Id==id&&id!=SourceSubscriptionState.LegacyId) ?? throw new ConnectException("SOURCE_SUBSCRIPTION_REQUIRED","Refresh and approve this source in PackProof before configuring local collection.");
     private static string SourceFolderDigest(string folder) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(folder.ToUpperInvariant())));
     private JsonElement SourceConfig(SourceSubscriptionState source) => source.ApprovedConfiguration is { } config ? config : throw new ConnectException("SOURCE_APPROVAL_REQUIRED","Review the source configuration in PackProof first.");
+    // A source grant cannot override a known global installation hold. Ready
+    // installations may have independent typed grants without legacy CSV active.
+    private bool TypedInstallationMayRead => !checkpointed && state.Token is not null && state.PendingToken is null && state.RenewalKey is null && state.CredentialExpiresAt>DateTimeOffset.UtcNow && ServerState is "ready" or "active";
+    private void RequireTypedInstallationRead()
+    {
+        RequireCredential();if(!TypedInstallationMayRead)throw new ConnectException("AGENT_AUTHORIZATION_REQUIRED","Approve and resume this installation in PackProof before reading source exports.");
+    }
     private bool SourcePolicyCurrent(SourceSubscriptionState source,DateTimeOffset now)
     {
+        if(!TypedInstallationMayRead)return false;
         var config=SourceConfig(source);
         return source.CapabilityApproved && source.ServerState=="active" && !source.LocalPaused && source.Folder is not null && source.FolderDigest==config.GetProperty("folderDigest").GetString() && CollectionPolicy.IsWithinApprovedWindow(now,source.LastPolicyCheckAt,state.CredentialExpiresAt,config.GetProperty("offlineWindowHours").GetDouble(),networkOnline);
     }
@@ -50,17 +58,75 @@ public sealed partial class AgentRuntime
         }
         foreach(var source in state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId&&!present.Contains(s.Id))){source.CapabilityApproved=false;source.LocalPaused=true;source.LastErrorCode="SOURCE_AUTHORIZATION_REQUIRED";}
         typedSourceSubscriptions=true;
+        await ApplyApprovedCompactionCommands(ct);
+    }
+    internal static bool CompactionCommandMatches(JsonElement command,SourceSubscriptionState source,QueueEntry entry,string installationId,string environment,string generation,DateTimeOffset now,bool historicalAcknowledgement=false)
+    {
+        try
+        {
+            if(source.ServerView is not { } view||!source.CapabilityApproved||source.ServerState is not("approved" or "active")||Optional(Optional(view,"capabilities"),"disposition")?.ValueKind!=JsonValueKind.True)return false;
+            var receiptGrantRevision=command.GetProperty("receiptGrantRevision").GetInt32();if(receiptGrantRevision<1)return false;
+            if(command.GetProperty("schema").GetString()!="packproof.collector-compaction-command/v1"||command.GetProperty("compactAfterAcknowledgement").ValueKind!=JsonValueKind.True||entry.State!="complete"||entry.ImportId!=command.GetProperty("batchId").GetString()||entry.Digest!=command.GetProperty("originalSha256").GetString()||entry.SourceId!=source.Id||entry.ConfigDigest!=source.QueueConfigurationIdentity(installationId,receiptGrantRevision)||entry.GrantRevision!=receiptGrantRevision||entry.CredentialGeneration!=generation)return false;
+            if(command.GetProperty("subscriptionId").GetString()!=source.Id||command.GetProperty("installationId").GetString()!=installationId||command.GetProperty("environment").GetString()!=environment||command.GetProperty("configurationRevision").GetInt32()!=source.ConfigurationRevision||command.GetProperty("grantRevision").GetInt32()!=source.GrantRevision)return false;
+            foreach(var field in new[]{"organizationId","environment","principalId","installationId","connectionId","locationId","operatorMembershipId"})if(command.GetProperty(field).GetString()!=view.GetProperty(field).GetString())return false;
+            if(!historicalAcknowledgement&&(now<command.GetProperty("retainUntil").GetDateTimeOffset()||now>=command.GetProperty("expiresAt").GetDateTimeOffset()))return false;
+            var expected=command.GetProperty("commandSha256").GetString();var body=Json.Element(command.EnumerateObject().Where(p=>p.Name!="commandSha256").ToDictionary(p=>p.Name,p=>(object?)p.Value));
+            return expected==Convert.ToHexStringLower(SHA256.HashData(TypedSourceSemantics.CanonicalBytes(body)));
+        }
+        catch(Exception error)when(error is KeyNotFoundException or InvalidOperationException or FormatException){return false;}
+    }
+    internal static DateTimeOffset CompactionPermitTime(JsonElement permit,JsonElement command,QueueEntry entry,DateTimeOffset projectedServerTime)
+    {
+        try
+        {
+            var issued=permit.GetProperty("issuedAt").GetDateTimeOffset();var expires=permit.GetProperty("expiresAt").GetDateTimeOffset();var server=permit.GetProperty("serverTime").GetDateTimeOffset();
+            var now=projectedServerTime>server?projectedServerTime:server;
+            if(permit.GetProperty("id").ValueKind!=JsonValueKind.String||string.IsNullOrWhiteSpace(permit.GetProperty("id").GetString())||permit.GetProperty("commandId").GetString()!=command.GetProperty("id").GetString()||permit.GetProperty("commandSha256").GetString()!=command.GetProperty("commandSha256").GetString()||permit.GetProperty("batchId").GetString()!=entry.ImportId||permit.GetProperty("originalSha256").GetString()!=entry.Digest||expires<=issued||expires-issued>TimeSpan.FromSeconds(30)||server<issued||now>=expires||Math.Abs((projectedServerTime-server).TotalSeconds)>2)throw new InvalidOperationException();
+            return now;
+        }
+        catch(Exception error)when(error is KeyNotFoundException or InvalidOperationException or FormatException){throw new ConnectException("SOURCE_COMPACTION_UNSAFE","A current online preservation permit is required before this completed original can be compacted.");}
+    }
+    private async Task ApplyApprovedCompactionCommands(CancellationToken ct)
+    {
+        if(!state.SourceSubscriptions.Any(s=>Optional(Optional(s.ServerView,"capabilities"),"disposition")?.ValueKind==JsonValueKind.True))return;
+        var response=await api.Request("GET","/v1/partner/agent/source-dispositions/compaction-commands",null,state.Token,null,ct);
+        if(!api.LastResponseHadServerDate||api.LastServerDate is not { } serverNow)return;
+        if(response.GetProperty("schema").GetString()!="packproof.collector-compaction-commands/v1")throw new ConnectException("SOURCE_COMPACTION_UNSAFE","The source compaction contract is unsupported; originals remain retained.");
+        foreach(var command in response.GetProperty("commands").EnumerateArray().Take(100))
+        {
+            var source=state.SourceSubscriptions.SingleOrDefault(s=>s.Id==Optional(command,"subscriptionId")?.GetString());if(source is null)continue;
+            var entry=queue.Entries().SingleOrDefault(e=>e.ImportId==Optional(command,"batchId")?.GetString()&&e.SourceId==source.Id);if(entry is null)continue;
+            var retained=queue.Payload(entry);var historical=retained.OriginalCompacted&&retained.CompactionCommandId==Optional(command,"id")?.GetString()&&retained.CompactionCommandSha256==Optional(command,"commandSha256")?.GetString()&&retained.CompactionPermitId is not null&&retained.CompactedAt is not null;
+            if(!CompactionCommandMatches(command,source,entry,state.InstallationId??"",(host.Environment=="live"?"live":"sandbox"),Generation,serverNow,historical))continue;
+            var receipt=await api.Request("GET","/v1/partner/typed-imports/"+Uri.EscapeDataString(entry.ImportId!),null,state.Token,null,ct);
+            if(!api.LastResponseHadServerDate||api.LastServerDate is not { } receiptNow||!CompactionCommandMatches(command,source,entry,state.InstallationId??"",(host.Environment=="live"?"live":"sandbox"),Generation,receiptNow,historical))continue;
+            RequireTypedReceipt(receipt,entry,source);if(receipt.GetProperty("state").GetString()!="succeeded")continue;ValidateTypedAccounting(receipt);
+            var payload=queue.Payload(entry);
+            if(!payload.OriginalCompacted)
+            {
+                payload.Receipt=receipt;queue.Save(entry,payload,"complete");entry=queue.Find(entry.Id)!;
+                var permit=await api.Request("POST","/v1/partner/agent/source-dispositions/compaction-commands/"+Uri.EscapeDataString(command.GetProperty("id").GetString()!)+"/permit",new{commandSha256=command.GetProperty("commandSha256").GetString(),batchId=entry.ImportId,originalSha256=entry.Digest},state.Token,command.GetProperty("id").GetString()+"-permit-"+Guid.NewGuid().ToString("N"),ct);
+                if(permit.TryGetProperty("value",out var permitted))permit=permitted;
+                if(!api.LastResponseHadServerDate||api.LastServerDate is not { } permitServerTime)continue;
+                var compactAt=CompactionPermitTime(permit,command,entry,permitServerTime);
+                if(!CompactionCommandMatches(command,source,entry,state.InstallationId??"",(host.Environment=="live"?"live":"sandbox"),Generation,compactAt))continue;
+                _=queue.CompactApprovedTyped(entry,command.GetProperty("id").GetString()!,command.GetProperty("commandSha256").GetString()!,compactAt,permit.GetProperty("id").GetString()!);
+            }
+            var compacted=queue.Payload(entry);if(compacted.CompactionPermitId is null)throw new ConnectException("SOURCE_COMPACTION_UNSAFE","The retained compaction acknowledgement has no preservation permit.");
+            await api.Request("POST","/v1/partner/agent/source-dispositions/compaction-commands/"+Uri.EscapeDataString(command.GetProperty("id").GetString()!)+"/ack",new{permitId=compacted.CompactionPermitId,commandSha256=command.GetProperty("commandSha256").GetString(),batchId=entry.ImportId,originalSha256=entry.Digest,serverReceiptReconciled=true,localDisposition="compacted",compactedAt=compacted.CompactedAt!.Value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'",System.Globalization.CultureInfo.InvariantCulture)},state.Token,command.GetProperty("id").GetString()+"-"+command.GetProperty("commandSha256").GetString(),ct);
+        }
     }
     private object[] SubscriptionViews() => state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId).Select(source=>
     {
         var config=source.ApprovedConfiguration;JsonElement? receipt=null;
         if(source.SetupQueueId is not null&&queue.Find(source.SetupQueueId) is { } setup)receipt=queue.Payload(setup).Receipt;
         object[] files=[];
-        if(source.Folder is not null)try{files=FolderSource.Inventory(source.Folder).Take(100).ToArray();}catch(ConnectException){ }
+        if(TypedInstallationMayRead&&source.CapabilityApproved&&(source.ServerState is "approved" or "active")&&source.Folder is not null)try{files=FolderSource.Inventory(source.Folder).Take(100).ToArray();}catch(ConnectException){ }
         return (object)new {source.Id,source.SourceProfile,displayName=Optional(config,"displayName"),state=source.ServerState,source.LocalPaused,source.ConfigurationRevision,source.GrantRevision,source.Folder,source.FolderDigest,source.LastCheckAt,source.LastCollectedAt,source.LastReceiptAt,source.LastErrorCode,queue=queue.Counts(source.Id),source.VerifiedCaseId,source.SetupQueueId,files,selectedFileName=source.SelectedFileName,fileSha256=source.SelectedFileSha256,headers=Optional(source.LocalPreview,"headers"),rowCount=Optional(source.LocalPreview,"rowCount"),samples=Optional(source.LocalPreview,"samples"),receipt=receipt is null?null:new {id=Optional(receipt,"id"),state=Optional(receipt,"state"),counts=Optional(receipt,"counts"),caseIds=Optional(receipt,"caseIds"),original=Optional(receipt,"original")},approvalPath=$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(source.Id)}"};
     }).ToArray();
     private void BindSubscriptionSource(SourceSubscriptionState source,string input)
     {
+        RequireTypedInstallationRead();
         if(!typedSourceSubscriptions||!source.CapabilityApproved)throw new ConnectException("SOURCE_APPROVAL_REQUIRED","Approve this exact source in PackProof before selecting its local folder.");
         var folder=FolderSource.Validate(input);var digest=SourceFolderDigest(folder);var config=SourceConfig(source);
         if(digest!=config.GetProperty("folderDigest").GetString())throw new ConnectException("SOURCE_SCOPE_REVIEW_REQUIRED","The selected folder differs from its browser-approved source. Review the source path before collection.");
@@ -90,7 +156,10 @@ public sealed partial class AgentRuntime
     private JsonElement TypedRequest(SourceSubscriptionState source,string name,byte[] bytes)
     {
         var config=SourceConfig(source);var view=source.ServerView!.Value;
-        return Json.Element(new Dictionary<string,object?>{{"schema",TypedSourceSemantics.Schema},{"subscriptionId",source.Id},{"configurationRevision",source.ConfigurationRevision},{"grantRevision",source.GrantRevision},{"connectionId",view.GetProperty("connectionId").GetString()},{"locationId",view.GetProperty("locationId").GetString()},{"sourceProfile",source.SourceProfile},{"mappingVersion",config.GetProperty("mappingVersion").GetString()},{"sourceNamespace",config.GetProperty("sourceNamespace").GetString()},{"mapping",config.GetProperty("mapping")},{"constants",config.GetProperty("constants")},{"wholeFileConsent",true},{"original",new{name,mediaType="text/csv",content=new UTF8Encoding(false,true).GetString(bytes),sha256=Convert.ToHexStringLower(SHA256.HashData(bytes))}},{"completeness",new{kind="unknown"}}});
+        var schema=Optional(config,"batchSchema")?.GetString()??TypedSourceSemantics.Schema;
+        var request=new Dictionary<string,object?>{{"schema",schema},{"subscriptionId",source.Id},{"configurationRevision",source.ConfigurationRevision},{"grantRevision",source.GrantRevision},{"connectionId",view.GetProperty("connectionId").GetString()},{"locationId",view.GetProperty("locationId").GetString()},{"sourceProfile",source.SourceProfile},{"mappingVersion",config.GetProperty("mappingVersion").GetString()},{"sourceNamespace",config.GetProperty("sourceNamespace").GetString()},{"mapping",config.GetProperty("mapping")},{"constants",config.GetProperty("constants")},{"wholeFileConsent",true},{"original",new{name,mediaType="text/csv",content=new UTF8Encoding(false,true).GetString(bytes),sha256=Convert.ToHexStringLower(SHA256.HashData(bytes))}},{"completeness",new{kind="unknown"}}};
+        if(schema==TypedSourceSemantics.SchemaV2)request["identityPolicy"]=config.GetProperty("identityPolicy");
+        return Json.Element(request);
     }
     private async Task ProcessTyped(SourceSubscriptionState source,QueueEntry entry,CancellationToken ct)
     {
@@ -122,6 +191,7 @@ public sealed partial class AgentRuntime
             }
             var next=phase switch{"succeeded"=>"complete","partially_succeeded"=>"partial","failed" or "blocked_policy"=>"action_needed","previewed"=>"awaiting_review",_=>"server_processing"};
             if(next=="complete")ValidateTypedAccounting(receipt);
+            if(payload.OriginalCompacted&&payload.Receipt is { } compactedReceipt)payload.Receipt=DurableQueue.ReceiptWithoutRaw(compactedReceipt);
             queue.Save(entry,payload,next);if(next=="complete")source.LastReceiptAt=DateTimeOffset.UtcNow;
         }
         catch(ApiException error){queue.Save(queue.Find(entry.Id)??entry,payload,error.Transient?entry.State:"action_needed",error:error.Code,failed:error.Transient,retryAfter:error.RetryAfter);source.LastErrorCode=error.Code;throw;}
@@ -144,15 +214,53 @@ public sealed partial class AgentRuntime
         {
             if(subset.GetProperty("schema").GetString()!="packproof.typed-import-records/v1"||subset.GetProperty("batchId").GetString()!=batchId||subset.GetProperty("originalSha256").GetString()!=digest)throw new InvalidOperationException();
             var stored=subset.GetProperty("rows").EnumerateArray().ToArray();var accepted=receipt.GetProperty("rows").EnumerateArray().Where(row=>row.GetProperty("status").GetString() is "accepted_linked" or "duplicate").ToArray();
-            if(stored.Length!=accepted.Length||stored.Length==0||stored.Select(row=>row.GetProperty("rowNumber").GetInt32()).Distinct().Count()!=stored.Length)throw new InvalidOperationException();
+            if(stored.Length==0||accepted.Length==0||stored.Select(row=>(row.GetProperty("rowNumber").GetInt32(),row.GetProperty("caseId").GetString())).Distinct().Count()!=stored.Length||stored.Any(s=>!accepted.Any(r=>r.GetProperty("rowNumber").GetInt32()==s.GetProperty("rowNumber").GetInt32())))throw new InvalidOperationException();
+            bool Same(JsonElement a,JsonElement b)=>TypedSourceSemantics.CanonicalBytes(a).SequenceEqual(TypedSourceSemantics.CanonicalBytes(b));
+            bool Assertion(JsonElement actual,JsonElement expected)=>actual.GetProperty("id").ValueKind==JsonValueKind.String&&actual.GetProperty("property").GetString()==expected.GetProperty("property").GetString()&&Same(actual.GetProperty("subjectReference"),expected.GetProperty("subjectReference"))&&Same(actual.GetProperty("value"),expected.GetProperty("value"));
+            bool Relation(JsonElement actual,JsonElement expected)=>actual.GetProperty("id").ValueKind==JsonValueKind.String&&actual.GetProperty("type").GetString()==expected.GetProperty("type").GetString()&&Same(actual.GetProperty("from"),expected.GetProperty("from"))&&Same(actual.GetProperty("to"),expected.GetProperty("to"))&&Same(actual.GetProperty("quantity"),expected.GetProperty("quantity"));
             string? firstCase=null;
             foreach(var row in accepted)
             {
-                var original=row.GetProperty("normalized");var current=stored.Single(r=>r.GetProperty("rowNumber").GetInt32()==row.GetProperty("rowNumber").GetInt32());var caseId=current.GetProperty("caseId").GetString();
-                if(string.IsNullOrEmpty(caseId)||current.GetProperty("projectionRevision").GetInt32()<1||current.GetProperty("observationId").ValueKind!=JsonValueKind.String||!receipt.GetProperty("caseIds").EnumerateArray().Any(c=>c.GetString()==caseId))throw new InvalidOperationException();
-                var assertions=current.GetProperty("assertions").EnumerateArray().ToArray();var expected=original.GetProperty("assertions").EnumerateArray().ToArray();
-                if(assertions.Length!=expected.Length||expected.Any(a=>!assertions.Any(s=>s.GetProperty("id").ValueKind==JsonValueKind.String&&s.GetProperty("property").GetString()==a.GetProperty("property").GetString()&&TypedSourceSemantics.CanonicalBytes(s.GetProperty("subjectReference")).SequenceEqual(TypedSourceSemantics.CanonicalBytes(a.GetProperty("subjectReference")))&&TypedSourceSemantics.CanonicalBytes(s.GetProperty("value")).SequenceEqual(TypedSourceSemantics.CanonicalBytes(a.GetProperty("value"))))))throw new InvalidOperationException();
-                firstCase??=caseId;
+                var original=row.GetProperty("normalized");var current=stored.Where(r=>r.GetProperty("rowNumber").GetInt32()==row.GetProperty("rowNumber").GetInt32()).ToArray();
+                var declared=row.TryGetProperty("caseIds",out var ids)&&ids.ValueKind==JsonValueKind.Array?ids.EnumerateArray().Select(i=>i.GetString()).ToArray():row.TryGetProperty("caseId",out var legacyCase)&&legacyCase.ValueKind==JsonValueKind.String?[legacyCase.GetString()]:null;
+                if(current.Length==0||(declared is null?current.Length!=1:declared.Length!=current.Length||declared.Any(id=>!current.Any(c=>c.GetProperty("caseId").GetString()==id))))throw new InvalidOperationException();
+                foreach(var projection in current)
+                {
+                    var caseId=projection.GetProperty("caseId").GetString();
+                    if(string.IsNullOrEmpty(caseId)||projection.GetProperty("projectionRevision").GetInt32()<1||projection.GetProperty("observationId").ValueKind!=JsonValueKind.String||!receipt.GetProperty("caseIds").EnumerateArray().Any(c=>c.GetString()==caseId))throw new InvalidOperationException();
+                    if(row.TryGetProperty("id",out var rowId)&&rowId.ValueKind==JsonValueKind.String){var sourceId=row.TryGetProperty("duplicateOf",out var duplicate)&&duplicate.ValueKind==JsonValueKind.String?duplicate.GetString():rowId.GetString();if(projection.GetProperty("observationId").GetString()!=sourceId)throw new InvalidOperationException();}
+                    var projectedAssertions=projection.GetProperty("assertions").EnumerateArray().ToArray();
+                    if(projectedAssertions.Select(a=>a.GetProperty("id").GetString()).Distinct().Count()!=projectedAssertions.Length||projectedAssertions.Select(a=>a.GetProperty("property").GetString()+":"+System.Text.Encoding.UTF8.GetString(TypedSourceSemantics.CanonicalBytes(a.GetProperty("subjectReference")))).Distinct().Count()!=projectedAssertions.Length)throw new InvalidOperationException();
+                    if(current.Length>1||projection.TryGetProperty("sourceRootReference",out var suppliedRoot)&&suppliedRoot.ValueKind==JsonValueKind.Object)
+                    {
+                        var sourceRoot=projection.GetProperty("sourceRootReference");var targetRoot=projection.GetProperty("rootReference");
+                        if(sourceRoot.ValueKind!=JsonValueKind.Object||sourceRoot.GetProperty("type").GetString()!="order"||!original.GetProperty("references").EnumerateArray().Any(r=>Same(r,sourceRoot)))throw new InvalidOperationException();
+                        var rootId=sourceRoot.GetProperty("externalId").GetString();var rootNamespace=sourceRoot.GetProperty("namespace").GetString();
+                        if(!Same(sourceRoot,targetRoot))
+                        {
+                            var basis=projection.GetProperty("associationBasis");
+                            if(basis.GetProperty("ruleVersion").GetString()!="packproof.case-partition/v1"||basis.GetProperty("kind").GetString()!="approved_crosswalk"||!Same(basis.GetProperty("root"),sourceRoot)||!basis.GetProperty("crosswalks").EnumerateArray().Any(c=>c.GetProperty("caseId").GetString()==caseId&&c.GetProperty("id").ValueKind==JsonValueKind.String))throw new InvalidOperationException();
+                        }
+                        string Key(JsonElement r)=>System.Text.Encoding.UTF8.GetString(TypedSourceSemantics.CanonicalBytes(r));
+                        bool OwnLine(JsonElement r)=>r.GetProperty("type").GetString()=="order_line"&&r.GetProperty("namespace").GetString()==rootNamespace&&r.GetProperty("parentExternalId").GetString()==rootId;
+                        void Scope(JsonElement r){var type=r.GetProperty("type").GetString();if(type=="order"&&!Same(r,sourceRoot)||type=="order_line"&&!OwnLine(r))throw new InvalidOperationException();}
+                        var relations=projection.GetProperty("relationships").EnumerateArray().ToArray();var reachable=new HashSet<string>(original.GetProperty("references").EnumerateArray().Where(r=>Same(r,sourceRoot)||OwnLine(r)).Select(Key),StringComparer.Ordinal);
+                        foreach(var relation in relations){Scope(relation.GetProperty("from"));Scope(relation.GetProperty("to"));}
+                        bool changed;do{changed=false;foreach(var relation in relations){var from=Key(relation.GetProperty("from"));var to=Key(relation.GetProperty("to"));if(reachable.Contains(from))changed|=reachable.Add(to);if(reachable.Contains(to))changed|=reachable.Add(from);}}while(changed);
+                        foreach(var assertion in projectedAssertions){var subject=assertion.GetProperty("subjectReference");Scope(subject);if(!reachable.Contains(Key(subject)))throw new InvalidOperationException();}
+                        if(relations.Any(r=>!reachable.Contains(Key(r.GetProperty("from")))||!reachable.Contains(Key(r.GetProperty("to")))))throw new InvalidOperationException();
+                    }
+                    firstCase??=caseId;
+                }
+                var assertions=current.SelectMany(c=>c.GetProperty("assertions").EnumerateArray()).ToArray();var expected=original.GetProperty("assertions").EnumerateArray().ToArray();
+                if(assertions.Any(a=>!expected.Any(e=>Assertion(a,e)))||expected.Any(e=>!assertions.Any(a=>Assertion(a,e))))throw new InvalidOperationException();
+                // Version two exposes every case partition. Verify the union of
+                // its materialized relations as well as its scalar assertions.
+                if(original.TryGetProperty("identityDerivation",out _)||current.Any(c=>c.TryGetProperty("relationships",out _)))
+                {
+                    var relationships=current.SelectMany(c=>c.GetProperty("relationships").EnumerateArray()).ToArray();var expectedRelations=original.GetProperty("relationships").EnumerateArray().ToArray();
+                    if(relationships.Any(r=>!expectedRelations.Any(e=>Relation(r,e)))||expectedRelations.Any(e=>!relationships.Any(r=>Relation(r,e))))throw new InvalidOperationException();
+                }
             }
             return firstCase!;
         }
@@ -173,14 +281,14 @@ public sealed partial class AgentRuntime
     }
     private async Task ReconcileSubscriptionBeforeRenewal(SourceSubscriptionState source,CancellationToken ct)
     {
-        if(!networkOnline||!source.CapabilityApproved)return;
+        if(!networkOnline||!source.CapabilityApproved||!TypedInstallationMayRead)return;
         var next=queue.NextDue(source.Id,Generation,source.QueueConfigurationIdentity(state.InstallationId),DateTimeOffset.UtcNow);
         if(next is not null&&(!source.LocalPaused||next.State=="server_processing"))await ProcessTyped(source,next,ct);
     }
     private async Task CollectSubscription(SourceSubscriptionState source,CancellationToken ct)
     {
         var now=DateTimeOffset.UtcNow;
-        if(networkOnline && source.SetupQueueId is not null && source.CapabilityApproved && queue.Find(source.SetupQueueId) is {State:"server_processing"} setup && setup.NextAttemptAt<=now && setup.ConfigDigest==source.QueueConfigurationIdentity(state.InstallationId)) {await ProcessTyped(source,setup,ct);return;}
+        if(TypedInstallationMayRead && networkOnline && source.SetupQueueId is not null && source.CapabilityApproved && queue.Find(source.SetupQueueId) is {State:"server_processing"} setup && setup.NextAttemptAt<=now && setup.ConfigDigest==source.QueueConfigurationIdentity(state.InstallationId)) {await ProcessTyped(source,setup,ct);return;}
         if(!SourcePolicyCurrent(source,now))return;
         var identity=source.QueueConfigurationIdentity(state.InstallationId);var next=queue.NextDue(source.Id,Generation,identity,now);
         if(next is not null&&networkOnline){await ProcessTyped(source,next,ct);return;}
@@ -205,7 +313,9 @@ public sealed partial class AgentRuntime
     }
     private async Task TypedCommand(string operation,JsonElement payload,CancellationToken ct)
     {
-        RequireCredential();if(!typedSourceSubscriptions)await RefreshSubscriptions(ct);var source=Subscription(payload.GetProperty("id").GetString()??"");
+        RequireCredential();if(operation!="pauseSubscription")RequireTypedInstallationRead();if(!typedSourceSubscriptions)await RefreshSubscriptions(ct);var source=Subscription(payload.GetProperty("id").GetString()??"");
+        if(operation is "inspectSubscriptionFile" or "previewSubscription" or "commitSubscription" or "verifySubscription")
+            if(!typedSourceSubscriptions||!source.CapabilityApproved||source.ServerState is not("approved" or "active"))throw new ConnectException("SOURCE_AUTHORIZATION_REQUIRED","Approve and resume this exact source in PackProof before reading or submitting another original.");
         switch(operation)
         {
             case "selectSubscriptionSource":BindSubscriptionSource(source,payload.GetProperty("folder").GetString()??"");break;
@@ -247,7 +357,7 @@ public sealed partial class AgentRuntime
     private object? SubscriptionDraftView()
     {
         var draft=state.SubscriptionDraft;if(draft is null)return null;object[] files=[];
-        try{files=FolderSource.Inventory(draft.Folder).Take(100).ToArray();}catch(ConnectException){ }
+        if(TypedInstallationMayRead)try{files=FolderSource.Inventory(draft.Folder).Take(100).ToArray();}catch(ConnectException){ }
         return new {draft.Folder,draft.FolderDigest,files,selectedFileName=draft.SelectedFileName,fileSha256=draft.SelectedFileSha256,headers=Optional(draft.LocalPreview,"headers"),rowCount=Optional(draft.LocalPreview,"rowCount"),samples=Optional(draft.LocalPreview,"samples"),proposal=draft.Proposal,approvalPath=draft.ApprovalPath};
     }
     private object StatusCapabilities()
@@ -257,7 +367,7 @@ public sealed partial class AgentRuntime
     }
     private async Task TypedDraftCommand(string operation,JsonElement payload,CancellationToken ct)
     {
-        RequireCredential();if(!typedSourceSubscriptions)await RefreshSubscriptions(ct);
+        RequireTypedInstallationRead();if(!typedSourceSubscriptions)await RefreshSubscriptions(ct);
         if(!typedSourceSubscriptions)throw new ConnectException("SOURCE_CAPABILITY_UNSUPPORTED","Install and approve the matching source-capable API and desktop before adding an operational source.");
         if(operation=="beginSubscriptionSource")
         {
@@ -274,6 +384,12 @@ public sealed partial class AgentRuntime
         var original=FolderSource.Snapshot(draft.Folder,draft.SelectedFileName);if(Convert.ToHexStringLower(SHA256.HashData(original))!=draft.SelectedFileSha256)throw new ConnectException("SOURCE_CHANGED","The selected local original changed. Inspect its exact bytes again.");
         var from=payload.GetProperty("historyFrom").GetString();if(from is null||!DateTimeOffset.TryParse(from,System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out _)||!System.Text.RegularExpressions.Regex.IsMatch(from,@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$"))throw new ConnectException("SOURCE_HISTORY_REQUIRED","Confirm the source history start with an explicit UTC offset.");
         var config=Json.Element(new Dictionary<string,object?>{{"transport","local_ntfs"},{"displayName",payload.GetProperty("displayName")},{"sourceProfile",payload.GetProperty("sourceProfile")},{"sourceNamespace",payload.GetProperty("sourceNamespace")},{"mappingVersion",payload.GetProperty("mappingVersion")},{"mapping",payload.GetProperty("mapping")},{"constants",Optional(payload,"constants")??Json.Element(new{})},{"wholeFileConsent",true},{"folderDigest",draft.FolderDigest},{"initialFileName",draft.SelectedFileName},{"initialOriginalSha256",draft.SelectedFileSha256},{"expectedHeaders",draft.LocalPreview.Value.GetProperty("headers")},{"historyFrom",from},{"historyTo",Optional(payload,"historyTo")},{"unknownTimePolicy",Optional(payload,"unknownTimePolicy")??Json.Element("quarantine")},{"maxBytes",FolderSource.MaxCsvBytes},{"maxRows",1000},{"offlineWindowHours",24},{"expectedIntervalSeconds",Optional(payload,"expectedIntervalSeconds")},{"completenessPolicy",new{kind="unknown",scope="shipment_line",sourceOwnerQualified=false,qualificationReference=(string?)null}}});
+        if(payload.TryGetProperty("batchSchema",out var batchSchema))
+        {
+            if(batchSchema.GetString()!=TypedSourceSemantics.SchemaV2||Optional(Optional(state.ServerConfig,"capabilities"),"typedSourceBatchSchemas") is not {ValueKind:JsonValueKind.Array} accepted||!accepted.EnumerateArray().Any(v=>v.GetString()==TypedSourceSemantics.SchemaV2))throw new ConnectException("SOURCE_CAPABILITY_UNSUPPORTED","Approve the matching source identity contract in PackProof before using this identity policy.");
+            var values=config.EnumerateObject().ToDictionary(p=>p.Name,p=>(object?)p.Value);values["batchSchema"]=batchSchema;values["identityPolicy"]=payload.GetProperty("identityPolicy");config=Json.Element(values);
+        }
+        else if(payload.TryGetProperty("identityPolicy",out _))throw new ConnectException("TYPED_SOURCE_NEEDS_REVIEW","Choose the explicit source contract before approving a source identity policy.");
         if(TypedSourceSemantics.Preview(original,config).Any(row=>!row.Valid))throw new ConnectException("TYPED_SOURCE_NEEDS_REVIEW","The proposed source mapping does not validate every bounded row. Review its field meaning before approval.");
         var proposed=await api.Request("POST","/v1/partner/source-subscriptions/proposals",new{config},state.Token,Guid.NewGuid().ToString("N"),ct);if(proposed.TryGetProperty("value",out var wrapped))proposed=wrapped;
         draft.Proposal=proposed.Clone();var id=Optional(proposed,"subscriptionId")?.GetString()??Optional(proposed,"id")?.GetString();draft.ApprovalPath=Optional(proposed,"approvalPath")?.GetString()??(id is null?null:$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(id)}");Save();

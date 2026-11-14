@@ -114,3 +114,14 @@ it('keeps paginated source reviews separate and never presents a quiet collector
   await userEvent.setup().click(screen.getByRole('button', { name: 'Next source page' }));
   await waitFor(() => expect(request).toHaveBeenLastCalledWith('/source-subscriptions?organizationId=org-a&environment=live&cursor=source-next'));
 });
+
+it('shows an actual source compatibility block in both its source card and exact review', async () => {
+  const blocked = { ...subscription, state: 'active', capabilities: { collectorSupported: false, blockedReason: 'Install the matching collector version before using this source contract.' } };
+  const request = vi.fn(async (path: string) => path.startsWith('/source-subscriptions?') ? { subscriptions: [blocked], nextCursor: null } : blocked);
+  const api = { recordsRequest: request } as unknown as PackProofApi;
+  const { rerender } = render(<SourceSubscriptions api={api} organizationId="org-a" environment="live" canManage/>);
+  expect(await screen.findByText('Install the matching collector version before using this source contract.')).toBeVisible();
+  rerender(approval(api));
+  expect(await screen.findByText('Install the matching collector version before using this source contract.')).toBeVisible();
+  expect(screen.getByText('Collection needs attention.')).toBeVisible();
+});

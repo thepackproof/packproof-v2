@@ -123,7 +123,14 @@ export interface SubscriptionDraft {
   proposal?: { id: string; subscriptionId?: string };
   approvalPath?: string;
 }
+export interface SubscriptionIdentityPolicy {
+  schema: "packproof.source-identity-policy/v1";
+  eventKey: { kind: "column" } | { kind: "composite"; fields: string[] };
+  revision: { kind: "column" | "source_as_of" | "immutable_event" };
+}
 export interface SubscriptionProposal {
+  batchSchema?: "packproof.typed-source-batch/v2";
+  identityPolicy?: SubscriptionIdentityPolicy;
   displayName: string;
   sourceProfile: string;
   sourceNamespace: string;
@@ -139,7 +146,7 @@ export interface ConnectStatus {
   state: string;
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
-  capabilities?: { sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean };
+  capabilities?: { sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[] };
   sourceCapabilities?: { typedCollection: boolean };
   sourceSubscriptions?: SourceSubscriptionStatus[];
   subscriptionDraft?: SubscriptionDraft;

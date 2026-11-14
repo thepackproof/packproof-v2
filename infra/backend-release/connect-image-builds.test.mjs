@@ -47,7 +47,7 @@ test('invalid profile/source pins cannot create a build request',()=>{
 });
 test('exact reconstruction113 Git archive supplies Docker inputs while frozen108 and109 profiles reject it',()=>{
  const root=fileURLToPath(new URL('../../',import.meta.url));
- const head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+ const head='bd63a7cb591cdf217e9c978e71bb3494c323223c';
  const directory=mkdtempSync(path.join(tmpdir(),'connect-source-'));
  try{
   const archive=path.join(directory,'source.zip'),script=path.join(root,'infra/backend-release/backend-source-archive.py');
@@ -70,5 +70,21 @@ test('exact reconstruction113 Git archive supplies Docker inputs while frozen108
     assert.ok(names.some(name=>name===input||name.startsWith(input+'/')),`missing Docker COPY input ${input}`);
   }
   assert.deepEqual(names.filter(name=>name.startsWith('infra/')).sort(),['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']);
+ }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+test('exact reconstruction116 Git archive supplies all v2 Docker inputs while frozen profiles reject it',()=>{
+ const root=fileURLToPath(new URL('../../',import.meta.url)),head=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+ const directory=mkdtempSync(path.join(tmpdir(),'reconstruction-v2-source-'));
+ try{
+  const archive=path.join(directory,'source.zip'),script=path.join(root,'infra/backend-release/backend-source-archive.py');
+  const run=extra=>JSON.parse(execFileSync('python',[script,head,archive,'reconstruction-v2',...extra],{cwd:root,encoding:'utf8'}));
+  const created=run([]),verified=run(['--verify']);assert.deepEqual(verified,created);assert.equal(verified.migrationCount,115);assert.equal(verified.allGitBlobBytesVerified,true);
+  for(const profile of ['connect-v1','zero-touch-v1','reconstruction-v1'])assert.throws(()=>execFileSync('python',[script,head,path.join(directory,profile+'.zip'),profile],{cwd:root,encoding:'utf8',stdio:'pipe'}),/EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
+  const names=JSON.parse(execFileSync('python',['-c','import json,sys,zipfile; print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))',archive],{encoding:'utf8'}));
+  const dockerfile=execFileSync('git',['show',`${head}:backend/Dockerfile`],{cwd:root,encoding:'utf8'});
+  for(const line of dockerfile.split('\n').filter(line=>line.startsWith('COPY ')&&!line.includes('--from=')))for(const input of line.trim().split(/\s+/).slice(1,-1))assert.ok(names.some(name=>name===input||name.startsWith(input+'/')),`missing Docker COPY input ${input}`);
+  for(const name of ['reconstruction-v2-release-review.mjs','reconstruction-v2-runtime-preflight.mjs'])assert.ok(names.includes('infra/backend-release/'+name));
+  assert.throws(()=>execFileSync('python',[script,'bd63a7cb591cdf217e9c978e71bb3494c323223c',path.join(directory,'predecessor.zip'),'reconstruction-v2'],{cwd:root,encoding:'utf8',stdio:'pipe'}),/CONNECT_PROBES_REQUIRED|EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
  }finally{rmSync(directory,{recursive:true,force:true});}
 });

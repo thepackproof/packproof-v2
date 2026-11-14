@@ -127,3 +127,100 @@ it('marks retained source assertions when the original is no longer available', 
   expect(await screen.findByText(/original file is unavailable under the current retention policy/)).toBeVisible();
   expect(screen.getByText('Source value').nextElementSibling).toHaveTextContent('8');
 });
+
+it('keeps pending projection and unmeasured input accounting visibly unknown', async () => {
+  const current = { ...detail, projectionStatus: { state: 'pending', caseRevision: 4, projectedRevision: 3, reason: 'Accepted source reports are awaiting reconstruction.' }, case: { ...detail.case, issueCount: null }, pagination: { ...detail.pagination, total: null }, comparisons: [], rulesStatus: { available: false, reason: 'Current comparison projection is pending.' }, sources: detail.sources.map(source => ({ ...source, accountingAvailable: false, accounting: { ...source.accounting, received: 0, acceptedLinked: 0, acceptedUnlinked: 0, conflict: 0 } })) };
+  render(cases({ recordsRequest: vi.fn(async () => current) } as unknown as PackProofApi));
+  expect(await screen.findByText(/Accepted source reports are awaiting reconstruction/)).toHaveTextContent('Difference counts have not been evaluated');
+  expect(screen.getByText('Not evaluated')).toBeVisible();
+  await userEvent.setup().click(screen.getByText('Input accounting'));
+  expect(screen.getAllByText('Not measured')).toHaveLength(8);
+  expect(screen.queryByText('0 differences to review')).not.toBeInTheDocument();
+});
+
+it('shows only permitted shared-reference neighbors with a count-free restricted indicator', async () => {
+  const related = { ...detail, caseLinks: [{ id: 'link-a', type: 'shared_load', sharedReference: { type: 'load', namespace: 'wms', externalId: 'LOAD-001' }, neighbor: { id: 'case-b', reference: '0010483', type: 'order', locationId: 'site-a' }, basis: { ruleVersion: 'packproof.shared-case-reference/v1', basis: 'explicit_same_observation_allocations', sourcePolicyVersion: 'site-allocations/3' }, sourceObservationId: 'observation-a', restricted: false }], restrictedCaseLinks: true, pagination: { ...detail.pagination, section: 'caseLinks', nextCursor: 'link-next', hasMore: true } };
+  render(cases({ recordsRequest: vi.fn(async () => related) } as unknown as PackProofApi, { params: new URLSearchParams({ ...Object.fromEntries(params), section: 'caseLinks' }), crossCaseEnabled: true }));
+  const link = await screen.findByRole('link', { name: 'Order 0010483' });
+  expect(link).toHaveAttribute('href', '/app/cases/case-b?organizationId=org-a&environment=live&locationId=site-a');
+  expect(screen.getByText('Additional related cases are outside your current access.')).toBeVisible();
+  expect(screen.queryByText(/restricted.*\d/i)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Next related case page' })).toBeVisible();
+  await userEvent.setup().click(screen.getByText('Why this case is related'));
+  expect(screen.getByText('The same source observation explicitly allocates this shared operational reference to each related case.')).toBeVisible();
+  expect(screen.getByText('site-allocations/3')).toBeVisible();
+});
+
+it('explains the exact field reference decision from a comparison when opening its source', async () => {
+  const canonical = { type: 'order_line', namespace: 'erp', externalId: '004', parentExternalId: '0010482' }, raw = { ...canonical, namespace: 'wms' };
+  const identity = { subject: canonical, fields: [{ reference: raw, canonicalReference: canonical, basis: [{ id: 'alias-1', revisionHash: 'b'.repeat(64), ruleVersion: 'site-lines/2', reason: 'Source owner confirmed exact parent-scoped line meaning', approvedBy: 'admin-a', approvedAt: '2026-11-14T00:00:00Z', effectiveFrom: null, effectiveUntil: null }] }] };
+  const compared = { ...detail, comparisons: detail.comparisons.map(item => ({ ...item, inputs: item.inputs!.map(input => ({ ...input, source: { ...input.source, comparisonIdentity: identity } })) })) };
+  const request = vi.fn(async (path: string) => path.includes('/assertions/') ? { ...extract, source: { ...extract.source, revision: 'immutable-event/v1', identityDerivation: { schema: 'packproof.source-identity-derivation/v1', eventKey: { kind: 'composite', components: [{ field: 'sourceSequence', value: '00004', sourceLocator: { row: 12, field: 'Sequence' }, approvedConstant: false }] }, revision: { kind: 'immutable_event', sourceValue: null, sourceLocator: null } } } } : compared), user = userEvent.setup();
+  render(cases({ recordsRequest: request } as unknown as PackProofApi));
+  await user.click(await screen.findByRole('button', { name: 'Open reported loaded source' }));
+  await user.click(await screen.findByText('Why this source field belongs to the comparison'));
+  expect(screen.getByText('Source owner confirmed exact parent-scoped line meaning')).toBeVisible();
+  expect(screen.getByText('Not reported — immutable event contract')).toBeVisible();
+  expect(screen.queryByText('immutable-event/v1')).not.toBeInTheDocument();
+  await user.click(screen.getByText('How this report’s identity was established'));
+  expect(screen.getByText('Source event sequence: 00004')).toBeVisible();
+});
+
+it('paginates namespace rules independently of entity alias decisions', async () => {
+  const onGo = vi.fn(), rules = { ...detail, identityRules: [{ id: 'rule-a', revisionHash: 'c'.repeat(64), locationId: 'site-a', leftNamespace: 'erp', rightNamespace: 'wms', type: 'order_line', mode: 'exact_external_and_parent', cardinality: 'one_to_one', effectiveFrom: null, effectiveUntil: null, ruleVersion: 'lines/3', reason: 'Owner confirmed exact parent scope', approvedBy: 'admin-a', approvedAt: '2026-11-14T00:00:00Z' }], pagination: { ...detail.pagination, section: 'identityRules', total: 2, returnedCount: 1, nextCursor: 'rule-next', hasMore: true } };
+  render(cases({ recordsRequest: vi.fn(async () => rules) } as unknown as PackProofApi, { params: new URLSearchParams({ ...Object.fromEntries(params), section: 'identityRules' }), crossCaseEnabled: true, onGo }));
+  expect(await screen.findByRole('heading', { name: 'Approved namespace rules' })).toBeVisible();
+  expect(screen.getByText('1 shown of 2 permitted namespace rules')).toBeVisible();
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Next namespace rule page' }));
+  expect(onGo).toHaveBeenCalledWith(expect.stringContaining('section=identityRules'));
+  expect(onGo).toHaveBeenCalledWith(expect.stringContaining('cursor=rule-next'));
+});
+
+it('loads every authorized Proof page without calling unrequested pages restricted', async () => {
+  const proofPagination = { section: 'proofs' as const, limit: 2, total: 3, returnedCount: 2, hasMore: true, nextCursor: 'proof-next', projectionVersion: detail.projectionVersion };
+  const first = { ...detail, case: { ...detail.case, proofIds: ['proof-1', 'proof-2'], proofCount: 3, restrictedMembers: false }, proofPagination };
+  const next = { ...first, case: { ...first.case, proofIds: ['proof-3'] }, proofPagination: { ...proofPagination, returnedCount: 1, hasMore: false, nextCursor: null } };
+  const request = vi.fn(async (path: string) => path.includes('section=proofs') ? next : first), user = userEvent.setup();
+  render(cases({ recordsRequest: request } as unknown as PackProofApi));
+  expect(await screen.findByText('2 of 3 permitted Proofs shown')).toBeVisible();
+  expect(screen.queryByText('Additional related shipment records are outside your current access.')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Show more Proofs' }));
+  expect(await screen.findByRole('link', { name: 'Open shipment evidence proof-3' })).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Open shipment evidence proof-1' })).toBeVisible();
+  expect(screen.getByText('3 of 3 permitted Proofs shown')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Show more Proofs' })).not.toBeInTheDocument();
+  expect(request).toHaveBeenLastCalledWith('/cases/case-a?organizationId=org-a&environment=live&locationId=site-a&section=proofs&limit=2&cursor=proof-next');
+});
+
+it('keeps actual inaccessible Proof membership separate from permitted page totals', async () => {
+  const first = { ...detail, case: { ...detail.case, proofIds: ['proof-1'], proofCount: 1, restrictedMembers: true }, proofPagination: { section: 'proofs', limit: 2, total: 1, returnedCount: 1, hasMore: false, nextCursor: null, projectionVersion: detail.projectionVersion } };
+  render(cases({ recordsRequest: vi.fn(async () => first) } as unknown as PackProofApi));
+  expect(await screen.findByText('1 of 1 permitted Proofs shown')).toBeVisible();
+  expect(screen.getByText('Additional related shipment records are outside your current access.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Show more Proofs' })).not.toBeInTheDocument();
+});
+
+it('rejects a Proof page from a changed projection instead of merging memberships', async () => {
+  const proofPagination = { section: 'proofs', limit: 2, total: 3, returnedCount: 2, hasMore: true, nextCursor: 'proof-next', projectionVersion: detail.projectionVersion };
+  const first = { ...detail, case: { ...detail.case, proofIds: ['proof-1', 'proof-2'] }, proofPagination };
+  const next = { ...first, case: { ...first.case, proofIds: ['unreviewed-proof'] }, proofPagination: { ...proofPagination, projectionVersion: 'new-projection' } };
+  const onRefresh = vi.fn(), user = userEvent.setup();
+  render(cases({ recordsRequest: vi.fn(async (path: string) => path.includes('section=proofs') ? next : first) } as unknown as PackProofApi, { onRefresh }));
+  await user.click(await screen.findByRole('button', { name: 'Show more Proofs' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('authorized Proof membership changed');
+  expect(screen.queryByRole('link', { name: /unreviewed-proof/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Refresh Proof membership' }));
+  expect(onRefresh).toHaveBeenCalledOnce();
+});
+
+it('preserves the exact received-timeline scope when loading its signed Proof cursor', async () => {
+  const proofPagination = { section: 'proofs', limit: 1, total: 2, returnedCount: 1, hasMore: true, nextCursor: 'received-proof-next', projectionVersion: detail.projectionVersion };
+  const first = { ...detail, case: { ...detail.case, proofIds: ['proof-1'] }, proofPagination };
+  const next = { ...first, case: { ...first.case, proofIds: ['proof-2'] }, proofPagination: { ...proofPagination, hasMore: false, nextCursor: null } };
+  const request = vi.fn(async (path: string) => path.includes('section=proofs') ? next : first), user = userEvent.setup();
+  render(cases({ recordsRequest: request } as unknown as PackProofApi, { params: new URLSearchParams({ ...Object.fromEntries(params), section: 'timeline', timelineOrder: 'received' }) }));
+  await user.click(await screen.findByRole('button', { name: 'Show more Proofs' }));
+  expect(await screen.findByRole('link', { name: 'Open shipment evidence proof-2' })).toBeVisible();
+  const query = new URL(request.mock.calls.at(-1)![0], 'https://synthetic.invalid').searchParams;
+  expect(query.get('section')).toBe('proofs'); expect(query.get('limit')).toBe('1'); expect(query.get('cursor')).toBe('received-proof-next'); expect(query.get('timelineOrder')).toBe('received');
+});

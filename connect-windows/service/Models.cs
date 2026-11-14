@@ -92,6 +92,10 @@ public sealed class QueuePayload
     public bool CommitApproved { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public bool OriginalCompacted { get; set; }
+    public string? CompactionCommandId { get; set; }
+    public string? CompactionCommandSha256 { get; set; }
+    public string? CompactionPermitId { get; set; }
+    public DateTimeOffset? CompactedAt { get; set; }
     public byte[]? QuarantinedOriginalBytes { get; set; }
 }
 public sealed record PipeRequest(int Version, string Id, string Operation, JsonElement? Payload);

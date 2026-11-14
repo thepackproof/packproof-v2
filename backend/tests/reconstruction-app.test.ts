@@ -80,9 +80,19 @@ describe('operational reconstruction through the assembled application',()=>{
   const outsiderRead=await request(app).get(`/me/records/cases/${caseId}/assertions/${firstAssertion}/source`).query(scope()).set('Authorization',`Bearer ${outsider}`);expect(outsiderRead.status).toBe(404);
  });
  it('exports an immutable explicitly scoped investigation profile with omissions and reproducible input values',async()=>{
+  const reads=vi.spyOn(deps.objectStore,'get');
   const result=await request(app).get(`/me/records/cases/${caseId}/export`).query(scope()).set(human());expect(result.status,result.text).toBe(200);expect(result.headers['x-content-sha256']).toBe(sha256Hex(result.text));expect(result.headers['content-disposition']).toContain('attachment');
-  const data=JSON.parse(result.text);expect(data.schema).toBe('packproof.reconstruction-investigation/v1');expect(data.integrity.signed).toBe(false);expect(data.extracts.length).toBe(4);expect(data.omissions.some((o:{kind:string})=>o.kind==='shared_originals')).toBe(true);expect(result.text).not.toContain('SECRET-OTHER-CUSTOMER');expect(result.text).not.toContain('original_object_key');
+  expect(reads).toHaveBeenCalledTimes(3);reads.mockRestore();
+  const data=JSON.parse(result.text);expect(data.schema).toBe('packproof.reconstruction-investigation/v1');expect(data.integrity.signed).toBe(false);expect(data.associationDecisions.length).toBeGreaterThan(0);expect(data.associationDecisions.every((d:{createdAt:unknown})=>typeof d.createdAt==='string'&&Number.isFinite(Date.parse(d.createdAt)))).toBe(true);expect(data.extracts.length).toBe(4);expect(data.omissions.some((o:{kind:string})=>o.kind==='shared_originals')).toBe(true);expect(result.text).not.toContain('SECRET-OTHER-CUSTOMER');expect(result.text).not.toContain('original_object_key');
   await expect(opened.db.query("UPDATE record_reconstruction_exports SET payload_canonical='changed' WHERE payload_sha256=$1",[result.headers['x-content-sha256']])).rejects.toThrow(/immutable/i);
+ });
+ it('advertises signing only when the actual bound runtime is qualified',async()=>{
+  vi.stubEnv('PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED','true');
+  const capability=await request(app).get(`/me/records/cases/${caseId}/export-capabilities`).query(scope()).set(human());expect(capability.status).toBe(200);expect(capability.body.signed).toMatchObject({available:false,qualification:null});expect(capability.body.unsigned.available).toBe(true);
+  const signed=await request(app).get(`/me/records/cases/${caseId}/export`).query({...scope(),profile:'packproof.reconstruction-investigation/v2'}).set(human());expect(signed.status).toBe(503);expect(signed.body.error.code).toBe('RECONSTRUCTION_SIGNING_UNAVAILABLE');
+  const bad=await request(app).get(`/me/records/cases/${caseId}/export`).query({...scope(),profile:'made-up'}).set(human());expect(bad.status).toBe(400);
+  const privateRead=await request(app).get(`/me/records/cases/${caseId}/export-capabilities`).query(scope()).set('Authorization',`Bearer ${outsider}`);expect(privateRead.status).toBe(404);
+  vi.stubEnv('PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED','false');
  });
  it('does not reveal case search results or counts outside current membership',async()=>{
   const read=await request(app).get('/me/records/cases').query({...scope(),q:'0010482'}).set('Authorization',`Bearer ${outsider}`);expect(read.status).toBe(404);

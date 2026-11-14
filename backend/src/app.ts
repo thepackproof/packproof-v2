@@ -279,6 +279,8 @@ export interface AppDependencies {
   manifestSigning?: ManifestSigningRuntime;
   envelopeTrustPublication?: import("./integrity/envelope-publication.js").EnvelopeTrustPublication | null;
   envelopes?: import("./integrity/envelope-access.js").EnvelopeAccessRuntime;
+  reconstructionSigning?: import('./records/reconstruction-signing.js').ReconstructionSigningRuntime;
+  sourceDisposition?: import('./records/source-retention-disposition.js').QualifiedSourceDispositionStore;
   operationalSnapshots?: import('./records/operational-snapshot-runtime.js').OperationalSnapshotRuntime;
   recipientPreservation?: import("./export/recipient-preservation.js").RecipientPreservationRuntime;
   requireDurableReceipts?: boolean;

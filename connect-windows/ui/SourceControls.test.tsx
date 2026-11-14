@@ -98,3 +98,29 @@ it("submits a reviewed source mapping and an explicit UTC history policy from or
   expect(bridge.proposeSubscription).toHaveBeenCalledWith(expect.objectContaining({ displayName: "ERP orders", sourceNamespace: "site-a-qualified", historyFrom: "2026-11-14T00:00:00Z", unknownTimePolicy: "retain_unknown", constants: { observationKind: "snapshot", property: "orderedQuantity", timeQuality: "unknown" }, wholeFileUploadApproved: true }));
   expect(bridge.previewSubscription).not.toHaveBeenCalled();
 });
+it("reviews composite source keys and source-as-of versions without JSON or invented row IDs", () => {
+  const state: ConnectStatus = { ...current, capabilities: { ...current.capabilities!, typedSourceBatchSchemas: ["packproof.typed-source-batch/v1", "packproof.typed-source-batch/v2"] }, subscriptionDraft: { folder: "Approved exports", folderDigest: "b".repeat(64), selectedFileName: "orders.csv", fileSha256: "c".repeat(64), files: [{ name: "orders.csv", byteSize: 300 }], headers: ["Order", "Line", "Qty", "Unit", "AsOf"], rowCount: 1 } };
+  const bridge = bridgeFor(state);
+  render(<SourceControls status={state} bridge={bridge} disabled={false} action={run} external={() => {}}/>);
+  fireEvent.click(screen.getByRole("button", { name: "Add an existing export source" }));
+  const form = within(screen.getByRole("region", { name: "Add source" }));
+  fireEvent.change(form.getByLabelText("Source name"), { target: { value: "ERP snapshots" } });
+  fireEvent.change(form.getByLabelText("Reference group"), { target: { value: "qualified-erp" } });
+  fireEvent.click(form.getByRole("checkbox", { name: "Review an explicit source identity and revision policy" }));
+  fireEvent.change(form.getByLabelText("Source row identity"), { target: { value: "composite" } });
+  fireEvent.change(form.getByLabelText("Revision basis"), { target: { value: "source_as_of" } });
+  for (const [label, value] of [["Order number", "Order"], ["Stable order line ID", "Line"], ["Quantity", "Qty"], ["Unit", "Unit"], ["Snapshot as of time with offset", "AsOf"]]) fireEvent.change(form.getByRole("combobox", { name: label }), { target: { value } });
+  const semantic = form.getAllByLabelText("Or a meaning confirmed for every row");
+  for (const [index, value] of ["snapshot", "orderedQuantity", "snapshot_time_only"].entries()) fireEvent.change(semantic[index], { target: { value } });
+  fireEvent.change(form.getByLabelText("Approved history starts at (UTC)"), { target: { value: "2026-11-14T00:00" } });
+  for (const label of ["Order number", "Reported value meaning"]) fireEvent.click(form.getByRole("checkbox", { name: label }));
+  fireEvent.click(form.getByRole("checkbox", { name: /I reviewed the exact report/ }));
+  const save = form.getByRole("button", { name: "Save source for browser approval" });
+  expect(save).toBeDisabled();
+  fireEvent.click(form.getByRole("checkbox", { name: "Stable order line ID" }));
+  expect(save).toBeDisabled(); // Every policy edit invalidates whole-original review.
+  fireEvent.click(form.getByRole("checkbox", { name: /I reviewed the exact report/ }));
+  expect(save).toBeEnabled();fireEvent.click(save);
+  expect(bridge.proposeSubscription).toHaveBeenCalledWith(expect.objectContaining({ batchSchema: "packproof.typed-source-batch/v2", identityPolicy: { schema: "packproof.source-identity-policy/v1", eventKey: { kind: "composite", fields: ["orderId", "orderLineId", "property"] }, revision: { kind: "source_as_of" } } }));
+  expect(form.queryByRole("textbox", { name: /JSON|API key/i })).toBeNull();
+});

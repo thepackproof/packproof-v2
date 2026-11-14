@@ -1,4 +1,7 @@
 import type {TypedSourceCompleteness} from './source-contracts.js';
+import type {SourceRulePolicies} from './source-rule-policy.js';
+
+export type SourceCompletenessScope='shipment_line'|'tracking_package'|'handling_unit_set';
 
 export interface SourceOutcomeCounts {
  received:number;acceptedLinked:number;acceptedUnlinked:number;duplicate:number;
@@ -11,7 +14,7 @@ export interface SourceCoverageInput {
  expectedIntervalSeconds:number|null;errorCode?:string|null;
  reportedState?:string|null;collectorBacklog?:number|null;oldestPendingAt?:string|null;
  completeness:TypedSourceCompleteness;
- completenessPolicy?:{kind:'unknown'|'snapshot'|'sequence';scope:'shipment_line';sourceOwnerQualified:boolean;qualificationReference?:string|null}|null;
+ completenessPolicy?:{kind:'unknown'|'snapshot'|'sequence';scope:SourceCompletenessScope;sourceOwnerQualified:boolean;qualificationReference?:string|null}|null;
  counts:SourceOutcomeCounts;
 }
 export interface SourceCoverage {
@@ -22,7 +25,8 @@ export interface SourceCoverage {
  expectedIntervalSeconds:number|null;coverage:'qualified'|'unknown';
  collectorBacklog:number|null;oldestPendingAt:string|null;
  accounting:SourceOutcomeCounts&{reconciled:boolean};nextAction:string;
- completeness:{kind:TypedSourceCompleteness['kind'];marker:string|null;asOf:string|null;qualificationReference:string|null};
+ rulePolicies?:SourceRulePolicies|null;
+ completeness:{kind:TypedSourceCompleteness['kind'];marker:string|null;asOf:string|null;qualificationReference:string|null;scope?:SourceCompletenessScope};
 }
 
 /** Reconcile mutually exclusive receipt outcomes. Projection work is separate:
@@ -47,9 +51,9 @@ export function deriveSourceCoverage(input:SourceCoverageInput,now:Date):SourceC
  const validInterval=typeof interval==='number'&&Number.isInteger(interval)&&interval>=60&&interval<=604800;
  const boundary=time(input.completeness.asOf),checked=time(input.lastCheckedAt),asOf=time(input.sourceAsOf);
  const validTimes=[boundary,checked,asOf].every(value=>value!==null&&value<=now.getTime());
- const qualified=!!policy&&policy.sourceOwnerQualified===true&&!!policy.qualificationReference?.trim()&&policy.scope==='shipment_line'&&policy.kind!=='unknown'&&policy.kind===input.completeness.kind&&!!input.completeness.marker&&validTimes;
+ const qualified=!!policy&&policy.sourceOwnerQualified===true&&!!policy.qualificationReference?.trim()&&['shipment_line','tracking_package','handling_unit_set'].includes(policy.scope)&&policy.kind!=='unknown'&&policy.kind===input.completeness.kind&&!!input.completeness.marker&&validTimes;
  const base={connectionId:input.connectionId,sourceNamespace:input.sourceNamespace,lastReceivedAt:input.lastReceivedAt,sourceAsOf:input.sourceAsOf,lastCheckedAt:input.lastCheckedAt,expectedIntervalSeconds:interval,coverage:qualified?'qualified':'unknown',accounting,collectorBacklog:input.collectorBacklog??null,oldestPendingAt:input.oldestPendingAt??null,
-  completeness:{...input.completeness,qualificationReference:qualified?policy!.qualificationReference!:null}} as const;
+  completeness:{...input.completeness,qualificationReference:qualified?policy!.qualificationReference!:null,...(policy?{scope:policy.scope}:{})}} as const;
  if(input.state==='paused'||input.state==='revoked')return {...base,state:'paused',label:input.state==='revoked'?'Source authorization revoked':'Source paused',nextAction:'Ask a source administrator to review current authorization.'};
  if(input.reportedState==='mapping_drift'||input.errorCode&&/SCHEMA|MAPPING|DRIFT|QUARANTIN/i.test(input.errorCode))return {...base,state:'mapping_drift',label:'Source mapping needs review',nextAction:'Review the changed source contract. Other approved sources can continue.'};
  if(input.reportedState==='source_unreadable')return {...base,state:'offline',label:'Source is unreadable',nextAction:'Review source access and reconcile the affected interval.'};

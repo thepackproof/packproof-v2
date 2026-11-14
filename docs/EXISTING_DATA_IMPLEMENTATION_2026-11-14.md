@@ -10,7 +10,7 @@ The PR163 Windows Server evidence does not demonstrate Windows 11 installation, 
 
 ## Implemented path
 
-1. An enrolled collector proposes a specific local source. The server derives the installation, principal, operator, connection and site; proposal alone grants no collection authority.
+1. A matching new collector can start from an administrator-approved local file connection without a legacy shipment CSV. Enrollment and exact source approval remain separate. An enrolled collector proposes a specific local source. The server derives the installation, principal, operator, connection and site; proposal alone grants no collection authority.
 2. A current administrator reviews the exact profile, mapping/constants, source namespace, original policy, file identity, history and byte/row limits in the browser. Configuration and grant revisions remain distinct.
 3. The collector preserves the exact approved UTF-8 original in its encrypted durable spool. The API preserves it at an independently checked object version before acknowledging a typed preview.
 4. Versioned commit and background processing retain every row outcome: processing, accepted linked, accepted unlinked, duplicate, conflict, quarantined or rejected. Scoped immutable event/revision identity prevents altered redelivery from silently replacing facts.
@@ -19,7 +19,7 @@ The PR163 Windows Server evidence does not demonstrate Windows 11 installation, 
 7. Source coverage requires both approved source-owner qualification and measured accounting/boundaries. Explainable comparisons use the existing exact quantity engine and shipment allocation, rather than summing order, pick, load and delivery counts.
 8. Durable issues retain evaluations and reasoned acknowledge, assign, note, resolve and reopen history. Worker actions have explicit system provenance rather than a fabricated human actor.
 9. The portal exposes cases, comparisons, source-specific health, supporting field extracts, first-record review and recurring-source decisions. Case access never authorizes downloading a complete multi-case original.
-10. A new explicitly unsigned investigation JSON profile freezes the projection, assertions, association decisions, issue history, safe extracts, digest inventory, scope omissions and retention summary. Existing signed Proof and operational-snapshot profiles are unchanged.
+10. The unsigned investigation JSON profile freezes the projection, assertions, association decisions, issue history, safe extracts, digest inventory, scope omissions and retention summary. Existing signed Proof and operational-snapshot profiles are unchanged. A separately qualified v2 wrapper adds an independently verified signature and frozen inventory without altering v1 bytes.
 
 ## Source contracts
 
@@ -28,8 +28,9 @@ The PR163 Windows Server evidence does not demonstrate Windows 11 installation, 
 | `packproof.order-lines/v1` | Explicit order and stable parent-scoped order line. |
 | `packproof.shipment-handling-units/v1` | Shipment-line allocation with explicit handling-unit relationships. |
 | `packproof.operational-observations/v1` | Source snapshots, events, corrections and tombstones with declared time quality. |
+| `packproof.operational-observations/v2` | Additive qualified label/carrier and explicit handling-unit handoff assertions. |
 
-Transport schema is `packproof.typed-source-batch/v1`. Local collection is approved NTFS CSV only; approved partner clients can submit bounded CSV or original JSON. The parser derives locators from the original bytes rather than trusting caller-provided row/field pointers. Bounds remain 2 MiB, 1,000 rows and 50 CSV columns. Larger streaming sources and arbitrary vendor formats are not qualified by increasing the HTTP envelope.
+Transport schemas are `packproof.typed-source-batch/v1` and the separately approved `packproof.typed-source-batch/v2`. Version one retains its original identity and revision semantics. Version two requires an exact approved identity policy; explicit columns, grain-qualified composite components, actual snapshot boundaries and immutable-event contracts remain distinguishable in source provenance. Local collection is approved NTFS CSV only; approved partner clients can submit bounded CSV or original JSON. The parser derives locators from the original bytes rather than trusting caller-provided row/field pointers. Bounds remain 2 MiB, 1,000 rows and 50 CSV columns. Larger streaming sources and arbitrary vendor formats are not qualified by increasing the HTTP envelope.
 
 An approved subscription binds its connection, site, principal/installation, profile, mapping and constants, namespace, complete-header schema, original consent and history. Grant and configuration identity are retained with pending work. Changed or revoked authority cannot be bypassed with an idempotency cache hit. Existing installation credentials remain CSV-only unless a separately approved typed subscription and server capability negotiation authorize the new source.
 
@@ -53,11 +54,11 @@ The synthetic contract corpus is shared by TypeScript and C# through `typed-sour
 | --- | --- |
 | API | Existing partner API plus opt-in typed batch and source subscription v1 profiles. |
 | Browser | Source-specific review and first-batch activation from this exact source candidate. |
-| Windows | Internal desktop/service `0.2.0`, protected subscription state and queue schema v2. |
-| Database | Additive migrations 110–113; explicit 113 runtime privilege review. |
+| Windows | Internal desktop/service `0.3.0`, explicitly negotiated v1/v2 source contracts; protected subscription state and queue schema v3. |
+| Database | Additive migrations 110–116; frozen 108/109/113 policies plus explicit 116 runtime privilege review. |
 | Legacy source lane | Existing scheduled CSV v1/v2 and PR163 validation retained. |
 
-The existing queue is migrated without deleting original bytes, keys, credentials or receipts. The old binary must refuse the new queue rather than reset it. Rollback pauses the affected source and uses a compatible service or a roll-forward repair. Do not replace the executable with an older reader after migration, delete ProgramData, run a destructive down migration, or transfer queued bytes into a new source grant.
+The existing queue is migrated without deleting original bytes, keys, credentials or receipts. The old binary must refuse the schema-three queue rather than reset it. Rollback pauses the affected source and uses a compatible service or a roll-forward repair. Do not replace the executable with an older reader after migration, delete ProgramData, run a destructive down migration, or transfer queued bytes into a new source grant.
 
 ## Independent switches
 
@@ -72,6 +73,12 @@ All switches require the literal value `true`; absent values remain disabled.
 | Source health | `PACKPROOF_SOURCE_HEALTH_ENABLED` |
 | Explainable rules | `PACKPROOF_RECONSTRUCTION_RULES_ENABLED` |
 | Investigation exports | `PACKPROOF_RECONSTRUCTION_EXPORTS_ENABLED` |
+| Approved v2 source identity | `PACKPROOF_SOURCE_IDENTITY_V2_ENABLED` |
+| Explicit cross-case allocations and mappings | `PACKPROOF_CROSS_CASE_ENABLED` |
+| Source-owner operational rule policies | `PACKPROOF_SOURCE_RULE_POLICIES_ENABLED` |
+| Bounded materialized case pages | `PACKPROOF_PAGED_PROJECTIONS_ENABLED` |
+| Qualified signed investigation profile | `PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED` |
+| Qualified source disposition and collector compaction | `PACKPROOF_SOURCE_DISPOSITION_ENABLED` |
 
 The existing organization entitlement remains required. Disabling a reader or a rule does not delete accepted originals. Disabling admission stops new work without silently discarding retained work. See `infra/backend-release/reconstruction-candidate-runbook.md` for reviewed migrations, role separation, release checks and recovery.
 
@@ -81,11 +88,11 @@ The following requirements remain open and must not be described as completed:
 
 - **G0 / WP01:** actual Windows 11 clean install, pending-work upgrade, signed-out browser approval, hosted first case, unattended next export, reboot/offline/revocation, accessibility and five-person setup acceptance. Source review and local/hosted-server tests are not that evidence.
 - **G1 / WP02:** three authorized real pilot feeds, source-owner field and completeness approval, documented export publication conventions and actual identity/correction semantics. No named vendor adapter is qualified without its actual source access.
-- **Cross-case scope:** current observations have one primary case. An observation resolving to multiple unrelated order cases remains unlinked; it does not automatically distribute a multi-order load across cases. Explicit same-case many-line, shipment, carton, load and return relationships are supported. Broader authorized cross-case allocation requires further implementation and qualification.
-- **Source keys:** the initial contracts require explicit source identity and revisions. A source without them needs an approved composite-key contract and matching collector support before it can be advertised as supported.
-- **Rules:** qualified quantity, serial, identity-conflict and source-coverage reasoning must not become a claim that label acceptance, handoff scans or physical loading occurred. Label/handoff absence rules need source-specific qualified event/window and expected-unit contracts. Unknown prerequisites remain unavailable or not comparable.
-- **Scale:** correctness pagination is tested, but the current detail reader builds a complete case projection before returning a page. The one-million-observation retained workload, 100 observations/second burst, p95 latency and production capacity targets remain unmeasured and may require materialized/paged projections.
-- **WP10:** retention policy, holds, safe review and unavailability are implemented. Physical original/history deletion, delivery of cloud retention policy to collector compaction, backup erasure and signed case-package distribution remain unqualified. Typed originals stay preserved under spool quotas rather than being purged to hide a backlog.
+- **Cross-case qualification:** explicit owner-approved multi-order allocations, per-case assertion partitions, scoped typed entity aliases and namespace rules are implemented. The same external load ID in unrelated receipts does not create an association. Real source owners must still qualify identity cardinality, reuse intervals and allocation meaning.
+- **Source keys:** additive v2 policies and equivalent C#/TypeScript interpreters support approved grain-qualified composite identities, source-as-of snapshots and immutable events. These fixtures do not qualify the identifiers or publication semantics of an unknown real source.
+- **Rules:** label/carrier acceptance and expected handling-unit handoff rules are implemented behind separate qualified policy bindings. Exact source revisions, carrier account/service, explicit event/deadline times, source completeness and current coverage are prerequisites. Status vocabularies and windows require actual source-owner review.
+- **Scale:** ordinary case pages use SQL pagination and revision-bound cursors. Workers maintain complete versioned comparisons and derived source accounting; pending/stale projections suppress comparison totals. The reproducible retained-history workload and actual measured results are recorded separately; local fixture timing is not production PostgreSQL capacity qualification.
+- **WP10:** a separate v2 signed case package reuses the existing signing provider and independent trust registry. Runtime source/profile/org/env/key/time bindings are required; existing signed Proof/snapshot formats remain unchanged. Exact-version original disposition requires a separate worker-only privileged role and two independently authorized human decisions; collector compaction requires a reconciled completed receipt and matching scope/digest. Immutable normalized audit history remains preserved, and backup erasure is never claimed. Actual production key, role, storage retention and restore qualification remain required before activation.
 - **G4 / WP12:** production migration rehearsal, live role preflight, signed Windows distribution, external security/retention acceptance, one-site shadow operation and the 20-investigation value study remain open. No production schema, role, source, Site audience or deployment is changed by preparing this candidate.
 
 The optional WP11 non-file adapter is deferred until a real provider, source version and authorized access are selected. The implementation does not claim universal warehouse integration, physical verification, fraud detection or responsibility assignment.
@@ -93,3 +100,5 @@ The optional WP11 non-file adapter is deferred until a real provider, source ver
 ## Verification record
 
 Final commands, results and CI links are recorded in the pull request. Meaningful checks include the full backend suite, assembled reconstruction HTTP tests, actual database privilege tests, shared C#/TypeScript corpus parity, complete web and desktop tests/builds, native service build/tests and source-review browser checks. Any skipped Windows-only tests and external acceptance gates must remain explicit.
+
+The reference profile targets two to five feeds per case. Dependency validation supports at most500 participating/required policy feeds and fails explicitly above that bound; the source subscription inventory remains independently paginated. No source subset is silently presented as complete.

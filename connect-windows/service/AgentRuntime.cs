@@ -7,7 +7,7 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.2.0";
+    internal const string InstalledVersion="0.3.0";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
     private readonly Func<ISourceAdapter> sourceAdapterFactory=()=>new LocalNtfsSourceAdapter();
@@ -20,14 +20,14 @@ public sealed partial class AgentRuntime : IDisposable
             var serviceSid = (SecurityIdentifier)new NTAccount($"NT SERVICE\\{host.ServiceName}").Translate(typeof(SecurityIdentifier));
             if (WindowsIdentity.GetCurrent().Groups?.Contains(serviceSid) != true) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must receive its dedicated service SID. Ask IT to repair the installed service identity before accessing protected work.");
             ProtectedAncestry.Assert(host.DataRoot, Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), serviceSid.Value);
-            store.Initialize();state=store.Read<LocalState>("state.bin")??new();SourceStateMigration.Validate(state);queue=new(store);SourceStateMigration.SynchronizeLegacy(state);
+            store.Initialize();state=store.Read<LocalState>("state.bin")??new();SourceStateMigration.Validate(state);var previousStateVersion=state.StateVersion;queue=new(store);SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state);
         }
         catch(ConnectException error){startupError=error;state=new(){LastErrorCode=error.Code};}
         catch(Microsoft.Data.Sqlite.SqliteException){startupError=new("LOCAL_QUEUE_UNAVAILABLE","The retained queue cannot be opened safely. Preserve its database, journal and protected keys and contact support; the service will not replace it with an empty queue.");state=new(){LastErrorCode=startupError.Code};}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
-    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store); api = transport; SourceStateMigration.SynchronizeLegacy(state); }
+    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store); api = transport; var previousStateVersion=state.StateVersion;SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state); }
     private void Save() { SourceStateMigration.SynchronizeLegacy(state); store.Write("state.bin", state); }
     private static string Hash(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     private string Generation => state.Token is null ? "none" : Hash(state.Token);

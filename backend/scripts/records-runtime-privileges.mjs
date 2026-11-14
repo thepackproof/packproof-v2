@@ -89,7 +89,31 @@ const policy113={...policy,
  record_case_rule_runs:{api:select,worker:{...select,insert:'*'}},
  record_case_rule_state:{api:{...select,insert:'*',update:['case_revision','projection_version','checked_at','next_check_at','error_code']},worker:{...select,insert:'*',update:['case_revision','projection_version','checked_at','next_check_at','error_code']}},
 };
-const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:policy;
+// The second candidate adds only reviewed114–116 authority. Old policy objects
+// and the default109 profile are preserved byte-for-byte above.
+const counterUpdates=['received_count','processing_count','linked_count','unlinked_count','duplicate_count','conflict_count','quarantined_count','rejected_count','unknown_time_count','ready','updated_at'];
+const policy116={...policy113,
+ record_typed_source_identities_v2:{api:select,worker:{...select,insert:'*'}},
+ record_case_row_projections:{api:select,worker:{...select,insert:'*'}},
+ record_case_links:{api:select,worker:{...select,insert:'*'}},
+ record_case_entity_aliases:{api:{...select,insert:'*'},worker:select},
+ record_case_identity_rules:{api:{...select,insert:'*'},worker:select},
+ record_typed_snapshot_versions:{api:select,worker:{...select,insert:'*'}},
+ // Counter maintenance also runs in the invoker's intake transaction trigger.
+ record_source_projection_counters:{api:{...select,insert:['subscription_id','organization_id','environment','location_id','operator_membership_id','updated_at'],update:counterUpdates.filter(column=>column!=='ready')},worker:{...select,insert:'*',update:counterUpdates}},
+ record_case_projection_state:{api:select,worker:{...select,insert:'*',update:['case_revision','projection_version','source_signature','summary','source_keys','source_snapshot','rule_capabilities','comparison_count','created_at','valid_until','next_check_at','error_code']}},
+ record_case_projection_comparisons:{api:select,worker:{...select,insert:'*'}},
+ record_reconstruction_signed_exports:{api:{...select,insert:'*'},worker:{}},
+ record_source_disposition_requests:{api:{...select,insert:'*'},worker:select},
+ record_source_disposition_approvals:{api:{...select,insert:'*'},worker:select},
+ record_source_disposition_work:{api:{...select,insert:['request_id','state','next_attempt_at','updated_at'],update:['state','updated_at']},worker:{...select,update:['state','attempts','lease_token','lease_expires_at','next_attempt_at','error_code','updated_at']}},
+ record_source_disposition_intents:{api:select,worker:{...select,insert:'*'}},
+ record_source_disposition_results:{api:select,worker:{...select,insert:'*'}},
+ record_source_compaction_commands:{api:select,worker:{...select,insert:'*'}},
+ record_source_compaction_acknowledgements:{api:{...select,insert:'*'},worker:select},
+ record_source_compaction_permits:{api:{...select,insert:'*'},worker:select},
+};
+const selectPolicy=throughMigration=>throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:policy;
 
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -131,7 +155,7 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109,113].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ if(![108,109,113,116].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
  const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[01][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();

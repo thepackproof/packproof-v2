@@ -33,14 +33,14 @@ public sealed class DurableQueue : IDisposable
     {
         using var command = db.CreateCommand(); command.CommandText = "PRAGMA user_version";
         var userVersion = Convert.ToInt32(command.ExecuteScalar());
-        if (userVersion > 2) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
+        if (userVersion > 3) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta'";
         var hasMeta = Convert.ToInt32(command.ExecuteScalar()) > 0;
         if (hasMeta)
         {
             command.CommandText = "SELECT version FROM meta"; var values = new List<int>();
             using (var reader = command.ExecuteReader()) while (reader.Read()) values.Add(reader.GetInt32(0));
-            if (values.Count != 1 || values[0] is < 1 or > 2 || (userVersion != 0 && values[0] != userVersion)) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
+            if (values.Count != 1 || values[0] is < 1 or > 3 || (userVersion != 0 && values[0] != userVersion)) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
         }
         Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON;");
         using var transaction = db.BeginTransaction(); command.Transaction = transaction;
@@ -52,7 +52,11 @@ public sealed class DurableQueue : IDisposable
             // are unchanged. The sentinel is a legacy lane, never a new grant.
             command.CommandText = "ALTER TABLE queue ADD COLUMN source_id TEXT NOT NULL DEFAULT 'legacy'; ALTER TABLE queue ADD COLUMN source_profile TEXT NOT NULL DEFAULT 'shipment-csv/v1'; ALTER TABLE queue ADD COLUMN grant_revision INTEGER NOT NULL DEFAULT 0; UPDATE meta SET version=2;"; command.ExecuteNonQuery();
         }
-        command.CommandText = "CREATE INDEX IF NOT EXISTS queue_source_due ON queue(source_id,credential_generation,config_digest,state,next_attempt_at); CREATE INDEX IF NOT EXISTS queue_source_page ON queue(source_id,id); PRAGMA user_version=2;"; command.ExecuteNonQuery(); transaction.Commit();
+        // Version three is an incompatibility barrier for v2 identity and
+        // preservation-permit payloads. Only metadata changes: encrypted
+        // originals, wire bodies, stable keys and approval ownership stay exact.
+        command.CommandText="UPDATE meta SET version=3";command.ExecuteNonQuery();
+        command.CommandText = "CREATE INDEX IF NOT EXISTS queue_source_due ON queue(source_id,credential_generation,config_digest,state,next_attempt_at); CREATE INDEX IF NOT EXISTS queue_source_page ON queue(source_id,id); PRAGMA user_version=3;"; command.ExecuteNonQuery(); transaction.Commit();
     }
     private static QueueEntry ReadEntry(SqliteDataReader r) => new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7), r.GetInt32(8), DateTimeOffset.Parse(r.GetString(9)), r.IsDBNull(10) ? null : r.GetString(10), r.GetString(11), r.GetString(12), r.GetString(13), r.GetInt32(14));
     private IReadOnlyList<QueueEntry> ReadEntries(SqliteCommand command)
@@ -146,6 +150,34 @@ public sealed class DurableQueue : IDisposable
             ProtectedStore.AtomicWrite(Path.Combine(spoolRoot, entry.PayloadPath), encryption.Encrypt(Json.Bytes(payload), entry.Id)); compacted++;
         }
         return compacted;
+    }
+    internal static JsonElement ReceiptWithoutRaw(JsonElement receipt)
+    {
+        var summary=receipt.EnumerateObject().ToDictionary(p=>p.Name,p=>(object?)p.Value);
+        summary["rows"]=receipt.GetProperty("rows").EnumerateArray().Select(r=>r.EnumerateObject().Where(p=>p.Name!="raw").ToDictionary(p=>p.Name,p=>(object?)p.Value)).ToArray();return Json.Element(summary);
+    }
+    // No general typed-spool aging path exists. Only the current, exact server
+    // command may compact one reconciled completed original; queue ownership,
+    // digests and durable receipt accounting remain in place.
+    internal string CompactApprovedTyped(QueueEntry expected,string commandId,string commandSha256,DateTimeOffset now,string permitId)
+    {
+        var entry=Find(expected.Id);
+        if(entry is null||entry!=expected||entry.State!="complete"||entry.SourceId==SourceSubscriptionState.LegacyId||entry.ImportId is null)throw new ConnectException("SOURCE_COMPACTION_UNSAFE","The exact completed source original must reconcile before compaction.");
+        var payload=Payload(entry);var receipt=payload.Receipt;
+        if(receipt is null||receipt.Value.GetProperty("id").GetString()!=entry.ImportId||receipt.Value.GetProperty("state").GetString()!="succeeded"||receipt.Value.GetProperty("original").GetProperty("sha256").GetString()!=entry.Digest)throw new ConnectException("SOURCE_COMPACTION_UNSAFE","The retained receipt does not identify this completed original.");
+        if(payload.OriginalCompacted)
+        {
+            if(payload.CompactionCommandId!=commandId||payload.CompactionCommandSha256!=commandSha256||payload.CompactedAt is null||payload.CompactionPermitId!=permitId)throw new ConnectException("SOURCE_COMPACTION_UNSAFE","The retained compaction authorization differs from this command.");
+            return "already_compacted";
+        }
+        AgentRuntime.ValidateTypedAccounting(receipt.Value);
+        payload.FileName="";payload.Csv="";payload.QuarantinedOriginalBytes=null;payload.PreviewBody=Json.Element(new{});payload.PreviewWireBody=null;payload.CommitWireBody=null;
+        // Drop copies of unmapped raw source fields from receipt rows. Derived
+        // assertions and accounting stay available under their separate policy.
+        payload.Receipt=ReceiptWithoutRaw(receipt.Value);
+        if(string.IsNullOrWhiteSpace(permitId))throw new ConnectException("SOURCE_COMPACTION_UNSAFE","A fresh online compaction permit is required.");
+        payload.OriginalCompacted=true;payload.CompactionPermitId=permitId;payload.CompactionCommandId=commandId;payload.CompactionCommandSha256=commandSha256;payload.CompactedAt=now;
+        ProtectedStore.AtomicWrite(Path.Combine(spoolRoot,entry.PayloadPath),encryption.Encrypt(Json.Bytes(payload),entry.Id));return "compacted";
     }
     public void Checkpoint() => Execute("PRAGMA wal_checkpoint(FULL)");
     public void Dispose() => db.Dispose();

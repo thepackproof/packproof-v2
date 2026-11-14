@@ -158,7 +158,10 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
   }
   // A separately approved versioned source grant is necessary for typed routes.
   // Scope strings and issuing a replacement credential cannot confer it.
-  const typedRoute=(method==='GET'&&path==='/source-subscriptions')||
+  const sourceCapabilities=method==='GET'&&path==='/source-profiles';
+  if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
+  const compaction=(method==='GET'&&path==='/agent/source-dispositions/compaction-commands')||(method==='POST'&&/^\/agent\/source-dispositions\/compaction-commands\/[A-Za-z0-9_-]+\/(?:ack|permit)$/.test(path));
+  const typedRoute=(compaction&&reconstructionFeatureEnabled('sourceDisposition'))||(method==='GET'&&path==='/source-subscriptions')||
     (method==='POST'&&path==='/source-subscriptions/proposals')||
     (method==='POST'&&/^\/source-subscriptions\/[A-Za-z0-9_-]+\/heartbeat$/.test(path))||
     (method==='POST'&&path==='/typed-imports/preview')||

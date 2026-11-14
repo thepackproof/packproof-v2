@@ -30,3 +30,10 @@ describe("source privileged boundary", () => {
     for (const extra of [{ folder: "C:\\private" }, { sourceProfile: "unqualified/v1" }, { constants: { amount: "10" } }, { wholeFileUploadApproved: false }, { unknownTimePolicy: 'invent_time' }]) expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, ...extra }]).success).toBe(false);
   });
 });
+it("accepts only explicitly paired versioned policies with bounded actual identity fields", () => {
+  const proposal = { displayName: "Orders", sourceProfile: "packproof.order-lines/v1", sourceNamespace: "site-a", mappingVersion: "mapping/v2", mapping: { orderId: "Order", orderLineId: "Line", sourceAsOf: "AsOf" }, constants: { observationKind: "snapshot", property: "orderedQuantity", timeQuality: "snapshot_time_only" }, historyFrom: "2026-11-14T00:00:00Z", wholeFileUploadApproved: true, batchSchema: "packproof.typed-source-batch/v2", identityPolicy: { schema: "packproof.source-identity-policy/v1", eventKey: { kind: "composite", fields: ["orderId", "orderLineId", "property"] }, revision: { kind: "source_as_of" } } };
+  expect(argumentsByMethod.proposeSubscription.safeParse([proposal]).success).toBe(true);
+  expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, batchSchema: undefined }]).success).toBe(false);
+  expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, identityPolicy: undefined }]).success).toBe(false);
+  for (const fields of [["orderId", "fileSha256"], ["orderId", "amount"], ["orderId", "sourceAsOf"], ["orderId", "orderId"], ["orderId"]]) expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, identityPolicy: { ...proposal.identityPolicy, eventKey: { kind: "composite", fields } } }]).success).toBe(false);
+});

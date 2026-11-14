@@ -96,7 +96,7 @@ jobs:
       - name: Verify database credential and session-option guards
         run: node --test ../infra/tests/admin-runtime-credentials.test.mjs
       - name: Verify reconstruction candidate inventory and read-only release review
-        run: node --test ../infra/backend-release/reconstruction-release-review.test.mjs
+        run: node --test ../infra/backend-release/reconstruction-release-review.test.mjs ../infra/backend-release/reconstruction-v2-release-review.test.mjs
       - name: Hash exact API build and migration set
         run: node ../scripts/release-bom.mjs --root .. --out "$RUNNER_TEMP/backend-bom.json" --api-dist dist --expected-sha "$GITHUB_SHA"
       - uses: actions/upload-artifact@v4
@@ -381,6 +381,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
