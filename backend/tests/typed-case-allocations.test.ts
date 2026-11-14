@@ -9,7 +9,7 @@ import {insertUser} from '../src/domain/users.js';
 import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,PARTNER_SCOPES,type PartnerActor} from '../src/platform/organizations.js';
 import {LocalObjectStore} from '../src/s3/local-object-store.js';
 import {requireRecordWorkspace} from '../src/records/access.js';
-import {proposeSourceSubscription,actOnSourceSubscription} from '../src/records/source-subscriptions.js';
+import {proposeSourceSubscription,actOnSourceSubscription,type SourceSubscriptionConfig} from '../src/records/source-subscriptions.js';
 import {previewTypedImport,commitTypedImport,readTypedImport,readTypedImportRecordSubset,processPendingTypedImports,replayPendingTypedRows,resumeTypedImport,type TypedImportDeps} from '../src/records/typed-imports.js';
 import {approveCaseCrosswalk,requireCaseAccess,approveCaseEntityAlias,approveCaseIdentityRule,readCaseIdentityMappingsForProjection,readCaseEntityChoices,currentCaseAssertionSql,caseObservationSupersededSql,partitionOperationalObservation} from '../src/records/cases.js';
 import {loadOperationalCaseProjection} from '../src/records/reconstruction.js';
@@ -125,6 +125,38 @@ describe('qualified many-case source allocations and aliases',()=>{
    expect(evaluation.relationships.flatMap(r=>[r.from,r.to]).filter(r=>r.type==='order_line').every(r=>r.parentExternalId===parent)).toBe(true);
    expect(evaluation.case.shipmentCount).toBe(1);
   }
+ });
+
+ it('retains broad v1 correction history across schemas and unledgered accepted rows while excluding another site',async()=>{
+  const event='retained-cross-schema-event',v2=await v2Source('retained-cross-schema','packproof.order-lines/v1'),unledgered=await v2Source('retained-unledgered','packproof.order-lines/v1');
+  const e2=(rows:TypedSourceObservation[],sub:string)=>({...envelope(rows,sub),schema:'packproof.typed-source-batch/v2',identityPolicy:identity});
+  const revision=(root:string,number:number):TypedSourceObservation=>({...order(event,root),sourceRevision:String(number),...(number>1?{supersedes:{sourceEventId:event,sourceRevision:String(number-1)}}:{})});
+  const a=await ingest(envelope([revision('RETAINED-A',1)]),'retained-a1'),b=await ingest(e2([revision('RETAINED-B',1)],v2),'retained-b1');
+  const aBefore=Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[a.caseIds[0]])).rows[0].revision);await ingest(e2([revision('RETAINED-B',2)],v2),'retained-b2');expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[a.caseIds[0]])).rows[0].revision)).toBe(aBefore);
+  const d=await ingest(envelope([order('retained-unledgered-case','RETAINED-UNLEDGERED')]),'retained-unledgered-case'),preview=await previewTypedImport(deps,actor,e2([revision('RETAINED-UNLEDGERED',1),revision('RETAINED-UNLEDGERED',2)],unledgered),'retained-unledgered-original');
+  // Simulate retained accepted history with an incomplete identity ledger. The
+  // original is real and correctly parsed; no identity is fabricated for it.
+  const retained=(await opened.db.query<{id:string;source_revision:string}>('SELECT id,source_revision FROM record_typed_rows WHERE batch_id=$1',[preview.value.id])).rows,first=retained.find(r=>r.source_revision==='1')!.id;
+  await opened.db.query("UPDATE record_typed_rows SET status='accepted_linked',case_id=$2,supersedes_id=CASE WHEN source_revision='2' THEN $3 ELSE NULL END WHERE batch_id=$1",[preview.value.id,d.caseIds[0],first]);await opened.db.query("UPDATE record_typed_batches SET state='succeeded' WHERE id=$1",[preview.value.id]);expect((await opened.db.query('SELECT 1 FROM record_typed_source_identities_v2 WHERE row_id=ANY($1::text[])',[retained.map(r=>r.id)])).rows).toHaveLength(0);
+  const otherSite='retained-other-site';await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[otherSite,org,'Other retained site',clock.now().toISOString()]);const otherSub=await source('packproof.order-lines/v1',otherSite),c=await ingest(envelope([revision('RETAINED-SITE',1)],otherSub,'packproof.order-lines/v1',otherSite),'retained-site1');await ingest(envelope([revision('RETAINED-SITE',2)],otherSub,'packproof.order-lines/v1',otherSite),'retained-site2');
+  const before=new Map((await opened.db.query<{id:string;revision:number}>('SELECT id,revision FROM record_cases WHERE id=ANY($1::text[])',[[b.caseIds[0],c.caseIds[0],d.caseIds[0]]])).rows.map(r=>[r.id,Number(r.revision)]));await ingest(envelope([revision('RETAINED-A',2)]),'retained-a2');
+  for(const id of [b.caseIds[0],d.caseIds[0]])expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[id])).rows[0].revision)).toBe(before.get(id)!+1);
+  expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[c.caseIds[0]])).rows[0].revision)).toBe(before.get(c.caseIds[0]));
+ });
+
+ it('includes retained v1 history after an approved v2 upgrade without affecting another source stream',async()=>{
+  const ns='retained-upgrade',event='retained-upgrade-event',sub=await source('packproof.order-lines/v1',site,ns),adapt=(n:TypedSourceObservation)=>JSON.parse(JSON.stringify(n).replaceAll(namespace,ns)) as TypedSourceObservation;
+  const revision=(number:number):TypedSourceObservation=>adapt({...order(event,'UPGRADE-ORIGINAL'),sourceRevision:String(number),...(number>1?{supersedes:{sourceEventId:event,sourceRevision:String(number-1)}}:{})});
+  const original=await ingest(envelope([revision(1)],sub,'packproof.order-lines/v1',site,ns),'upgrade-v1-1');await ingest(envelope([revision(2)],sub,'packproof.order-lines/v1',site,ns),'upgrade-v1-2');const target=await ingest(envelope([adapt(order('upgrade-target','UPGRADE-TARGET'))],sub,'packproof.order-lines/v1',site,ns),'upgrade-target');
+  const w=await requireRecordWorkspace(opened.db,owner,org,'sandbox',true);await approveCaseCrosswalk(opened.db,clock,w,{caseId:target.caseIds[0],locationId:site,namespace:ns,type:'order',externalId:'UPGRADE-ORIGINAL',ruleVersion:'retained-upgrade/1',reason:'Explicit owner-approved revised case association'},'retained-upgrade-map');
+  const config=(await opened.db.query<{configuration:SourceSubscriptionConfig}>('SELECT configuration FROM record_source_subscription_revisions WHERE subscription_id=$1 AND revision=1',[sub])).rows[0].configuration,newConfig={...config,batchSchema:'packproof.typed-source-batch/v2',identityPolicy:identity,crossCasePolicy};
+  const revised=await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,w,sub,{action:'revise',configurationRevision:1,config:newConfig},'retained-upgrade-revise'));await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,w,sub,{action:'approve',configurationRevision:2,configurationSha256:revised.configurationSha256,wholeFileConsent:true},'retained-upgrade-approve'));
+  const grant=Number((await opened.db.query<{grant_revision:number}>('SELECT grant_revision FROM record_source_subscriptions WHERE id=$1',[sub])).rows[0].grant_revision),evolved=(n:TypedSourceObservation)=>({...envelope([n],sub,'packproof.order-lines/v1',site,ns),schema:'packproof.typed-source-batch/v2',identityPolicy:identity,configurationRevision:2,grantRevision:grant});
+  const first=await ingest(evolved(revision(1)),'upgrade-v2-1');expect(first.caseIds).toEqual(target.caseIds);
+  const neighborSub=await v2Source('upgrade-other-stream','packproof.order-lines/v1'),neighborRows=(number:number):TypedSourceObservation=>({...order(event,'UPGRADE-NEIGHBOR'),sourceRevision:String(number),...(number>1?{supersedes:{sourceEventId:event,sourceRevision:String(number-1)}}:{})}),neighborEnvelope=(number:number)=>({...envelope([neighborRows(number)],neighborSub),schema:'packproof.typed-source-batch/v2',identityPolicy:identity});
+  const neighbor=await ingest(neighborEnvelope(1),'upgrade-neighbor1');await ingest(neighborEnvelope(2),'upgrade-neighbor2');
+  const ids=[original.caseIds[0],neighbor.caseIds[0]],before=new Map((await opened.db.query<{id:string;revision:number}>('SELECT id,revision FROM record_cases WHERE id=ANY($1::text[])',[ids])).rows.map(r=>[r.id,Number(r.revision)]));await ingest(evolved(revision(2)),'upgrade-v2-2');
+  expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[original.caseIds[0]])).rows[0].revision)).toBe(before.get(original.caseIds[0])!+1);expect(Number((await opened.db.query<{revision:number}>('SELECT revision FROM record_cases WHERE id=$1',[neighbor.caseIds[0]])).rows[0].revision)).toBe(before.get(neighbor.caseIds[0]));
  });
 
 });
