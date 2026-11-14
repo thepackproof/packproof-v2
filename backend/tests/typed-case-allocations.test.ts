@@ -5,6 +5,7 @@ import path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
 import {migrate} from '../src/db/migrate.js';
+import type {Database} from '../src/db/database.js';
 import {insertUser} from '../src/domain/users.js';
 import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,PARTNER_SCOPES,type PartnerActor} from '../src/platform/organizations.js';
 import {LocalObjectStore} from '../src/s3/local-object-store.js';
@@ -60,6 +61,11 @@ describe('qualified many-case source allocations and aliases',()=>{
  const v2Envelope=(n:TypedSourceObservation,sub:string)=>({...envelope([n],sub,'packproof.operational-observations/v2'),schema:'packproof.typed-source-batch/v2',identityPolicy:identity,mapping:{}});
  function shared(event:string):TypedSourceObservation {const a=ref('order','A'),b=ref('order','B'),la=ref('order_line','004','A'),lb=ref('order_line','004','B'),shipment=ref('shipment',`SHIP-AB-${event}`),pallet=ref('handling_unit',`PALLET-AB-${event}`),load=ref('load',`LOAD-AB-${event}`);return {...order(event,'A'),references:[a,b,la,lb,shipment,pallet,load],assertions:[{subjectReference:lb,property:'reportedLoadedQuantity',value:{amount:'3',unit:'each'},sourceLocator:{row:1,field:'B quantity'},assurance:'source_reported'},{subjectReference:la,property:'reportedLoadedQuantity',value:{amount:'7',unit:'each'},sourceLocator:{row:1,field:'A quantity'},assurance:'source_reported'},{subjectReference:load,property:'status',value:'loaded',sourceLocator:{row:1,field:'load state'},assurance:'source_reported'}],relationships:[{from:a,to:la,type:'has_line',quantity:null},{from:b,to:lb,type:'has_line',quantity:null},{from:shipment,to:la,type:'fulfills',quantity:null},{from:shipment,to:lb,type:'fulfills',quantity:null},{from:la,to:pallet,type:'allocated_to',quantity:{amount:'7',unit:'each'}},{from:lb,to:pallet,type:'allocated_to',quantity:{amount:'3',unit:'each'}},{from:pallet,to:load,type:'loaded_on',quantity:null}]};}
  const activeAssertions=(caseId:string)=>opened.db.query<{id:string;value:unknown;observation_id:string}>(`SELECT a.id,a.value,a.observation_id FROM record_case_assertions a JOIN record_typed_rows r ON r.id=a.observation_id WHERE a.case_id=$1 AND ${currentCaseAssertionSql('a','r','a.case_id')} AND NOT(${caseObservationSupersededSql('r.id','a.case_id')}) ORDER BY a.id`,[caseId]);
+ function observeEvaluation(){
+  const queries:Array<{sql:string;params:unknown[];ids:string[]}>=[];
+  const db:Database={query:async<T>(sql:string,params:unknown[]=[])=>{const result=await opened.db.query<T>(sql,params);queries.push({sql,params,ids:result.rows.map(row=>(row as {id?:string}).id).filter((id):id is string=>typeof id==='string')});return result;},transaction:fn=>opened.db.transaction(fn)};
+  return {db,queries};
+ }
  it('keeps known A projected while unseen B remains pending, then adds B without merging',async()=>{
   const a=await ingest(envelope([order('create-A','A')]),'create-A'),sub=await v2Source('shared'),input=v2Envelope(shared('shared-B-unseen'),sub),done=await ingest(input,'shared-B-unseen');
   expect(done.counts).toMatchObject({acceptedUnlinked:1,acceptedLinked:0});expect(done.caseIds).toEqual(a.caseIds);expect(done.rows[0].caseId).toBeNull();
@@ -110,11 +116,12 @@ describe('qualified many-case source allocations and aliases',()=>{
   const left=await ingest(envelope([order('evaluation-create-A','EVALUATION-A')]),'evaluation-create-A'),right=await ingest(envelope([order('evaluation-create-B','EVALUATION-B')]),'evaluation-create-B'),sub=await v2Source('evaluation-correction'),w=await requireRecordWorkspace(opened.db,owner,org,'sandbox');
   const adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,...(r.type==='order'&&['A','B'].includes(r.externalId)?{externalId:`EVALUATION-${r.externalId}`}:{}) ,...(r.type==='order_line'?{parentExternalId:`EVALUATION-${r.parentExternalId}`}:{})});
   const original=shared('evaluation-shared');original.references=original.references.map(adapt);original.assertions=original.assertions.map(a=>({...a,subjectReference:adapt(a.subjectReference)}));original.relationships=original.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}));
+  const retired=ref('handling_unit','EVALUATION-RETIRED-HU');original.references.push(retired);original.relationships.push({from:ref('order_line','004','EVALUATION-A'),to:retired,type:'allocated_to',quantity:{amount:'1',unit:'each'}});
   const first=await ingest(v2Envelope(original,sub),'evaluation-shared-1');
-  const correction:TypedSourceObservation={...structuredClone(original),sourceRevision:'2',supersedes:{sourceEventId:original.sourceEventId,sourceRevision:'1'},assertions:original.assertions.map(a=>({...a,value:a.property==='reportedLoadedQuantity'?{amount:a.subjectReference.parentExternalId==='EVALUATION-A'?'6':'4',unit:'each'}:a.value}))};
+  const correction:TypedSourceObservation={...structuredClone(original),sourceRevision:'2',supersedes:{sourceEventId:original.sourceEventId,sourceRevision:'1'},assertions:original.assertions.map(a=>({...a,value:a.property==='reportedLoadedQuantity'?{amount:a.subjectReference.parentExternalId==='EVALUATION-A'?'6':'4',unit:'each'}:a.value})),relationships:original.relationships.filter(r=>r.to.externalId!==retired.externalId)};
   const second=await ingest(v2Envelope(correction,sub),'evaluation-shared-2');
   for(const [id,parent] of [[left.caseIds[0],'EVALUATION-A'],[right.caseIds[0],'EVALUATION-B']]){
-   const history=await loadOperationalCaseProjection(opened.db,clock,w,id),evaluation=await loadOperationalCaseProjection(opened.db,clock,w,id,{evaluation:true});
+   const observedHistory=observeEvaluation(),observedEvaluation=observeEvaluation(),history=await loadOperationalCaseProjection(observedHistory.db,clock,w,id),evaluation=await loadOperationalCaseProjection(observedEvaluation.db,clock,w,id,{evaluation:true});
    const oldAssertions=history.assertions.filter(a=>a.source.observationId===first.rows[0].id),newAssertions=history.assertions.filter(a=>a.source.observationId===second.rows[0].id);
    expect(oldAssertions.length).toBeGreaterThan(0);expect(oldAssertions.every(a=>a.active===false)).toBe(true);
    expect(newAssertions.filter(a=>a.property==='reportedLoadedQuantity')).toEqual([expect.objectContaining({active:true,subject:expect.objectContaining({parentExternalId:parent})})]);
@@ -125,7 +132,28 @@ describe('qualified many-case source allocations and aliases',()=>{
    expect(evaluation.relationships.map(r=>r.id).sort()).toEqual(history.relationships.filter(r=>r.active).map(r=>r.id).sort());
    expect(evaluation.relationships.flatMap(r=>[r.from,r.to]).filter(r=>r.type==='order_line').every(r=>r.parentExternalId===parent)).toBe(true);
    expect(evaluation.case.shipmentCount).toBe(1);
+   const entities=(await opened.db.query<{id:string;namespace:string;entity_type:TypedSourceReference['type'];external_id:string;parent_external_id:string}>('SELECT id,namespace,entity_type,external_id,parent_external_id FROM record_case_entities WHERE case_id=$1',[id])).rows;
+   const key=(r:TypedSourceReference)=>canonicalize([r.namespace,r.type,r.externalId,r.parentExternalId??'']),byReference=new Map(entities.map(e=>[canonicalize([e.namespace,e.entity_type,e.external_id,e.parent_external_id]),e.id]));
+   const expectedIds=[...new Set([...history.assertions.filter(a=>a.active).map(a=>byReference.get(key(a.subject))!),...history.relationships.filter(r=>r.active).flatMap(r=>[r.from.id,r.to.id])])].sort();
+   const entityQueries=observedEvaluation.queries.filter(q=>q.sql.startsWith('SELECT e.id,e.namespace,e.entity_type,e.external_id,e.parent_external_id FROM record_case_entities e'));
+   expect(entityQueries).toHaveLength(1);expect(entityQueries[0].ids).toEqual(expectedIds);expect(entityQueries[0].params.slice(0,3)).toEqual([id,org,'sandbox']);expect(new Set(entityQueries[0].params[3] as string[])).toEqual(new Set(expectedIds));
+   expect(entityQueries[0].sql).toContain('e.id=ANY($4::text[])');expect(entityQueries[0].sql).not.toMatch(/active_a|active_rel|EXISTS/);
+   expect(observedEvaluation.queries.some(q=>q.sql.startsWith('SELECT r.id,')||q.sql.includes('AND false'))).toBe(false);expect(evaluation.timeline).toEqual([]);
+   expect(observedHistory.queries.some(q=>q.sql.startsWith('SELECT r.id,'))).toBe(true);expect(observedHistory.queries.some(q=>q.sql.includes('entity_assertion'))).toBe(true);
+   const relationOnly=entities.find(e=>e.entity_type==='handling_unit'&&e.external_id.startsWith('PALLET-AB-'))!;expect(expectedIds).toContain(relationOnly.id);expect(history.assertions.some(a=>key(a.subject)===canonicalize([relationOnly.namespace,relationOnly.entity_type,relationOnly.external_id,relationOnly.parent_external_id]))).toBe(false);
+   if(parent==='EVALUATION-A'){const inactiveOnly=entities.find(e=>e.external_id===retired.externalId)!;expect(observedHistory.queries.find(q=>q.sql.startsWith('SELECT e.id,e.namespace'))?.ids).toContain(inactiveOnly.id);expect(expectedIds).not.toContain(inactiveOnly.id);}
   }
+ });
+
+ it('skips evaluation entity and history SQL for a tombstoned empty active set while retaining authorized history',async()=>{
+  const original=order('evaluation-empty-active','EVALUATION-EMPTY'),first=await ingest(envelope([original]),'evaluation-empty-first'),w=await requireRecordWorkspace(opened.db,owner,org,'sandbox');
+  const tombstone:TypedSourceObservation={...structuredClone(original),sourceRevision:'2',observationKind:'tombstone',supersedes:{sourceEventId:original.sourceEventId,sourceRevision:'1'},assertions:[],relationships:[]};
+  await ingest(envelope([tombstone]),'evaluation-empty-tombstone');
+  const observed=observeEvaluation(),evaluation=await loadOperationalCaseProjection(observed.db,clock,w,first.caseIds[0],{evaluation:true}),history=await loadOperationalCaseProjection(opened.db,clock,w,first.caseIds[0]);
+  expect(evaluation.assertions).toEqual([]);expect(evaluation.relationships).toEqual([]);expect(evaluation.timeline).toEqual([]);expect(evaluation.case.shipmentCount).toBe(0);
+  expect(observed.queries.some(q=>q.sql.startsWith('SELECT e.id,e.namespace')||q.sql.startsWith('SELECT r.id,')||q.sql.includes('AND false'))).toBe(false);
+  expect(observed.queries.filter(q=>q.sql.startsWith('SELECT c.* FROM record_cases c WHERE')).length).toBeGreaterThanOrEqual(2);
+  expect(history.timeline).toHaveLength(2);expect(history.assertions).toHaveLength(1);expect(history.assertions[0].active).toBe(false);expect(history.relationships.every(r=>!r.active)).toBe(true);
  });
 
  it('retains broad v1 correction history across schemas and unledgered accepted rows while excluding another site',async()=>{

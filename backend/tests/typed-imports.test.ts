@@ -191,6 +191,63 @@ describe('typed source receipts and operational case writes',()=>{
   await opened.db.query("UPDATE record_source_subscriptions SET state='approved' WHERE id=$1",[subscription]);
  });
 
+
+ function traceReceiptTransactions(afterQuery?:(sql:string,params:unknown[]|undefined,result:QueryResult<unknown>,tx:Database)=>Promise<void>){
+  const trace={transactions:0,statements:[] as Array<{transaction:number;sql:string}>};
+  const db:Database={async query(){throw new Error('Receipt data escaped its authority transaction');},async transaction<T>(work:(tx:Database)=>Promise<T>){
+   const transaction=++trace.transactions;
+   return opened.db.transaction(async tx=>{
+    const scoped:Database={async query<T>(sql:string,params?:unknown[]){trace.statements.push({transaction,sql});const result=await tx.query<T>(sql,params);await afterQuery?.(sql,params,result,tx);return result;},transaction:async inner=>inner(scoped)};
+    return work(scoped);
+   });
+  }};return {db,trace};
+ }
+ it('reads a fresh receipt in one authority transaction and joins an existing transaction safely',async()=>{
+  const done=await ingest(envelope([order('transactional-read','TRANSACTIONAL-READ')]),'transactional-read');let snapshots=0;
+  const {db,trace}=traceReceiptTransactions(async(sql,params,result)=>{if(sql==='SELECT * FROM record_typed_batches WHERE id=$1'&&params?.[0]===done.id&&snapshots++===0)(result.rows[0] as {state:string}).state='queued';});
+  // Model the initial metadata snapshot taken before a worker finished while
+  // authority acquisition was waiting. The post-lock read must win.
+  expect(await readTypedImport({...deps,db},actor,done.id)).toEqual(done);
+  expect(trace.transactions).toBe(1);expect(new Set(trace.statements.map(s=>s.transaction)).size).toBe(1);expect(snapshots).toBe(2);
+  expect(trace.statements.filter(s=>s.sql.startsWith('SELECT control_revision,paused')).length).toBe(2);
+  expect(trace.statements.filter(s=>s.sql.startsWith('SELECT input.id receipt_row_id')).length).toBe(1);
+  expect(await opened.db.transaction(tx=>readTypedImport({...deps,db:tx},actor,done.id))).toEqual(done);
+ });
+ it('skips case joins for processing-only receipts while retaining both current authority checks',async()=>{
+  const p=await previewTypedImport(deps,actor,envelope([order('transactional-preview-read','TRANSACTIONAL-PREVIEW-READ')]),'transactional-preview-read'),{db,trace}=traceReceiptTransactions();
+  const result=await readTypedImport({...deps,db},actor,p.value.id);expect(result).toEqual(p.value);expect(result.caseIds).toEqual([]);expect(result.counts.processing).toBe(1);
+  expect(trace.transactions).toBe(1);expect(trace.statements.some(s=>s.sql.startsWith('SELECT input.id receipt_row_id'))).toBe(false);
+  expect(trace.statements.filter(s=>s.sql.startsWith('SELECT control_revision,paused')).length).toBe(2);
+ });
+ for(const change of ['credential','source_pause'] as const)it(`checks current ${change} authority again before returning receipt contents`,async()=>{
+  const done=await ingest(envelope([order(`transactional-revoke-${change}`,`TRANSACTIONAL-REVOKE-${change}`)]),`transactional-revoke-${change}`);let changed=false;
+  const {db}=traceReceiptTransactions(async(sql,params,_result,tx)=>{if(changed||sql!=='SELECT * FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number'||params?.[0]!==done.id)return;changed=true;
+   if(change==='credential')await tx.query('UPDATE platform_credentials SET revoked_at=$2 WHERE id=$1',[actor.credentialId,clock.now().toISOString()]);
+   else await tx.query("UPDATE record_source_subscriptions SET state='paused' WHERE id=$1",[subscription]);
+  });
+  await expect(readTypedImport({...deps,db},actor,done.id)).rejects.toMatchObject({code:change==='credential'?'INSUFFICIENT_SCOPE':'SOURCE_AUTHORIZATION_REQUIRED'});expect(changed).toBe(true);
+  // The failed read rolls back this injected authority change. No immutable
+  // credential or source history is rewritten to repair the fixture.
+  expect(await readTypedImport(deps,actor,done.id)).toEqual(done);
+ });
+ it('reauthorizes cached preview and commit responses after a source is paused',async()=>{
+  const key='transactional-cached',input=envelope([order(key,'TRANSACTIONAL-CACHED')]),done=await ingest(input,key),body={previewVersion:done.previewVersion,originalSha256:done.original.sha256,importValidRows:false};
+  const rollback=new Error('Rollback synthetic source pause');
+  await expect(opened.db.transaction(async tx=>{
+   await tx.query("UPDATE record_source_subscriptions SET state='paused' WHERE id=$1",[subscription]);
+   await expect(previewTypedImport({...deps,db:tx},actor,input,`preview-${key}`)).rejects.toMatchObject({code:'SOURCE_AUTHORIZATION_REQUIRED'});
+   await expect(commitTypedImport({...deps,db:tx},actor,done.id,body,`commit-${key}`)).rejects.toMatchObject({code:'SOURCE_AUTHORIZATION_REQUIRED'});throw rollback;
+  })).rejects.toBe(rollback);
+  expect((await previewTypedImport(deps,actor,input,`preview-${key}`)).replayed).toBe(true);expect((await commitTypedImport(deps,actor,done.id,body,`commit-${key}`)).replayed).toBe(true);
+ });
+ it('keeps preview preflight and stored receipt work in separate authority transactions',async()=>{
+  const {db,trace}=traceReceiptTransactions(),input=envelope([order('transactional-preview-preflight','TRANSACTIONAL-PREVIEW-PREFLIGHT')]);
+  const p=await previewTypedImport({...deps,db},actor,input,'transactional-preview-preflight');expect(p.value.counts.processing).toBe(1);expect(trace.transactions).toBe(3);
+  const preflight=trace.statements.filter(s=>s.transaction===1).map(s=>s.sql);expect(preflight.some(sql=>sql.startsWith('SELECT pg_advisory_xact_lock'))).toBe(true);expect(preflight.some(sql=>sql.startsWith('INSERT '))).toBe(false);
+  expect(trace.statements.some(s=>s.transaction===2&&s.sql.startsWith('INSERT INTO record_typed_batches'))).toBe(true);
+  expect(trace.statements.filter(s=>s.transaction===3&&s.sql.startsWith('SELECT control_revision,paused')).length).toBe(2);
+ });
+
  async function queueChunkReceipt(key:string,count=12,sub=subscription,ns=namespace){
   const adapt=(r:TypedSourceReference):TypedSourceReference=>({...r,namespace:ns});
   const rows=Array.from({length:count},(_,i)=>{const n=order(`${key}-${i}`,`${key}-ORDER-${i}`);return {...n,references:n.references.map(adapt),assertions:n.assertions.map(a=>({...a,subjectReference:adapt(a.subjectReference)})),relationships:n.relationships.map(r=>({...r,from:adapt(r.from),to:adapt(r.to)}))};}),p=await previewTypedImport(deps,actor,envelope(rows,sub,'packproof.order-lines/v1',site,ns),`preview-${key}`);

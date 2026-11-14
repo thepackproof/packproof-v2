@@ -5,7 +5,7 @@ import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {newId} from '../ids.js';
 import {idempotent} from '../platform/idempotency.js';
-import {reauthorizePartner,auditOrganization,strictBody,type PartnerActor} from '../platform/organizations.js';
+import {auditOrganization,strictBody,type PartnerActor} from '../platform/organizations.js';
 import {parseTypedSourceBatch,type TypedSourceBatch,type TypedSourceObservation,type TypedSourceRow} from './source-contracts.js';
 import {applyOperationalObservation,currentCaseObservationSql,observationCaseCandidatesSql,currentCaseObservationProjectionSql,currentCaseAssertionSql,currentCaseRelationshipSql,caseObservationSupersededSql} from './cases.js';
 import {requireTypedSourceAuthority,type SourceSubscriptionConfig} from './source-subscriptions.js';
@@ -33,7 +33,8 @@ async function items(db:Database,id:string) {return (await db.query<Item>('SELEC
 async function current(deps:TypedImportDeps,db:Database,a:PartnerActor,j:TypedBatchRow,operation:'preview'|'read'|'commit'|'replay'='read',original?:TypedSourceBatch) {
  requireReconstructionFeature('typedIntake');
  if(j.organization_id!==a.merchantId||j.environment!==a.environment||j.principal_id!==a.principalId||j.credential_id!==a.credentialId||a.delegationGrantId)throw new DomainError('TYPED_IMPORT_NOT_FOUND','Source receipt not found',404);
- await reauthorizePartner(db,deps.clock,a,operation==='read'?'imports:read':'imports:write');
+ // Source authority immediately performs this operation's current partner
+ // authorization; the same scope need not be checked twice consecutively.
  const approved=await requireTypedSourceAuthority(db,deps.clock,a,authorityInput(j.contract),operation);
  if(operation!=='read'&&j.contract.collectionContext)await requireSourceBackfillCollection({...deps,db},a,j.contract.collectionContext);
  if(operation!=='read'&&Number(approved.grantRevision)!==Number(j.grant_revision))fail('SOURCE_GRANT_CHANGED','This retained original keeps its original approval grant; review recovery explicitly',403);
@@ -55,12 +56,19 @@ function view(j:TypedBatchRow,rs:Item[],associations:Map<string,string[]>=new Ma
   rows:rs.map((r,index)=>({id:r.id,index,rowNumber:r.row_number,status:r.status,raw:r.source_values,normalized:r.normalized,payloadSha256:r.payload_sha256,errors:r.errors,errorCode:r.error_code,historyEligibility:r.history_eligibility,caseId:r.status==='duplicate'?((associations.get(r.id)?.length??0)===1?associations.get(r.id)![0]:null):r.case_id,caseIds:associations.get(r.id)??[],projectionOutcomes:(associations.get(r.id)??[]).map(caseId=>({caseId,status:'linked' as const})),duplicateOf:r.duplicate_of,supersedesId:r.supersedes_id})),
   caseIds:[...new Set(rs.flatMap(r=>associations.get(r.id)??[]))],receivedAt:iso(j.received_at),updatedAt:iso(j.updated_at),errorCode:j.error_code,links:{self:`/v1/partner/typed-imports/${j.id}`},assurance:'source_reported',physicalCondition:'not_established'};
 }
-async function currentSourceCases(db:Database,j:TypedBatchRow,rs:Item[]) {
- const result=new Map<string,string[]>();if(!rs.length)return result;
+async function currentSourceCases(db:Database,j:TypedBatchRow,rs:Item[],stableReceiptRows=false) {
+ const result=new Map<string,string[]>();if(!rs.length||stableReceiptRows&&!rs.some(row=>['accepted_linked','accepted_unlinked','duplicate'].includes(row.status)))return result;
  const pairs=(await db.query<{receipt_row_id:string;case_id:string}>(`SELECT input.id receipt_row_id,c.id case_id FROM record_typed_rows input JOIN record_typed_rows source ON source.id=COALESCE(input.duplicate_of,input.id) JOIN record_typed_batches b ON b.id=source.batch_id JOIN record_cases c ON c.id IN ${observationCaseCandidatesSql('source')} AND c.organization_id=b.organization_id AND c.environment=b.environment AND c.location_id=b.location_id AND c.operator_membership_id=b.operator_membership_id WHERE input.batch_id=$1 AND input.status IN ('accepted_linked','accepted_unlinked','duplicate') AND b.organization_id=$2 AND b.environment=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 AND b.connection_id=$6 AND source.payload_sha256=input.payload_sha256 AND ${currentCaseObservationSql('source','c.id')} ORDER BY input.id,c.id`,[j.id,j.organization_id,j.environment,j.location_id,j.operator_membership_id,j.connection_id])).rows;
  for(const row of pairs){const ids=result.get(row.receipt_row_id)??[];ids.push(row.case_id);result.set(row.receipt_row_id,ids);}return result;
 }
-export async function readTypedImport(deps:TypedImportDeps,a:PartnerActor,id:string) {const j=await batch(deps.db,id);await current(deps,deps.db,a,j);const rs=await items(deps.db,id),result=view(j,rs,await currentSourceCases(deps.db,j,rs));await current(deps,deps.db,a,j);return result;}
+export async function readTypedImport(deps:TypedImportDeps,a:PartnerActor,id:string) {
+ return deps.db.transaction(async tx=>{
+  const before=await batch(tx,id);await current(deps,tx,a,before);
+  // A worker may have committed while the first authority lock was waiting.
+  const j=await batch(tx,id),rs=await items(tx,id),result=view(j,rs,await currentSourceCases(tx,j,rs,true));
+  await current(deps,tx,a,j);return result;
+ });
+}
 
 /** The installed collector verifies materialized source values without gaining
  * access to the remainder of a multi-source case. No raw original is returned. */
@@ -96,10 +104,11 @@ export async function previewTypedImport(deps:TypedImportDeps,a:PartnerActor,inp
  requireReconstructionFeature('typedIntake');
  const parsed=parseTypedSourceBatch(input);
  if(!parsed.subscriptionId||parsed.configurationRevision===null)fail('SOURCE_AUTHORIZATION_REQUIRED','Approve this exact source subscription before uploading',403);
- await reauthorizePartner(deps.db,deps.clock,a,'imports:write');
- const initialApproval=await requireTypedSourceAuthority(deps.db,deps.clock,a,authorityInput(parsed),'preview');
- assertSourceSnapshotBoundary(initialApproval.config,parsed);
- await validateSourceBackfillAdmission(deps,a,parsed);
+ await deps.db.transaction(async tx=>{
+  const initialApproval=await requireTypedSourceAuthority(tx,deps.clock,a,authorityInput(parsed),'preview');
+  assertSourceSnapshotBoundary(initialApproval.config,parsed);
+  await validateSourceBackfillAdmission({...deps,db:tx},a,parsed);
+ });
  const result=await idempotent(deps.db,deps.clock,a.tenantId,`typed-preview:${a.environment}:${a.principalId}:${a.credentialId}`,key,input,async tx=>{
   const approved=await requireTypedSourceAuthority(tx,deps.clock,a,authorityInput(parsed),'preview');
   const verifiedBoundary=assertSourceSnapshotBoundary(approved.config,parsed);
