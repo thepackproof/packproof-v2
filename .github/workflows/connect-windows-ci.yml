@@ -47,6 +47,8 @@ jobs:
       - run: npm run verify:artifacts
       - name: Exercise actual LocalService protected storage and bridge
         run: ./scripts/smoke-native-foundation.ps1
+      - name: Upgrade the retained 0.2.0 legacy queue with the packaged service
+        run: ./scripts/smoke-legacy-queue-upgrade.ps1
       - name: Reject unhealthy installation and repair retained storage safely
         run: ./scripts/smoke-storage-repair.ps1
       - name: Qualify read-only Windows PowerShell 5.1 installation diagnostics
@@ -66,6 +68,7 @@ jobs:
             connect-windows/release/development/win32-x64/DEVELOPMENT-BUILD.txt
             connect-windows/release/development/win32-x64/native-foundation-smoke.json
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
+            connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -75,3 +78,4 @@ jobs:
           path: |
             connect-windows/release/development/win32-x64/native-foundation-smoke.json
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
+            connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json

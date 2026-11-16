@@ -1,5 +1,6 @@
 # Read-only Windows PowerShell 5.1 diagnostics. No lifecycle, repair, network,
-# enrollment, permission, credential, protected-content or key operations.
+# enrollment, permission, credential, customer-row or key operations.
+# The queue inspection reads only its fixed 100-byte SQLite file header.
 param([ValidateSet('development','staging','production')][string]$Channel='development')
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -9,6 +10,45 @@ function Failure($ErrorRecord) {
  $id=([string]$ErrorRecord.FullyQualifiedErrorId -replace '[^A-Za-z0-9_.-]','')
  if($id.Length -gt 100) { $id=$id.Substring(0,100) }
  return @{category=$id;hresult=$ErrorRecord.Exception.HResult}
+}
+function Read-ConnectQueueHeader([string]$Path) {
+ if(-not ('PackProofQueueHeaderDiagnostic' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;using System.IO;using System.Text;using System.Collections.Generic;using System.Runtime.InteropServices;using Microsoft.Win32.SafeHandles;
+public sealed class PackProofQueueHeaderFacts { public int HeaderSchemaVersion;public int ApplicationId;public int BytesRead; }
+public static class PackProofQueueHeaderDiagnostic {
+ [StructLayout(LayoutKind.Sequential)] private struct FileInformation { public uint Attributes;public System.Runtime.InteropServices.ComTypes.FILETIME Creation,Access,Write;public uint Serial,SizeHigh,SizeLow,Links,IndexHigh,IndexLow; }
+ [DllImport("kernel32.dll",EntryPoint="CreateFileW",CharSet=CharSet.Unicode,SetLastError=true)] private static extern SafeFileHandle CreateFile(string path,uint access,uint share,IntPtr security,uint creation,uint flags,IntPtr template);
+ [DllImport("kernel32.dll",SetLastError=true)] private static extern bool GetFileInformationByHandle(SafeFileHandle file,out FileInformation information);
+ private static void Ordinary(SafeFileHandle file,bool directory) {
+  FileInformation info;if(file.IsInvalid||!GetFileInformationByHandle(file,out info))throw new IOException("QUEUE_HEADER_PATH_UNAVAILABLE");
+  if((info.Attributes&0x400)!=0)throw new IOException("QUEUE_HEADER_REPARSE_REFUSED");
+  if(((info.Attributes&0x10)!=0)!=directory)throw new IOException("QUEUE_HEADER_ENTRY_TYPE_INVALID");
+ }
+ private static int SignedBigEndian(byte[] b,int offset) { return unchecked((int)(((uint)b[offset]<<24)|((uint)b[offset+1]<<16)|((uint)b[offset+2]<<8)|b[offset+3])); }
+ public static PackProofQueueHeaderFacts Read(string path) {
+  var full=Path.GetFullPath(path);var ancestors=new List<string>();var held=new List<SafeFileHandle>();
+  for(var parent=new DirectoryInfo(Path.GetDirectoryName(full));parent!=null;parent=parent.Parent)ancestors.Add(parent.FullName);
+  ancestors.Reverse();
+  try {
+   // Hold ordinary ancestor handles without delete sharing until the read ends,
+   // preventing an intervening directory replacement from redirecting the path.
+   foreach(var ancestor in ancestors) { var handle=CreateFile(ancestor,0,3,IntPtr.Zero,3,0x02200000,IntPtr.Zero);held.Add(handle);Ordinary(handle,true); }
+   // OPEN_REPARSE_POINT refuses a linked file even if it changed after listing.
+   using(var file=CreateFile(full,0x80000000,7,IntPtr.Zero,3,0x00200000,IntPtr.Zero)) {
+    Ordinary(file,false);using(var stream=new FileStream(file,FileAccess.Read,100,false)) {
+     var bytes=new byte[100];var count=0;while(count<100) { var read=stream.Read(bytes,count,100-count);if(read==0)break;count+=read; }
+     if(count!=100)throw new IOException("QUEUE_HEADER_TRUNCATED");
+     if(Encoding.ASCII.GetString(bytes,0,16)!="SQLite format 3\0")throw new IOException("QUEUE_HEADER_SIGNATURE_INVALID");
+     return new PackProofQueueHeaderFacts { HeaderSchemaVersion=SignedBigEndian(bytes,60),ApplicationId=SignedBigEndian(bytes,68),BytesRead=count };
+    }
+   }
+  } finally { foreach(var handle in held)handle.Dispose(); }
+ }
+}
+'@
+ }
+ return [PackProofQueueHeaderDiagnostic]::Read($Path)
 }
 $suffix=$Channel.Substring(0,1).ToUpperInvariant()+$Channel.Substring(1)
 $serviceName='PackProofConnect'+$suffix
@@ -72,9 +112,27 @@ foreach($part in @(@('programData',$programData),@('productParent',(Join-Path $p
 $report.storage.protectedFiles=@()
 foreach($name in @('state.bin','state.bin.new','spool-key.bin','spool-key.bin.new','queue.sqlite','queue.sqlite-wal','queue.sqlite-shm')) {
  $facts=[ordered]@{name=$name;exists=$false}
- try { $path=Join-Path $data $name;if(Test-Path -LiteralPath $path) { $entry=Get-Item -LiteralPath $path -Force;$facts.exists=$true;$facts.directory=[bool]$entry.PSIsContainer;$facts.attributes=[string]$entry.Attributes;if(-not $entry.PSIsContainer) { $facts.byteSize=$entry.Length };$acl=Get-Acl -LiteralPath $path;$facts.ownerSid=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value } } catch { $facts.failure=Failure $_ }
+ try { $path=Join-Path $data $name;if(Test-Path -LiteralPath $path) { $entry=Get-Item -LiteralPath $path -Force;$facts.exists=$true;$facts.directory=[bool]$entry.PSIsContainer;$facts.attributes=[string]$entry.Attributes;$facts.reparsePoint=[bool]($entry.Attributes -band [IO.FileAttributes]::ReparsePoint);if(-not $entry.PSIsContainer) { $facts.byteSize=$entry.Length };$acl=Get-Acl -LiteralPath $path;$facts.ownerSid=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value } } catch { $facts.failure=Failure $_ }
  $report.storage.protectedFiles+=,$facts
 }
+# Header metadata is not a SQLite open, schema admission, integrity check or
+# migration. A live WAL can contain a newer header than the main file reports.
+$queueFacts=@($report.storage.protectedFiles|Where-Object {$_.name -eq 'queue.sqlite'})[0]
+$walFacts=@($report.storage.protectedFiles|Where-Object {$_.name -eq 'queue.sqlite-wal'})[0]
+$headerFacts=[ordered]@{requested=$false;readOnly=$true;bytesRead=0;source='main_file_header_only';walPresent=[bool]$walFacts.exists;walReparsePoint=[bool]$walFacts['reparsePoint'];walByteSize=$(if($walFacts.exists -and -not $walFacts.directory -and -not $walFacts['reparsePoint']){$walFacts['byteSize']}else{$null});mayLagWal=$true;caveat='The main-file header may lag an active WAL. These values do not prove the current logical schema or authorize opening, migration or reset.'}
+if($queueFacts.exists) {
+ try {
+  $headerFacts.requested=$true
+  if($queueFacts.directory -or $queueFacts.reparsePoint) { throw 'QUEUE_HEADER_REPARSE_REFUSED' }
+  $header=Read-ConnectQueueHeader (Join-Path $data 'queue.sqlite')
+  $headerFacts.signatureValid=$true;$headerFacts.bytesRead=$header.BytesRead;$headerFacts.headerSchemaVersion=$header.HeaderSchemaVersion;$headerFacts.applicationId=$header.ApplicationId
+ } catch {
+  $headerFacts.failure=Failure $_
+  $message=[string]$_.Exception.Message
+  foreach($code in @('QUEUE_HEADER_PATH_UNAVAILABLE','QUEUE_HEADER_REPARSE_REFUSED','QUEUE_HEADER_ENTRY_TYPE_INVALID','QUEUE_HEADER_TRUNCATED','QUEUE_HEADER_SIGNATURE_INVALID')) { if($message.Contains($code)) { $headerFacts.failure.code=$code;break } }
+ }
+}
+$report.storage.sqliteHeader=$headerFacts
 foreach($part in @(@('service','resources\service\PackProof.Connect.Service.exe'),@('bridge','resources\bridge\PackProof.Connect.Bridge.exe'),@('serviceConfig','resources\service\service-config.json'),@('bridgeConfig','resources\bridge\bridge-config.json'),@('lifecycle','resources\installer\lifecycle.ps1'),@('storageHealth','resources\installer\storage-health.ps1'),@('applicationArchive','resources\app.asar'))) {
  $facts=[ordered]@{exists=$false}
  try { $path=Join-Path $install $part[1];if(Test-Path -LiteralPath $path) { $entry=Get-Item -LiteralPath $path -Force;$facts.exists=$true;$facts.byteSize=$entry.Length;$facts.reparsePoint=[bool]($entry.Attributes -band [IO.FileAttributes]::ReparsePoint);if($part[0] -in @('service','bridge')) { $facts.fileVersion=[Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion } } } catch { $facts.failure=Failure $_ }

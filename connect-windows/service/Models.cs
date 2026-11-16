@@ -43,6 +43,7 @@ public sealed record TransportObservation(
     string[]? SourceContracts);
 public sealed class LocalState
 {
+    [JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
     public TransportObservation? Transport { get; set; }
     public JsonElement? LocalAnalysis { get; set; }
     public int DraftRevision { get; set; }
@@ -91,6 +92,7 @@ public sealed class LocalState
 public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath);
 public sealed class QueuePayload
 {
+    [JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
     public required string FileName { get; set; }
     public required string Csv { get; set; }
     public required JsonElement PreviewBody { get; set; }

@@ -80,7 +80,7 @@ test('installer diagnostic classification preserves codes and excludes raw paths
  const {spawnSync}=require('node:child_process');
  const engine=process.platform==='win32'?'powershell.exe':process.env.PACKPROOF_TEST_PWSH||'pwsh';
  const lifecycle=join(__dirname,'../installer/lifecycle.ps1').replaceAll("'","''");
- const command=`$tokens=$null;$errors=$null;$ast=[System.Management.Automation.Language.Parser]::ParseFile('${lifecycle}',[ref]$tokens,[ref]$errors);if($errors.Count){throw 'Installer syntax invalid'};$formatter=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Format-ConnectInstallationFailure'},$true);Invoke-Expression $formatter.Extent.Text;$result=@();$result+=Format-ConnectInstallationFailure 'service_readiness' 'LOCAL_STORAGE_BUSY: PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'operator_metadata' 'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.';$result+=Format-ConnectInstallationFailure 'service_start' 'PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'PRIVATE_PATH TOKEN=secret' 'FAKE_CODE: PRIVATE_PATH TOKEN=secret';$result|ConvertTo-Json -Compress`;
+ const command=`$tokens=$null;$errors=$null;$ast=[System.Management.Automation.Language.Parser]::ParseFile('${lifecycle}',[ref]$tokens,[ref]$errors);if($errors.Count){throw 'Installer syntax invalid'};$formatter=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Format-ConnectInstallationFailure'},$true);Invoke-Expression $formatter.Extent.Text;$result=@();$result+=Format-ConnectInstallationFailure 'service_readiness' 'LOCAL_STORAGE_BUSY: PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'operator_metadata' 'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.';$result+=Format-ConnectInstallationFailure 'service_start' 'PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'PRIVATE_PATH TOKEN=secret' 'FAKE_CODE: PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'service_readiness' 'QUEUE_SOURCE_RUNTIME_REQUIRED: PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'service_readiness' 'LOCAL_STATE_UNSUPPORTED: PRIVATE_PATH TOKEN=secret';$result|ConvertTo-Json -Compress`;
  const result=spawnSync(engine,['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8',timeout:15000});
  if(result.error?.code==='ENOENT'){t.skip('PowerShell unavailable locally; exercised by native Windows candidate');return;}
  assert.equal(result.status,0,result.stderr);
@@ -89,6 +89,9 @@ test('installer diagnostic classification preserves codes and excludes raw paths
  assert.match(lines[1],/OPERATOR_METADATA_OWNER \[operator_metadata\]/);
  assert.match(lines[2],/INSTALL_SERVICE_START_FAILED \[service_start\]/);
  assert.match(lines[3],/INSTALL_INITIALIZATION_FAILED \[initialization\]/);
+ assert.match(lines[4],/QUEUE_SOURCE_RUNTIME_REQUIRED \[service_readiness\]/);
+ assert.match(lines[4],/compatible PackProof source-runtime version; do not reset or reinterpret/);
+ assert.match(lines[5],/LOCAL_STATE_UNSUPPORTED \[service_readiness\]/);
  for(const line of lines){assert.ok(line.length<=480);assert.doesNotMatch(line,/PRIVATE_PATH|TOKEN|secret|FAKE_CODE|[\r\n]/);}
 });
 

@@ -17,13 +17,27 @@ public sealed class DurableQueue : IDisposable
     {
         if (originalFileLimit is < 1 or > MaxFiles) throw new ArgumentOutOfRangeException(nameof(originalFileLimit));
         this.originalFileLimit = originalFileLimit;
+        // Inspect retained format read-only before creating directories, keys or
+        // changing SQLite settings. A rejected source-aware queue is untouched.
+        var databasePath = Path.Combine(store.Root, "queue.sqlite");
+        if (File.Exists(databasePath))
+        {
+            // Ordinary read-only SQLite honors committed WAL frames. SQLite
+            // may create coordination sidecars; it cannot alter retained rows,
+            // version markers, originals, credentials or key material here.
+            using var retained = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            retained.Open(); _ = QueueSchemaCompatibility.Inspect(retained);
+        }
         spoolRoot = Path.Combine(store.Root, "spool"); Directory.CreateDirectory(spoolRoot); encryption = new(store.Key());
         db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(store.Root, "queue.sqlite"), Mode = SqliteOpenMode.ReadWriteCreate }.ToString()); db.Open();
         try
         {
-            using (var compatibility = db.CreateCommand()) { compatibility.CommandText = "PRAGMA user_version"; if (Convert.ToInt32(compatibility.ExecuteScalar()) > 1) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue."); compatibility.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta'"; if (Convert.ToInt32(compatibility.ExecuteScalar()) > 0) { compatibility.CommandText = "SELECT version FROM meta"; if (Convert.ToInt32(compatibility.ExecuteScalar()) != 1) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue."); } }
-            Execute("PRAGMA user_version=1; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL); INSERT INTO meta(version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta); CREATE TABLE IF NOT EXISTS queue(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL,preview_key TEXT NOT NULL,commit_key TEXT NOT NULL,credential_generation TEXT NOT NULL,config_digest TEXT NOT NULL,import_id TEXT,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at TEXT NOT NULL,error_code TEXT,payload_path TEXT NOT NULL,UNIQUE(digest,config_digest));");
-            using var v = db.CreateCommand(); v.CommandText = "SELECT version FROM meta"; if (Convert.ToInt32(v.ExecuteScalar()) != 1) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "This version cannot read the queued work. Install the compatible PackProof version.");
+            var schema = QueueSchemaCompatibility.Inspect(db);
+            if (schema <= 1)
+            {
+                Execute("PRAGMA user_version=1; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL); INSERT INTO meta(version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta); CREATE TABLE IF NOT EXISTS queue(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL,preview_key TEXT NOT NULL,commit_key TEXT NOT NULL,credential_generation TEXT NOT NULL,config_digest TEXT NOT NULL,import_id TEXT,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at TEXT NOT NULL,error_code TEXT,payload_path TEXT NOT NULL,UNIQUE(digest,config_digest));");
+            }
+            else Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON;");
             foreach (var entry in Entries()) if (!File.Exists(Path.Combine(spoolRoot, entry.PayloadPath))) throw new ConnectException("SPOOL_ORIGINAL_MISSING", "A queue entry is missing its encrypted original. Preserve the remaining queue and contact support.");
             // Unreferenced .new/.bin files are retained as recoverable orphans; never counted as safe committed work.
         }
