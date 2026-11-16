@@ -21,6 +21,13 @@ function cloneTask(t){
  for(const c of t.containerDefinitions){const names=[...(c.environment??[]),...(c.secrets??[])].map(x=>x.name);check(names.length===new Set(names).size&&!c.environmentFiles?.length,'CONNECT_RUNTIME_BINDINGS_AMBIGUOUS');}
  return Object.fromEntries(taskFields.filter(k=>k in t).map(k=>[k,structuredClone(t[k])]));
 }
+// ECS adds systemControls: [] to some registration responses. Only that exact
+// empty default is equivalent to omission; preserve real requests and controls.
+function taskConfigurationHash(t){
+ const copy=structuredClone(t);
+ for(const c of copy.containerDefinitions??[])if(Array.isArray(c.systemControls)&&c.systemControls.length===0)delete c.systemControls;
+ return hash(copy);
+}
 function replaceRelease(c,r){
  const e=env(c);check(releaseNames.every(k=>Object.hasOwn(e,k))&&e.PACKPROOF_MIGRATE_ON_START==='false','CONNECT_RUNTIME_RELEASE_BINDINGS_REQUIRED');
  c.image=r.image;c.environment=c.environment.map(x=>releaseNames.includes(x.name)?{...x,value:({PACKPROOF_RELEASE_SHA:r.sourceSha,PACKPROOF_RELEASE_IMAGE:r.image,PACKPROOF_RELEASE_VERSION:r.version})[x.name]}:x);
@@ -49,7 +56,7 @@ function validate(snapshot,r,now){
 }
 function qualification(q,r,kind,now,expectedDefinition){
  const expectedContainers=expectedDefinition.containerDefinitions.map(c=>c.name),registered=q?.registered?.taskDefinition??q?.registered;
- check(taskArn(registered?.taskDefinitionArn)&&q?.task?.taskDefinitionArn===registered.taskDefinitionArn&&hash(cloneTask(registered))===hash(expectedDefinition),'CONNECT_RUNTIME_PROBE_DEFINITION_REQUIRED');
+ check(taskArn(registered?.taskDefinitionArn)&&q?.task?.taskDefinitionArn===registered.taskDefinitionArn&&taskConfigurationHash(cloneTask(registered))===taskConfigurationHash(expectedDefinition),'CONNECT_RUNTIME_PROBE_DEFINITION_REQUIRED');
  const report=q?.report,task=q?.task;
  check(report?.schema==='packproof.connect-runtime-probe/v1'&&report.kind===kind&&report.sourceSha===r.sourceSha&&report.image===r.image&&report.inventorySha256===CONNECT_RUNTIME_INVENTORY.sha256&&report.readOnly===true&&report.runtimeAuthorityUnchanged===true&&report.durabilityPolicyMatches===true&&report.compiledV2Guards===true&&fresh(report.completedAt,now),'CONNECT_RUNTIME_QUALIFICATION_REQUIRED');
  check(report.role===(kind==='api'?r.apiRole:r.workerRole)&&report.databaseHost===r.database.host&&report.databaseName===r.database.name&&report.environment===r.environment,'CONNECT_RUNTIME_PROBE_TARGET_MISMATCH');
@@ -72,7 +79,7 @@ export function connectWorkerUpdate(plan,registered,observation,now=Date.now()){
  planFresh(plan,now);
  check(fresh(observation?.observedAt,now)&&observation.service?.taskDefinition===plan.workerPredecessorTaskDefinition&&hash(workerFixed(observation))===plan.workerPredecessorSha256&&observation.service.runningCount===observation.service.desiredCount&&observation.service.pendingCount===0&&observation.service.deployments?.length===1&&observation.service.deployments[0].rolloutState==='COMPLETED','CONNECT_RUNTIME_WORKER_DRIFT');
  const t=registered?.taskDefinition??registered;
- check(taskArn(t?.taskDefinitionArn)&&hash(cloneTask(t))===hash(plan.workerRegister),'CONNECT_RUNTIME_REGISTERED_WORKER_MISMATCH');
+ check(taskArn(t?.taskDefinitionArn)&&taskConfigurationHash(cloneTask(t))===taskConfigurationHash(plan.workerRegister),'CONNECT_RUNTIME_REGISTERED_WORKER_MISMATCH');
  return {cluster:plan.workerClusterArn,service:plan.workerServiceArn,taskDefinition:t.taskDefinitionArn};
 }
 export function connectApiUpdate(plan,workerObservation,apiObservation,now=Date.now()){
@@ -80,7 +87,7 @@ export function connectApiUpdate(plan,workerObservation,apiObservation,now=Date.
  check(fresh(apiObservation?.observedAt,now)&&apiObservation.service?.serviceArn===TARGET.serviceArn&&apiObservation.service.runningCount===apiObservation.service.desiredCount&&apiObservation.service.pendingCount===0&&apiObservation.nativeDeploymentStatus==='SUCCESSFUL'&&hash(apiObservation.express?.activeConfigurations)===plan.apiConfigurationSha256&&hash(apiObservation.topology)===plan.topologySha256,'CONNECT_RUNTIME_API_DRIFT');
  const {service,tasks,taskDefinition,observedAt}=workerObservation??{};
  check(fresh(observedAt,now)&&service?.serviceArn===plan.workerServiceArn&&service.clusterArn===plan.workerClusterArn&&service.status==='ACTIVE'&&service.desiredCount>=1&&service.runningCount===service.desiredCount&&service.pendingCount===0&&service.deployments?.length===1&&service.deployments[0].rolloutState==='COMPLETED','CONNECT_RUNTIME_CANDIDATE_WORKER_NOT_STABLE');
- check(service.taskDefinition===taskDefinition?.taskDefinitionArn&&hash(cloneTask(taskDefinition))===hash(plan.workerRegister)&&tasks?.length===service.desiredCount&&tasks.every(t=>t.clusterArn===plan.workerClusterArn&&t.taskDefinitionArn===service.taskDefinition&&t.lastStatus==='RUNNING'&&t.containers?.length===plan.workerRegister.containerDefinitions.length&&hash(t.containers.map(c=>c.name).sort())===hash(plan.workerRegister.containerDefinitions.map(c=>c.name).sort())&&t.containers.every(c=>{const definition=plan.workerRegister.containerDefinitions.find(d=>d.name===c.name);return c.imageDigest===plan.image.split('@')[1]&&(env(definition).PACKPROOF_PROCESS_ROLE==='worker'?c.lastStatus==='RUNNING':c.lastStatus==='STOPPED'&&c.exitCode===0);})), 'CONNECT_RUNTIME_CANDIDATE_WORKER_DIGEST_REQUIRED');
+ check(service.taskDefinition===taskDefinition?.taskDefinitionArn&&taskConfigurationHash(cloneTask(taskDefinition))===taskConfigurationHash(plan.workerRegister)&&tasks?.length===service.desiredCount&&tasks.every(t=>t.clusterArn===plan.workerClusterArn&&t.taskDefinitionArn===service.taskDefinition&&t.lastStatus==='RUNNING'&&t.containers?.length===plan.workerRegister.containerDefinitions.length&&hash(t.containers.map(c=>c.name).sort())===hash(plan.workerRegister.containerDefinitions.map(c=>c.name).sort())&&t.containers.every(c=>{const definition=plan.workerRegister.containerDefinitions.find(d=>d.name===c.name);return c.imageDigest===plan.image.split('@')[1]&&(env(definition).PACKPROOF_PROCESS_ROLE==='worker'?c.lastStatus==='RUNNING':c.lastStatus==='STOPPED'&&c.exitCode===0);})), 'CONNECT_RUNTIME_CANDIDATE_WORKER_DIGEST_REQUIRED');
  return structuredClone(plan.apiUpdate);
 }
 export function connectRollbackWorker(plan,apiObservation,quiescence,now=Date.now()){
@@ -105,7 +112,7 @@ export function connectProbeRegistrations(snapshot,r,script,now=Date.now()){
 }
 export function connectProbeRunRequest(snapshot,r,kind,registered,script,now=Date.now()){
  const definitions=connectProbeRegistrations(snapshot,r,script,now),t=registered?.taskDefinition??registered,p=snapshot.probe;
- check(definitions[kind]&&taskArn(t?.taskDefinitionArn)&&hash(cloneTask(t))===hash(definitions[kind]),'CONNECT_RUNTIME_PROBE_REGISTRATION_MISMATCH');
+ check(definitions[kind]&&taskArn(t?.taskDefinitionArn)&&taskConfigurationHash(cloneTask(t))===taskConfigurationHash(definitions[kind]),'CONNECT_RUNTIME_PROBE_REGISTRATION_MISMATCH');
  check(p?.clusterArn===r.probeClusterArn&&new RegExp(`^arn:aws:ecs:${TARGET.region}:${TARGET.account}:cluster/[A-Za-z0-9_-]+$`).test(p.clusterArn)&&p.networkConfiguration?.awsvpcConfiguration?.subnets?.length&&p.networkConfiguration.awsvpcConfiguration.securityGroups?.length&&['ENABLED','DISABLED'].includes(p.networkConfiguration.awsvpcConfiguration.assignPublicIp),'CONNECT_RUNTIME_PROBE_NETWORK_REQUIRED');
  check(!p.capacityProviderStrategy?.length||p.capacityProviderStrategy.every(x=>['FARGATE','FARGATE_SPOT'].includes(x.capacityProvider)),'CONNECT_RUNTIME_PROBE_CAPACITY_REQUIRED');
  return {cluster:p.clusterArn,taskDefinition:t.taskDefinitionArn,count:1,networkConfiguration:structuredClone(p.networkConfiguration),...(p.capacityProviderStrategy?.length?{capacityProviderStrategy:structuredClone(p.capacityProviderStrategy)}:{launchType:'FARGATE'}),...(p.platformVersion?{platformVersion:p.platformVersion}:{}),enableExecuteCommand:false,clientToken:hash({review:r,kind}),startedBy:`connect-${r.sourceSha.slice(0,12)}-${kind}`,tags:[{key:'packproof-connect-release',value:r.sourceSha}]};

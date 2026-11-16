@@ -73,3 +73,17 @@ test('leases and separately pins the complete probe cluster and network',()=>{
  const f=fixture(),lease=connectConfigurationLease(f.snapshot);f.snapshot.probe.networkConfiguration.awsvpcConfiguration.securityGroups=['sg-unreviewed'];assert.notEqual(connectConfigurationLease(f.snapshot),lease);assert.throws(()=>connectProbeRegistrations(f.snapshot,f.review,script,now),/CONFIGURATION_CHANGED/);
  f.review.configurationLeaseSha256=connectConfigurationLease(f.snapshot);assert.throws(()=>connectProbeRegistrations(f.snapshot,f.review,script,now),/PROBE_NETWORK_CHANGED/);
 });
+test('accepts only the observed empty ECS systemControls default without changing requests or weakening nonempty controls',()=>{
+ const f=fixture();f.probes.api.registered.containerDefinitions[0].systemControls=[];
+ assert.equal(connectProbeRunRequest(f.snapshot,f.review,'api',f.probes.api.registered,script,now).count,1);
+ const plan=connectRuntimePlan(f.snapshot,f.review,f.probes,now,script),registered={...structuredClone(plan.workerRegister),taskDefinitionArn:arn(plan.workerRegister.family,3)};
+ registered.containerDefinitions[0].systemControls=[];
+ assert.equal(connectWorkerUpdate(plan,registered,{...f.snapshot.worker,observedAt:at},now).taskDefinition,registered.taskDefinitionArn);
+ const observation={observedAt:at,service:{...f.snapshot.worker.service,taskDefinition:registered.taskDefinitionArn},taskDefinition:registered,tasks:[{clusterArn:cluster,taskDefinitionArn:registered.taskDefinitionArn,lastStatus:'RUNNING',containers:[{name:'worker',lastStatus:'RUNNING',imageDigest:image.split('@')[1]}]}]},api={...f.snapshot.api,observedAt:at,topology:f.snapshot.topology};
+ assert.equal(connectApiUpdate(plan,observation,api,now).primaryContainer.image,image);
+ assert.deepEqual(f.probes.api.registered.containerDefinitions[0].systemControls,[]);assert.deepEqual(registered.containerDefinitions[0].systemControls,[]);
+ const nonempty=[{namespace:'net.ipv4.ip_forward',value:'1'}];f.probes.api.registered.containerDefinitions[0].systemControls=nonempty;
+ assert.throws(()=>connectProbeRunRequest(f.snapshot,f.review,'api',f.probes.api.registered,script,now),/PROBE_REGISTRATION/);assert.throws(()=>connectRuntimePlan(f.snapshot,f.review,f.probes,now,script),/PROBE_DEFINITION/);
+ registered.containerDefinitions[0].systemControls=nonempty;
+ assert.throws(()=>connectWorkerUpdate(plan,registered,{...f.snapshot.worker,observedAt:at},now),/REGISTERED_WORKER/);assert.throws(()=>connectApiUpdate(plan,observation,api,now),/WORKER_DIGEST/);
+});
