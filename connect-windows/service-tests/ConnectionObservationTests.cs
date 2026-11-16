@@ -79,5 +79,16 @@ public sealed class ConnectionObservationTests : IDisposable
         var state = new LocalState(); using var runtime = new AgentRuntime(Host(), Store(), new PackProofClient(Host(), new Handler(request => { Assert.Null(request.Headers.Authorization); Assert.Equal("/health", request.RequestUri!.AbsolutePath); return Reply(HttpStatusCode.OK, new { }); })), state);
         await runtime.Command("preflight", null, default); Assert.Equal("unauthenticated", state.Transport?.State); Assert.Null(state.Transport?.SourceContracts);
     }
+    [Fact] public async Task Displayed_completion_time_is_reported_by_the_server_not_invented_from_local_observation()
+    {
+        var completed = "2026-11-16T12:00:00Z";
+        var state = new LocalState { LastCompletedImportAt = DateTimeOffset.Parse("2026-11-16T12:03:00Z"), ServerConfig = Json.Element(new { state = "ready", sourceName = "Source", integrationAccountId = "source", operatorMembershipId = "member", health = new { lastCompletedImportAt = completed } }) };
+        using var runtime = new AgentRuntime(Host(), Store(), new PackProofClient(Host(), new Handler(_ => throw new InvalidOperationException("No network expected"))), state);
+        var status = Json.Element(await runtime.Command("status", null, default));
+        Assert.Equal(completed, status.GetProperty("health").GetProperty("lastCompletedImportAt").GetString());
+        state.ServerConfig = Json.Element(new { state = "ready", sourceName = "Source", integrationAccountId = "source", operatorMembershipId = "member" });
+        status = Json.Element(await runtime.Command("status", null, default));
+        Assert.False(status.GetProperty("health").TryGetProperty("lastCompletedImportAt", out var missing) && missing.ValueKind != JsonValueKind.Null);
+    }
     public void Dispose() { using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(root, "queue.sqlite"), Mode = SqliteOpenMode.ReadWriteCreate }.ToString()); SqliteConnection.ClearPool(connection); if (Directory.Exists(root)) Directory.Delete(root, true); }
 }

@@ -6,21 +6,23 @@ using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Security;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 
 public sealed class ConnectIdentityProbeResult
 {
-    public string IdentitySid { get; set; }
+    public string IdentitySid { get; set; } = "";
     public bool IsAdministrator { get; set; }
     public bool IsNetworkLogon { get; set; }
     public bool IsInteractiveLogon { get; set; }
-    public string PipeAccess { get; set; }
-    public string ProtectedFileAccess { get; set; }
+    public string PipeAccess { get; set; } = "";
+    public string ProtectedFileAccess { get; set; } = "";
 }
 
 public static class ConnectNativeSecurityProbe
@@ -29,6 +31,7 @@ public static class ConnectNativeSecurityProbe
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool LogonUser(string name, string domain, string password, int logonType, int provider, out SafeAccessTokenHandle token);
 
+    [SupportedOSPlatform("windows")]
     public static ConnectIdentityProbeResult CheckIdentity(string name, string password, int logonType, string expectedSid, string pipeName, string protectedFile)
     {
         if (logonType != 2 && logonType != 3) throw new ArgumentException("Only the declared local interactive and network-token fixtures are supported.");
@@ -103,6 +106,47 @@ public static class ConnectNativeSecurityProbe
         }
     }
 
+    // Start both drains before waiting. Windows redirected anonymous pipes can
+    // fill around 4 KiB; a valid full status response is larger than that.
+    // Keep capture bounded while continuing to drain excess output, so even an
+    // oversized fixture response cannot deadlock the child before rejection.
+    internal sealed class BoundedProcessCapture
+    {
+        private readonly Process child;
+        private readonly Task<string> output;
+        private readonly Task<string> error;
+        internal BoundedProcessCapture(Process process, int maximumOutputBytes = 262145, int maximumErrorBytes = 16384)
+        {
+            child = process;
+            output = DrainBounded(process.StandardOutput.BaseStream, maximumOutputBytes);
+            error = DrainBounded(process.StandardError.BaseStream, maximumErrorBytes);
+        }
+        internal string WaitForResponse(int milliseconds)
+        {
+            if (!child.WaitForExit(milliseconds)) throw new TimeoutException("The verified bridge did not respond before the fixture deadline.");
+            var response = output.GetAwaiter().GetResult();
+            error.GetAwaiter().GetResult();
+            return response;
+        }
+        private static async Task<string> DrainBounded(Stream stream, int limit)
+        {
+            using (var saved = new MemoryStream())
+            {
+                var buffer = new byte[4096];
+                var exceeded = false;
+                int count;
+                while ((count = await stream.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) != 0)
+                {
+                    if (saved.Length + count <= limit && !exceeded) saved.Write(buffer, 0, count);
+                    else exceeded = true;
+                }
+                if (exceeded) throw new InvalidOperationException("The bridge fixture received oversized redirected output.");
+                return new UTF8Encoding(false, true).GetString(saved.ToArray());
+            }
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
     public static void AssertVerifiedBridgeAsStandardUser(string name, string password, string bridgePath)
     {
         // Launch the exact packaged bridge under a real non-administrator token.
@@ -130,11 +174,11 @@ public static class ConnectNativeSecurityProbe
                 if (child == null) throw new InvalidOperationException("The standard-user bridge could not launch.");
                 try
                 {
+                    var capture = new BoundedProcessCapture(child);
                     var id = Guid.NewGuid().ToString();
                     child.StandardInput.WriteLine(JsonSerializer.Serialize(new { version = 1, id, operation = "status" }));
                     child.StandardInput.Close();
-                    if (!child.WaitForExit(20000)) throw new TimeoutException("The standard-user verified bridge did not respond.");
-                    var output = child.StandardOutput.ReadToEnd();
+                    var output = capture.WaitForResponse(20000);
                     using (var parsed = JsonDocument.Parse(output))
                     {
                         var root = parsed.RootElement;
@@ -144,7 +188,7 @@ public static class ConnectNativeSecurityProbe
                             !root.GetProperty("result").GetProperty("health").GetProperty("serviceOnline").GetBoolean())
                         {
                             string code = root.TryGetProperty("error", out var error) &&
-                                error.TryGetProperty("code", out var errorCode) ? errorCode.GetString() : "NO_CODE";
+                                error.TryGetProperty("code", out var errorCode) ? errorCode.GetString() ?? "NO_CODE" : "NO_CODE";
                             throw new InvalidOperationException("The standard-user verified bridge rejected the registered helper: " + code);
                         }
                     }
@@ -180,21 +224,19 @@ public static class ConnectNativeSecurityProbe
                 if (child == null) throw new InvalidOperationException("The installed bridge could not launch.");
                 try
                 {
-                    var errorOutput = child.StandardError.ReadToEndAsync();
+                    var capture = new BoundedProcessCapture(child);
                     child.StandardInput.WriteLine(JsonSerializer.Serialize(new { version = 1, id, operation = "status", payload = new { syntheticCanary = "must-never-reach-counterfeit-peer" } }));
                     child.StandardInput.Close();
                     connection.GetAwaiter().GetResult();
                     var one = new byte[1];
                     var received = fake.ReadAsync(one.AsMemory(), deadline.Token).AsTask().GetAwaiter().GetResult();
                     if (received != 0) throw new InvalidOperationException("The helper transmitted request bytes to a counterfeit peer.");
-                    if (!child.WaitForExit(5000)) throw new TimeoutException("The helper did not finish its peer rejection.");
-                    using (var response = JsonDocument.Parse(child.StandardOutput.ReadToEnd()))
+                    using (var response = JsonDocument.Parse(capture.WaitForResponse(5000)))
                     {
                         var root = response.RootElement;
                         if (child.ExitCode != 1 || root.GetProperty("id").GetString() != id || root.GetProperty("ok").GetBoolean() || !new[] { "SERVICE_NOT_RUNNING", "SERVICE_PIPE_PEER_MISMATCH", "SERVICE_IDENTITY_MISMATCH" }.Contains(root.GetProperty("error").GetProperty("code").GetString()))
                             throw new InvalidOperationException("The helper did not return the bounded peer-verification refusal.");
                     }
-                    errorOutput.GetAwaiter().GetResult();
                 }
                 finally { if (!child.HasExited) { child.Kill(true); child.WaitForExit(5000); } }
             }

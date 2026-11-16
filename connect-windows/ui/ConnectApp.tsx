@@ -552,7 +552,7 @@ export function ConnectApp({
                   {friendlyFolder(status.source?.folder)}
                 </p>
                 <Facts>
-                  <Fact name="Last observed export (source)">
+                  <Fact name="Latest source shipment time">
                     {stamp(status.health.sourceWatermarkAt)}
                   </Fact>
                   <Fact name="Last file observed (this computer)">

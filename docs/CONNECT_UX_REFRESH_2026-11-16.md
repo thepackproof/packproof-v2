@@ -33,7 +33,7 @@ The current source versions are a pairing identifier only; current authenticated
 | Release policy and provenance regression suite | Seven passing Node tests. The added test packages a real fixture ASAR, detects a stale/changed packaged renderer, rejects wrong source identity and unexpected assets, and rejects dirty signed-release source |
 | Desktop typecheck/component/view-model tests and build | 71 Vitest tests passed; TypeScript check and development renderer/main build passed |
 | Browser/backend focused tests and builds | 47 browser approval tests and 25 backend agent tests passed; backend TypeScript and web production builds passed |
-| Cross-platform service suite | 115 passed; five native Windows-only tests skipped on Linux with .NET 10.0.404. This is not native acceptance |
+| Cross-platform service suite | 118 passed; five native Windows-only tests skipped on Linux with .NET 10.0.404. This is not native acceptance |
 | Native Windows candidate | PR-triggered `Connect Windows candidate` builds on `windows-2025`, then runs service tests, packaging, LocalService/bridge/permissions and storage-repair smoke checks. A new exact-source run is required; its result must be recorded before distributing the candidate |
 | Windows 11 installed-product and five-person acceptance | Not performed in this workspace; remains open |
 | Signed bundle, staged rollout and live deployment receipts | Not performed by this documentation/provenance change; remains open |
@@ -42,9 +42,13 @@ Browser screenshot QA could not be completed because the available browser could
 
 The native candidate workflow runs automatically when a PR changes `connect-windows/**` or its rules/fixtures/workflow. It publishes a development installer only if all candidate validation and both native smoke scripts succeed. Its GitHub Actions run and final source SHA must be retained with the artifact hashes. A Windows Server runner pass does not establish Windows 11 installed-product acceptance.
 
+The first native attempts exposed two qualification issues that were corrected without removing gates: portable ASAR member names need native normalization at the archive API boundary, and the real standard-user subprocess fixture must drain redirected stdout/stderr before waiting for exit. All 120 service tests passed on Windows before the latter fixture stalled. The fixture now has real child-process regressions for larger-than-pipe-buffer output and bounded overflow rejection. The next native run must pass the unchanged peer, ACL, LocalService, queue and repair assertions before its installer is retained.
+
 ## Safe rollout sequence
 
-1. Complete source-bound CI and additive backend validation/capability qualification. Deploy matching backend support first using the existing exact-source workflow and inspected immutable image/task/topology inputs. Keep v1 sources supported under their existing semantics; old clients cannot consume v2 by fallback.
+1. Complete source-bound CI and additive backend validation/capability qualification. Deploy matching API **and import-worker** support first using the existing exact-source workflow and inspected immutable image/task/topology inputs. The separate deployed import worker also revalidates source contracts; an API-only image update can advertise v2 while an older worker rejects its batches. Prove the worker image and semantics match before exposing v2 eligibility. Keep v1 sources supported under their existing semantics; old clients cannot consume v2 by fallback.
+The repository’s so-called staging deployment target and default Connect API URL currently identify the same hosted production API in its public metadata. Treat deployment names as labels, not isolation evidence. An independent existing target or a source-bound isolated rehearsal must be established before calling the staged acceptance complete.
+
 2. Deploy the matching browser review and verify exact installation/import return through authentication, workspace checks, stale/expired/denied reviews and separate configuration/batch/recurring decisions.
 3. Install the matching internal Windows candidate. Record its source/asset manifest, actual service/bridge/rules versions, authenticated transport probe and backend `/meta` identity. Run the full first Proof and second unattended eligible export. Closing the UI must not stop the authorized background service.
 4. Exercise network loss/reconnect, restart/reboot, expired/revoked grant, changed source, protected queue continuity, upgrade and rollback. Complete installed accessibility and five-user acceptance. Produce/verify the signed release candidate, then stage a measured cohort rollout.
