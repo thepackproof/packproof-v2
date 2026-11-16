@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { normalize, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -50,8 +50,10 @@ export async function verifyBuildProvenance(root, expected) {
 /** Read the packaged ASAR independently; stale/changed packaged renderer bytes cannot qualify. */
 export async function verifyPackagedProvenance(archive, expected) {
   const asar = (await import('@electron/asar')).default;
-  const manifest = JSON.parse(asar.extractFile(archive, manifestPath).toString('utf8'));
-  const appPackage = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8'));
+  // ASAR traverses member directories using the host path separator. Manifest
+  // names stay portable, but every member lookup must use native separators.
+  const manifest = JSON.parse(asar.extractFile(archive, normalize(manifestPath)).toString('utf8'));
+  const appPackage = JSON.parse(asar.extractFile(archive, normalize('package.json')).toString('utf8'));
   if (appPackage.version !== manifest.appVersion) throw Error('Packaged application version differs from its provenance');
   if (manifest.schema !== 'packproof.connect-build/v1' || manifest.sourceCommit !== expected.sourceCommit || manifest.channel !== expected.channel) throw Error('Packaged provenance does not match the candidate');
   if (expected.requireClean && manifest.sourceDirty !== false) throw Error('Release provenance requires clean committed source');
@@ -59,10 +61,11 @@ export async function verifyPackagedProvenance(archive, expected) {
   for (const raw of asar.listPackage(archive)) {
     const file = raw.replaceAll('\\', '/').replace(/^\//, '');
     if (!file.startsWith('dist/main/') && !file.startsWith('dist/renderer/')) continue;
-    const info = asar.statFile(archive, file, false);
+    const member = normalize(file);
+    const info = asar.statFile(archive, member, false);
     if ('link' in info) throw Error('Packaged application assets cannot be symbolic links');
     if ('files' in info || file === manifestPath) continue;
-    const bytes = asar.extractFile(archive, file);
+    const bytes = asar.extractFile(archive, member);
     assets.push({ file, bytes: bytes.length, sha256: hash(bytes) });
   }
   const ordered = values => [...values].sort((a, b) => a.file.localeCompare(b.file, 'en'));
