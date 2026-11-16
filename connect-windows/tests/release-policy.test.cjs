@@ -63,3 +63,40 @@ test('candidate provenance detects a stale packaged renderer, changed assets and
   await assert.rejects(()=>verifyBuildProvenance(app,{sourceCommit,channel,requireClean:true}),/clean committed source/);
  }finally{asar.uncacheAll();await rm(root,{recursive:true,force:true});}
 });
+
+test('interactive installer failures restore visible details and display only bounded redacted output',()=>{
+ const hooks=readFileSync(join(__dirname,'../installer/hooks.nsh'),'utf8');
+ const install=hooks.slice(hooks.indexOf('!macro customInstall'),hooks.indexOf('!macro customUnInstall'));
+ assert.match(install,/-RedactedFailureOutput/);
+ assert.ok(install.indexOf('SetDetailsPrint both')<install.indexOf('DetailPrint "$3"'));
+ assert.ok(install.indexOf('SetDetailsView show')<install.indexOf('DetailPrint "$3"'));
+ assert.match(install,/StrCpy \$2 \$1 37[\s\S]*PackProof installation check failed:/);
+ assert.match(install,/StrCpy \$3 \$1 480/);
+ assert.match(install,/MessageBox MB_ICONSTOP[^\n]*\$3/);
+ assert.doesNotMatch(install,/DetailPrint "\$1"|MessageBox[^\n]*\$1/);
+});
+
+test('installer diagnostic classification preserves codes and excludes raw paths, secrets and forged phases',t=>{
+ const {spawnSync}=require('node:child_process');
+ const engine=process.platform==='win32'?'powershell.exe':process.env.PACKPROOF_TEST_PWSH||'pwsh';
+ const lifecycle=join(__dirname,'../installer/lifecycle.ps1').replaceAll("'","''");
+ const command=`$tokens=$null;$errors=$null;$ast=[System.Management.Automation.Language.Parser]::ParseFile('${lifecycle}',[ref]$tokens,[ref]$errors);if($errors.Count){throw 'Installer syntax invalid'};$formatter=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Format-ConnectInstallationFailure'},$true);Invoke-Expression $formatter.Extent.Text;$result=@();$result+=Format-ConnectInstallationFailure 'service_readiness' 'LOCAL_STORAGE_BUSY: PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'operator_metadata' 'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.';$result+=Format-ConnectInstallationFailure 'service_start' 'PRIVATE_PATH TOKEN=secret';$result+=Format-ConnectInstallationFailure 'PRIVATE_PATH TOKEN=secret' 'FAKE_CODE: PRIVATE_PATH TOKEN=secret';$result|ConvertTo-Json -Compress`;
+ const result=spawnSync(engine,['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8',timeout:15000});
+ if(result.error?.code==='ENOENT'){t.skip('PowerShell unavailable locally; exercised by native Windows candidate');return;}
+ assert.equal(result.status,0,result.stderr);
+ const lines=JSON.parse(result.stdout.replace(/^\uFEFF/,''));
+ assert.match(lines[0],/^PackProof installation check failed: LOCAL_STORAGE_BUSY \[service_readiness\]/);
+ assert.match(lines[1],/OPERATOR_METADATA_OWNER \[operator_metadata\]/);
+ assert.match(lines[2],/INSTALL_SERVICE_START_FAILED \[service_start\]/);
+ assert.match(lines[3],/INSTALL_INITIALIZATION_FAILED \[initialization\]/);
+ for(const line of lines){assert.ok(line.length<=480);assert.doesNotMatch(line,/PRIVATE_PATH|TOKEN|secret|FAKE_CODE|[\r\n]/);}
+});
+
+test('native installer early failure exits nonzero with a visible safe code and no raw error record',{skip:process.platform!=='win32'?'Requires native Windows PowerShell 5.1':false},()=>{
+ const {spawnSync}=require('node:child_process');const {tmpdir}=require('node:os');
+ const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-File',join(__dirname,'../installer/lifecycle.ps1'),'-Action','Install','-InstallRoot',join(tmpdir(),'outside-packproof-program-files'),'-RedactedFailureOutput'],{encoding:'utf8',timeout:15000});
+ assert.equal(result.status,1,result.stderr);
+ assert.match(result.stdout,/^PackProof installation check failed: INSTALL_PATH_UNSUPPORTED \[install_path\]/);
+ assert.doesNotMatch(result.stdout,/At line:|CategoryInfo|FullyQualifiedErrorId|[A-Z]:\\/);
+ assert.equal(result.stderr,'');
+});

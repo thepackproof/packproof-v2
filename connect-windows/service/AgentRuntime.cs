@@ -7,10 +7,11 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.2.1";
+    internal const string InstalledVersion="0.2.2";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
-    private ConnectException? startupError;
+    private readonly ConnectException? startupError;
+    private readonly bool localInitialized;
     private bool networkOnline = true; private bool checkpointed; private JsonElement? localPreview; private DateTimeOffset lastRefresh = DateTimeOffset.MinValue; private DateTimeOffset lastScan = DateTimeOffset.MinValue; private DateTimeOffset lastCleanup = DateTimeOffset.MinValue;
     public AgentRuntime(HostConfiguration configuration)
     {
@@ -19,14 +20,22 @@ public sealed partial class AgentRuntime : IDisposable
             var serviceSid = (SecurityIdentifier)new NTAccount($"NT SERVICE\\{host.ServiceName}").Translate(typeof(SecurityIdentifier));
             if (WindowsIdentity.GetCurrent().Groups?.Contains(serviceSid) != true) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must receive its dedicated service SID. Ask IT to repair the installed service identity before accessing protected work.");
             ProtectedAncestry.Assert(host.DataRoot, Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), serviceSid.Value);
-            store.Initialize();state=store.Read<LocalState>("state.bin")??new();queue=new(store);
+            store.Initialize();state=store.Read<LocalState>("state.bin")??new();queue=new(store);localInitialized=true;
         }
         catch(ConnectException error){startupError=error;state=new(){LastErrorCode=error.Code};}
         catch(Microsoft.Data.Sqlite.SqliteException){startupError=new("LOCAL_QUEUE_UNAVAILABLE","The retained queue cannot be opened safely. Preserve its database, journal and protected keys and contact support; the service will not replace it with an empty queue.");state=new(){LastErrorCode=startupError.Code};}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
-    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null) { setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; queue = new(store); api = transport; }
+    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null) { setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; queue = new(store); api = transport; localInitialized=true; }
+    // Constructor-owned local admission only. Installer attestation must never
+    // wait for the command gate held by authenticated cloud work or enumerate
+    // a warehouse export source. The caller still verifies current local I/O.
+    internal void RequireLocalInitialization()
+    {
+        if(startupError is not null)throw startupError;
+        if(!localInitialized)throw new ConnectException("SERVICE_NOT_READY","The installed collector has not completed local startup.");
+    }
     private void Save() => store.Write("state.bin", state);
     private static string Hash(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     private string Generation => state.Token is null ? "none" : Hash(state.Token);

@@ -20,16 +20,13 @@ public sealed class InstallerReadiness(HostConfiguration host, AgentRuntime agen
         acl.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), PipeAccessRights.ReadWrite, AccessControlType.Allow));
         return acl;
     }
-    private async Task<object> Check(string nonce, CancellationToken ct)
+    private object Check(string nonce, CancellationToken ct)
     {
         var phase = "service_status";
         try
         {
-            var status = Json.Element(await agent.Command("status", null, ct));
-            if (status.TryGetProperty("error", out var error))
-                throw new ConnectException(error.GetProperty("code").GetString()!, error.GetProperty("message").GetString()!);
-            if (!status.GetProperty("health").GetProperty("serviceOnline").GetBoolean())
-                throw new ConnectException("SERVICE_NOT_READY", "The installed collector has not completed startup.");
+            ct.ThrowIfCancellationRequested();
+            agent.RequireLocalInitialization();
             phase = "service_identity";
             if (!WindowsIdentity.GetCurrent().User!.IsWellKnown(WellKnownSidType.LocalServiceSid))
                 throw new ConnectException("SERVICE_IDENTITY_INVALID", "The readiness check must run in the installed LocalService process.");
@@ -85,7 +82,7 @@ public sealed class InstallerReadiness(HostConfiguration host, AgentRuntime agen
                     input.Add(one[0]);
                 }
                 if (input.Count != 32) throw new IOException("Invalid readiness challenge.");
-                var response = Json.Bytes(await Check(Encoding.ASCII.GetString(input.ToArray()), deadline.Token));
+                var response = Json.Bytes(Check(Encoding.ASCII.GetString(input.ToArray()), deadline.Token));
                 if (response.Length > 8192) throw new IOException("Readiness reply limit.");
                 await pipe.WriteAsync(response, deadline.Token); await pipe.WriteAsync(new byte[] { 10 }, deadline.Token); await pipe.FlushAsync(deadline.Token);
             }

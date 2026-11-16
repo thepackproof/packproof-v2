@@ -1,6 +1,78 @@
-param([Parameter(Mandatory=$true)][ValidateSet('Install','Stop','Remove')][string]$Action,[Parameter(Mandatory=$true)][string]$InstallRoot,[string]$OperatorSid,[switch]$AllowUnsupportedDevelopmentHost)
+param([Parameter(Mandatory=$true)][ValidateSet('Install','Stop','Remove')][string]$Action,[Parameter(Mandatory=$true)][string]$InstallRoot,[string]$OperatorSid,[switch]$AllowUnsupportedDevelopmentHost,[switch]$RedactedFailureOutput)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+function Format-ConnectInstallationFailure([string]$Phase,[string]$Message) {
+ # Only fixed phase names, exact legacy guards and allowlisted service codes
+ # cross the installer boundary. Never print an ErrorRecord or raw exception.
+ $phases=@{
+  initialization='The installer could not initialize its local checks.'
+  install_path='Use an ordinary installation folder beneath Program Files.'
+  host_support='This installer requires Windows 11 x64.'
+  service_stop='The existing helper could not be stopped safely. Pending work was retained.'
+  operator_metadata='The protected operator registration needs administrator review.'
+  operator_identity='The approved local operator could not be verified.'
+  service_configuration='The restricted helper registration could not be completed.'
+  protected_storage='The protected storage checks need administrator review. Do not delete the data folder.'
+  export_source='The prepared export folder permissions need administrator review.'
+  service_start='The installed helper did not start successfully.'
+  service_readiness='The installed helper did not confirm functional protected storage.'
+ }
+ if (-not $phases.ContainsKey($Phase)) { $Phase='initialization' }
+ $code='INSTALL_'+$Phase.ToUpperInvariant()+'_FAILED'
+ $legacy=@{
+  'Connect must be installed beneath Program Files.'='INSTALL_PATH_UNSUPPORTED'
+  'Reparse point installation locations are unsupported.'='INSTALL_PATH_UNSUPPORTED'
+  'Unknown Connect environment.'='INSTALL_ENVIRONMENT_INVALID'
+  'Windows 11 x64 is required. Windows Server needs separately qualified support.'='INSTALL_HOST_UNSUPPORTED'
+  'Saved local operator metadata is invalid. Ask IT to explicitly assign the approved operator SID; repair did not choose another account.'='OPERATOR_METADATA_INVALID'
+  'Connect operator metadata has an untrusted owner. Ask IT to repair the dedicated product registry permissions.'='OPERATOR_METADATA_OWNER'
+  'Connect operator metadata allows non-administrator changes. Ask IT to repair the dedicated product registry permissions.'='OPERATOR_METADATA_PERMISSIONS'
+  'The original operator identity could not be verified.'='OPERATOR_IDENTITY_UNVERIFIED'
+  'A shared storage ancestor has an untrusted owner. Ask IT to assign SYSTEM or Administrators ownership and remove ordinary-user replacement rights; PackProof did not change shared parent ACLs.'='PROTECTED_STORAGE_ANCESTOR_OWNER'
+  'A shared storage ancestor permits ordinary-user deletion, replacement or permission changes. Ask IT to remove those parent rights; existing Desktop and source ACLs were preserved.'='PROTECTED_STORAGE_ANCESTOR_PERMISSIONS'
+ }
+ if ($legacy.ContainsKey($Message)) { $code=$legacy[$Message] }
+ $known=@{
+  SERVICE_IDENTITY_INVALID='The registered helper identity or executable does not match this installation.'
+  SERVICE_READINESS_INVALID='The helper returned an incompatible readiness response.'
+  SERVICE_READINESS_CHANGED='The helper restarted during validation. Retry the installer after it has stopped.'
+  SERVICE_READINESS_TIMEOUT='The helper did not return its authenticated readiness response in time.'
+  SERVICE_NOT_READY='The installed helper has not completed startup.'
+  STORAGE_REPAIR_LIMIT='The retained storage exceeds the bounded automatic repair limit. Preserve it for support review.'
+  PROTECTED_STORAGE_LINK='Repair rejected a reparse point or hard-linked entry. Preserve retained work for review.'
+  PROTECTED_STORAGE_LAYOUT='An unexpected private storage entry needs review. Nothing was removed.'
+  PROTECTED_STORAGE_OWNER='A protected entry has an untrusted owner. Preserve retained work for review.'
+  PROTECTED_STORAGE_POLICY='An unexpected protected access rule needs review. No permission rule was bypassed.'
+  PROTECTED_STORAGE_PERMISSIONS='The protected storage ownership or replacement permissions need review.'
+  PROTECTED_STORAGE_UNAVAILABLE='The restricted helper cannot access its protected storage.'
+  LOCAL_STORAGE_ACCESS_DENIED='The restricted helper was denied access to protected storage.'
+  LOCAL_STORAGE_BUSY='Another process is holding a protected file open. Release that file and retry; do not delete it.'
+  LOCAL_STORAGE_FULL='Free disk space, keeping at least 1 GiB of reserve, then retry.'
+  LOCAL_STORAGE_PATH_MISSING='A required protected storage path is missing. Preserve existing work for review.'
+  LOCAL_STORAGE_IO_FAILED='The protected storage operation failed. Preserve existing work for review.'
+  LOCAL_STORAGE_VERIFY_FAILED='The protected storage write and recovery check failed.'
+  LOCAL_STATE_INVALID='The retained state could not be interpreted safely. Do not reset the data folder.'
+  LOCAL_QUEUE_BUSY='The retained queue is busy. Release the competing process and retry.'
+  LOCAL_QUEUE_UNAVAILABLE='The retained queue could not be opened safely.'
+  LOCAL_QUEUE_INTEGRITY_FAILED='The retained queue did not pass its integrity check. Preserve its database, journal and keys.'
+  QUEUE_SCHEMA_UNSUPPORTED='The retained queue requires a compatible helper version.'
+  SPOOL_KEY_MISSING='The retained queue has no usable key. Preserve it; setup will not create a replacement.'
+  SPOOL_KEY_INVALID='The retained queue key could not be used. Preserve the original key and queue.'
+  SPOOL_INTEGRITY_FAILED='Retained pending work did not pass its integrity check. Preserve it for review.'
+ }
+ $hint=$phases[$Phase]
+ foreach ($candidate in $known.Keys) {
+  if ($Message.StartsWith($candidate+': ',[StringComparison]::Ordinal)) { $code=$candidate;$hint=$known[$candidate];break }
+ }
+ return ('PackProof installation check failed: '+$code+' ['+$Phase+']. '+$hint+' Existing data and keys were preserved.')
+}
+$script:ConnectInstallPhase='initialization'
+trap {
+ if (-not $RedactedFailureOutput) { break }
+ Write-Output (Format-ConnectInstallationFailure $script:ConnectInstallPhase ([string]$_.Exception.Message))
+ exit 1
+}
+$script:ConnectInstallPhase='install_path'
 $installPath=[IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $programFiles=[IO.Path]::GetFullPath([Environment]::GetFolderPath('ProgramFiles')).TrimEnd('\')
 if (-not $installPath.StartsWith($programFiles+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Connect must be installed beneath Program Files.' }
@@ -20,12 +92,15 @@ function Stop-Connect {
 }
 if ($Action -eq 'Stop') { Stop-Connect;exit 0 }
 if ($Action -eq 'Remove') { Stop-Connect;if ($null -ne $service) { & "$env:SystemRoot\System32\sc.exe" delete $serviceName | Out-Null;if ($LASTEXITCODE -ne 0) { throw 'Service removal failed. Data was preserved.' } };exit 0 }
+$script:ConnectInstallPhase='host_support'
 $productType=(Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\ProductOptions').ProductType
 $isSupportedHost=$productType -eq 'WinNT' -and [Environment]::OSVersion.Version.Build -ge 22000 -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64'
 if ($AllowUnsupportedDevelopmentHost -and $channel -ne 'development') { throw 'Unsupported-host service smoke is development-only.' }
 if (-not $isSupportedHost -and -not $AllowUnsupportedDevelopmentHost) { throw 'Windows 11 x64 is required. Windows Server needs separately qualified support.' }
+$script:ConnectInstallPhase='service_stop'
 Stop-Connect
 . (Join-Path $PSScriptRoot 'storage-health.ps1')
+$script:ConnectInstallPhase='operator_metadata'
 $groupName='PackProof Connect '+$suffix+' Operators'
 $group=Get-LocalGroup -Name $groupName -ErrorAction SilentlyContinue
 if ($null -eq $group) { $group=New-LocalGroup -Name $groupName -Description 'PackProof Connect setup operators' }
@@ -70,6 +145,7 @@ function Initialize-OperatorMetadataKey([string]$Path) {
 Initialize-OperatorMetadataKey $metadataRoot
 Initialize-OperatorMetadataKey $metadataPath
 $storedOperatorSid=(Get-Item -LiteralPath $metadataPath).GetValue('OperatorsSid')
+$script:ConnectInstallPhase='operator_identity'
 if (-not ('ConnectShellIdentity' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;using System.Runtime.InteropServices;public static class ConnectShellIdentity{[DllImport("user32.dll")]public static extern IntPtr GetShellWindow();[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr window,out uint pid);}
@@ -88,6 +164,7 @@ elseif ($null -ne $storedOperatorSid) {
 [uint32]$shellPid=0
 [void][ConnectShellIdentity]::GetWindowThreadProcessId([ConnectShellIdentity]::GetShellWindow(),[ref]$shellPid)
 if (-not $approvedOperatorSid -and $shellPid -ne 0) { $shell=Get-CimInstance Win32_Process -Filter "ProcessId=$shellPid";if ($null -ne $shell) { $owner=Invoke-CimMethod -InputObject $shell -MethodName GetOwnerSid;if ($owner.ReturnValue -ne 0 -or $owner.Sid -notmatch '^S-1-5-21-') { throw 'The original operator identity could not be verified.' };$approvedOperatorSid=$owner.Sid;$member=Get-LocalGroupMember -Group $groupName | Where-Object { $_.SID.Value -eq $owner.Sid };if ($null -eq $member) { Add-LocalGroupMember -Group $groupName -Member $owner.Sid } } }
+$script:ConnectInstallPhase='service_configuration'
 $serviceConfigPath=Join-Path $installPath 'resources\service\service-config.json'
 $serviceConfig=Get-Content -LiteralPath $serviceConfigPath -Raw | ConvertFrom-Json
 $serviceConfig.operatorsSid=if ($approvedOperatorSid) { $approvedOperatorSid } else { $group.SID.Value }
@@ -166,12 +243,14 @@ function Set-DirectoryPermissions([string]$Path,[array]$Rules) {
  foreach ($rule in $Rules) { $sid=New-Object Security.Principal.SecurityIdentifier($rule[0]);$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid,$rule[1],'ContainerInherit,ObjectInherit','None','Allow'))) }
  Set-Acl -LiteralPath $Path -AclObject $acl
 }
+$script:ConnectInstallPhase='protected_storage'
 Assert-NoReparseAncestors $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 Initialize-ConnectStorageRoot $dataRoot $serviceSid.Value
 Assert-ProtectedAncestry $dataRoot ([Environment]::GetFolderPath('CommonApplicationData'))
 # Preserve existing producer permissions on the prepared source. It is not
 # private service storage and must not be normalized as part of a queue repair.
+$script:ConnectInstallPhase='export_source'
 $exports=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('PackProof\Exports\'+$serviceConfig.environment)
 Assert-NoReparseAncestors $exports ([Environment]::GetFolderPath('CommonApplicationData'))
 Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicationData'))
@@ -185,10 +264,12 @@ Assert-ProtectedAncestry $exports ([Environment]::GetFolderPath('CommonApplicati
 Assert-OperatorMetadataPermissions $metadataRoot
 Assert-OperatorMetadataPermissions $metadataPath
 New-ItemProperty -LiteralPath $metadataPath -Name OperatorsSid -PropertyType String -Value $serviceConfig.operatorsSid -Force | Out-Null
+$script:ConnectInstallPhase='service_start'
 Start-Service -Name $serviceName
 (Get-Service -Name $serviceName).WaitForStatus('Running',[TimeSpan]::FromSeconds(30))
 # Running is not ready: only the actual, PID-authenticated service may attest
 # that DPAPI, retained state/key, spool and SQLite work under its own identity.
+$script:ConnectInstallPhase='service_readiness'
 $pipeChannel=if ($serviceConfig.environment -eq 'live') { 'production' } else { $serviceConfig.environment }
 $readiness=Wait-ConnectReadiness $serviceName ('PackProofConnect-'+$pipeChannel+'-v1') $binary
 if (-not $readiness.ready) { throw 'SERVICE_NOT_READY: Installation cannot report success.' }

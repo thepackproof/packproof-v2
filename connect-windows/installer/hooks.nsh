@@ -11,13 +11,25 @@
 !macroend
 !macro customInstall
   ${DisableX64FSRedirection}
-  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\resources\installer\lifecycle.ps1" -Action Install -InstallRoot "$INSTDIR"'
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "$INSTDIR\resources\installer\lifecycle.ps1" -Action Install -InstallRoot "$INSTDIR" -RedactedFailureOutput'
   Pop $0
   Pop $1
   ${EnableX64FSRedirection}
   ${If} $0 != 0
-    DetailPrint "$1"
-    MessageBox MB_ICONSTOP "PackProof did not pass its installation or protected-storage readiness check. Setup has not completed. Existing data and encryption keys were not reset. Open the installation details for the specific failure; do not delete the PackProof data folder."
+    # electron-builder disables interactive details before this hook. Restore
+    # visibility and display only the trusted script's bounded redacted line.
+    SetDetailsPrint both
+    SetDetailsView show
+    StrCpy $2 $1 37
+    ${If} $2 == "PackProof installation check failed: "
+      StrCpy $3 $1 480
+    ${ElseIf} $0 == "timeout"
+      StrCpy $3 "INSTALL_SCRIPT_TIMEOUT: The local installation checks did not finish. Existing data and keys were preserved."
+    ${Else}
+      StrCpy $3 "INSTALL_SCRIPT_LAUNCH_FAILED: Windows could not run or complete the trusted installation checks. Ask support to inspect PowerShell policy and the installed files. Existing data and keys were preserved."
+    ${EndIf}
+    DetailPrint "$3"
+    MessageBox MB_ICONSTOP "Setup has not completed.$\r$\n$\r$\n$3$\r$\n$\r$\nCopy this code or the installation details for support. Do not delete the PackProof data folder."
     Abort
   ${EndIf}
 !macroend
