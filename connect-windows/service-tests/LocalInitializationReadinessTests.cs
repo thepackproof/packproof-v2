@@ -37,7 +37,10 @@ public sealed class LocalInitializationReadinessTests : IDisposable
             await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>runtime.Command("status",null,statusDeadline.Token));
             // This is the same immutable admission guard used by InstallerReadiness.
             // Ordinary status is blocked above, proving the network gate is held.
-            await Task.Run(runtime.RequireLocalInitialization).WaitAsync(TimeSpan.FromSeconds(1));
+            // Native suites run in parallel; a queued ThreadPool work item can
+            // be starved independently of this synchronous local guard. Use a
+            // dedicated thread while staying below the pipe's 10-second deadline.
+            await Task.Factory.StartNew(runtime.RequireLocalInitialization,CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default).WaitAsync(TimeSpan.FromSeconds(3));
             Assert.False(tick.IsCompleted);Assert.Equal(1,transport.Attempts);Assert.True(state.LocalPaused);
             Assert.Equal(keyBefore,File.ReadAllBytes(Path.Combine(root,"spool-key.bin")));
             Assert.Equal(stateBefore,File.ReadAllBytes(Path.Combine(root,"state.bin")));
