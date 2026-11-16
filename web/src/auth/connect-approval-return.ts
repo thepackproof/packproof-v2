@@ -6,20 +6,30 @@ export function connectApprovalReturnPath(href: string): string | null {
   try {
     const url = new URL(href, 'https://packproof.local');
     if (url.pathname !== '/app/records/connect/approve' || url.hash) return null;
+    // A malformed locator must not turn an exact receipt review into a broader
+    // installation review after sign-in. Reject ambiguous authority parameters.
+    for (const key of ['enrollmentId', 'installationId', 'organizationId', 'environment', 'importId', 'action']) {
+      if (url.searchParams.getAll(key).length > 1) return null;
+    }
     const enrollment = url.searchParams.get('enrollmentId');
     const installation = url.searchParams.get('installationId');
     const validId = (value: string | null) => !!value && /^[A-Za-z0-9_-]{1,160}$/.test(value);
-    if (validId(enrollment) === validId(installation)) return null;
+    if ((enrollment !== null && !validId(enrollment)) || (installation !== null && !validId(installation)) || !!enrollment === !!installation) return null;
     const kept = new URLSearchParams();
     if (enrollment) kept.set('enrollmentId', enrollment);
     if (installation) kept.set('installationId', installation);
     const organization = url.searchParams.get('organizationId');
+    if (organization !== null && !validId(organization)) return null;
     if (validId(organization)) kept.set('organizationId', organization!);
     const environment = url.searchParams.get('environment');
+    if (environment !== null && environment !== 'sandbox' && environment !== 'live') return null;
     if (environment === 'sandbox' || environment === 'live') kept.set('environment', environment);
     const importId = url.searchParams.get('importId');
+    if (importId !== null && (!validId(importId) || !installation)) return null;
     if (validId(importId) && installation) kept.set('importId', importId!);
-    if (installation && url.searchParams.get('action') === 'resume') kept.set('action', 'resume');
+    const action = url.searchParams.get('action');
+    if (action !== null && (action !== 'resume' || !installation)) return null;
+    if (action === 'resume') kept.set('action', 'resume');
     return '/app/records/connect/approve?' + kept.toString();
   } catch { return null; }
 }

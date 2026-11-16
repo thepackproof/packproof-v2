@@ -28,8 +28,22 @@ public sealed record HostConfiguration(string Environment, string ApiOrigin, str
         if (OperatingSystem.IsWindows()) _ = new System.Security.Principal.SecurityIdentifier(OperatorsSid);
     }
 }
+/** Only bounded, renderer-safe facts about an authenticated read-only probe or heartbeat.
+ * This observation never grants authority or clears a local pause. */
+public sealed record TransportObservation(
+    string State,
+    DateTimeOffset AttemptedAt,
+    DateTimeOffset? SucceededAt,
+    DateTimeOffset ExpiresAt,
+    int? HttpStatus,
+    string? FailureKind,
+    string? CorrelationId,
+    string ExpectedRulesVersion,
+    string? ObservedRulesVersion,
+    string[]? SourceContracts);
 public sealed class LocalState
 {
+    public TransportObservation? Transport { get; set; }
     public JsonElement? LocalAnalysis { get; set; }
     public int DraftRevision { get; set; }
     public string[]? ExcludedFileNames { get; set; }

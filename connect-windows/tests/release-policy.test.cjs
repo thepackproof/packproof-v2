@@ -34,3 +34,32 @@ test('native service smoke contains one coherent PowerShell test harness',()=>{
  assert.match(smoke,/Native verified bridge refused trusted service:/);
  assert.ok(smoke.trimEnd().endsWith('}'));
 });
+
+test('candidate provenance detects a stale packaged renderer, changed assets and dirty release source',async()=>{
+ const {mkdtemp,mkdir,writeFile,rm}=require('node:fs/promises');
+ const {tmpdir}=require('node:os');
+ const {writeBuildProvenance,verifyBuildProvenance,verifyPackagedProvenance}=await import('../scripts/build-provenance.mjs');
+ const asar=require('@electron/asar');
+ const root=await mkdtemp(join(tmpdir(),'connect-provenance-'));
+ const archive=join(root,'candidate.asar'),app=join(root,'app');
+ const sourceCommit='a'.repeat(40),channel='development';
+ try{
+  await mkdir(join(app,'dist/main'),{recursive:true});await mkdir(join(app,'dist/renderer/assets'),{recursive:true});
+  await writeFile(join(app,'package.json'),JSON.stringify({version:'0.1.2'}));
+  await writeFile(join(app,'dist/main/index.cjs'),'main fixture');await writeFile(join(app,'dist/renderer/assets/ui.js'),'review fixture');
+  const manifest=await writeBuildProvenance(app,{sourceCommit,channel,sourceDirty:false,appVersion:'0.1.2'});
+  await asar.createPackage(app,archive);
+  assert.equal((await verifyPackagedProvenance(archive,{sourceCommit,channel})).assets.length,2);
+  await assert.rejects(()=>verifyPackagedProvenance(archive,{sourceCommit:'b'.repeat(40),channel}),/does not match/);
+  await writeFile(join(app,'dist/renderer/assets/ui.js'),'different UI');
+  await assert.rejects(()=>verifyBuildProvenance(app,{sourceCommit,channel}),/assets differ/);
+  const staleArchive=join(root,'stale.asar');await asar.createPackage(app,staleArchive);
+  await assert.rejects(()=>verifyPackagedProvenance(staleArchive,{sourceCommit,channel}),/assets differ/);
+  await writeFile(join(app,'dist/renderer/assets/ui.js'),'review fixture');
+  await writeFile(join(app,'dist/renderer/assets/extra.js'),'unexpected asset');
+  await assert.rejects(()=>verifyBuildProvenance(app,{sourceCommit,channel}),/assets differ/);
+  await rm(join(app,'dist/renderer/assets/extra.js'));
+  await writeFile(join(app,'dist/main/build-provenance.json'),JSON.stringify({...manifest,sourceDirty:true}));
+  await assert.rejects(()=>verifyBuildProvenance(app,{sourceCommit,channel,requireClean:true}),/clean committed source/);
+ }finally{asar.uncacheAll();await rm(root,{recursive:true,force:true});}
+});

@@ -48,7 +48,7 @@ public sealed partial class AgentRuntime
         if(state.LocalAnalysis?.GetProperty("ready").GetBoolean()!=true)throw new ConnectException("MAPPING_NEEDS_REVIEW","Resolve the shipment details before requesting approval.");
         if(request.GetProperty("draftRevision").GetInt32()!=state.DraftRevision)throw new ConnectException("PREVIEW_CHANGED","Review the current report before approving.");
         await Refresh(ct);
-        if(Optional(Optional(state.ServerConfig,"capabilities"),"rulesVersion")?.GetString()!=CsvSemantics.Version)throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server and this installation need matching source-validation support. No original was uploaded.");
+        if(CapabilityState(Optional(state.ServerConfig,"capabilities"))!="compatible")throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server and this installation need matching source-validation support. No original was uploaded.");
         if(!DateTimeOffset.TryParse(state.BaselineObservedAt,out var reviewedAt)||DateTimeOffset.UtcNow-reviewedAt>TimeSpan.FromMinutes(30))throw new ConnectException("APPROVAL_EXPIRED","This local source review expired. Choose the report again to request a fresh approval.");
         var bytes=CurrentSnapshot();var config=state.LocalAnalysis.Value.GetProperty("configuration");FolderSource.ValidateContract(bytes,config);
         if(state.GuidedSetup && state.GuidedProposalSha256 is not null && state.GuidedFileSha256==state.FileDigest)return;

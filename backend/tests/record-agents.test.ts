@@ -210,3 +210,43 @@ it('revalidates a legacy saved proposal at approval instead of trusting its old 
  await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'INVALID_MAPPING'});
  const held=await loadInstallation(opened.db,a.result.installationId);expect(held.approved_config).toBeNull();expect(held.status).toBe('setup');expect(held.pending_proposal_sha256).toBe(digest);
 });
+
+it('rejects mismatched server rules, expired exact reviews and another workspace without changing protected receipts',async()=>{
+ const {CSV_RULES}=await import('../src/records/csv-semantics.js');
+ const {canonicalize}=await import('../src/canonical.js');
+ const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
+ const a=await enroll();await ack(a);
+ const original=`Shipment reference,Description,Quantity,Shipment date\nEXACT-REVIEW-001,Review fixture parcel,2,${clock.now().toISOString()}\n`;
+ const sourceContract={schema:'packproof.scheduled-csv/v2' as const,exporterName:null,exporterVersion:null,expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:null,backfillFrom:new Date(time-86400000).toISOString(),rulesVersion:CSV_RULES.version,profileVersion:CSV_RULES.profile,analysisRevision:1,confirmedFields:[],historyPolicy:{mode:'selected_then_new' as const,baselineSha256:'b'.repeat(64),observedAt:clock.now().toISOString(),initialFileName:'exact-review.csv',initialFileSha256:sha256Hex(Buffer.from(original))}};
+ const c={...config(a.account),timeZone:'source-offset',mapping:{shipmentReference:'Shipment reference',itemTitle:'Description',quantity:'Quantity',shippedAt:'Shipment date'},sourceContract};
+ const incompatible={...c,sourceContract:{...sourceContract,rulesVersion:'unsupported-rules'}};
+ await expect(proposeAgentConfig(deps,a.actor,incompatible)).rejects.toMatchObject({code:'SOURCE_CONTRACT_UNSUPPORTED'});
+ const digest=sha256Hex(canonicalize(incompatible));
+ await opened.db.query('UPDATE record_agent_installations SET pending_proposal=$2::jsonb,pending_proposal_sha256=$3 WHERE id=$1',[a.result.installationId,JSON.stringify(incompatible),digest]);
+ await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'SOURCE_CONTRACT_UNSUPPORTED'});
+ expect((await loadInstallation(opened.db,a.result.installationId)).approved_config).toBeNull();
+ const proposal=await proposeAgentConfig(deps,a.actor,c);
+ const start=time;
+ try{
+  time+=31*60000;
+  await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:proposal.proposalSha256})).rejects.toMatchObject({code:'APPROVAL_EXPIRED'});
+  const fresh=await proposeAgentConfig(deps,a.actor,{...c,sourceContract:{...sourceContract,historyPolicy:{...sourceContract.historyPolicy,observedAt:clock.now().toISOString()}}});
+  await humanAction(a.result.installationId,{action:'configure',proposalSha256:fresh.proposalSha256});
+  const first=(await previewPartnerImport(deps,a.actor,'exact-review-expiry-preview',{integrationAccountId:a.account,operatorMembershipId:member,sourceName:c.sourceName,mapping:c.mapping,timeZone:c.timeZone,csv:original})).value;
+  await expect(readAgentDetail(deps,{...w,organizationId:'another-workspace'},a.result.installationId,first.id)).rejects.toMatchObject({code:'INSTALLATION_NOT_FOUND'});
+  await expect(readAgentDetail(deps,w,a.result.installationId,'another-receipt')).rejects.toMatchObject({code:'IMPORT_NOT_FOUND'});
+  time+=31*60000;
+  await expect(humanAction(a.result.installationId,{action:'authorize_test',importId:first.id})).rejects.toMatchObject({code:'APPROVAL_EXPIRED'});
+  expect((await loadInstallation(opened.db,a.result.installationId)).test_import_id).toBeNull();
+  const retained=await readPartnerImport(deps,a.actor,first.id);expect(retained.state).toBe('previewed');expect(retained.original.sha256).toBe(sourceContract.historyPolicy.initialFileSha256);
+ }finally{time=start;}
+});
+
+it('keeps a historical transport error inspectable without claiming an outage after a fresh authenticated heartbeat',async()=>{
+ const a=await enroll();await ack(a);
+ const current=await heartbeatAgent(deps,a.actor,{version:'0.1.2',queueCount:0,lastErrorCode:'NETWORK_UNAVAILABLE'});
+ expect(current.health.serviceOnline).toBe(true);
+ expect(current.health.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+ expect(current.health.conditions).not.toContainEqual(expect.objectContaining({code:'NETWORK_UNAVAILABLE'}));
+ expect(current.health.history.at(-1)?.codes).not.toContain('NETWORK_UNAVAILABLE');
+});

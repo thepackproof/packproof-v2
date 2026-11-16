@@ -20,6 +20,10 @@ if ($env:GITHUB_SHA -and $sha -ne $env:GITHUB_SHA) {throw 'Artifact source diffe
 $artifacts=@($installer | ForEach-Object {@{file=$_.Name;bytes=$_.Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()}})
 $runtime=Get-Content -LiteralPath (Join-Path $root 'dist\main\runtime-config.json') -Raw | ConvertFrom-Json
 if ($runtime.sourceCommit -ne $sha -or $runtime.channel -ne $channel) {throw 'Runtime provenance differs from this artifact.'}
-@{schemaVersion=1;product='PackProof Connect';version=(Get-Content (Join-Path $root 'package.json') -Raw|ConvertFrom-Json).version;sourceCommit=$sha;channel=$channel;signed=$signed;publicDistributionAllowed=$false;artifacts=$artifacts;executables=$inventory;gate='internal-build-only';nativeAcceptance='not_run';customerAcceptance='not_run'} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'release-evidence.json') -Encoding utf8NoBOM
+& node (Join-Path $root 'scripts/build-provenance.mjs') verify $root $sha $channel (Join-Path $unpacked 'resources/app.asar')
+if ($LASTEXITCODE -ne 0) {throw 'Application asset provenance verification failed.'}
+$application=Get-Content -LiteralPath (Join-Path $root 'dist/main/build-provenance.json') -Raw | ConvertFrom-Json
+Copy-Item -LiteralPath (Join-Path $root 'dist/main/build-provenance.json') -Destination (Join-Path $output 'build-provenance.json')
+@{schemaVersion=2;product='PackProof Connect';version=(Get-Content (Join-Path $root 'package.json') -Raw|ConvertFrom-Json).version;sourceCommit=$sha;sourceDirty=$application.sourceDirty;channel=$channel;signed=$signed;application=$application;publicDistributionAllowed=$false;artifacts=$artifacts;executables=$inventory;gate='internal-build-only';nativeAcceptance='not_run';customerAcceptance='not_run'} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'release-evidence.json') -Encoding utf8NoBOM
 $artifacts | ForEach-Object {$_.sha256+'  '+$_.file} | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS') -Encoding ascii
 if (-not $signed) {'INTERNAL DEVELOPMENT BUILD. Unsigned. Not approved for public distribution or customer source activation.' | Set-Content -LiteralPath (Join-Path $output 'DEVELOPMENT-BUILD.txt')}

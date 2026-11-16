@@ -77,8 +77,24 @@ export interface Configuration {
   offlineWindowHours: number;
   sourceContract?: SourceContract;
 }
+/** A bounded authenticated observation; cached capabilities alone are not readiness. */
+export interface TransportObservation {
+  state: 'unknown' | 'compatible' | 'unsupported' | 'outdated' | 'unauthenticated' | 'forbidden' | 'unreachable';
+  attemptedAt?: string;
+  succeededAt?: string;
+  expiresAt?: string;
+  httpStatus?: number;
+  failureKind?: string;
+  correlationId?: string;
+  expectedRulesVersion: string;
+  observedRulesVersion?: string;
+  sourceContracts?: string[];
+}
 export interface ConnectStatus {
   state: string;
+  error?: { code: string; message: string };
+  transport?: TransportObservation;
+  versions?: { service: string; bridgeProtocol: number; csvRules: string; csvProfile: string; environment: string; apiOrigin: string };
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
   capabilities?: { sourceContracts: string[]; rulesVersion: string };

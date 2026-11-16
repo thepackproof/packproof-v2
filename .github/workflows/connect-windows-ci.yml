@@ -60,6 +60,7 @@ jobs:
             connect-windows/release/development/win32-x64/*.exe
             connect-windows/release/development/win32-x64/SHA256SUMS
             connect-windows/release/development/win32-x64/release-evidence.json
+            connect-windows/release/development/win32-x64/build-provenance.json
             connect-windows/release/development/win32-x64/DEVELOPMENT-BUILD.txt
             connect-windows/release/development/win32-x64/native-foundation-smoke.json
             connect-windows/release/development/win32-x64/storage-repair-smoke.json

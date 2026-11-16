@@ -14,6 +14,8 @@ public sealed class PackProofClient : IDisposable
     // Project it using elapsed (Stopwatch) time, independent of wall-clock edits.
     public DateTimeOffset? LastServerDate => serverDate is { } observed ? observed + time.GetElapsedTime(serverDateTimestamp) : null;
     public bool LastResponseHadServerDate { get; private set; }
+    public int? LastHttpStatus { get; private set; }
+    public string? LastCorrelationId { get; private set; }
     public PackProofClient(HostConfiguration host, HttpMessageHandler? handler = null, TimeProvider? timeProvider = null)
     {
         host.Validate(); time = timeProvider ?? TimeProvider.System;
@@ -31,8 +33,15 @@ public sealed class PackProofClient : IDisposable
         if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (key is not null) request.Headers.Add("Idempotency-Key", key);
         if (body is not null) { var bytes = body is ExactJsonBody exact ? exact.Bytes : Json.Bytes(body); if (body is ExactJsonBody checkedBody && Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) != checkedBody.Sha256) throw new ConnectException("REQUEST_BODY_INTEGRITY_FAILED", "The preserved upload request failed its integrity check. Queued work is preserved."); if (bytes.Length > 6 * 1024 * 1024) throw new ConnectException("CSV_WIRE_LIMIT", "The encoded source exceeds the upload limit. Ask the source owner for a smaller approved export."); request.Content = new ByteArrayContent(bytes); request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json"); }
-        LastResponseHadServerDate = false;
+        LastResponseHadServerDate = false; LastHttpStatus = null; LastCorrelationId = null;
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        LastHttpStatus = (int)response.StatusCode;
+        // Correlation identifiers are opaque, bounded support references, never URLs or tokens.
+        if (response.Headers.TryGetValues("X-Request-Id", out var references))
+        {
+            var reference = references.FirstOrDefault();
+            if (reference is not null && System.Text.RegularExpressions.Regex.IsMatch(reference, @"^[A-Za-z0-9_.:-]{1,128}$")) LastCorrelationId = reference;
+        }
         LastResponseHadServerDate = response.Headers.Date is not null;
         if (response.Headers.Date is { } observedDate) { serverDate = observedDate; serverDateTimestamp = time.GetTimestamp(); }
         // A missing Date header must not erase a previously observed clock skew.
