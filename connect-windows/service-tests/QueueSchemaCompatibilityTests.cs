@@ -40,7 +40,22 @@ public sealed class QueueSchemaCompatibilityTests : IDisposable
     {
         using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Database, Pooling = false }.ToString()); db.Open(); using var command = db.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery();
     }
-    private Dictionary<string, string> Snapshot() => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToDictionary(path => Path.GetRelativePath(root, path), path => Path.GetFileName(path) == "queue.sqlite-shm" ? "sqlite-reader-coordination" : Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
+    private static string HashFixtureFile(string path)
+    {
+        // The WAL authority fixture deliberately keeps its SQLite writer open.
+        // Observe stable committed bytes with Windows-compatible sharing; do
+        // not close/checkpoint that writer merely to make the snapshot easier.
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[8192]; var total = 0; int read;
+        while ((read = stream.Read(buffer)) != 0)
+        {
+            total += read; if (total > 16 * 1024 * 1024) throw new InvalidOperationException("The synthetic queue fixture exceeds its bounded snapshot budget.");
+            digest.AppendData(buffer, 0, read);
+        }
+        return Convert.ToHexString(digest.GetHashAndReset());
+    }
+    private Dictionary<string, string> Snapshot() => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).ToDictionary(path => Path.GetRelativePath(root, path), path => Path.GetFileName(path) == "queue.sqlite-shm" ? "sqlite-reader-coordination" : HashFixtureFile(path));
     private void AssertSnapshot(Dictionary<string, string> expected)
     {
         var observed = Snapshot();
