@@ -86,6 +86,41 @@ try {
  if (-not $restarted.source.accessible -or $restarted.source.selectedFileName -ne 'setup.csv') { throw 'The restarted service did not recover the protected setup state.' }
  if ((Get-FileHash -LiteralPath (Join-Path $data 'state.bin') -Algorithm SHA256).Hash -ne $stateHash) { throw 'Restart unexpectedly replaced the protected setup state.' }
  Record-Pass 'service restart recovers identity-protected configuration without an interactive UI'
+ # Exercise the packaged bridge/service without an enrolled test account. Keep all
+ # source folders read-only to the service and grant writes only at the output.
+ $sampleOrders=Join-Path $exports 'multi-order-source'
+ $samplePicks=Join-Path $exports 'multi-picking-source'
+ $sampleOutput=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('PackProof\Multisource-smoke-'+[guid]::NewGuid().ToString('N'))
+ foreach ($folder in @($sampleOrders,$samplePicks,$sampleOutput)) {
+   New-Item -ItemType Directory -Path $folder -ErrorAction Stop | Out-Null
+ }
+ & icacls $sampleOutput /grant ("NT SERVICE\{0}:(OI)(CI)(M)" -f $serviceName) | Out-Null
+ if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare service-owned proof output fixture.' }
+ $draft=Invoke-Bridge addWorkspaceSource @{folder=$sampleOrders;role='order'}
+ if ($draft.workspace.sources.Count -ne 1 -or $draft.workspace.sources[0].recognition.state -ne 'empty') { throw 'Empty order source was not accurately reported.' }
+ $orderId=$draft.workspace.sources[0].id
+ Copy-Item -LiteralPath (Join-Path $root '..\examples\multisource-journey\fixtures\orders.json') -Destination $sampleOrders
+ $draft=Invoke-Bridge inspectWorkspaceSource @{sourceId=$orderId}
+ if ($draft.workspace.sources[0].recognition.state -ne 'recognized') { throw 'The sample order could not be read by the service identity.' }
+ $draft=Invoke-Bridge addWorkspaceSource @{folder=$sampleOrders;role='evidence'}
+ if ($draft.workspace.sources.Count -ne 1 -or $draft.workspace.sources[0].id -ne $orderId -or $draft.workspace.sources[0].roles -notcontains 'evidence') { throw 'Shared folder created duplicate source subscriptions or lost its roles.' }
+ [void](Invoke-Bridge addWorkspaceSource @{folder=$samplePicks;role='picking'})
+ $rejected=$false
+ try { [void](Invoke-Bridge setWorkspaceOutput @{folder=$sampleOrders}) }
+ catch { if ($_.Exception.Message -notmatch 'OUTPUT_PATH_UNSAFE') { throw }; $rejected=$true }
+ if (-not $rejected) { throw 'A source folder was accepted for local proof output.' }
+ $draft=Invoke-Bridge setWorkspaceOutput @{folder=$sampleOutput}
+ if ($draft.workspace.outputState -ne 'ready') { throw 'The installed service could not verify its writable destination.' }
+ [void](Invoke-Bridge saveWorkspaceStep @{step='review'})
+ Run-Lifecycle Stop
+ Start-Service -Name $serviceName
+ (Get-Service -Name $serviceName).WaitForStatus('Running',[TimeSpan]::FromSeconds(30))
+ $saved=(Invoke-Bridge status).workspace
+ if ($saved.phase -ne 'draft' -or $saved.step -ne 'review' -or $saved.sources.Count -ne 2 -or $saved.outputFolder -ne $sampleOutput -or $saved.sources.id -notcontains $orderId) {
+   throw 'Protected multi-source setup, identities, output or unfinished state did not survive service restart.'
+ }
+ if ((Get-CimInstance Win32_Service -Filter "Name='$serviceName'").StartMode -ne 'Auto') { throw 'The background service is not set to start independently after reboot.' }
+ Record-Pass 'service reads an order, preserves one subscription for two roles, rejects source/output overlap, tests write access and resumes saved setup after restart'
  Run-Lifecycle Install -KeepApprovedOperator
  $repaired=Invoke-Bridge status
  if ($repaired.source.selectedFileName -ne 'setup.csv') { throw 'Repair reset the protected setup state.' }

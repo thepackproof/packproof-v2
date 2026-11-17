@@ -7,7 +7,8 @@ import {runReconstructionPreflight} from './reconstruction-v8-runtime-preflight.
 
 test('122 widens exactly the 117 installation predicate and pins the entire catalog',async()=>{
  const root=new URL('../../backend/migrations/',import.meta.url);
- const names=(await readdir(root)).filter(name=>name.endsWith('.sql')).sort();
+ const all=(await readdir(root)).filter(name=>name.endsWith('.sql')).sort();
+ const names=all.filter(name=>Number(name.slice(0,3))<=122);
  const source=await Promise.all(names.map(async name=>{
   const sql=await readFile(new URL(name,root),'utf8');
   return {id:name.slice(0,-4),sql,checksum:reconstructionDigest(sql)};
@@ -19,6 +20,11 @@ test('122 widens exactly the 117 installation predicate and pins the entire cata
  const applied=source.map(({id,checksum})=>({id,checksum}));
  const review={inventorySha256:backfillMigrationInventorySha256};
  const inventory=inspectReconstructionInventory(source,applied,review);
+ for(const later of all.filter(name=>!names.includes(name))){
+  const sql=await readFile(new URL(later,root),'utf8');
+  const additional={id:later.slice(0,-4),sql,checksum:reconstructionDigest(sql)};
+  assert.throws(()=>inspectReconstructionInventory([...source,additional],applied,review),/SOURCE_INVENTORY/);
+ }
  assert.equal(inventory.sourceCount,121);
  assert.equal(inventory.predecessorSha256,shipmentMigrationInventorySha256);
  assert.throws(()=>inspectReconstructionInventory(source.slice(0,-1),applied,review),/SOURCE_INVENTORY/);

@@ -1,0 +1,11 @@
+{
+  "kind": "evidence",
+  "eventId": "photo-94",
+  "version": 1,
+  "occurredAt": "2026-11-17T12:02:00Z",
+  "entityNamespace": "MEDIA_A",
+  "entityType": "artifact",
+  "entityId": "photo-94",
+  "packageNamespace": "PACK_A",
+  "packageId": "PKG94"
+}

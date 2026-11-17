@@ -1,0 +1,16 @@
+<Project>
+  <ItemGroup>
+    <PackageReference Include="NPOI" Version="2.7.6" />
+    <PackageReference Include="PdfPig" Version="0.1.13" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.14" />
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="Tesseract.Data.English" Version="4.0.0" GeneratePathProperty="true" ExcludeAssets="all" />
+    <Content Include="$(PkgTesseract_Data_English)/**/eng.traineddata" Condition="'$(PkgTesseract_Data_English)' != ''">
+      <Link>tessdata/eng.traineddata</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+</Project>

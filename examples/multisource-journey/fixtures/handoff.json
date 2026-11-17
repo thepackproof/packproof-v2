@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "handoff",
+    "eventId": "dispatch-SHP771",
+    "version": 1,
+    "occurredAt": "2026-11-17T12:05:00Z",
+    "entityNamespace": "SHIP_A",
+    "entityType": "shipment",
+    "entityId": "SHP771",
+    "orderNamespace": "ERP_A",
+    "orderId": "SO10482",
+    "lineId": "20",
+    "sku": "A100",
+    "shippedQuantity": 2,
+    "unit": "each"
+  },
+  {
+    "kind": "handoff",
+    "eventId": "dispatch-SHP772",
+    "version": 1,
+    "occurredAt": "2026-11-17T12:05:00Z",
+    "entityNamespace": "SHIP_A",
+    "entityType": "shipment",
+    "entityId": "SHP772",
+    "orderNamespace": "ERP_A",
+    "orderId": "SO10482",
+    "lineId": "30",
+    "sku": "A100",
+    "shippedQuantity": 1,
+    "unit": "each"
+  }
+]

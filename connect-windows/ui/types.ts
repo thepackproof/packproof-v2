@@ -1,3 +1,4 @@
+import type { WorkspaceStatus, WorkspaceBridge, ProofOutput } from './workspace-types';
 /** Renderer-safe state only. Tokens and enrollment redemption secrets never cross this boundary. */
 export type CheckState = "passed" | "warning" | "blocked" | "not_checked";
 export interface ComputerCheck {
@@ -205,6 +206,8 @@ export interface TransportObservation {
   sourceContracts?: string[];
 }
 export interface ConnectStatus {
+  workspace?: WorkspaceStatus;
+  proofOutput?: ProofOutput;
   state: string;
   error?: { code: string; message: string };
   transport?: TransportObservation;
@@ -306,7 +309,7 @@ export interface ReviewedSource {
   grantRevision: number;
   originalSha256: string;
 }
-export interface ConnectBridge {
+export interface ConnectBridge extends WorkspaceBridge {
   chooseBackfillFiles(input: BackfillInspectionRequest): Promise<ConnectStatus>;
   proposeBackfill(input: { id: string; inspectionSha256: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
   pauseBackfill(input: { id: string; jobId: string }): Promise<ConnectStatus>;

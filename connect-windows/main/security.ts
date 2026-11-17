@@ -1,3 +1,4 @@
+import { sourceRoles, setupSteps } from '../ui/workspace-types';
 import {z} from 'zod';
 import rules from '../../backend/src/records/typed-source-rules.json';
 export const APP_ORIGIN='packproof-connect://app';
@@ -14,7 +15,22 @@ export const configuration=z.object({sourceName:z.string().trim().min(1).max(80)
 const identityPolicy=z.object({schema:z.literal('packproof.source-identity-policy/v1'),eventKey:z.discriminatedUnion('kind',[z.object({kind:z.literal('column')}).strict(),z.object({kind:z.literal('composite'),fields:z.array(z.enum(rules.identityFieldsV2 as [string,...string[]])).min(2).max(8).refine(fields=>new Set(fields).size===fields.length)}).strict()]),revision:z.object({kind:z.enum(['column','source_as_of','immutable_event'])}).strict()}).strict();
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const reviewedSource = {id, configurationRevision:z.number().int().nonnegative(), grantRevision:z.number().int().nonnegative(), originalSha256:sha256};
+const role = z.enum(sourceRoles);
 export const argumentsByMethod={
+ confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
+ workspaceDraftPreview: z.tuple([]),
+ workspaceOrderDetail: z.tuple([id,z.number().int().positive().safe()]),
+ chooseWorkspaceFolder: z.tuple([role]),
+ reuseWorkspaceFolder: z.tuple([id, role]),
+ removeWorkspaceRole: z.tuple([id, role]),
+ inspectWorkspaceSource: z.tuple([id]),
+ saveWorkspaceStep: z.tuple([z.enum(setupSteps)]),
+ chooseWorkspaceOutput: z.tuple([]),
+ activateWorkspace: z.union([z.tuple([]),z.tuple([z.literal(true)])]),
+ pauseWorkspaceSource: z.tuple([id]),
+ resumeWorkspaceSource: z.tuple([id]),
+ openWorkspaceApproval: z.tuple([]),
+ openWorkspaceOutput: z.tuple([]),
  chooseBackfillFiles:z.tuple([z.object({id,historyFrom:timestamp,historyTo:timestamp,semantics:z.enum(['cumulative_snapshot','event_delta'])}).strict().refine(value=>Date.parse(value.historyFrom)<=Date.parse(value.historyTo),'The historical interval must end after it begins')]),
  proposeBackfill:z.tuple([z.object({id,inspectionSha256:z.string().regex(/^[a-f0-9]{64}$/),wholeFileUploadApproved:z.literal(true)}).strict()]),pauseBackfill:z.tuple([z.object({id,jobId:id}).strict()]),resumeBackfill:z.tuple([z.object({id,jobId:id}).strict()]),openBackfillApproval:z.tuple([z.object({id,jobId:id}).strict()]),
  chooseNewSubscriptionFolder:z.tuple([]),inspectSubscriptionDraft:z.tuple([csvFile]),proposeSubscription:z.tuple([z.object({displayName:z.string().trim().min(1).max(100),sourceProfile:z.enum(['packproof.order-lines/v1','packproof.shipment-handling-units/v1','packproof.operational-observations/v1','packproof.operational-observations/v2']),batchSchema:z.literal('packproof.typed-source-batch/v2').optional(),identityPolicy:identityPolicy.optional(),sourceNamespace:z.string().trim().min(1).max(200),mappingVersion:z.string().trim().min(1).max(200),mapping,constants:z.partialRecord(z.enum(['observationKind','property','timeQuality']),z.string().min(1).max(100)),historyFrom:timestamp,historyTo:timestamp.nullable().optional(),unknownTimePolicy:z.enum(['quarantine','retain_unknown']).optional(),expectedIntervalSeconds:z.number().int().min(60).max(604800).nullable().optional(),wholeFileUploadApproved:z.literal(true)}).strict().superRefine((p,ctx)=>{if((p.batchSchema!==undefined)!==(p.identityPolicy!==undefined)||p.sourceProfile==='packproof.operational-observations/v2'&&!p.batchSchema)ctx.addIssue({code:'custom',message:'The versioned source contract and approved identity policy must be supplied together'});})]),

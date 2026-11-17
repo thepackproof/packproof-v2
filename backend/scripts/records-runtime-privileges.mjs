@@ -148,10 +148,25 @@ const receiptInsert121=[
 const policy121={...policy120,
  partner_import_jobs:{api:{...policy120.partner_import_jobs.api,insert:receiptInsert121},worker:policy120.partner_import_jobs.worker},
 };
+// Source originals, interpretations, revisions and review decisions are append-only.
+// The API commits these transactions. The background worker does not use these tables.
+const orderAppend = {api:{...select,insert:'*'},worker:{}};
+const policy123 = {
+ ...policy121,
+ record_order_sessions:{api:{...select,insert:'*',update:['state','decided_by','decided_at']},worker:{}},
+ record_order_roots:orderAppend,
+ record_order_receipts:orderAppend,
+ record_order_events:orderAppend,
+ record_order_event_refs:orderAppend,
+ record_order_revisions:{api:{...select,insert:['proof_id','revision','committed_at','view','content_digest']},worker:{}},
+ record_order_decisions:orderAppend,
+ record_order_link_state:{api:{...select,insert:'*',update:['proof_ids','unresolved','updated_at']},worker:{}},
+};
+
 //119 adds only an index: its catalog columns and effective grants remain118.
 const policiesByMigration=new Map([
  [108,policy108],[109,policy],[113,policy113],[116,policy116],[117,policy117],
- [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],
+ [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],[123,policy123],
 ]);
 function selectPolicy(throughMigration){
  const result=policiesByMigration.get(throughMigration);
@@ -162,6 +177,8 @@ function selectPolicy(throughMigration){
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
 const sequenceName='record_issue_actions_sequence_seq';
+const reviewedSequences = profile => profile >= 123
+ ? [sequenceName, 'record_order_revisions_sequence_seq'] : [sequenceName];
 const sequencePrivileges=['SELECT','UPDATE','USAGE'];
 const authorityFunction='lock_operational_snapshot_authority(text,text,text,text,text)';
 const policyDigest=policy=>sha({tables:policy,authorityFunction});
@@ -255,8 +272,8 @@ async function inspect(db,o,actualCaller){
  WHERE n.nspname=$4 AND c.relkind='r' AND c.relname=ANY($2::text[]) ORDER BY roles.role,c.relname,a.attnum,p.privilege`,[roles,names,fieldPrivileges,o.schema])).rows;
  const sequences=(await db.query(`SELECT roles.role,c.relname AS name,p.privilege,has_sequence_privilege(roles.role,c.oid,p.privilege) AS allowed,
  has_sequence_privilege(roles.role,c.oid,p.privilege||' WITH GRANT OPTION') AS grantable FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- CROSS JOIN unnest($1::text[]) roles(role) CROSS JOIN unnest($2::text[]) p(privilege) WHERE n.nspname=$3 AND c.relkind='S' AND c.relname=$4 ORDER BY roles.role,p.privilege`,[roles,sequencePrivileges,o.schema,sequenceName])).rows;
- if(sequences.length!==6)fail('RECORDS_SEQUENCE_MISSING');
+ CROSS JOIN unnest($1::text[]) roles(role) CROSS JOIN unnest($2::text[]) p(privilege) WHERE n.nspname=$3 AND c.relkind='S' AND c.relname=ANY($4::text[]) ORDER BY roles.role,c.relname,p.privilege`,[roles,sequencePrivileges,o.schema,reviewedSequences(o.throughMigration)])).rows;
+ if(sequences.length!==6*reviewedSequences(o.throughMigration).length)fail('RECORDS_SEQUENCE_MISSING');
  const publicFunction=(await db.query(`SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
  WHERE p.oid=to_regprocedure($1) AND a.grantee=0 AND a.privilege_type='EXECUTE' LIMIT 1`,[`${quote(o.schema)}.${authorityFunction}`])).rows;
  if(publicFunction.length)fail('RECORDS_FUNCTION_PUBLIC_ACCESS_UNSAFE');
@@ -291,9 +308,11 @@ export async function planRecordsRuntimePrivileges(db,input){
   if(rule.select)statements.push(`GRANT SELECT ON TABLE ${target} TO ${who}`);
   for(const op of ['insert','update'])if(rule[op])statements.push(`GRANT ${op.toUpperCase()}(${rule[op]==='*'?columns:rule[op].map(quote).join(',')}) ON TABLE ${target} TO ${who}`);
  }
- const sequence=`${quote(o.schema)}.${quote(sequenceName)}`;
- for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON SEQUENCE ${sequence} FROM ${quote(role)}`);
- statements.push(`GRANT USAGE ON SEQUENCE ${sequence} TO ${quote(o.runtimeRole)}`);
+ for(const name of reviewedSequences(o.throughMigration)){
+  const sequence=`${quote(o.schema)}.${quote(name)}`;
+  for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON SEQUENCE ${sequence} FROM ${quote(role)}`);
+  statements.push(`GRANT USAGE ON SEQUENCE ${sequence} TO ${quote(o.runtimeRole)}`);
+ }
  for(const role of Object.values(o.roles))statements.push(`REVOKE ALL PRIVILEGES ON FUNCTION ${quote(o.schema)}.${authorityFunction} FROM ${quote(role)}`,
   `GRANT EXECUTE ON FUNCTION ${quote(o.schema)}.${authorityFunction} TO ${quote(role)}`);
  return {schema:'packproof.records-privilege-plan/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,runtimeRole:o.runtimeRole,workerRole:o.workerRole,

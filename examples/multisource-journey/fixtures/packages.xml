@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<records>
+  <record>
+    <kind>packing</kind>
+    <eventId>pack-PKG92</eventId>
+    <version>1</version>
+    <occurredAt>2026-11-17T12:02:00Z</occurredAt>
+    <entityNamespace>PACK_A</entityNamespace>
+    <entityType>package</entityType>
+    <entityId>PKG92</entityId>
+    <warehouseNamespace>WMS_A</warehouseNamespace>
+    <warehouseId>WO771</warehouseId>
+    <shipmentNamespace>SHIP_A</shipmentNamespace>
+    <shipmentId>SHP771</shipmentId>
+    <orderNamespace>ERP_A</orderNamespace>
+    <orderId>SO10482</orderId>
+    <lineId>20</lineId>
+    <sku>A100</sku>
+    <packedQuantity>2</packedQuantity>
+    <unit>each</unit>
+    <weightGrams>1100</weightGrams>
+  </record>
+  <record>
+    <kind>packing</kind>
+    <eventId>pack-PKG93</eventId>
+    <version>1</version>
+    <occurredAt>2026-11-17T12:02:00Z</occurredAt>
+    <entityNamespace>PACK_A</entityNamespace>
+    <entityType>package</entityType>
+    <entityId>PKG93</entityId>
+    <warehouseNamespace>WMS_A</warehouseNamespace>
+    <warehouseId>WO771</warehouseId>
+    <shipmentNamespace>SHIP_A</shipmentNamespace>
+    <shipmentId>SHP772</shipmentId>
+    <orderNamespace>ERP_A</orderNamespace>
+    <orderId>SO10482</orderId>
+    <lineId>30</lineId>
+    <sku>A100</sku>
+    <packedQuantity>1</packedQuantity>
+    <unit>each</unit>
+    <weightGrams>550</weightGrams>
+  </record>
+</records>

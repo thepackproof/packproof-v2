@@ -10,6 +10,7 @@ import { ImportWizard } from './ImportWizard';
 import { RecordMedia, RecordPackageDownload } from './RecordMedia';
 import { SourceArtifacts } from './SourceArtifacts';
 import { OperationalSnapshots } from './OperationalSnapshots';
+import { OrderReferenceReview } from './OrderReferenceReview';
 import { OrderProofs } from './OrderProofs';
 import { OperationalCases } from './OperationalCases';
 import { SourceSubscriptions } from './SourceSubscriptions';
@@ -211,6 +212,7 @@ export default function RecordsPortal({ api, session, href, onGo, onSignOut, adm
           {!connectApproval && section === 'records' && (id ? <RecordDetailScreen key={`${organization.id}.${organization.environment}.${id}`} api={api} organization={organization} params={scopedParams} id={id} revision={revision} onRefresh={refresh} onGo={onGo} storageScope={`${session.apiBaseUrl}.${session.userId}`}/> : <RecordsListScreen api={api} organization={organization} params={scopedParams} revision={revision} onGo={onGo} onRefresh={refresh}/>)}
           {section === 'order-proofs' && (context.data.capabilities.orderProofs ? <OrderProofs key={[session.userId, organization.id, organization.environment, selectedLocation, id].join('.')} api={api} organization={organization} locationId={selectedLocation} id={id} revision={revision}/> : <p role="status">Order proofs are unavailable in this workspace.</p>)}
           {section === 'cases' && <OperationalCases api={api} organization={organization} params={scopedParams} id={id} revision={revision} onGo={onGo} onRefresh={refresh} enabled={context.data.capabilities.reconstruction === true} exportsEnabled={context.data.capabilities.reconstructionExports === true} crossCaseEnabled={context.data.capabilities.crossCase === true} signedExportsEnabled={context.data.capabilities.signedCaseExports === true} retentionEnabled={context.data.capabilities.sourceDisposition === true}/>}
+          {section === 'attention' && context.data.capabilities.orderProofs && <OrderReferenceReview key={scopeQuery(organization,selectedLocation).toString()} api={api} scope={scopeQuery(organization,selectedLocation).toString()} canManage={['ADMIN','OWNER'].includes(organization.role)}/>}
           {section === 'attention' && <AttentionScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/>}
           {section === 'connections' && <><ConnectionsScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/><AgentConnections key={`${organization.id}.${organization.environment}`} api={api} organizationId={organization.id} environment={organization.environment} canManage={['OWNER','ADMIN'].includes(organization.role)}/></>}
           {section === 'connections' && context.data.capabilities.sourceSubscriptions && <SourceSubscriptions key={`${organization.id}.${organization.environment}`} api={api} organizationId={organization.id} environment={organization.environment} canManage={['OWNER','ADMIN'].includes(organization.role)} revision={revision}/>}

@@ -8,14 +8,14 @@ import {canonicalize} from '../src/canonical.js';
 import {sha256Hex} from '../src/hash.js';
 import { recordsMigrationInventory, planRecordsRuntimePrivileges, verifyRecordsRuntimePrivileges, type RecordsPrivilegeOptions } from '../scripts/records-runtime-privileges.mjs';
 
-describe.each([113,116,117,118,119,120,121,122] as const)('reconstruction%s API and worker database separation',profile=>{
+describe.each([113,116,117,118,119,120,121,122,123] as const)('reconstruction%s API and worker database separation',profile=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,options:RecordsPrivilegeOptions,user:string;
  const suffix=randomBytes(6).toString('hex'),api=`recon_api_${suffix}`,worker=`recon_worker_${suffix}`,broad=`recon_broad_${suffix}`,source='a'.repeat(40),at='2026-11-14T12:00:00Z';
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
  const asRole=async<T>(role:string,fn:(db:typeof opened.db)=>Promise<T>)=>{try{return await opened.db.transaction(async tx=>{await tx.query(`SET LOCAL SESSION AUTHORIZATION ${role}`);return fn(tx);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);opened=await openIsolatedTestDatabase();
-  if(profile<122)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
+  if(profile<123)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
   else await migrate(opened.db);
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
@@ -44,6 +44,16 @@ describe.each([113,116,117,118,119,120,121,122] as const)('reconstruction%s API 
   else if(profile===117){expect(plan.policySha256).toBe('ced17ca1a4fadd3b74959b7f0b0b5a21279f24404eb44e747231751c7c18e9e0');expect(Object.keys((await recordsMigrationInventory(117)).migrations)).toHaveLength(22);}
   else if(profile<120){expect(plan.policySha256).toBe('0b8927e8893dcf7cb1da8e176d3a97765eb97014d3d7d565dcfe3572fb2fb300');expect(Object.keys((await recordsMigrationInventory(profile)).migrations)).toHaveLength(profile-95);const prior=(await recordsMigrationInventory(117)).tableColumns.record_typed_batches,current=(await recordsMigrationInventory(118)).tableColumns.record_typed_batches;expect(current).toEqual([...prior,'csv_snapshot_boundary_at']);if(profile===119)expect((await recordsMigrationInventory(119)).tableColumns).toEqual((await recordsMigrationInventory(118)).tableColumns);}
   else if(profile===120){expect(plan.policySha256).toBe('5f437b9e72480850e1bd1f3cd7b41bd1c1c9df0fb609aa6eb7fd39ee56b6ab4e');expect(Object.keys((await recordsMigrationInventory(120)).migrations)).toHaveLength(25);}
+ });
+ if(profile===123)it('limits order changes to append-only API writes and exact session decisions',async()=>{
+  await asRole(api,db=>db.query('UPDATE record_order_sessions SET state=state WHERE false'));
+  await asRole(api,db=>db.query('INSERT INTO record_order_revisions(proof_id,revision,committed_at,view,content_digest) SELECT proof_id,revision,committed_at,view,content_digest FROM record_order_revisions WHERE false'));
+  for (const table of ['record_order_receipts','record_order_events','record_order_revisions','record_order_decisions']) {
+   await asRole(api,db=>db.query(`SELECT * FROM ${table} WHERE false`));
+   await expect(asRole(api,db=>db.query(`DELETE FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+   await expect(asRole(worker,db=>db.query(`SELECT * FROM ${table} WHERE false`))).rejects.toMatchObject({code:'42501'});
+  }
+  await expect(asRole(api,db=>db.query('UPDATE record_order_sessions SET scope=scope WHERE false'))).rejects.toMatchObject({code:'42501'});
  });
  if(profile===122)it('verifies the replaced backfill scope guard and identical 121 grant policy under both restricted roles',async()=>{
   const {verifyBackfillScopeGuard}=await import('../../infra/backend-release/reconstruction-v8-release-review.mjs');

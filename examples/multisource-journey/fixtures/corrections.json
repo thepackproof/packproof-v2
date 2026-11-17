@@ -1,0 +1,23 @@
+{
+  "kind": "order",
+  "eventId": "order-10482",
+  "version": 2,
+  "occurredAt": "2026-11-17T12:07:00Z",
+  "entityNamespace": "ERP_A",
+  "entityType": "order",
+  "entityId": "SO10482",
+  "lines": [
+    {
+      "lineId": "20",
+      "sku": "A100",
+      "orderedQuantity": 3,
+      "unit": "each"
+    },
+    {
+      "lineId": "30",
+      "sku": "A100",
+      "orderedQuantity": 1,
+      "unit": "each"
+    }
+  ]
+}

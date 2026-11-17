@@ -1,0 +1,64 @@
+{
+  "tenant": "sample-only",
+  "orderId": "SO10482",
+  "warehouseId": "WO771",
+  "secondOrderId": "SO10483",
+  "allocations": [
+    {
+      "lineId": "20",
+      "sku": "A100",
+      "shipmentId": "SHP771",
+      "packageId": "PKG92",
+      "trackingId": "TRACK771",
+      "shippedQuantity": 2
+    },
+    {
+      "lineId": "30",
+      "sku": "A100",
+      "shipmentId": "SHP772",
+      "packageId": "PKG93",
+      "trackingId": "TRACK772",
+      "shippedQuantity": 1
+    }
+  ],
+  "afterOrder": {
+    "proofs": 1,
+    "ordered": 3,
+    "shipped": 0
+  },
+  "afterLabel": {
+    "shipped": 0
+  },
+  "afterDelivery": {
+    "deliveredPackages": 2,
+    "shipped": 3
+  },
+  "afterReplay": {
+    "revisionDelta": 0
+  },
+  "afterCorrection": {
+    "ordered": 4,
+    "shipped": 3,
+    "remaining": 1
+  },
+  "afterEarlyEvidence": {
+    "unresolved": [
+      "PKG94"
+    ]
+  },
+  "afterLateBridge": {
+    "unresolved": []
+  },
+  "afterReturn": {
+    "lineId": "20",
+    "returned": 1
+  },
+  "afterConsolidation": {
+    "separateOrderProofs": 2,
+    "sharedShipmentId": "SHP771"
+  },
+  "otherOwner": {
+    "sharesProof": false
+  },
+  "revisionRule": "Accepted changes affecting a proof advance its revision; identical replay and stale observations do not. Early detached evidence has no effect on that proof until its bridge arrives."
+}

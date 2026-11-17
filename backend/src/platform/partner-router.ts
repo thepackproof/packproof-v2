@@ -7,7 +7,8 @@ import { newId } from '../ids.js';
 import { idempotent } from './idempotency.js';
 import { consumeApiRate } from './tenants.js';
 import { authenticatePartner,reauthorizePartner,authorizePartnerProof,auditOrganization,type PartnerActor,type PartnerScope } from './organizations.js';
-import { importPartnerOrder,resolvePartnerProof,readPartnerProof,requestOperatorCapture,addPartnerBinding } from './partner-proofs.js';
+import {importCloudOrder} from '../records/cloud-order.js';
+import { resolvePartnerProof,readPartnerProof,requestOperatorCapture,addPartnerBinding } from './partner-proofs.js';
 import { listEventStream } from './event-stream.js';
 import { listPartnerProofs } from './proof-pagination.js';
 import { createWebhook,listWebhooks,revokeWebhook,protectWebhookResponse,webhookConfigFromEnv } from './webhooks.js';
@@ -72,7 +73,7 @@ export function createPartnerRouter(deps:AppDependencies){
    res.status(status).json(result);
   }));
  }
- endpoint('post','/proofs','proofs:write',(db,a,r)=>importPartnerOrder(db,deps.clock,a,r.body),201);
+ endpoint('post','/proofs','proofs:write',(db,a,r)=>importCloudOrder(deps,db,a,r.body,(r as PartnerRequest&{orderOriginal?:Buffer}).orderOriginal),201);
  endpoint('get','/proofs/resolve','proofs:read',(db,a,r)=>resolvePartnerProof(db,deps.clock,a,r.query.integrationAccountId,r.query.externalId));
  endpoint('get','/proofs','proofs:read',(db,a,r)=>listPartnerProofs(db,deps.clock,a,r.query.after,process.env.PACKPROOF_EVENT_CURSOR_KEY??''));
  endpoint('get','/proofs/:proofId','proofs:read',(db,a,r)=>readPartnerProof(db,deps.clock,a,r.params.proofId));

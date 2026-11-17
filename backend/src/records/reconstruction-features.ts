@@ -2,6 +2,7 @@ import {DomainError} from '../domain/errors.js';
 
 /** Independent admission/read switches. No new capability is enabled by default. */
 export const RECONSTRUCTION_FLAGS={
+ orderWorkspace:'PACKPROOF_ORDER_WORKSPACE_ENABLED',
  sourceBackfillJobs:'PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED',
  typedIntake:'PACKPROOF_TYPED_INTAKE_ENABLED',
  sourceSubscriptions:'PACKPROOF_SOURCE_SUBSCRIPTIONS_ENABLED',
@@ -21,7 +22,7 @@ export type ReconstructionFeature=keyof typeof RECONSTRUCTION_FLAGS;
 export function reconstructionFeatureEnabled(feature:ReconstructionFeature){return process.env[RECONSTRUCTION_FLAGS[feature]]==='true';}
 // These versions implement the v4 queue, historical jobs and exporter boundaries.
 export function supportsSourceBackfills(version: string | null | undefined) {
- return version === '0.4.0' || version === '0.4.1';
+ return version === '0.4.0' || version === '0.4.1' || version === '0.5.0';
 }
 /** Explicit candidate compatibility; expanding this set requires parity and
  * migration qualification, not a guessed semver range. */

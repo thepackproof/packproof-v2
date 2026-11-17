@@ -71,4 +71,48 @@ describe('fresh typed source setup through the assembled application',()=>{
   const i=await loadInstallation(opened.db,installationId!);await opened.db.query('UPDATE platform_memberships SET revoked_at=$2 WHERE id=$1',[membership.id,clock.now().toISOString()]);const denied=await request(app).post(`/me/records/agent-installations/${i.id}/actions`).query(w.scope).set(human(w.user)).set('Idempotency-Key','revoked-operator-upgrade').send({action:'approve_source_setup',configRevision:i.config_revision,configSha256:i.config_sha256});expect(denied.status,denied.text).toBe(403);expect(denied.body.error?.code??denied.body.code).toBe('OPERATOR_NOT_AUTHORIZED');expect((await loadInstallation(opened.db,i.id)).status).toBe('setup');expect((await opened.db.query('SELECT 1 FROM record_source_subscriptions WHERE installation_id=$1',[i.id])).rows).toEqual([]);
  });
 
+it('approves an exact multi-source scope, links late evidence, and streams immutable revisions',async()=>{
+  vi.stubEnv('PACKPROOF_ORDER_WORKSPACE_ENABLED','true');
+  const w=await workspace(),e=await start(w,'0.5.0'),approval=await approve(w,e,{integrationAccountId:null,createLocalSource:true},'multi-order-test');
+  expect(approval.status,approval.text).toBe(200);
+  const {service}=await redeem(w,e);await acknowledge(e,service);
+  const post=(p:string,b:unknown)=>request(app).post('/v1/partner/agent/'+p).set(service).send(b);
+  const sources=['order','packing','delivery'].map((role,index)=>({id:role,generation:1,folderDigest:String(index+1).repeat(64),roles:[role],profileVersion:'fixture/v1'}));
+  const session=await post('order-workspace/proposals',{sources,history:'existing_and_future',outputDigest:'f'.repeat(64),outputName:'Proofs'});
+  expect(session.status,session.text).toBe(200);const scopeDigest=session.body.scopeDigest;
+  const decision='/me/records/agent-installations/'+approval.body.installationId+'/order-workspace/'+session.body.id+'/decision';
+  const foreign=await workspace();
+  expect((await request(app).post(decision).set(human(foreign.user)).send({...foreign.scope,scopeDigest,decision:'approve'})).status).toBe(404);
+  const approved=await request(app).post(decision).set(human(w.user)).send({...w.scope,scopeDigest,decision:'approve'});
+  expect(approved.status,approved.text).toBe(200);expect(approved.body.state).toBe('active');
+  const order={namespace:'ERP_A',type:'order',id:'SO10482'},pkg={namespace:'PACK',type:'package',id:'PKG92'};
+  const item=(id:string,kind:string,entity:typeof order,references:(typeof order)[],lines:unknown[]=[],version='1')=>({eventId:id,kind,entity,references,fields:{},lines,version,locator:'$.record',occurredAt:'2026-11-17T12:00:00Z'});
+  const send=(sourceId:string,record:ReturnType<typeof item>,observationId=record.eventId+record.version)=>{
+    const bytes=Buffer.from(JSON.stringify(record));
+    return post('order-workspace/observations',{sourceId,generation:1,scopeDigest,profileVersion:'fixture/v1',observationId,fileName:sourceId+'.json',mediaType:'application/json',originalSha256:sha256Hex(bytes),originalBase64:bytes.toString('base64'),records:[record]});
+  };
+  const early=await send('delivery',item('terminal','delivery',{namespace:'POD',type:'event',id:'P1'},[pkg]));
+  expect(early.status,early.text).toBe(200);expect(early.body.state).toBe('pending');
+  const sourceOrder=item('order-created','order',order,[],[{lineId:'20',sku:'A100',orderedQuantity:'2'},{lineId:'30',sku:'A100',orderedQuantity:'1'}]);
+  const first=await send('order',sourceOrder);expect(first.status,first.text).toBe(200);
+  const id=first.body.proofs[0].proofId;expect(first.body.proofs[0].revision).toBe(1);
+  const packed=await send('packing',item('packed','packing',pkg,[order],[{lineId:'20',shippedQuantity:'2'}]));
+  expect(packed.status,packed.text).toBe(200);expect(packed.body.proofs).toEqual([{proofId:id,revision:2}]);
+  const revision=await send('order',{...sourceOrder,version:'2',lines:[{lineId:'20',orderedQuantity:'3'}]});
+  expect(revision.status,revision.text).toBe(200);expect(revision.body.proofs[0].revision).toBe(3);
+  expect((await send('order',sourceOrder)).body.proofs[0].revision).toBe(3);
+  const detail=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/3').set(service);
+  expect(detail.status,detail.text).toBe(200);expect(detail.body.events).toHaveLength(3);
+  expect(detail.body.lines).toEqual([{lineId:'20',sku:'A100',orderedQuantity:'3',shippedQuantity:'2'},{lineId:'30',sku:'A100',orderedQuantity:'1'}]);
+  const humanRead=await request(app).get('/me/records/order-proofs/'+id).query(w.scope).set(human(w.user));
+  expect(humanRead.body).toEqual(detail.body);
+  const other=await request(app).get('/me/records/order-proofs/'+id).query(foreign.scope).set(human(foreign.user));
+  expect(other.status).toBe(404);
+  expect((await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/1').set(service)).body.events).toHaveLength(1);
+  const feed=await post('order-changes',{after:0,limit:10});expect(feed.status,feed.text).toBe(200);
+  expect(feed.body.changes.map((v:{revision:number})=>v.revision)).toEqual([1,2,3]);
+  const list=await request(app).get('/me/records/order-proofs').query(w.scope).set(human(w.user));expect(list.status,list.text).toBe(200);
+  expect(list.body.orders[0].proofId).toBe(id);expect(list.body.cursor).toBe(feed.body.nextCursor);
+  expect((await post('order-changes',{after:list.body.cursor,limit:10})).body.changes).toEqual([]);
+ },90000);
 });

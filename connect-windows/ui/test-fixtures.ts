@@ -7,6 +7,20 @@ export function bridgeFor(
 ): ConnectBridge {
   const result = async () => current;
   return {
+    confirmWorkspaceOrderMap: vi.fn(result),
+    workspaceDraftPreview: vi.fn(async()=>({examples:[],scannedFiles:0,unreadFiles:0,unresolved:0,limited:false})),
+    workspaceOrderDetail: vi.fn(async () => ({proofId:'proof-test',revision:1,orderReference:'Test',lines:[],events:[],evidence:[]})),
+    chooseWorkspaceFolder: vi.fn(result),
+    reuseWorkspaceFolder: vi.fn(result),
+    removeWorkspaceRole: vi.fn(result),
+    inspectWorkspaceSource: vi.fn(result),
+    saveWorkspaceStep: vi.fn(result),
+    chooseWorkspaceOutput: vi.fn(result),
+    activateWorkspace: vi.fn(result),
+    pauseWorkspaceSource: vi.fn(result),
+    resumeWorkspaceSource: vi.fn(result),
+    openWorkspaceApproval: vi.fn(async () => undefined),
+    openWorkspaceOutput: vi.fn(async () => undefined),
     chooseBackfillFiles: vi.fn(result),
     proposeBackfill: vi.fn(result),
     pauseBackfill: vi.fn(result),

@@ -28,7 +28,7 @@ export interface ScheduledCsvSourceContract {
   backfillFrom: string;
 }
 export function interpretationAvailable(version?: string) {
-  return (version === undefined || version === '0.4.1') &&
+  return (version === undefined || version === '0.4.1' || version === '0.5.0') &&
     process.env.PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED === 'true' &&
     process.env.PACKPROOF_SHIPMENT_WORKER_INTERPRETATION === CSV_RULES.interpretation.version;
 }
@@ -175,6 +175,9 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
   }
   // A separately approved versioned source grant is necessary for typed routes.
   // Scope strings and issuing a replacement credential cannot confer it.
+  const orderWorkspaceRoute = method==='GET' && (path==='/agent/order-workspace' || path==='/agent/order-proofs' || path==='/agent/order-attention' || /^\/agent\/order-proofs\/[A-Za-z0-9_-]+\/revisions\/[0-9]+(?:\/artifacts\/[A-Za-z0-9_-]+)?$/.test(path))
+    || method==='POST' && ['/agent/order-workspace/proposals','/agent/order-workspace/observations','/agent/order-changes'].includes(path);
+  if(orderWorkspaceRoute && reconstructionFeatureEnabled('orderWorkspace'))return; // Domain checks exact current installation scope.
   const sourceCapabilities=method==='GET'&&path==='/source-profiles';
   if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
   const backfillRoute=(method==='GET'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+$/.test(path)))||(method==='POST'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills\/proposals$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+\/items\/[A-Za-z0-9_-]+\/bind$/.test(path)));

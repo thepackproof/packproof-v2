@@ -1,0 +1,11 @@
+{
+  "kind": "packing",
+  "eventId": "bridge-94",
+  "version": 1,
+  "occurredAt": "2026-11-17T12:09:00Z",
+  "entityNamespace": "PACK_A",
+  "entityType": "package",
+  "entityId": "PKG94",
+  "shipmentNamespace": "SHIP_A",
+  "shipmentId": "SHP771"
+}

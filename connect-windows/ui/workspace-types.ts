@@ -1,0 +1,83 @@
+import type { ConnectStatus } from "./types";
+
+export const sourceRoles = ["order", "picking", "packing", "shipping", "evidence", "handoff", "delivery", "returns"] as const;
+export type SourceRole = (typeof sourceRoles)[number];
+export const setupSteps = [...sourceRoles, "review", "output", "activate", "overview"] as const;
+export type WorkspaceStep = (typeof setupSteps)[number];
+
+export interface WorkspaceSource {
+  id: string;
+  folder: string;
+  roles: SourceRole[];
+  generation: number;
+  state: string;
+  recognition: {
+    state: string;
+    message: string;
+    fields?: string[];
+    sample?: Record<string, string>;
+    question?: string;
+    suggestedOrderColumn?: string;
+    profileVersion?: string;
+  };
+}
+
+export interface OrderSummary {
+  proofId: string;
+  revision: number;
+  orderReference: string;
+}
+export interface OrderDetail extends OrderSummary {
+  lines: Record<string,unknown>[];
+  events: Record<string,unknown>[];
+  evidence: Record<string,unknown>[];
+  packages?: Record<string,unknown>[];
+  conflicts?: string[];
+}
+export interface WorkspaceStatus {
+  orders?: OrderSummary[];
+  syncState?: string;
+  attention?: string | null;
+  expiresAt?: string | null;
+  step: WorkspaceStep;
+  phase: "draft" | "awaiting_approval" | "active";
+  sources: WorkspaceSource[];
+  outputFolder?: string | null;
+  outputState?: "ready" | "unavailable" | "denied" | "unselected";
+  approvalPath?: string | null;
+}
+
+export interface ProofOutput {
+  folder?: string | null;
+  state: "not_configured" | "ready" | "pending" | "current" | "access_denied" | "unavailable";
+  errorCode?: string | null;
+  pending: number;
+  completedRevision?: number | null;
+}
+
+export interface DraftPreview {
+  examples: {
+    orderReference: string; source: string;
+    lines: {lineId:string;sku:string;quantity:string;unit:string}[];
+    packages: string[];
+    events: {kind:string; source:string; fileName:string; occurredAt:string; shared:boolean}[];
+  }[];
+  scannedFiles: number; unreadFiles: number; unresolved: number; limited: boolean;
+}
+export interface WorkspaceBridge {
+  confirmWorkspaceOrderMap(sourceId:string, expectedGeneration:number, profileVersion:string):Promise<ConnectStatus>;
+  workspaceDraftPreview(): Promise<DraftPreview>;
+  workspaceOrderDetail(proofId: string, revision: number): Promise<OrderDetail>;
+  chooseWorkspaceFolder(role: SourceRole): Promise<ConnectStatus>;
+  reuseWorkspaceFolder(sourceId: string, role: SourceRole): Promise<ConnectStatus>;
+  removeWorkspaceRole(sourceId: string, role: SourceRole): Promise<ConnectStatus>;
+  inspectWorkspaceSource(sourceId: string): Promise<ConnectStatus>;
+  saveWorkspaceStep(step: WorkspaceStep): Promise<ConnectStatus>;
+  chooseWorkspaceOutput(): Promise<ConnectStatus>;
+  activateWorkspace(allowPendingOutput?: true): Promise<ConnectStatus>;
+  pauseWorkspaceSource(sourceId: string): Promise<ConnectStatus>;
+  resumeWorkspaceSource(sourceId: string): Promise<ConnectStatus>;
+  openWorkspaceApproval(): Promise<void>;
+  openWorkspaceOutput(): Promise<void>;
+}
+

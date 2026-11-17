@@ -3,14 +3,16 @@ import type { PackProofApi } from '../api/client';
 import { displayState, recordsPath } from './model';
 import type { RecordOrganization } from './types';
 import { workflowError } from './workflow';
+import { RemoveOrderLink } from './OrderReferenceReview';
 
 interface OrderSummary { proofId: string; revision: number; orderReference: string; updatedAt: string }
 interface OrderLine { lineId: string; sku?: string; orderedQuantity?: string; pickedQuantity?: string; packedQuantity?: string; shippedQuantity?: string }
-interface OrderEvent { kind: string; occurredAt?: string; sourceId: string; locator?: string; fields: Record<string, unknown> }
+interface OrderEvent { eventKey?: string; kind: string; occurredAt?: string; sourceId: string; fileName?: string; locator?: string; entity?: {type:string;id:string}; fields: Record<string, unknown> }
 interface OrderDetail extends OrderSummary {
   lines: OrderLine[];
   events: OrderEvent[];
-  evidence: { name?: string; locator?: string; sourceId?: string; sha256?: string; originalContentHash?: string }[];
+  evidence: { fileName?: string; kind?: string; locator?: string; sourceId?: string }[];
+  conflicts?: string[];
 }
 interface Snapshot { orders: OrderSummary[]; cursor: number }
 interface Changes { changes: { sequence: number; proofId: string; revision: number }[]; nextCursor: number; hasMore: boolean }
@@ -64,8 +66,9 @@ function useOrderView(api: PackProofApi, scope: string, search: string, id: stri
   return { view, error };
 }
 
-function OrderContents({ order }: { order: OrderDetail }) {
+function OrderContents({ order, api, scope, canManage, refresh }: { order: OrderDetail; api: PackProofApi; scope: string; canManage: boolean; refresh: () => void }) {
   return <>
+    {!!order.conflicts?.length && <div className="records-notice warning"><div><strong>Source reports disagree</strong><ul>{order.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div></div>}
     <section className="records-panel"><h2>Items</h2>
       {!order.lines.length ? <p>Waiting for line items.</p> : <ul>{order.lines.map(line => <li key={line.lineId}>
         <strong>{line.sku ?? 'Item'}</strong> · Line {line.lineId}
@@ -78,14 +81,17 @@ function OrderContents({ order }: { order: OrderDetail }) {
     <section className="records-panel"><h2>Order timeline</h2>
       {!order.events.length ? <p>Waiting for source reports.</p> : <ol>{order.events.map((event, index) => <li key={index}>
         <strong>{displayState(event.kind)}</strong> · {event.occurredAt ? new Date(event.occurredAt).toLocaleString() : 'Time not reported'}
+        {event.fileName && <p>{event.fileName}</p>}
+        {event.entity && <p>{displayState(event.entity.type)} {event.entity.id}</p>}
         <details><summary>Source details</summary><p>{event.sourceId} {event.locator}</p>
           <dl className="records-facts">{Object.entries(event.fields ?? {}).filter(([, value]) => typeof value === 'string' || typeof value === 'number')
             .map(([field, value]) => <div key={field}><dt>{displayState(field.replace(/([a-z])([A-Z])/g, '$1 $2'))}</dt><dd>{String(value)}</dd></div>)}</dl>
         </details>
+        {canManage && event.eventKey && event.kind !== 'order' && <RemoveOrderLink api={api} scope={scope} proofId={order.proofId} revision={order.revision} eventKey={event.eventKey} onSaved={refresh}/>}
       </li>)}</ol>}
     </section>
     <section className="records-panel"><h2>Evidence</h2>
-      {order.evidence.length ? <ul>{order.evidence.map((item, index) => <li key={index}>{item.name || item.locator || 'Source excerpt'}</li>)}</ul> : <p>No evidence files in this revision.</p>}
+      {order.evidence.length ? <ul>{order.evidence.map((item, index) => <li key={index}>{item.fileName || 'Source report'}{item.kind === 'derived_excerpt' && ' · Excerpt'}{item.locator && <small> · {item.locator}</small>}</li>)}</ul> : <p>No evidence files in this revision.</p>}
       <details><summary>Revision details</summary><p>Revision {order.revision} · {order.proofId}</p></details>
     </section>
   </>;
@@ -108,7 +114,7 @@ export function OrderProofs({ api, organization, locationId, id, revision }: {
     </form>}
     {error ? <div role="alert"><p>{error}</p><button className="records-button secondary" onClick={() => setRetry(n => n + 1)}>Try again</button></div>
       : !view ? <p role="status">Checking order records…</p>
-      : view.detail ? <OrderContents order={view.detail}/> : <section className="records-panel"><h2>{search ? 'Search results' : 'Recently updated orders'}</h2>
+      : view.detail ? <OrderContents order={view.detail} api={api} scope={params.toString()} canManage={['ADMIN','OWNER'].includes(organization.role)} refresh={() => setRetry(n => n+1)}/> : <section className="records-panel"><h2>{search ? 'Search results' : 'Recently updated orders'}</h2>
         {!view.rows.length ? <p>{search ? 'No order matches this number.' : 'Waiting for the first order.'}</p> :
           <ul>{view.rows.map(row => <li key={row.proofId}><a href={recordsPath('order-proofs', params, {}, row.proofId)}>{row.orderReference}</a> · {new Date(row.updatedAt).toLocaleString()}</li>)}</ul>}
       </section>}

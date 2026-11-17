@@ -65,6 +65,16 @@ jobs:
       - run: npm run publish:native
       - run: npm run package:win
       - run: npm run verify:artifacts
+      - name: Verify screens from this signed packaged application
+        timeout-minutes: 8
+        run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs --packaged-workspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-connect-workspace-walkthrough-${{ inputs.channel }}-${{ github.sha }}
+          path: |
+            connect-windows/build/workspace-layout.json
+            connect-windows/build/workspace-screens/*.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: packproof-connect-${{ inputs.channel }}-win32-x64-${{ github.sha }}

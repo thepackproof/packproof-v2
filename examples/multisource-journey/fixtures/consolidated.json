@@ -1,0 +1,15 @@
+{
+  "kind": "handoff",
+  "eventId": "handoff-second",
+  "version": 1,
+  "occurredAt": "2026-11-17T12:08:00Z",
+  "entityNamespace": "SHIP_A",
+  "entityType": "shipment",
+  "entityId": "SHP771",
+  "orderNamespace": "ERP_A",
+  "orderId": "SO10483",
+  "lineId": "10",
+  "sku": "B200",
+  "shippedQuantity": 1,
+  "unit": "each"
+}

@@ -18,7 +18,53 @@ async function mutate(operation:string,payload?:unknown){await bridge.request(op
 function safeError(error:unknown){const message=error instanceof Error?error.message:'';return message&&!/Bearer\s|pp_org_|(?:token|secret|credential)\s*[:=]\s*\S+|[A-Z]:\\|\/workspace\//i.test(message)?message.slice(0,400):'PackProof could not complete this action. Your pending work is preserved. Open diagnostics for the next step.';}
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);return {ok:true,value:await fn(...parsed)};}catch(error){return {ok:false,error:safeError(error)};}});}
+async function openWorkspaceApproval(current:ConnectStatus) {
+ const path = current.workspace?.approvalPath;
+ if (!path || current.workspace?.phase !== 'awaiting_approval')
+   throw Error('Review your selected sources and start collecting to request permission.');
+ await open(approvalUrl(path, config.webBaseUrl));
+}
 function setup(){
+ bind('confirmWorkspaceOrderMap',(sourceId,expectedGeneration,profileVersion)=>mutate('confirmWorkspaceOrderMap',{sourceId,expectedGeneration,profileVersion}));
+ bind('workspaceDraftPreview',async()=>rendererSafe(await bridge.request('workspaceDraftPreview')));
+ bind('workspaceOrderDetail', async (proofId,revision) => rendererSafe(await bridge.request('workspaceOrderDetail', {proofId,revision})));
+ bind('chooseWorkspaceFolder', async role => {
+  const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', properties:['openDirectory','dontAddToRecent'] });
+  if (result.canceled || result.filePaths.length !== 1) return status();
+  return mutate('addWorkspaceSource', {role, folder:result.filePaths[0]});
+ });
+ bind('reuseWorkspaceFolder', async (sourceId,role) => {
+  const source = (await status()).workspace?.sources.find(item => item.id === sourceId);
+  if (!source) throw Error('This location has changed. Choose a records folder again.');
+  return mutate('addWorkspaceSource', {role, folder:source.folder});
+ });
+ bind('saveWorkspaceStep', step => mutate('saveWorkspaceStep', {step}));
+ bind('removeWorkspaceRole', (sourceId,role) => mutate('removeWorkspaceRole', {sourceId,role}));
+ for (const method of ['inspectWorkspaceSource','pauseWorkspaceSource','resumeWorkspaceSource'] as const)
+   bind(method, sourceId => mutate(method, {sourceId}));
+ bind('chooseWorkspaceOutput', async () => {
+  const result = await dialog.showOpenDialog(win!, { title:'Where should PackProof save your proofs?', properties:['openDirectory','createDirectory','dontAddToRecent'] });
+  if (result.canceled || result.filePaths.length !== 1) return status();
+  return mutate('setWorkspaceOutput', {folder:result.filePaths[0]});
+ });
+ bind('activateWorkspace', async (pending?:true) => {
+  const current = await mutate('activateWorkspace', pending ? {allowPendingOutput:true} : {});
+  if (!current.installationId && current.enrollment?.state === 'pending') {
+   try { await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl)); }
+   catch { return {...current,authorizationNotice:'Open the browser review to connect this computer.'}; }
+  } else if (current.workspace?.phase === 'awaiting_approval' && current.workspace.approvalPath) {
+   try { await openWorkspaceApproval(current); }
+   catch { return {...current, authorizationNotice:'Your request was saved. Select Open browser review to continue.'}; }
+  }
+  return current;
+ });
+ bind('openWorkspaceApproval', async () => openWorkspaceApproval(await status()));
+ bind('openWorkspaceOutput', async () => {
+  const current = await status();
+  const folder = current.proofOutput?.folder || current.workspace?.outputFolder;
+  if (!folder || !(await stat(folder)).isDirectory()) throw Error('Your proof folder is unavailable. Reconnect the drive or choose a folder in Settings.');
+  if (await shell.openPath(folder)) throw Error('Windows could not open your proof folder. Check the drive or folder permissions.');
+ });
  bind('chooseBackfillFiles',async input=>{
   const current=await status(),source=current.sourceSubscriptions?.find(source=>source.id===input.id);
   if(current.capabilities?.sourceBackfillJobs!==true||source?.backfillAvailable!==true||!source.folder||source.state!=='active'||source.localPaused)throw Error('Refresh and resume the current approved source before inspecting historical reports.');
@@ -58,7 +104,7 @@ function setup(){
  bind('openSubscriptionCase',async id=>open(new URL(verifiedDetailPath(await mutate('refresh'),id),config.webBaseUrl).href));
  // A failed policy refresh does not erase the saved local review or canonical
  // receipt. The service's timestamped observation owns current remote readiness.
- bind('getStatus',async()=>{try{await bridge.request('refresh');}catch{/* Return preserved local state with the service's failed transport observation. */}return status();});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown;transport?:unknown;versions?:unknown};return {...await status(),checks:result.checks,transport:result.transport,versions:result.versions};});
+ bind('getStatus',async()=>{try{await bridge.request('refresh');}catch{/* Return preserved local state with the service's failed transport observation. */}return status();});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');try{await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));}catch{return {...value,authorizationNotice:'Your sign-in request was saved. Open the browser review to continue.'};}return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown;transport?:unknown;versions?:unknown};return {...await status(),checks:result.checks,transport:result.transport,versions:result.versions};});
  for(const [method,operation] of Object.entries({pollEnrollment:'pollEnrollment',verifyImport:'verify',proposeActivation:'proposeActivation',activate:'activate',pause:'pause',resume:'resume',refresh:'refresh'}))bind(method as Method,()=>mutate(operation));
  bind('chooseFolder',async()=>{
   const prepared=preparedExportPath(config.channel,process.env.ProgramData);

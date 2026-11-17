@@ -7,7 +7,7 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.4.1";
+    internal const string InstalledVersion="0.5.0";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
     private readonly Func<ISourceAdapter> sourceAdapterFactory=()=>new LocalNtfsSourceAdapter();
@@ -21,14 +21,14 @@ public sealed partial class AgentRuntime : IDisposable
             var serviceSid = (SecurityIdentifier)new NTAccount($"NT SERVICE\\{host.ServiceName}").Translate(typeof(SecurityIdentifier));
             if (WindowsIdentity.GetCurrent().Groups?.Contains(serviceSid) != true) throw new ConnectException("SERVICE_IDENTITY_INVALID", "The collector must receive its dedicated service SID. Ask IT to repair the installed service identity before accessing protected work.");
             ProtectedAncestry.Assert(host.DataRoot, Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), serviceSid.Value);
-            store.Initialize();state=store.Read<LocalState>("state.bin")??new();SourceStateMigration.Validate(state);var previousStateVersion=state.StateVersion;queue=new(store);SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state);localInitialized=true;
+            store.Initialize();state=store.Read<LocalState>("state.bin")??new();SourceStateMigration.Validate(state);var previousStateVersion=state.StateVersion;queue=new(store);SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state);MigrateExistingWorkspace();localInitialized=true;
         }
         catch(ConnectException error){startupError=error;state=new(){LastErrorCode=error.Code};}
         catch(Microsoft.Data.Sqlite.SqliteException){startupError=new("LOCAL_QUEUE_UNAVAILABLE","The retained queue cannot be opened safely. Preserve its database, journal and protected keys and contact support; the service will not replace it with an empty queue.");state=new(){LastErrorCode=startupError.Code};}
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
-    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store); api = transport; var previousStateVersion=state.StateVersion;SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state); localInitialized=true; }
+    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store); api = transport; var previousStateVersion=state.StateVersion;SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state); MigrateExistingWorkspace(); localInitialized=true; }
     private void Save() { SourceStateMigration.SynchronizeLegacy(state); store.Write("state.bin", state); }
     // Constructor-owned local admission only. Installer attestation must never
     // wait for the command gate held by authenticated cloud work or enumerate
@@ -104,7 +104,7 @@ public sealed partial class AgentRuntime : IDisposable
         var verified = state.VerifiedRecordId is not null && MappingUnderstood && ConfigMatches && state.SetupQueueId is not null && queue.Find(state.SetupQueueId)?.Digest == state.FileDigest;
         var currentCollectionPolicy = CollectionPolicy.IsWithinApprovedWindow(DateTimeOffset.UtcNow, state.LastPolicyCheckAt, state.CredentialExpiresAt, Approved?.GetProperty("offlineWindowHours").GetDouble() ?? 24, networkOnline);
         var display = Approved is not null && !MappingSupported ? "needs_review" : ServerState == "active" && !state.LocalPaused && !currentCollectionPolicy ? "action_needed" : (ServerState == "paused" || (ServerState == "active" && state.LocalPaused)) ? "paused" : state.Token is null ? "needs_approval" : state.Folder is null ? "source_selected" : !ConfigMatches ? "needs_approval" : verified ? ServerState == "active" && !state.LocalPaused ? "active" : "ready_to_activate" : preview is null ? "source_selected" : preview.Value.GetProperty("state").GetString() == "previewed" ? "preview_ready" : "verification_pending";
-        return new { state = display, installationId = state.InstallationId, environment = host.Environment, configRevision = ConfigRevision, analysis = state.LocalAnalysis, setup = new { running = state.GuidedSetup, phase = state.GuidedPhase }, capabilities = StatusCapabilities(), transport = state.Transport, versions = Versions(), sourceSubscriptions=SubscriptionViews(), subscriptionDraft=SubscriptionDraftView(), source, enrollment = state.EnrollmentId is null ? null : new { id = state.EnrollmentId, comparisonCode = state.ComparisonCode, expiresAt = state.EnrollmentExpiresAt, approvalPath = state.Token is null ? reviewPath : null, state = state.EnrollmentState }, installedVersion = InstalledVersion, recoveryAvailable = RecoveryAvailable, pendingProposal = Optional(state.ServerConfig,"pendingProposal"), config = Approved, binding = state.ServerConfig is null ? null : new { integrationAccountId = state.ServerConfig.Value.GetProperty("integrationAccountId"), operatorMembershipId = state.ServerConfig.Value.GetProperty("operatorMembershipId"), sourceName = state.ServerConfig.Value.GetProperty("sourceName"), organizationId = Optional(state.ServerConfig,"organizationId"), organizationName = Optional(state.ServerConfig,"organizationName"), locationId = Optional(state.ServerConfig,"locationId") }, preview = preview is null ? null : PreviewView(preview.Value), verification = new { complete = verified, recordId = verified ? state.VerifiedRecordId : null, recordUrl = verified ? $"{host.WebOrigin.TrimEnd('/')}/app/records/{Uri.EscapeDataString(state.VerifiedRecordId!)}" : null, configRevision = ConfigRevision, fileSha256 = state.FileDigest }, health = new { serviceOnline = true, skippedExistingFileCount = Math.Max(0,(state.ExcludedFileNames?.Length ?? 0)-1), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = Optional(Optional(state.ServerConfig,"health"),"lastCompletedImportAt"), lastReceiptReconciledAt = state.LastReceiptReconciledAt, quarantinedFileCount = CurrentCounts().Where(p=>p.Key is "action_needed" or "partial").Sum(p=>p.Value), queueCount = CurrentPendingCount(), preservedQueueCount = PreservedQueueCount(), orphanedPayloadCount = queue.OrphanCount, lastErrorCode = state.LastErrorCode ?? (Approved is not null && !MappingSupported ? "MAPPING_NEEDS_REVIEW" : null), sourceFreshness = Optional(Optional(state.ServerConfig,"health"),"sourceFreshness"), sourceWatermarkAt = Optional(Optional(state.ServerConfig,"health"),"sourceWatermarkAt"), expectedIntervalSeconds = Optional(Optional(state.ServerConfig,"health"),"expectedIntervalSeconds"), sourceAccounting = Optional(Optional(state.ServerConfig,"health"),"sourceAccounting") }, approvalPath = reviewPath };
+        return new { state = display, workspace = WorkspaceView(), proofOutput = ReadProofOutput(), installationId = state.InstallationId, environment = host.Environment, configRevision = ConfigRevision, analysis = state.LocalAnalysis, setup = new { running = state.GuidedSetup, phase = state.GuidedPhase }, capabilities = StatusCapabilities(), transport = state.Transport, versions = Versions(), sourceSubscriptions=SubscriptionViews(), subscriptionDraft=SubscriptionDraftView(), source, enrollment = state.EnrollmentId is null ? null : new { id = state.EnrollmentId, comparisonCode = state.ComparisonCode, expiresAt = state.EnrollmentExpiresAt, approvalPath = state.Token is null ? reviewPath : null, state = state.EnrollmentState }, installedVersion = InstalledVersion, recoveryAvailable = RecoveryAvailable, pendingProposal = Optional(state.ServerConfig,"pendingProposal"), config = Approved, binding = state.ServerConfig is null ? null : new { integrationAccountId = state.ServerConfig.Value.GetProperty("integrationAccountId"), operatorMembershipId = state.ServerConfig.Value.GetProperty("operatorMembershipId"), sourceName = state.ServerConfig.Value.GetProperty("sourceName"), organizationId = Optional(state.ServerConfig,"organizationId"), organizationName = Optional(state.ServerConfig,"organizationName"), locationId = Optional(state.ServerConfig,"locationId") }, preview = preview is null ? null : PreviewView(preview.Value), verification = new { complete = verified, recordId = verified ? state.VerifiedRecordId : null, recordUrl = verified ? $"{host.WebOrigin.TrimEnd('/')}/app/records/{Uri.EscapeDataString(state.VerifiedRecordId!)}" : null, configRevision = ConfigRevision, fileSha256 = state.FileDigest }, health = new { serviceOnline = true, skippedExistingFileCount = Math.Max(0,(state.ExcludedFileNames?.Length ?? 0)-1), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastCompletedImportAt = Optional(Optional(state.ServerConfig,"health"),"lastCompletedImportAt"), lastReceiptReconciledAt = state.LastReceiptReconciledAt, quarantinedFileCount = CurrentCounts().Where(p=>p.Key is "action_needed" or "partial").Sum(p=>p.Value), queueCount = CurrentPendingCount(), preservedQueueCount = PreservedQueueCount(), orphanedPayloadCount = queue.OrphanCount, lastErrorCode = state.LastErrorCode ?? (Approved is not null && !MappingSupported ? "MAPPING_NEEDS_REVIEW" : null), sourceFreshness = Optional(Optional(state.ServerConfig,"health"),"sourceFreshness"), sourceWatermarkAt = Optional(Optional(state.ServerConfig,"health"),"sourceWatermarkAt"), expectedIntervalSeconds = Optional(Optional(state.ServerConfig,"health"),"expectedIntervalSeconds"), sourceAccounting = Optional(Optional(state.ServerConfig,"health"),"sourceAccounting") }, approvalPath = reviewPath };
     }
     private static object PreviewView(JsonElement receipt)
     {
@@ -126,6 +126,13 @@ public sealed partial class AgentRuntime : IDisposable
                 case "inspectBackfill":case "proposeBackfill":case "pauseBackfill":case "resumeBackfill":case "refreshBackfills":await BackfillCommand(command,p,ct);break;
                 case "beginSubscriptionSource": case "inspectSubscriptionDraft": case "proposeSubscription": await TypedDraftCommand(command,p,ct); break;
                 case "selectSubscriptionSource": case "inspectSubscriptionFile": case "previewSubscription": case "commitSubscription": case "verifySubscription": case "pauseSubscription": case "resumeSubscription": await TypedCommand(command,p,ct); break;
+                case "workspaceAttention": return await WorkspaceAttention(ct);
+                case "workspaceSearchOrders": return await WorkspaceSearchOrders(p,ct);
+                case "workspaceDraftPreview": return WorkspaceDraftPreview(ct);
+                case "workspaceOrderDetail": return await WorkspaceOrderDetail(p,ct);
+                case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
+                case "setWorkspaceOutput": case "activateWorkspace": case "pauseWorkspaceSource": case "resumeWorkspaceSource":
+                    await WorkspaceCommand(command,p,ct); break;
                 case "status": return Status();
                 case "preflight": return await Preflight(ct);
                 case "beginEnrollment": await BeginEnrollment(ct); break;
@@ -144,7 +151,7 @@ public sealed partial class AgentRuntime : IDisposable
                 case "pollEnrollment": await PollEnrollment(ct); break;
                 case "selectFolder":
                     {
-                        var folder = FolderSource.Validate(p.GetProperty("folder").GetString() ?? ""); if (folder != state.Folder) { state.Folder = folder; state.FolderDigest = Hash(folder.ToUpperInvariant()); state.FileName = null; state.FileDigest = null; state.ScanCursorFileName = null; state.SetupQueueId = null; state.VerifiedRecordId = null; state.LocalPaused = true; localPreview = null; InvalidateAnalysis(); }
+                        var folder = FolderSource.Validate(p.GetProperty("folder").GetString() ?? ""); ValidateProofSourceFolder(folder); if (folder != state.Folder) { state.Folder = folder; state.FolderDigest = Hash(folder.ToUpperInvariant()); state.FileName = null; state.FileDigest = null; state.ScanCursorFileName = null; state.SetupQueueId = null; state.VerifiedRecordId = null; state.LocalPaused = true; localPreview = null; InvalidateAnalysis(); }
                         break;
                     }
                 case "localPreview":
@@ -331,7 +338,21 @@ public sealed partial class AgentRuntime : IDisposable
     {
         await gate.WaitAsync(ct); try
         {
-            if (startupError is not null || checkpointed || state.Token is null) return;
+            if (startupError is not null || checkpointed) return;
+            if (state.Token is null)
+            {
+                if (state.Workspace?.ContinueAfterEnrollment == true)
+                {
+                    await PollEnrollment(ct);
+                    if (state.EnrollmentState is "denied" or "expired")
+                    {
+                        state.Workspace.ContinueAfterEnrollment = false;
+                        state.Workspace.Attention = "Computer approval expired or was declined. Start collecting to request a new review.";
+                        Save();
+                    }
+                }
+                if (state.Token is null) return;
+            }
             if (DateTimeOffset.UtcNow - lastCleanup >= TimeSpan.FromMinutes(1)) { queue.CompactCompleted(DateTimeOffset.UtcNow); lastCleanup = DateTimeOffset.UtcNow; }
             if(state.PendingToken is not null||state.RenewalKey is not null){
                 if(state.NextRenewalAttemptAt>DateTimeOffset.UtcNow)return;
@@ -340,6 +361,14 @@ public sealed partial class AgentRuntime : IDisposable
                 return;
             }
             if (DateTimeOffset.UtcNow - lastRefresh >= TimeSpan.FromSeconds(60)) { try { await Refresh(ct); } catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException) { networkOnline = false; lastRefresh = DateTimeOffset.UtcNow; state.LastErrorCode = e is ApiException a ? a.Code : "NETWORK_UNAVAILABLE"; if (e is ApiException authority && authority.Status is 401 or 403) { state.LocalPaused = true; Save(); return; } } }
+            if (state.Workspace is { ContinueAfterEnrollment:true } pending && CurrentInstallation)
+            {
+                // A network failure can be retried with the same exact scope.
+                await ProposeWorkspace(pending, pending.AllowPendingOutput, ct);
+                pending.ContinueAfterEnrollment = false; Save();
+            }
+            await TickWorkspace(ct);
+            if (WorkspaceAllowsProofOutput) await TickProofOutput(ct);
             var next = queue.NextDue(SourceSubscriptionState.LegacyId,Generation,QueueConfigIdentity,DateTimeOffset.UtcNow,receiptsOnly:!MappingSupported);
             if (next is not null && networkOnline && !checkpointed && !state.LocalPaused && ServerState == "active") await Process(next, ct);
             // Setup accepted work can be polled while automatic reads remain disabled.
@@ -348,7 +377,7 @@ public sealed partial class AgentRuntime : IDisposable
             if (state.CredentialExpiresAt - DateTimeOffset.UtcNow < TimeSpan.FromDays(7)) { if (networkOnline) { if(typedSourceSubscriptions)state.LastScheduledSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledSourceId,ReconcileSubscriptionBeforeRenewal,ct,includePaused:true); await Renew(ct); } return; }
             if (typedSourceSubscriptions) { state.LastScheduledSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledSourceId,CollectSubscription,ct,includePaused:true); Save(); }
             if(typedSourceSubscriptions&&BackfillAdvertised&&networkOnline){state.LastScheduledBackfillSourceId=await SourceScheduler.Run(state.SourceSubscriptions,state.LastScheduledBackfillSourceId,CollectBackfillSource,ct,includePaused:true,budget:1);Save();}
-            if (!MayCollect(DateTimeOffset.UtcNow) || DateTimeOffset.UtcNow - lastScan < TimeSpan.FromSeconds(30) || CurrentCounts().Any(p=>p.Value>0&&p.Key is "preview_pending" or "commit_pending" or "server_processing")) return;
+            if (WorkspaceTookOver(SourceSubscriptionState.LegacyId) || !MayCollect(DateTimeOffset.UtcNow) || DateTimeOffset.UtcNow - lastScan < TimeSpan.FromSeconds(30) || CurrentCounts().Any(p=>p.Value>0&&p.Key is "preview_pending" or "commit_pending" or "server_processing")) return;
             if (state.Folder is null) return; lastScan = DateTimeOffset.UtcNow; _ = FolderSource.Inventory(state.Folder); state.LastScanAt = DateTimeOffset.UtcNow;
             var knownEntries = queue.Entries().Select(x => x.Id).ToHashSet();
             foreach (var path in FolderSource.ScanBatch(Directory.EnumerateFiles(state.Folder, "*.csv", SearchOption.TopDirectoryOnly),state.ScanCursorFileName))
@@ -388,6 +417,6 @@ public sealed partial class AgentRuntime : IDisposable
     public void Dispose()
     {
         try { if (startupError is null) queue?.Checkpoint(); }
-        finally { queue?.Dispose(); api.Dispose(); gate.Dispose(); }
+        finally { StopWorkspaceWatchers(); queue?.Dispose(); api.Dispose(); gate.Dispose(); }
     }
 }

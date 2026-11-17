@@ -1,10 +1,10 @@
 name: Connect Windows candidate
 on:
   pull_request:
-    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   push:
     branches: [main]
-    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.403'
+      - run: node ../examples/multisource-journey/journey.mjs self-check
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -41,6 +42,25 @@ jobs:
       - run: node --test tests/hosted-approval.test.mjs
       - run: node scripts/verify-hosted-approval.mjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
+        env:
+          PACKPROOF_JOURNEY_RECEIPT: ${{ github.workspace }}/connect-windows/build/order-journey-receipts.json
+      - name: Verify controlled Windows reader receipts with the backend order projection
+        working-directory: backend
+        env:
+          PACKPROOF_JOURNEY_PROJECTED: ${{ github.workspace }}/connect-windows/build/order-journey-projection.json
+          PACKPROOF_JOURNEY_RECEIPT: ${{ github.workspace }}/connect-windows/build/order-journey-receipts.json
+        run: |
+          npm ci --no-audit --no-fund --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm exec --offline -- vitest run tests/order-journey-receipts.test.ts
+      - name: Compare the real local package to the Windows reader and backend projection
+        env:
+          PACKPROOF_JOURNEY_PROJECTED: ${{ github.workspace }}/connect-windows/build/order-journey-projection.json
+          PACKPROOF_JOURNEY_OUTPUT: ${{ github.workspace }}/connect-windows/build/order-journey-output
+        run: |
+          dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release --no-build --filter FullyQualifiedName~Publish_controlled_projection
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node ../examples/multisource-journey/verify-output.mjs "$env:PACKPROOF_JOURNEY_OUTPUT" "$env:PACKPROOF_JOURNEY_PROJECTED"
       - run: npm run build
       - name: Install and locate the pinned Electron runtime
         timeout-minutes: 5
@@ -57,6 +77,18 @@ jobs:
       - run: npm run publish:native
       - run: npm run package:win
       - run: npm run verify:artifacts
+      - name: Verify packaged workspace screens and capture light and dark walkthroughs
+        timeout-minutes: 8
+        run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs --packaged-workspace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connect-workspace-walkthrough-${{ github.sha }}
+          path: |
+            connect-windows/build/workspace-layout.json
+            connect-windows/build/order-journey-receipts.json
+            connect-windows/build/workspace-screens/*.png
+          if-no-files-found: error
       - name: Prepare pending encrypted work with the historical LocalService writer
         run: ./scripts/seed-legacy-queue-ci.ps1
       - name: Exercise actual LocalService protected storage and bridge

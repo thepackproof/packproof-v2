@@ -1,0 +1,3 @@
+kind,eventId,version,occurredAt,entityNamespace,entityType,entityId,orderNamespace,orderId,lineId,sku,pickedQuantity,unit
+picking,pick-20,1,2026-11-17T12:01:00Z,WMS_A,warehouse,WO771,ERP_A,SO10482,20,A100,2,each
+picking,pick-30,1,2026-11-17T12:01:00Z,WMS_A,warehouse,WO771,ERP_A,SO10482,30,A100,1,each

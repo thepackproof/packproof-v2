@@ -8,12 +8,14 @@ const { setTimeout: delay } = require("node:timers/promises");
 const { app, BrowserWindow, ipcMain, net, protocol } = require("electron");
 
 const root = path.join(__dirname, "..");
-const renderer = path.join(root, "dist", "renderer");
+const packaged = process.argv.includes("--packaged-workspace");
+const assets = packaged ? path.join(root,"release",process.env.APP_ENV || "development","win32-x64","win-unpacked","resources","app.asar") : root;
+const renderer = path.join(assets, "dist", "renderer");
 const appUrl = "packproof-connect://app/index.html";
 protocol.registerSchemesAsPrivileged([{scheme:"packproof-connect", privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 app.enableSandbox();
-const report = { scope: "synthetic Electron renderer", platform: process.platform, electron: process.versions.electron, runs: [] };
-const out = path.join(root, "build", "renderer-layout.json");
+const report = { scope: packaged ? "packaged ASAR renderer and preload; isolated synthetic IPC state" : "synthetic Electron renderer", platform: process.platform, electron: process.versions.electron, runs: [] };
+const out = path.join(root, "build", packaged ? "workspace-layout.json" : "renderer-layout.json");
 let watchdog;
 
 function saveReport() {
@@ -129,7 +131,7 @@ async function main() {
       headers.set("X-Content-Type-Options", "nosniff");
       return new Response(response.body,{status:response.status,headers});
     });
-    win = new BrowserWindow({show:true, webPreferences:{preload:path.join(root,"dist","main","preload.cjs"),sandbox:true, contextIsolation:true, nodeIntegration:false, backgroundThrottling:false}});
+    win = new BrowserWindow({show:true, webPreferences:{preload:path.join(assets,"dist","main","preload.cjs"),sandbox:true, contextIsolation:true, nodeIntegration:false, backgroundThrottling:false}});
     win.focus();
     const page = win.webContents;
     stage("start renderer before attaching device emulation");
@@ -142,12 +144,13 @@ async function main() {
     const version = "packproof.shipment-interpretation/v1";
     state.analysis.interpretation = { version, outcome: "automatic", grain: "shipment", reasonCodes: [] };
     state.capabilities.interpretationVersions = [version];
+    let currentState = state;
     for (const method of ["getStatus","checkComputer"]) {
       ipcMain.handle("connect:" + method, event => {
         assert.equal(event.sender, page);
         assert.equal(event.senderFrame.url, appUrl);
         const now = Date.now();
-        return {ok:true,value:{...state,transport:{...state.transport,attemptedAt:new Date(now-1000).toISOString(),
+        return {ok:true,value:{...currentState,transport:{...currentState.transport,attemptedAt:new Date(now-1000).toISOString(),
           succeededAt:new Date(now-500).toISOString(),expiresAt:new Date(now+100000).toISOString()}}};
       });
     }
@@ -155,8 +158,14 @@ async function main() {
     page.on("console-message", details => {
       if (details.level === "error") console.error("Renderer:",details.message);
     });
-    for (const [width,height] of [[1280,720],[1920,1080],[560,720]]) {
-      for (const scale of (width === 560 ? [1] : [1,1.5,2])) {
+    if (packaged) {
+      await require("./workspace-layout.cjs")({page,state,appUrl,report,stage,reach,keyboard,waitFor,checkPage,
+        directory:path.join(root,"build","workspace-screens"), setStatus:next=>{ currentState=next; },
+        register:(method,data)=>ipcMain.handle("connect:"+method, event=>{
+          assert.equal(event.sender,page); assert.equal(event.senderFrame.url,appUrl); return {ok:true,value:data};
+        })});
+    } else for (const [width,height] of [[1280,720],[1920,1080],[560,720]]) {
+      for (const scale of (width === 560 ? [1] : [1,1.25,1.5,2])) {
         for (const theme of ["light","dark"]) await exercise(page, width,height,scale,theme);
       }
     }

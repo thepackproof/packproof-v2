@@ -1,3 +1,4 @@
+import {orderHumanRouter,orderAgentRouter} from './order-router.js';
 import express, {type Request,type Response,type NextFunction} from 'express';
 import type {AppDependencies} from '../app.js';
 import type {Database} from '../db/database.js';
@@ -21,6 +22,7 @@ export function createConnectEnrollmentRouter(deps:AppDependencies){
 }
 export function createAgentHumanRouter(deps:AppDependencies){
  const router=express.Router();
+ router.use(orderHumanRouter(deps));
  async function workspace(r:Request,mutating=false){return agentWorkspace(deps,r.headers,r.body?.organizationId??r.query.organizationId,r.body?.environment??r.query.environment,mutating);}
  router.get('/agent-enrollments/:enrollmentId',route(async(r,s)=>{const w=await workspace(r);s.json(await readEnrollment(deps,r.params.enrollmentId,w));}));
  router.get('/agent-installations',route(async(r,s)=>{s.json(await readAgentInventory(deps,await workspace(r)));}));
@@ -49,6 +51,7 @@ export function createAgentHumanRouter(deps:AppDependencies){
 }
 export function createAgentPartnerRouter(deps:AppDependencies){
  const router=express.Router();
+ router.use(orderAgentRouter(deps));
  const actor=(r:Request)=>(r as Request&{partnerActor:PartnerActor}).partnerActor;
  router.get('/agent/config',route(async(r,s)=>{const a=actor(r);const value=await deps.db.transaction(async tx=>{await reauthorizePartner(tx,deps.clock,a,'imports:read');const result=await agentView(deps,await installationForActor(tx,a),tx);await reauthorizePartner(tx,deps.clock,a,'imports:read');return result;});s.json(value);}));
  router.post('/agent/config-proposals',route(async(r,s)=>{s.json(await proposeAgentConfig(deps,actor(r),r.body));}));

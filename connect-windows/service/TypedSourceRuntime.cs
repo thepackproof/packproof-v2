@@ -141,7 +141,7 @@ public sealed partial class AgentRuntime
     {
         RequireTypedInstallationRead();
         if(!typedSourceSubscriptions||!source.CapabilityApproved)throw new ConnectException("SOURCE_APPROVAL_REQUIRED","Approve this exact source in PackProof before selecting its local folder.");
-        var folder=FolderSource.Validate(input);var digest=SourceFolderDigest(folder);var config=SourceConfig(source);
+        var folder=FolderSource.Validate(input);ValidateProofSourceFolder(folder);var digest=SourceFolderDigest(folder);var config=SourceConfig(source);
         if(digest!=config.GetProperty("folderDigest").GetString())throw new ConnectException("SOURCE_SCOPE_REVIEW_REQUIRED","The selected folder differs from its browser-approved source. Review the source path before collection.");
         _=FolderSource.Inventory(folder);
         // Rechecking an already bound folder must not redefine its historical
@@ -327,7 +327,7 @@ public sealed partial class AgentRuntime
         // file read plus one due receipt operation bounds this source's turn.
         var checkDue = source.NextPublicationCheckAt is { } scheduled
             ? now >= scheduled : source.LastCheckAt is null || now - source.LastCheckAt >= TimeSpan.FromSeconds(30);
-        if (checkDue)
+        if (checkDue && !WorkspaceTookOver(source.Id))
         {
             try
             {
@@ -460,7 +460,7 @@ public sealed partial class AgentRuntime
         if(!typedSourceSubscriptions)throw new ConnectException("SOURCE_CAPABILITY_UNSUPPORTED","Install and approve the matching source-capable API and desktop before adding an operational source.");
         if(operation=="beginSubscriptionSource")
         {
-            var folder=FolderSource.Validate(payload.GetProperty("folder").GetString()??"");_=FolderSource.Inventory(folder);
+            var folder=FolderSource.Validate(payload.GetProperty("folder").GetString()??"");ValidateProofSourceFolder(folder);_=FolderSource.Inventory(folder);
             state.SubscriptionDraft=new(){Folder=folder,FolderDigest=SourceFolderDigest(folder),ExcludedFileNames=Directory.EnumerateFiles(folder,"*.csv",SearchOption.TopDirectoryOnly).Select(Path.GetFileName).Cast<string>().Order(StringComparer.OrdinalIgnoreCase).ToArray()};return;
         }
         var draft=state.SubscriptionDraft??throw new ConnectException("SOURCE_REQUIRED","Select the dedicated local export folder first.");

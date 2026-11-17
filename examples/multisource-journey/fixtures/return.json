@@ -1,0 +1,17 @@
+{
+  "kind": "return",
+  "eventId": "return-20",
+  "version": 1,
+  "occurredAt": "2026-11-17T12:09:00Z",
+  "entityNamespace": "RETURNS_A",
+  "entityType": "return",
+  "entityId": "RMA771",
+  "orderNamespace": "ERP_A",
+  "orderId": "SO10482",
+  "lineId": "20",
+  "sku": "A100",
+  "returnedQuantity": 1,
+  "unit": "each",
+  "packageNamespace": "PACK_A",
+  "packageId": "PKG92"
+}

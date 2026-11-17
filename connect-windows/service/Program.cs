@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using PackProof.Connect;
 
 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("PackProof Connect requires Windows 11 x64.");
+if (args is ["--read-source-media", var extension]) { Environment.ExitCode = await SourceReaders.RunMediaChild(extension, CancellationToken.None); return; }
 var path = Path.Combine(AppContext.BaseDirectory, "service-config.json");
 var configuration = Json.Read<HostConfiguration>(File.ReadAllBytes(path)); configuration.Validate();
 var builder = Host.CreateApplicationBuilder(args); builder.Logging.ClearProviders();

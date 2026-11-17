@@ -1,0 +1,12 @@
+{
+  "kind": "evidence",
+  "eventId": "photo-92",
+  "version": 1,
+  "occurredAt": "2026-11-17T12:03:00Z",
+  "entityNamespace": "MEDIA_A",
+  "entityType": "artifact",
+  "entityId": "photo-92",
+  "packageNamespace": "PACK_A",
+  "packageId": "PKG92",
+  "artifactSha256": "8b264b29bd3ac78cbe799789d38b9e969cdf7bef3087732214daa455d11994f5"
+}

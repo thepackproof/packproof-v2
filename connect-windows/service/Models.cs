@@ -52,7 +52,7 @@ public sealed record TransportObservation(
     string ExpectedRulesVersion,
     string? ObservedRulesVersion,
     string[]? SourceContracts);
-public sealed class LocalState
+public sealed partial class LocalState
 {
     public int StateVersion { get; set; } = 1;
     public List<SourceSubscriptionState> SourceSubscriptions { get; set; } = [];

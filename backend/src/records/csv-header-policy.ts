@@ -5,7 +5,7 @@ export const CSV_REORDER_POLICY = 'same_names_any_order/v1';
 // Release admission requires an explicitly enabled policy and the revision
 // qualified on the ingestion worker. A missing declaration keeps exact ordering.
 export function csvHeaderPolicyAvailable(collectorVersion: string | null) {
-  return (collectorVersion === null || collectorVersion === '0.4.1') &&
+  return (collectorVersion === null || collectorVersion === '0.4.1' || collectorVersion === '0.5.0') &&
     process.env.PACKPROOF_CSV_HEADER_VARIANTS_ENABLED === 'true' &&
     process.env.PACKPROOF_CSV_HEADER_WORKER_POLICY === CSV_REORDER_POLICY;
 }
