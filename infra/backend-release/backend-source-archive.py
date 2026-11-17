@@ -3,7 +3,7 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
         raise ValueError('INVALID_SOURCE_COMMIT')
@@ -14,12 +14,21 @@ def archive(source,destination,profile,verify=False):
     if profile=='reconstruction-v3':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs']
     if profile=='reconstruction-v4':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs']
     if profile=='reconstruction-v5':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs']
-    if profile in ('reconstruction-v6','reconstruction-v7','reconstruction-v8'):probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs','infra/backend-release/reconstruction-v6-release-review.mjs','infra/backend-release/reconstruction-v6-runtime-preflight.mjs']
-    if profile in ('reconstruction-v7','reconstruction-v8'):
+    if profile in ('reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9'):probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs','infra/backend-release/reconstruction-v6-release-review.mjs','infra/backend-release/reconstruction-v6-runtime-preflight.mjs']
+    if profile in ('reconstruction-v7','reconstruction-v8','reconstruction-v9'):
         probes+=['infra/backend-release/reconstruction-v7-release-review.mjs','infra/backend-release/reconstruction-v7-runtime-preflight.mjs','infra/backend-release/shipment-automation-pair.mjs']
-    if profile=='reconstruction-v8':
+    if profile in ('reconstruction-v8','reconstruction-v9'):
         probes+=['infra/backend-release/reconstruction-v8-release-review.mjs','infra/backend-release/reconstruction-v8-runtime-preflight.mjs','infra/backend-release/backfill-automation-pair.mjs']
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8'):paths+=probes
+    if profile=='reconstruction-v9':
+        # The OCI adds only its release modules to this exact existing image.
+        # Refuse to attest an application, migration or inherited release file
+        # that is different from the image on which the operator will run.
+        base='93274b085113dee70ee4fe7516b384cacfcd385e'
+        inherited=[*paths,*probes,':(exclude)backend/Dockerfile.hosted-lock-profile']
+        if subprocess.run(['git','diff','--quiet',base,source,'--',*inherited]).returncode!=0:
+            raise ValueError('HOSTED_PROFILE_BASE_SOURCE_MISMATCH')
+        probes+=['backend/Dockerfile.hosted-lock-profile','infra/backend-release/hosted-membership-locks.mjs','infra/backend-release/reconstruction-v9-release-review.mjs','infra/backend-release/reconstruction-v9-runtime-preflight.mjs','infra/backend-release/hosted-backfill-automation-pair.mjs']
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -27,7 +36,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8') and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -102,7 +111,7 @@ def archive(source,destination,profile,verify=False):
         digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
         if len(inventory)!=120 or digest!='3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5':
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
-    if profile=='reconstruction-v8':
+    if profile in ('reconstruction-v8','reconstruction-v9'):
         digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
         if len(inventory)!=121 or digest!='ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
