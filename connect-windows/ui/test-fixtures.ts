@@ -7,10 +7,12 @@ export function bridgeFor(
 ): ConnectBridge {
   const result = async () => current;
   return {
+    chooseWorkspaceRelatedSource:vi.fn(result),
     confirmWorkspaceOrderMap: vi.fn(result),
     workspaceSearchOrders:vi.fn(async()=>[]),
     workspaceAttention:vi.fn(async()=>({items:[],hasMore:false})),
     openWorkspaceReview:vi.fn(async()=>undefined),openWorkspaceOrder:vi.fn(async()=>undefined),
+    getWorkspaceStatus:vi.fn(overrides.getStatus || result),
     addWorkspaceDirectSource:vi.fn(result),copyWorkspaceDirectProfile:vi.fn(async()=>undefined),
     workspaceDraftPreview: vi.fn(async()=>({examples:[],scannedFiles:0,unreadFiles:0,unresolved:0,limited:false})),
     workspaceOrderDetail: vi.fn(async () => ({proofId:'proof-test',revision:1,orderReference:'Test',lines:[],events:[],evidence:[]})),

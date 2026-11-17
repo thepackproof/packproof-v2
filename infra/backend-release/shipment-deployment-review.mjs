@@ -1,3 +1,5 @@
+import {validateReconstructionReview as validateWorkspaceReview, workspaceInventory, workspaceRecords} from './reconstruction-v10-release-review.mjs';
+import {inspectOrderWorkspacePair} from './order-workspace-pair.mjs';
 import {readFileSync} from 'node:fs';
 import {backfillMigrationInventorySha256,backfillRecordsInventorySha256,validateReconstructionReview as validateBackfillReview} from './reconstruction-v8-release-review.mjs';
 import {validateReconstructionReview as validateHostedReview} from './reconstruction-v9-release-review.mjs';
@@ -18,6 +20,8 @@ const offSwitches=new Set(['PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SU
  'PACKPROOF_CSV_HEADER_VARIANTS_ENABLED']);
 const shadow='PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES';
 const profiles={
+ 'packproof.connect-runtime-review/v10':{version:'v10',inventory:workspaceInventory,records:workspaceRecords,
+  validate:validateWorkspaceReview,pair:inspectOrderWorkspacePair,reader:'order-workspace-rollback-reader.mjs',readerSchema:'packproof.order-workspace-rollback-reader/v1'},
  'packproof.connect-runtime-review/v7':{version:'v7',inventory:shipmentMigrationInventorySha256,records:shipmentRecordsInventorySha256,
   validate:validateReconstructionReview,pair:inspectShipmentAutomationPair,reader:'shipment-rollback-reader-probe.mjs',readerSchema:'packproof.shipment-rollback-reader/v1'},
  'packproof.connect-runtime-review/v8':{version:'v8',inventory:backfillMigrationInventorySha256,records:backfillRecordsInventorySha256,
@@ -40,15 +44,16 @@ export function verifyShipmentDeploymentReview(snapshot,r,now){
   v.target.host===r.database.host&&v.target.database===r.database.name&&Date.parse(v.expiresAt)>=Date.parse(r.expiresAt),
   'SHIPMENT_DEPLOYMENT_REVIEW_BINDING_MISMATCH');
  const policy=v.automationPolicy;
+ const switches=profile.version==='v10'?new Set([...offSwitches,'PACKPROOF_ORDER_WORKSPACE_ENABLED']):offSwitches;
  check((profile.version==='v7'||v.backfillJobsEnabled===false)&&!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
   'SHIPMENT_DEFAULT_OFF_REVIEW_REQUIRED');
  const containers=[snapshot.api.express.activeConfigurations[0].primaryContainer,
   ...snapshot.api.taskDefinition.containerDefinitions,...snapshot.worker.taskDefinition.containerDefinitions];
  for(const c of containers){
-  check(!c.environmentFiles?.length&&!(c.secrets??[]).some(x=>offSwitches.has(x.name)||[shadow,reviewJson,reviewHash].includes(x.name)),
+  check(!c.environmentFiles?.length&&!(c.secrets??[]).some(x=>switches.has(x.name)||[shadow,reviewJson,reviewHash].includes(x.name)),
    'SHIPMENT_OPAQUE_POLICY_FORBIDDEN');
   for(const {name,value} of c.environment??[]){
-   if(offSwitches.has(name))check(value==='false'||value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
+   if(switches.has(name))check(value==='false'||value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
    if(name===shadow)check(value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
    check(name!==reviewJson&&name!==reviewHash,'SHIPMENT_PROBE_BINDING_EXISTS');
   }

@@ -170,7 +170,7 @@ public static partial class SourceReaders
             if(!File.Exists(Path.Combine(language,"eng.traineddata"))){issues.Add("English OCR data is unavailable. The original remains available.");continue;}
             try
             {
-                using var buffer=new MemoryStream();bmp.Save(buffer,ImageFormat.Png);
+                using var buffer=new MemoryStream();bmp.Save(buffer,System.Drawing.Imaging.ImageFormat.Png);
                 using var pix=Pix.LoadFromMemory(buffer.ToArray());
                 using var engine=new TesseractEngine(language,"eng",EngineMode.LstmOnly);
                 using var page=engine.Process(pix);using var iter=page.GetIterator();iter.Begin();

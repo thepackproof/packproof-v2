@@ -9,7 +9,6 @@ import {installationForActor,loadInstallation,type Installation} from './agent-e
 import {requireRecordLocation,type RecordWorkspace} from './access.js';
 import {requireReconstructionFeature} from './reconstruction-features.js';
 
-export const fail=(code:string,message:string,status=400):never=>{throw new DomainError(code,message,status);};
 export function boundedText(v:unknown,label:string,max=200):string{
  if(typeof v!=='string'||!v.trim()||v.length>max||/[\u0000-\u001f]/.test(v))throw new DomainError('INVALID_REQUEST',`Check ${label} and try again.`,400);
  return v;
@@ -17,7 +16,8 @@ export function boundedText(v:unknown,label:string,max=200):string{
 export function digest(v:unknown){const s=boundedText(v,'hash',64);if(!/^[0-9a-f]{64}$/.test(s))throw new DomainError('INVALID_REQUEST','A SHA-256 digest is required.',400);return s;}
 export function positive(v:unknown){if(typeof v!=='number'||!Number.isSafeInteger(v)||v<1||v>2147483647)throw new DomainError('INVALID_REQUEST','A positive source generation is required.',400);return v;}
 const roles=['order','picking','packing','evidence','shipping','handoff','delivery','returns'];
-function parseSource(v:unknown){
+interface ApprovedSource {id:string;generation:number;folderDigest:string;roles:string[];profileVersion:string;displayName?:string;transport:'folder'|'api';sourceNamespace?:string;}
+function parseSource(v:unknown):ApprovedSource{
  const s=strictBody(v,['id','generation','folderDigest','roles','profileVersion','displayName','transport','sourceNamespace']);
  if(!Array.isArray(s.roles)||!s.roles.length||s.roles.length>roles.length||s.roles.some(r=>!roles.includes(r)))throw new DomainError('INVALID_REQUEST','Choose the records supplied by each source.',400);
  if(s.transport!==undefined&&!['folder','api'].includes(String(s.transport)))throw new DomainError('INVALID_SCOPE','Choose a supported source transport.',400);
@@ -51,7 +51,7 @@ function present(clock:Clock,i:Installation,s:Session|undefined){
  return {id:s.id,state,scopeDigest:s.scope_digest,scope:s.scope,expiresAt:new Date(s.expires_at).toISOString(),deviceName:i.device_name,approvalPath:state==='pending'?'/app/records/connect/approve?'+query.toString():null,offlineWindowSeconds:state==='active'?3600:0};
 }
 export async function workspaceState(db:Database,clock:Clock,i:Installation){
- const result=await db.query<Session>("SELECT * FROM record_order_sessions WHERE installation_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1",[i.id]);
+ const result=await db.query<Session>("SELECT * FROM record_order_sessions WHERE installation_id=$1 ORDER BY (state='pending') DESC,created_at DESC,(state='active') DESC,id DESC LIMIT 1",[i.id]);
  return present(clock,i,result.rows[0]);
 }
 export async function proposeScope(db:Database,clock:Clock,i:Installation,input:unknown){

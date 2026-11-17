@@ -403,7 +403,7 @@ export function createApp(deps: AppDependencies): Express {
     if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
       next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
     }
-    const importPath=req.path==='/v1/partner/agent/order-workspace/observations'||/^\/(?:me\/records|v1\/partner)\/(?:imports|typed-imports)(?:\/|$)/.test(req.path);
+    const importPath=['/v1/partner/agent/order-workspace/observations','/v1/partner/order-workspace/events'].includes(req.path)||/^\/(?:me\/records|v1\/partner)\/(?:imports|typed-imports)(?:\/|$)/.test(req.path);
     express.json({limit:submissionPath?'64kb':importPath?'6mb':'2mb',verify:(request,_response,bytes,encoding)=>{
       if(req.path==='/v1/partner/proofs'&&req.method==='POST')(request as typeof request&{orderOriginal?:Buffer}).orderOriginal=Buffer.from(bytes);
       if(importPath && (encoding?.toLowerCase()!=='utf-8' || !isUtf8(bytes)))

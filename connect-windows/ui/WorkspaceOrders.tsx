@@ -76,11 +76,13 @@ export function Orders({list, bridge,sources=[],searchable=false}: {list: OrderS
     const newer=list.find(recent=>recent.proofId===row.proofId && recent.revision>row.revision);
     return newer || row;
   }) : list;
-  const [selected,setSelected] = useState("");
+  const [selected,setSelected] = useState<OrderSummary|null>(null);
   const [detail,setDetail] = useState<OrderDetail|null>(null);
   const [message,setMessage] = useState("");
   const [attempt,setAttempt] = useState(0);
-  const current = visible.find(item => item.proofId === selected);
+  const refreshed = visible.find(item=>item.proofId===selected?.proofId);
+  const current = refreshed && selected && refreshed.revision>selected.revision ? refreshed : selected;
+  useEffect(()=>{if(current && selected && current.revision>selected.revision)setSelected(current);},[current,selected]);
   useEffect(() => {
     let live = true;
     setMessage("");
@@ -97,15 +99,15 @@ export function Orders({list, bridge,sources=[],searchable=false}: {list: OrderS
   }, [bridge,current?.proofId,current?.revision,attempt]);
 
   return <div>
-    {searchable && <form className="ws-actions" onSubmit={e=>{e.preventDefault();setSelected("");setSearch(input.trim());}}>
+    {searchable && <form className="ws-actions" onSubmit={e=>{e.preventDefault();setSelected(null);setSearch(input.trim());}}>
       <label>Order reference<input maxLength={200} value={input} onChange={e=>setInput(e.target.value)}/></label>
       <button className="secondary" disabled={!input.trim()}>Find order</button>
-      {search && <button type="button" className="quiet" onClick={()=>{setInput("");setSearch("");setSelected("");}}>Show recent orders</button>}
+      {search && <button type="button" className="quiet" onClick={()=>{setInput("");setSearch("");setSelected(null);}}>Show recent orders</button>}
     </form>}
     {searchError && <p role="alert">{searchError}</p>}
     {!visible.length && !searchError && <p role="status">{search ? results===null ? "Finding your order…" : "No order with that reference was found." : "Waiting for the first order."}</p>}
     <ul className="ws-orders">{visible.map(item => <li key={item.proofId}>
-      <button className="ws-order-link" aria-pressed={selected === item.proofId} onClick={()=>setSelected(item.proofId)}>
+      <button className="ws-order-link" aria-pressed={selected?.proofId===item.proofId} onClick={()=>setSelected(item)}>
         <strong>{item.orderReference}</strong><span>Revision {item.revision}</span></button>
     </li>)}</ul>
     {current && (message ? <div role="alert">{message} <button className="quiet" onClick={()=>setAttempt(attempt+1)}>Retry</button></div> :

@@ -17,11 +17,12 @@ const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const reviewedSource = {id, configurationRevision:z.number().int().nonnegative(), grantRevision:z.number().int().nonnegative(), originalSha256:sha256};
 const role = z.enum(sourceRoles);
 export const argumentsByMethod={
+ chooseWorkspaceRelatedSource:z.tuple([id,z.number().int().positive().safe(),role,id]),
  confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
  workspaceSearchOrders: z.tuple([z.string().min(1).max(200)]),
  workspaceAttention: z.tuple([]),
  openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.tuple([id,z.number().int().positive().safe()]),
- addWorkspaceDirectSource:z.tuple([]),copyWorkspaceDirectProfile:z.tuple([id]),
+ getWorkspaceStatus:z.tuple([]),addWorkspaceDirectSource:z.union([z.tuple([]),z.tuple([z.string().regex(/^[A-Za-z0-9._-]{1,100}$/)])]),copyWorkspaceDirectProfile:z.tuple([id]),
  workspaceDraftPreview: z.tuple([]),
  workspaceOrderDetail: z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceFolder: z.tuple([role]),

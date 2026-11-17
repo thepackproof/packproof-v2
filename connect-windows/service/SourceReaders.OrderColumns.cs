@@ -19,7 +19,8 @@ public static partial class SourceReaders
         }
         var order=Find("salesorder","salesorderid","salesordernumber","orderid","ordernumber");
         var line=Find("salesorderlineid","orderlineid","orderlinenumber","salesorderlinenumber","lineid","linenumber");
-        var version=Find("recordversion","sourcerevision","rowversion","recordrevision","version","revision");
+        var version=Find("recordversion","sourcerevision","rowversion","recordrevision","version","revision") ??
+            Find("sourcemodifiedat","lastmodifiedat","updatedat","lastupdated","modifiedat","reportasof","snapshotat");
         var qty=Find("orderedquantity","orderedqty","qtyordered","quantityordered","quantity","qty");
         var unit=Find("unit","uom","unitofmeasure","quantityunit");
         return order!=null&&line!=null&&version!=null&&qty!=null&&unit!=null
@@ -36,15 +37,17 @@ public static partial class SourceReaders
         var rows=new List<SourceReaderRow>();
         foreach(var raw in input.Rows)
         {
-            string? order=Scalar(raw.Fields,map.Order),line=Scalar(raw.Fields,map.Line),version=Scalar(raw.Fields,map.Version);
+            string? order=Scalar(raw.Fields,map.Order),line=Scalar(raw.Fields,map.Line),reported=Scalar(raw.Fields,map.Version);
+            string? version=PublishedVersion(reported,reported,null,null);
             if(!IdentityPart(order)||!IdentityPart(line)||version==null||!Regex.IsMatch(version,@"^[0-9]{1,30}$")||
                 required.Any(k=>!raw.Fields.ContainsKey(k)))return Val(Array.Empty<object>());
             var fields=new Dictionary<string,JsonElement>{
                 ["entityNamespace"]=Val(sourceId),["entityType"]=Val("order"),["entityId"]=Val(order),["kind"]=Val("order"),
                 ["eventId"]=Val("line/"+Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]{sourceId,order,line})))),
-                ["version"]=raw.Fields[map.Version],["lineId"]=raw.Fields[map.Line],["orderedQuantity"]=raw.Fields[map.Quantity],
+                ["version"]=Val(version),["lineId"]=raw.Fields[map.Line],["orderedQuantity"]=raw.Fields[map.Quantity],
                 ["unit"]=raw.Fields[map.Unit],["orderReference"]=Val(order)
             };
+            if(reported!=null && SourceInstant(reported,out _))fields["sourceModifiedAt"]=Val(reported);
             var paths=new Dictionary<string,string>{{"orderReference",raw.Lineage[map.Order]},{"entityId",raw.Lineage[map.Order]},
                 {"version",raw.Lineage[map.Version]},{"lineId",raw.Lineage[map.Line]},{"orderedQuantity",raw.Lineage[map.Quantity]},{"unit",raw.Lineage[map.Unit]}};
             if(map.Sku!=null && raw.Fields.TryGetValue(map.Sku,out var sku)){fields["sku"]=sku;paths["sku"]=raw.Lineage[map.Sku];}

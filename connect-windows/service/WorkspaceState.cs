@@ -93,15 +93,22 @@ public sealed class WorkspaceSource
     public string? PhysicalRoot { get; set; }
     public List<string> Roles { get; set; } = [];
     public JsonElement? Recognition { get; set; }
+    public Dictionary<string,string> RelatedSources { get; set; } = [];
+    public Dictionary<string,int> ConfirmedDependencies { get; set; } = [];
+    public string? ObservedNamespace { get; set; }
+    public WorkflowColumnMap? ProposedWorkflow { get; set; }
+    public WorkflowColumnMap? ConfirmedWorkflow { get; set; }
     public OrderColumnMap? ProposedMap { get; set; }
     public OrderColumnMap? ConfirmedMap { get; set; }
-    public string ProfileVersion => Transport == "api" ? "packproof.partner-order/v1" : ConfirmedMap is null ? SourceReaders.ProfileId : SourceReaders.OrderProfileVersion(ConfirmedMap);
+    public string ProfileVersion => Transport == "api" ? "packproof.partner-order/v1" : ConfirmedWorkflow is not null ? SourceReaders.WorkflowProfileVersion(ConfirmedWorkflow) : ConfirmedMap is null ? SourceReaders.ProfileId : SourceReaders.OrderProfileVersion(ConfirmedMap);
     public bool Paused { get; set; }
     public string? Cursor { get; set; }
     public DateTimeOffset? LastScanAt { get; set; }
     public DateTimeOffset? RetryAt { get; set; }
     public string? Issue { get; set; }
     public List<string> MediaJobs { get; set; } = [];
+    public string? ApiHistoryState { get; set; }
+    public int ApiHistoryGeneration { get; set; }
     public bool CoverageGap { get; set; }
     public string? PreviousCollectorId { get; set; }
     public bool ReplacesPreviousCollector { get; set; }

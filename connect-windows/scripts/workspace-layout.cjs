@@ -29,6 +29,7 @@ const situations = [
 module.exports = async function workspaceLayout({page,setStatus,register,state,waitFor,checkPage,stage,reach,keyboard,appUrl,directory,report}) {
   fs.mkdirSync(directory,{recursive:true});
   register('workspaceOrderDetail',detail);
+  register('workspaceAttention',{items:[],hasMore:false});
   register('workspaceDraftPreview',{examples:[{orderReference:summary.orderReference,source:'Sales orders',
     lines:detail.lines.map(line=>({lineId:line.lineId,sku:line.sku,quantity:String(line.orderedQuantity),unit:line.unit})),
     packages:['PKG92','PKG93'],events:[{kind:'packing',source:'Packing bench',fileName:'packages.xml',occurredAt:'2026-11-17T12:02:00Z',shared:false}]}],

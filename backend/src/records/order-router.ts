@@ -7,6 +7,7 @@ import {agentWorkspace,type Installation} from './agent-enrollments.js';
 import {requireRecordWorkspace} from './access.js';
 import {checkedInstallation,workspaceState,proposeScope,readSession,decideSession} from './order-workspace.js';
 import {decideAssociation,humanAttentionFilter,deviceAttentionFilter,attention} from './order-review.js';
+import {reconcileApiHistory,setApiSourcePaused} from './order-api-history.js';
 import {storeDerivation} from './order-derivatives.js';
 import {readOrderArtifact} from './order-artifact.js';
 import {ingestOrderFile} from './order-ledger.js';
@@ -58,6 +59,8 @@ export function orderAgentRouter(deps:AppDependencies){
  });
  router.get('/agent/order-workspace',call((tx,i)=>workspaceState(tx,deps.clock,i)));
  router.post('/agent/order-workspace/proposals',call((tx,i,_a,r)=>proposeScope(tx,deps.clock,i,r.body),true));
+ router.post('/agent/order-workspace/reconcile-api-source',call((tx,i,a,r)=>reconcileApiHistory(deps,tx,a,i,r.body),true));
+ router.post('/agent/order-workspace/api-source-pause',call((tx,i,_a,r)=>setApiSourcePaused(tx,i,r.body),true));
  router.post('/agent/order-workspace/derivatives',call((tx,i,_a,r)=>storeDerivation(tx,i,r.body),true));
  router.post('/agent/order-workspace/observations',call((tx,i,a,r)=>ingestOrderFile(deps,tx,a,i,r.body),true));
  router.get('/agent/order-attention',call(async(tx,i)=>attention(tx,await deviceAttentionFilter(tx,i))));

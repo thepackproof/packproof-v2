@@ -25,6 +25,7 @@ async function openWorkspaceApproval(current:ConnectStatus) {
  await open(approvalUrl(path, config.webBaseUrl));
 }
 function setup(){
+ bind('chooseWorkspaceRelatedSource',(sourceId,expectedGeneration,role,relatedId)=>mutate('chooseWorkspaceRelatedSource',{sourceId,expectedGeneration,role,relatedId}));
  bind('confirmWorkspaceOrderMap',(sourceId,expectedGeneration,profileVersion)=>mutate('confirmWorkspaceOrderMap',{sourceId,expectedGeneration,profileVersion}));
  bind('openWorkspaceReview',async()=>{
   const current=await status();
@@ -40,7 +41,8 @@ function setup(){
  });
  bind('workspaceSearchOrders',async query=>rendererSafe(await bridge.request('workspaceSearchOrders',{query})));
  bind('workspaceAttention',async()=>rendererSafe(await bridge.request('workspaceAttention')));
- bind('addWorkspaceDirectSource',()=>mutate('addWorkspaceDirectSource',{role:'order'}));
+ bind('getWorkspaceStatus',status);
+ bind('addWorkspaceDirectSource',(sourceNamespace?:string)=>mutate('addWorkspaceDirectSource',{role:'order',sourceNamespace}));
  bind('copyWorkspaceDirectProfile',async sourceId=>{
   const profile=rendererSafe(await bridge.request('workspaceDirectConnection',{sourceId}));
   if(!profile || typeof profile!=='object')throw Error('Approve this source before copying its connection details.');

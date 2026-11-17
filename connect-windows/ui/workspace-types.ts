@@ -12,6 +12,7 @@ export interface WorkspaceSource {
   generation: number;
   transport?: "file" | "folder" | "api";
   displayName?: string;
+  sourceNamespace?: string;
   state: string;
   recognition: {
     state: string;
@@ -19,6 +20,7 @@ export interface WorkspaceSource {
     fields?: string[];
     sample?: Record<string, string>;
     question?: string;
+    relatedChoices?: {role:SourceRole;options:{id:string;displayName:string}[]}[];
     suggestedOrderColumn?: string;
     profileVersion?: string;
   };
@@ -40,6 +42,8 @@ export interface OrderDetail extends OrderSummary {
 export interface WorkspaceStatus {
   orders?: OrderSummary[];
   syncState?: string;
+  canReadOrders?: boolean;
+  viewKey?: string | null;
   attention?: string | null;
   expiresAt?: string | null;
   step: WorkspaceStep;
@@ -74,10 +78,12 @@ export interface AttentionReport {
 export interface WorkspaceBridge {
   workspaceAttention():Promise<AttentionReport>;
   workspaceSearchOrders(query:string):Promise<OrderSummary[]>;
+  chooseWorkspaceRelatedSource(sourceId:string,expectedGeneration:number,role:SourceRole,relatedId:string):Promise<ConnectStatus>;
   confirmWorkspaceOrderMap(sourceId:string, expectedGeneration:number, profileVersion:string):Promise<ConnectStatus>;
   openWorkspaceReview():Promise<void>;
   openWorkspaceOrder(proofId:string,revision:number):Promise<void>;
-  addWorkspaceDirectSource():Promise<ConnectStatus>;
+  getWorkspaceStatus():Promise<ConnectStatus>;
+  addWorkspaceDirectSource(sourceNamespace?:string):Promise<ConnectStatus>;
   copyWorkspaceDirectProfile(sourceId:string):Promise<void>;
   workspaceDraftPreview(): Promise<DraftPreview>;
   workspaceOrderDetail(proofId: string, revision: number): Promise<OrderDetail>;

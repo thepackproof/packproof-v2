@@ -161,6 +161,7 @@ const policy123 = {
  record_order_revisions:{api:{...select,insert:['proof_id','revision','committed_at','view','content_digest']},worker:{}},
  record_order_decisions:orderAppend,
  record_order_link_state:{api:{...select,insert:'*',update:['proof_ids','unresolved','updated_at']},worker:{}},
+ record_order_api_progress:{api:{...select,insert:'*',update:['cursor_proof_id','history_finished','paused']},worker:{}},
 };
 
 //119 adds only an index: its catalog columns and effective grants remain118.

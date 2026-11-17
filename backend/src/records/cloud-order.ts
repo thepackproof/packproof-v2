@@ -6,9 +6,10 @@ import {canonicalize} from '../canonical.js';
 import {newId} from '../ids.js';
 import {importPartnerOrder} from '../platform/partner-proofs.js';
 import {strictBody,type PartnerActor} from '../platform/organizations.js';
+import {orderApiPaused} from './order-api-history.js';
 import {activeScope,boundedText,digest,positive} from './order-workspace.js';
 import {loadInstallation} from './agent-enrollments.js';
-import {preserveOrderOriginal,ensureOrderRoot,insertOrderEvent,orderComponent,lockOperation,commitOrderGroup,originFor} from './order-ledger.js';
+import {preserveOrderOriginal,ensureOrderRoot,insertOrderEvent,orderComponent,lockOperation,commitOrderGroup,originFor,ingestOrderFile} from './order-ledger.js';
 import {normalizedRecord,refKey} from './order-projection.js';
 import {reconstructionFeatureEnabled} from './reconstruction-features.js';
 
@@ -40,6 +41,7 @@ async function cloudBinding(db:Database,a:PartnerActor,account:string,operator:s
  const session=await activeScope(db,i,chosen.scopeDigest);
  const source=session.scope.sources.find(s=>s.id===chosen!.sourceId&&s.generation===chosen!.generation&&s.transport==='api'&&s.roles.includes('order')&&s.sourceNamespace);
  if(!source)throw new DomainError('AUTH_REQUIRED','Approve this API source and order namespace before submitting records.',403);
+ if(await orderApiPaused(db,i,source))throw new DomainError('CONNECTION_PAUSED','Resume this order source before submitting new records.',409);
  return {i,session,source};
 }
 /** Keep the canonical Proof created by the public order import. Only an active
@@ -71,6 +73,18 @@ export async function importCloudOrder(deps:AppDependencies,tx:Database,a:Partne
  await ensureOrderRoot(tx,deps.clock,a,o,source.id,record,result.proofId);await insertOrderEvent(tx,o.operation,source.id,id,record);
  const group=await orderComponent(tx,o.operation,[refKey(record.entity)]);
  await commitOrderGroup(tx,deps.clock,o.operation,group,a.actorUserId);
- return {...result,connectedOrder:true};
+ return {...result,connectedOrder:true,connectedEventId:result.proofId};
 }
 
+/** Authenticated push adapter. Replays and corrections use the same grant,
+ * durable original store, canonical order identities and event processor as
+ * collection from an approved folder. */
+export async function submitCloudEvents(deps:AppDependencies,db:Database,a:PartnerActor,input:unknown){
+ if(!reconstructionFeatureEnabled('orderWorkspace'))throw new DomainError('AUTH_REQUIRED','Connected order intake has not been enabled.',409);
+ const b=strictBody(input,['integrationAccountId','operatorMembershipId','connectOperation','observation']);
+ const chosen=parseBinding(b.connectOperation),account=boundedText(b.integrationAccountId,'integration account'),operator=boundedText(b.operatorMembershipId,'operator');
+ const approved=await cloudBinding(db,a,account,operator,chosen);
+ if(!approved)throw new DomainError('AUTH_REQUIRED','An approved API order source is required.',403);
+ const item=strictBody(b.observation,['observationId','fileName','mediaType','originalSha256','originalBase64','records','issues']);
+ return ingestOrderFile(deps,db,a,approved.i,{...item,scopeDigest:chosen.scopeDigest,sourceId:chosen.sourceId,generation:chosen.generation,profileVersion:approved.source.profileVersion},'api');
+}

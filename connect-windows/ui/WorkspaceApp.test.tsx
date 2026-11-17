@@ -69,3 +69,36 @@ it("resumes a browser approval and opens the committed revision from Overview",a
   expect(bridge.workspaceOrderDetail).toHaveBeenCalledWith("p1",3);
 });
 
+
+it("asks which source owns an ambiguous reference before confirming a profile",async()=>{
+  const current=status({sources:[{...folder,recognition:{state:"ambiguous",message:"Read picking references.",
+    relatedChoices:[{role:"order",options:[{id:"sales1",displayName:"Sales East"},{id:"sales2",displayName:"Sales West"}]}]}}]});
+  const bridge=bridgeFor(current);
+  render(<WorkspaceApp bridge={bridge}/>);
+  fireEvent.click(await screen.findByRole("button",{name:"Sales West"}));
+  await waitFor(()=>expect(bridge.chooseWorkspaceRelatedSource).toHaveBeenCalledWith("source1",1,"order","sales2"));
+  expect(bridge.confirmWorkspaceOrderMap).not.toHaveBeenCalled();
+});
+it("adds the direct order system to the draft without requesting folder access",async()=>{
+  const bridge=bridgeFor(status());
+  render(<WorkspaceApp bridge={bridge}/>);
+  fireEvent.click(await screen.findByText("Connect a system instead"));
+  fireEvent.click(screen.getByRole("button",{name:"Connect PackProof Partner API"}));
+  await waitFor(()=>expect(bridge.addWorkspaceDirectSource).toHaveBeenCalledWith(undefined));
+  expect(bridge.chooseWorkspaceFolder).not.toHaveBeenCalled();
+  expect(bridge.activateWorkspace).not.toHaveBeenCalled();
+});
+it("finds a committed order outside the recent list and opens the authorized revision",async()=>{
+  const order={proofId:"older",revision:4,orderReference:"000120"};
+  const current=status({phase:"active",step:"overview",orders:[]});
+  const bridge=bridgeFor(current,{workspaceSearchOrders:vi.fn(async()=>[order]),workspaceOrderDetail:vi.fn(async()=>({...order,lines:[],evidence:[],events:[]}))});
+  render(<WorkspaceApp bridge={bridge}/>);
+  fireEvent.click(await screen.findByRole("button",{name:"Orders"}));
+  fireEvent.change(screen.getByRole("textbox",{name:"Order reference"}),{target:{value:"000120"}});
+  fireEvent.click(screen.getByRole("button",{name:"Find order"}));
+  fireEvent.click(await screen.findByRole("button",{name:/000120/}));
+  expect(await screen.findByRole("heading",{name:"000120"})).toBeVisible();
+  fireEvent.click(screen.getByRole("button",{name:"Open online order"}));
+  expect(bridge.workspaceSearchOrders).toHaveBeenCalledWith("000120");
+  expect(bridge.openWorkspaceOrder).toHaveBeenCalledWith("older",4);
+});

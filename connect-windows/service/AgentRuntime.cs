@@ -131,7 +131,7 @@ public sealed partial class AgentRuntime : IDisposable
                 case "workspaceSearchOrders": return await WorkspaceSearchOrders(p,ct);
                 case "workspaceDraftPreview": return WorkspaceDraftPreview(ct);
                 case "workspaceOrderDetail": return await WorkspaceOrderDetail(p,ct);
-                case "addWorkspaceDirectSource": case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
+                case "chooseWorkspaceRelatedSource": case "addWorkspaceDirectSource": case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
                 case "setWorkspaceOutput": case "activateWorkspace": case "pauseWorkspaceSource": case "resumeWorkspaceSource":
                     await WorkspaceCommand(command,p,ct); break;
                 case "status": return Status();

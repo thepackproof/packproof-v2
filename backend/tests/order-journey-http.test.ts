@@ -80,7 +80,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const grant=await call('POST','/connect/enrollments/'+e.id+'/redeem',{redeemSecret:e.redeemSecret});
     const credentials={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
     await call('POST','/v1/partner/agent/heartbeat',{version:'0.5.0',queueCount:0,enrollmentAcknowledged:true},credentials);
-    for(const folder of ['order','picking','packing','shipping','handoff','delivery','output']) await mkdir(path.join(root,folder));
+    for(const folder of ['order','picking','packing','evidence','shipping','handoff','delivery','output']) await mkdir(path.join(root,folder));
     const ps=process.env.PACKPROOF_JOURNEY_NATIVE_PS;
     runner=spawn(ps?'pwsh':'dotnet',ps?['-NoProfile','-NonInteractive','-File',ps]:['test','service-tests/PackProof.Connect.Service.Tests.csproj','-c','Release','--no-build','--filter','FullyQualifiedName~Run_real_order_service_against_isolated_http_application'],
       {cwd:path.join(repo,'connect-windows'),windowsHide:true,stdio:['ignore','inherit','inherit'],env:{...process.env,PACKPROOF_JOURNEY_ROOT:root,
@@ -94,33 +94,54 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     expect(approved.state).toBe('active'); mark('authorized');
     const list=()=>call('GET','/me/records/order-proofs'+query,undefined,adminHeaders);
     const view=(id:string)=>call('GET','/me/records/order-proofs/'+id+query,undefined,adminHeaders);
+    await publish('evidence','early_evidence.json');
     await publish('order','orders.json');mark('orderPublished');
     const first=await poll('earliest order capture',async()=>(await list()).orders?.find((o:any)=>o.orderReference==='SO10482'));
     const firstDoc=await view(first.proofId); expect(firstDoc.revision).toBe(1);mark('initialOnline');
+    expect(firstDoc.events.some((e:any)=>e.eventId==='photo-94')).toBe(false);
     await publish('picking','picking.csv');await publish('packing','packages.xml');await publish('shipping','labels.json');
+    await publish('shipping','label.zpl');
     const labelled=await poll('qualified label records',async()=>{const v=await view(first.proofId);return v.events.filter((x:any)=>x.kind==='label').length===2?v:undefined;});
     expect(labelled.events.some((x:any)=>x.kind==='handoff')).toBe(false);
     await publish('handoff','handoff.json');await publish('delivery','delivery.jsonl');
     await poll('delivery and split allocations',async()=>{const v=await view(first.proofId);return v.events.filter((x:any)=>x.kind==='delivery').length===2&&v.lines.find((l:any)=>l.lineId==='20')?.shippedQuantity==='2'?v:undefined;});
+    await publish('packing','late_bridge.json');
+    const completed=await poll('late evidence and original label bytes',async()=>{
+      const v=await view(first.proofId);
+      return v.events.some((e:any)=>e.eventId==='photo-94')&&v.originalArtifacts?.some((a:any)=>a.fileName==='label.zpl') ? v : undefined;
+    });
+    const verifier=await import('../../examples/multisource-journey/verify-output.mjs');
+    await poll('completed proof before destination outage',async()=>{try{return await verifier.verifyOutput(path.join(root,'output'),completed);}catch{return undefined;}});
+    const held=path.join(root,'disconnected-sample-output');
+    await poll('interrupt controlled output destination',async()=>{
+      try{await rename(path.join(root,'output'),held);return true;}
+      catch(e){if(['EPERM','EACCES','EBUSY'].includes((e as NodeJS.ErrnoException).code||''))return undefined;throw e;}
+    },12000);
+    await verifier.verifyOutput(held,completed);
     await writeFile(path.join(root,'restart'),'');await poll('protected worker restart',()=>receipt('restarted.json'));
     await publish('order','corrections.json','orders.json');mark('correctionPublished');
     const final=await poll('same proof receives quantity correction',async()=>{const v=await view(first.proofId);return v.lines.find((l:any)=>l.lineId==='20')?.orderedQuantity==='3'?v:undefined;});
     expect(final.lines.find((l:any)=>l.lineId==='20').shippedQuantity).toBe('2');mark('correctedOnline');
     const serviceView=await call('GET','/v1/partner/agent/order-proofs/'+first.proofId+'/revisions/'+final.revision,undefined,credentials);
     expect(serviceView).toEqual(final);
-    const verifier=await import('../../examples/multisource-journey/verify-output.mjs');
+    await verifier.verifyOutput(held,completed);
+    await rename(held,path.join(root,'output')); mark('destinationRestored');
     const checked=await poll('latest published output bundle',async()=>{try{return await verifier.verifyOutput(path.join(root,'output'),final);}catch{return undefined;}});
+    const inventory=JSON.parse(await readFile(path.join(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),'manifest.json'),'utf8'));
+    const label=inventory.files.find((e:any)=>e.kind==='original' && e.sourceFileName==='label.zpl');
+    expect(label?.originalSha256).toBe(final.originalArtifacts.find((a:any)=>a.fileName==='label.zpl').originalSha256);
+    expect(await readFile(path.resolve(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),label.file))).toEqual(await readFile(path.join(fixture,'label.zpl')));
     mark('outputVerified');
     const status=await poll('desktop service projection of committed order',async()=>{const s=await receipt('service-status.json');return s?.workspace?.orders?.some((o:any)=>o.proofId===first.proofId&&o.revision===final.revision)?s:undefined;});
     const msg={scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
       proofId:first.proofId,earliestRevision:firstDoc.revision,latestRevision:final.revision,verifiedFiles:checked.filesVerified,
-      activeSources:status.workspace.sources.length,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
+      activeSources:status.workspace.sources.length,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
       localAfterCommitObservedMs:Date.parse(timings.outputVerified)-Date.parse(timings.correctedOnline),routes};
     if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify(msg,null,2));
     console.log('Real HTTP journey',JSON.stringify({earliest:firstDoc.revision,latest:final.revision,verifiedFiles:checked.filesVerified,timings}));
   } catch(error) {
     const s=await receipt('service-status.json');
-    console.error('Journey checkpoint',phase,JSON.stringify({routes,error:s?.error?.code,attention:s?.workspace?.attention,
+    console.error('Journey checkpoint',phase,JSON.stringify({routes,error:s?.lastError,output:s?.output?.errorCode,attention:s?.workspace?.attention,
       sources:s?.workspace?.sources?.map((v:any)=>({state:v.state,issue:v.issue,queued:v.queued}))}));
     throw error;
   } finally {

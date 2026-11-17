@@ -67,3 +67,20 @@ The November 16 deployed `debf53231` binary only admits its 108-receipt schema t
 2. On the approved migrated target, `register-probes` returns four registrations. Bind their actual registered definitions and calls to `run-probe` using the keys `api`, `worker`, `previous-api`, `previous-worker`. Both candidate tasks execute the v7 read-only preflight. The predecessor tasks retain their actual previous binaries and perform bounded reader checks against this same catalog. All four must exit successfully. Record each actual stopped ECS task, complete registration and redacted log report under its own key in `probes`. Qualification on a restored target must be repeated under the actual production logins and target before a production image update.
 3. Generate `plan` with the new review and four observations. Then run the existing `worker-register`, `worker-update` and `api-update` stages as documented above. Verify every worker container and initializer before API promotion. Check public freshness, readiness and accepted-work progress after deployment. Browser publication and installed Windows acceptance have independent gates.
 4. The v7 plan omits executable legacy rollback requests. If recovery is necessary, pause the affected capability, reconcile admissions and pending work, and qualify the intended recovery images and actual roles against the current retained state. A compatible-reader receipt alone does not establish safe writer rollback. Preserve the database, originals, grants and receipts throughout.
+
+## Multi-source release and rollback
+
+The compatibility build and application build share an archive from one reviewed commit. The compatibility image keeps the deployed application on its existing migration inventory and extends its startup check to the exact 123 receipt. The application image contains the source readers, order API, worker and release checks for migration 123.
+
+1. Create and verify the source archive with the `reconstruction-v10` archive profile. Run both commands against the same commit and ZIP.
+
+   ```sh
+   python3 infra/backend-release/backend-source-archive.py "$COMMIT" backend.zip reconstruction-v10
+   python3 infra/backend-release/backend-source-archive.py "$COMMIT" backend.zip reconstruction-v10 --verify
+   ```
+
+2. Generate separate `build-request` files. Set `profile` to `order-workspace-bridge` in the first and `reconstruction-v10` in the second. Include the live API and worker digests in `predecessorImages`. The bridge build verifies the deployed base image digest and source label. Its image tag starts with `order-compat-`. The application image tag starts with `connect-runtime-`.
+3. On the existing schema, use the v9 runtime review and paired probes to qualify the bridge for both process roles. Promote the bridge worker, then API, and verify their deployed digests before changing the schema.
+4. Rehearse the pinned 123 migration, runtime grants, restore, and previous-image startup against an isolated database. Apply the reviewed migration through the separate database owner workflow. Preserve the bridge images and their environment settings.
+5. Use `packproof.connect-runtime-review/v10` with a `packproof.reconstruction-release-review/v10` preflight review. Bind the 123 catalog, records privilege inventory, hosted lock policy, source, image, target and independent process roles. The image-only qualification keeps `orderWorkspaceEnabled` false. Register and run both candidate probes and both bridge-reader probes. Generate the rollout requests only once the four read-only receipts validate. Verify runtime identity and queue health before cohort activation.
+6. For recovery, pause new collection and local output, retain durable jobs and published revisions, and qualify the compatibility image against the actual 123 database before restoring it on both roles. Preserve the additive tables. Resume only workflows supported by the recovered application.

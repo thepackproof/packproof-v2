@@ -72,6 +72,7 @@ public sealed partial class AgentRuntime
             outputFolder = ProofOutputFolder, outputState = ProofOutputState switch {
                 "ready" or "pending" or "current" => "ready", "access_denied" => "denied", "unavailable" => "unavailable", _ => "unselected"
             },
+            canReadOrders = WorkspaceGrantCurrent, viewKey = WorkspaceGrantCurrent ? w?.ActiveGrant?.ScopeDigest : null,
             orders = WorkspaceGrantCurrent && ordersScope == w?.ActiveGrant?.ScopeDigest ? workspaceOrders : [],
             syncState = WorkspaceGrantCurrent && networkOnline && ordersCurrent ? "current" : "pending",
             sources = (w?.Sources ?? []).Where(s => s.Roles.Count > 0).Select(s => new
@@ -80,7 +81,7 @@ public sealed partial class AgentRuntime
                 state = s.Paused ? "paused" : s.Issue is not null ? "needs_attention"
                     : s.PreviousCollectorId is { } priorId && !s.ReplacesPreviousCollector ? state.SourceSubscriptions.FirstOrDefault(p => p.Id == priorId)?.ServerState ?? "needs_approval"
                     : WorkspaceGrantCurrent && w!.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation ? "active" : "pending",
-                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, pendingMedia = s.MediaJobs.Count,
+                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, pendingMedia = s.MediaJobs.Count, historyState = s.ApiHistoryState,
                 queued = queue.Counts(DurableQueue.WorkspaceLane(s.Id)).Where(p => p.Key != "complete").Sum(p => p.Value)
             }).ToArray()
         };
@@ -130,11 +131,28 @@ public sealed partial class AgentRuntime
                 InspectWorkspaceSource(picked);
                 break;
             }
+            case "chooseWorkspaceRelatedSource":
+                var related = Source(w,p);
+                var targetRole = p.GetProperty("role").GetString() ?? "";
+                var targetId = p.GetProperty("relatedId").GetString();
+                if (related.Generation != p.GetProperty("expectedGeneration").GetInt32() ||
+                    !w.Sources.Any(s => s.Id == targetId && s.Id != related.Id && s.Roles.Contains(targetRole)))
+                    throw new ConnectException("SOURCE_REFERENCE_CHANGED", "Check the related source again.");
+                related.RelatedSources[targetRole] = targetId!;
+                related.ProposedWorkflow = null;
+                InspectWorkspaceSource(related);
+                break;
             case "confirmWorkspaceOrderMap":
                 var toMap = Source(w,p);
-                if (toMap.Generation != p.GetProperty("expectedGeneration").GetInt32() || toMap.ProposedMap == null
-                    || SourceReaders.OrderProfileVersion(toMap.ProposedMap) != p.GetProperty("profileVersion").GetString())
+                var workflowProfile = toMap.ProposedWorkflow is null ? null : SourceReaders.WorkflowProfileVersion(toMap.ProposedWorkflow);
+                var proposedProfile = workflowProfile ?? (toMap.ProposedMap == null ? null : SourceReaders.OrderProfileVersion(toMap.ProposedMap));
+                if (toMap.Generation != p.GetProperty("expectedGeneration").GetInt32() || proposedProfile == null
+                    || proposedProfile != p.GetProperty("profileVersion").GetString())
                     throw new ConnectException("PROFILE_CHANGED", "Check the folder again before confirming its order references.");
+                toMap.ConfirmedWorkflow = toMap.ProposedWorkflow;
+                toMap.ProposedWorkflow = null;
+                toMap.ConfirmedDependencies = toMap.RelatedSources.Values.Distinct().Where(id => w.Sources.Any(s=>s.Id==id && s.Roles.Count>0))
+                    .ToDictionary(id=>id,id=>w.Sources.Single(s=>s.Id==id).Generation);
                 toMap.ConfirmedMap = toMap.ProposedMap;
                 toMap.ProposedMap = null;
                 toMap.Generation = checked(toMap.Generation + 1);
@@ -147,6 +165,9 @@ public sealed partial class AgentRuntime
                 break;
             case "removeWorkspaceRole":
                 var changed = Source(w, p);
+                var removingRole = p.GetProperty("role").GetString();
+                if (changed.Transport == "api" && changed.Roles.Contains(removingRole ?? ""))
+                    await SetWorkspacePaused(w,changed,true,ct);
                 if (changed.Roles.Remove(p.GetProperty("role").GetString() ?? ""))
                 {
                     changed.Generation = checked(changed.Generation + 1);
@@ -177,9 +198,20 @@ public sealed partial class AgentRuntime
                 }
                 await ProposeWorkspace(w, pendingOutput, ct);
                 break;
-            case "pauseWorkspaceSource": Source(w,p).Paused = true; break;
-            case "resumeWorkspaceSource": Source(w,p).Paused = false; break;
+            case "pauseWorkspaceSource": await SetWorkspacePaused(w,Source(w,p),true,ct); break;
+            case "resumeWorkspaceSource": await SetWorkspacePaused(w,Source(w,p),false,ct); break;
         }
+    }
+
+    private async Task SetWorkspacePaused(OrderWorkspaceState w, WorkspaceSource source, bool pause, CancellationToken ct)
+    {
+        if (source.Transport == "api" && w.ActiveGrant is { } grant && grant.Generations.GetValueOrDefault(source.Id) == source.Generation)
+        {
+            var reply = await api.Request("POST", WorkspaceApi + "/api-source-pause",new { sourceId=source.Id,generation=source.Generation,scopeDigest=grant.ScopeDigest,paused=pause },state.Token,null,ct);
+            if (reply.GetProperty("paused").GetBoolean() != pause)
+                throw new ConnectException("SOURCE_PAUSE_UNCONFIRMED", "PackProof did not confirm the new source state. Review the connection again.");
+        }
+        source.Paused = pause;
     }
 
     private static bool Eligible(WorkspaceSource source) => !source.Paused && source.Roles.Count > 0 &&

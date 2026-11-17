@@ -30,10 +30,11 @@ function parseLine(v:unknown):Line{
 }
 export function parseRecord(input:unknown){
  const b=strictBody(input,['eventId','version','kind','entity','references','fields','lines','occurredAt','locator','sourceModifiedAt','fieldLineage']);
- if(typeof b.eventId==='string'&&b.eventId.startsWith('@derivation:'))throw new DomainError('INVALID_REQUEST','Use an external event identifier.',400);
+ if(typeof b.eventId==='string'&&/^@(derivation|conflict):/.test(b.eventId))throw new DomainError('INVALID_REQUEST','Use an external event identifier.',400);
  const kind=b.kind==='returns'?'return':String(b.kind);
  if(!kinds.includes(kind)||!Array.isArray(b.references)||b.references.length>32||b.lines!=null&&(!Array.isArray(b.lines)||b.lines.length>256))throw new DomainError('PROFILE_AMBIGUOUS','The source record has unsupported relationships or line allocations.',422);
  const entity=reference(b.entity),references=b.references.map(reference);
+ if(kind==='order'&&references.some(r=>r.type==='order'&&refKey(r)!==refKey(entity)))throw new DomainError('PROFILE_AMBIGUOUS','An order origin cannot identify another order as itself.',422);
  if(kind==='order'&&entity.type!=='order')throw new DomainError('PROFILE_AMBIGUOUS','An order origin needs a scoped order identity.',422);
  const raw=b.fields;
  if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).length>96)throw new DomainError('PROFILE_AMBIGUOUS','A bounded set of source fields is required.',422);
@@ -58,7 +59,7 @@ type Merged=StoredEvent&{history:StoredEvent[]};
 
 function latest(events:StoredEvent[]){
  const groups=new Map<string,StoredEvent[]>();
- for(const e of events){const key=canonicalize([e.source_id,e.record.eventId]);const group=groups.get(key)??[];group.push(e);groups.set(key,group);}
+ for(const e of events){const key=canonicalize([e.source_id,e.record.eventId,e.id.startsWith('order_conflict_')?e.id:'']);const group=groups.get(key)??[];group.push(e);groups.set(key,group);}
  const merged:Merged[]=[];
  for(const group of groups.values()){
   if(group.length>1&&!group.every(e=>/^\d{1,30}$/.test(e.record.version))){
@@ -113,14 +114,14 @@ export function projectOrders(events:StoredEvent[],roots:Root[]){
  const views=new Map<string,Merged[]>(),members=new Map<string,string[]>();
  for(const e of current){
   const entity=refKey(e.record.entity),direct=e.record.references.filter(r=>r.type==='order');
-  const matches=e.override!==undefined?new Set(e.override?[e.override]:[]):direct.length?new Set(direct.map(r=>anchors.get(refKey(r))).filter((id):id is string=>!!id)):
+  const matches=e.override!==undefined?new Set(e.override?[e.override]:[]):direct.length?new Set(direct.every(r=>anchors.has(refKey(r)))?direct.map(r=>anchors.get(refKey(r))!):[]):
    e.record.entity.type==='order'?new Set(anchors.has(entity)&&roots.find(r=>r.root_key===entity)?.source_id===e.source_id?[anchors.get(entity)!]:[]):resolve(entity);
   for(const id of matches){const a=views.get(id)??[];a.push(e);views.set(id,a);}
   for(const original of e.history)members.set(original.id,[...matches]);
  }
  const projections=roots.map(root=>{
   const used=views.get(root.proof_id)??[],events=used.map(e=>({...e.record,...lineage(e),associationScope:(members.get(e.id)??[]).length>1?'shared':'order',lines:(members.get(e.id)??[]).length>1?[]:e.record.lines}));
-  const claims=new Map<string,Map<string,Map<string,Set<string|null>>>>(),conflicts:string[]=[];
+  const claims=new Map<string,Map<string,Map<string,Set<string|null>>>>(),conflicts:string[]=[],quantityUnits=new Map<string,Set<string|null>>();
   for(const e of used){
    if((members.get(e.id)??[]).length>1)continue;
    for(const l of e.record.lines){
@@ -128,6 +129,7 @@ export function projectOrders(events:StoredEvent[],roots:Root[]){
     for(const [key,value] of Object.entries(l)){
      if(key==='lineId')continue;
      const allocations=values.get(key)??new Map();values.set(key,allocations);
+     if(quantityFields.some(q=>q===key)){const coordinate=canonicalize([l.lineId,key]),units=quantityUnits.get(coordinate)??new Set();units.add(l.unit??null);quantityUnits.set(coordinate,units);}
      // Count a package/line allocation once even if several independent sources report it.
      const partition=key.endsWith('Quantity')&&key!=='orderedQuantity'?refKey(e.record.entity):'line';
      const set=allocations.get(partition)??new Set();set.add(value);allocations.set(partition,set);
@@ -139,6 +141,8 @@ export function projectOrders(events:StoredEvent[],roots:Root[]){
    const line:Line={lineId};
    for(const [key,partitions] of values){
     const entries=[...partitions.values()];
+    const units=quantityUnits.get(canonicalize([lineId,key]));
+    if(entries.length>1&&units&&(units.size!==1||units.has(null))){conflicts.push(`${lineId}: ${key} units`);continue;}
     if(entries.some(s=>s.size!==1)){conflicts.push(`${lineId}: ${key}`);continue;}
     const v=entries.map(s=>[...s][0]);
     if(v.length===1)line[key]=v[0];
@@ -147,7 +151,7 @@ export function projectOrders(events:StoredEvent[],roots:Root[]){
    }
    lines.push(line);
   }
-  const evidence=used.flatMap(e=>e.history.map(v=>({...lineage(v),kind:'derived_excerpt',entity:v.record.entity,originalStatus:'retained',fields:v.record.fields}))).sort((a,b)=>a.receiptId.localeCompare(b.receiptId)||a.locator.localeCompare(b.locator));
+  const evidence=used.flatMap(e=>e.history.map(v=>({...lineage(v),kind:'derived_excerpt',entity:v.record.entity,originalStatus:v.profile_version==='packproof.partner-order-history/v1'?'original_unavailable':'retained',fieldLineage:v.record.fieldLineage,fields:v.record.fields}))).sort((a,b)=>a.receiptId.localeCompare(b.receiptId)||a.locator.localeCompare(b.locator));
   return {proofId:root.proof_id,orderReference:root.order_reference,lines:lines.sort((a,b)=>a.lineId.localeCompare(b.lineId)),events:events.sort((a,b)=>(a.occurredAt??a.observedAt).localeCompare(b.occurredAt??b.observedAt)||a.eventId.localeCompare(b.eventId)),evidence,conflicts:conflicts.sort()};
  });
  return {projections,members};

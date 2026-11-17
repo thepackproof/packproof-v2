@@ -145,7 +145,7 @@ async function main() {
     state.analysis.interpretation = { version, outcome: "automatic", grain: "shipment", reasonCodes: [] };
     state.capabilities.interpretationVersions = [version];
     let currentState = state;
-    for (const method of ["getStatus","checkComputer"]) {
+    for (const method of ["getStatus","getWorkspaceStatus","checkComputer"]) {
       ipcMain.handle("connect:" + method, event => {
         assert.equal(event.sender, page);
         assert.equal(event.senderFrame.url, appUrl);

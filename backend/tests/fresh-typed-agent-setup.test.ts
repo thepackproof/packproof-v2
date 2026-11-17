@@ -1,9 +1,10 @@
 import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
 import {randomBytes} from 'node:crypto';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,cp,mkdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import request from './in-process-http.js';
+import {createPgliteDatabase} from '../src/db/pglite.js';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
 import {migrate} from '../src/db/migrate.js';
 import {insertUser} from '../src/domain/users.js';
@@ -34,7 +35,7 @@ describe('fresh typed source setup through the assembled application',()=>{
  const mapping={orderId:'Order',orderLineId:'Line',property:'Property',amount:'Amount',unit:'Unit',sourceAsOf:'AsOf'},constants={observationKind:'snapshot',timeQuality:'snapshot_time_only'},identityPolicy={schema:'packproof.source-identity-policy/v1',eventKey:{kind:'composite',fields:['orderId','orderLineId','property']},revision:{kind:'source_as_of'}};
  const sourceConfig=()=>({batchSchema:'packproof.typed-source-batch/v2',identityPolicy,transport:'local_ntfs',displayName:'First existing order export',sourceProfile:'packproof.order-lines/v1',mappingVersion:'fresh-order-lines/1',sourceNamespace:'fresh-order-erp',mapping,constants,wholeFileConsent:true,folderDigest:'a'.repeat(64),initialFileName:'orders-first.csv',initialOriginalSha256:sha256Hex(csv),expectedHeaders:['Order','Line','Property','Amount','Unit','AsOf'],historyFrom:'2026-11-01T00:00:00Z',historyTo:null,unknownTimePolicy:'quarantine',maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:60,completenessPolicy:{kind:'unknown',scope:'shipment_line',sourceOwnerQualified:false,qualificationReference:null}});
  const batch=(w:Workspace,account:string,subscriptionId='no-source-approved',grantRevision=1)=>({schema:'packproof.typed-source-batch/v2',identityPolicy,connectionId:account,locationId:w.site,sourceProfile:'packproof.order-lines/v1',mappingVersion:'fresh-order-lines/1',sourceNamespace:'fresh-order-erp',subscriptionId,configurationRevision:1,grantRevision,wholeFileConsent:true,original:{name:'orders-first.csv',mediaType:'text/csv',content:csv,sha256:sha256Hex(csv)},mapping,constants,completeness:{kind:'unknown',asOf:null,marker:null}});
- beforeAll(async()=>{for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED',...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));opened=await openIsolatedTestDatabase();await migrate(opened.db);dir=await mkdtemp(path.join(os.tmpdir(),'fresh-typed-setup-'));admin=await insertUser(opened.db,clock);await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','fresh-fixture-secret'),auth:new BearerUserAdapter(opened.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']}};app=createServerApp({...deps,emailDelivery:new DisabledEmailDelivery()});},60000);
+ beforeAll(async()=>{for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED',...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));dir=await mkdtemp(path.join(os.tmpdir(),'fresh-typed-setup-'));opened=process.env.PACKPROOF_ORDER_RECOVERY_PROBE==='1'?await createPgliteDatabase(path.join(dir,'db')):await openIsolatedTestDatabase();await migrate(opened.db);admin=await insertUser(opened.db,clock);await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','fresh-fixture-secret'),auth:new BearerUserAdapter(opened.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']}};app=createServerApp({...deps,emailDelivery:new DisabledEmailDelivery()});},60000);
  afterAll(async()=>{await opened?.close();if(dir)await rm(dir,{recursive:true,force:true});vi.unstubAllEnvs();});
  it('starts from an empty account list and reaches an order-only recurring source without a legacy CSV setup',async()=>{
   const w=await workspace(),e=await start(w);expect(e.detail.choices.integrationAccounts).toEqual([]);expect(e.detail.capabilities.createLocalSource).toBe(true);
@@ -132,5 +133,22 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
   expect(moved.status,moved.text).toBe(200);expect(moved.body.proofs).toEqual(expect.arrayContaining([{proofId:id,revision:4},{proofId:cloudId,revision:3}]));
   const prior=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/3').set(service);
   expect(prior.body.events).toHaveLength(3);
+  if(process.env.PACKPROOF_ORDER_RECOVERY_PROBE==='1'){
+   const tables=['record_order_roots','record_order_sessions','record_order_receipts','record_order_events','record_order_event_refs','record_order_revisions','record_order_decisions','record_order_link_state','record_order_api_progress'];
+   const fingerprint=async(database:typeof opened.db)=>{const counts:Record<string,unknown>={};for(const name of tables)counts[name]=(await database.query(`SELECT COUNT(*)::integer n FROM ${name}`)).rows[0].n;return counts;};
+   const expected=await fingerprint(opened.db);
+   const stored=(await opened.db.query<{object_key:string;original_sha256:string}>('SELECT object_key,original_sha256 FROM record_order_receipts WHERE id=$1',[first.body.receiptId])).rows[0];
+   const base=path.join(dir,'recovery');await mkdir(base,{recursive:true});
+   const started=performance.now();await opened.close();
+   await cp(path.join(dir,'db'),path.join(base,'db'),{recursive:true});
+   await cp(path.join(dir,'objects'),path.join(base,'objects'),{recursive:true});
+   opened=await createPgliteDatabase(path.join(base,'db'));await migrate(opened.db);
+   expect(await fingerprint(opened.db)).toEqual(expected);
+   const restored=new LocalObjectStore(path.join(base,'objects'),'http://localhost','fresh-fixture-secret');
+   expect((await restored.digest(stored.object_key))?.sha256).toBe(stored.original_sha256);
+   const current=(await opened.db.query<{view: {revision:number;events:unknown[]}}>('SELECT view FROM record_order_revisions WHERE proof_id=$1 AND revision=3',[id])).rows[0].view;
+   expect(current).toEqual(prior.body);
+   process.stdout.write('Offline backup and restore fixture '+JSON.stringify({milliseconds:Math.round(performance.now()-started),lostCommittedRevisions:0,rows:expected})+'\n');
+  }
  },90000);
 });

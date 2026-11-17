@@ -26,7 +26,7 @@ export async function attention(db:Database,f:AttentionFilter){
  JOIN record_order_events e ON e.id=s.event_id JOIN record_order_receipts b ON b.id=e.receipt_id
  JOIN record_order_sessions session ON session.id=b.session_id JOIN record_agent_installations i ON i.id=session.installation_id
  WHERE s.unresolved AND ${f.where} ORDER BY s.updated_at DESC,e.id LIMIT 51`,f.params)).rows;
- return {items:rows.slice(0,50).map(r=>({eventKey:r.id,sourceId:r.source_id,fileName:r.file_name,locator:r.record.locator,entity:r.record.entity,references:r.record.references,kind:r.record.kind,reason:'This report needs an order reference.'})),hasMore:rows.length>50};
+ return {items:rows.slice(0,50).map(r=>({eventKey:r.id,sourceId:r.source_id,fileName:r.file_name,locator:r.record.locator,entity:r.record.entity,references:r.record.references,kind:r.record.kind,reason:r.id.startsWith('order_conflict_')?'This version differs from an earlier report. Review the source before linking.':'This report needs an order reference.'})),hasMore:rows.length>50};
 }
 export async function decideAssociation(db:Database,clock:Clock,w:RecordWorkspace,proofId:string,input:unknown,key:unknown){
  const b=strictBody(input,['organizationId','environment','eventKey','action','expectedRevision','reason']);
@@ -46,6 +46,7 @@ export async function decideAssociation(db:Database,clock:Clock,w:RecordWorkspac
   const prior=(await tx.query<{id:string}>(`SELECT d.id FROM record_order_decisions d WHERE d.event_id=$1 AND NOT EXISTS(SELECT 1 FROM record_order_decisions newer WHERE newer.supersedes_id=d.id)`,[id])).rows[0];
   const decisionId=newId('order_decision');
   await tx.query('INSERT INTO record_order_decisions(id,operation_key,event_id,proof_id,reason,actor_user_id,created_at,supersedes_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[decisionId,root.operation_key,id,b.action==='link'?proofId:null,reason,w.userId,clock.now().toISOString(),prior?.id??null]);
+  if(id.startsWith('order_conflict_')&&b.action==='link')await tx.query('INSERT INTO record_order_event_refs(operation_key,ref_key,event_id) SELECT $1,k,$3 FROM unnest($2::text[]) k ON CONFLICT DO NOTHING',[root.operation_key,[e.record.entity,...e.record.references].map(refKey),id]);
   const group=await orderComponent(tx,root.operation_key,[root.root_key,...[e.record.entity,...e.record.references].map(refKey)]);
   const {proofs}=await commitOrderGroup(tx,clock,root.operation_key,group,w.userId);
   return {decisionId,proofs};

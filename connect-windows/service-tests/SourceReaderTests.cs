@@ -65,14 +65,28 @@ public sealed class SourceReaderTests
     }
     private static string Isa=>"ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *261117*0900*U*00401*000000001*0*T*:~";
     [Theory]
-    [InlineData("850","BEG*00*NE*PO-007**20261117","purchase_order","PO-007")]
-    [InlineData("856","BSN*00*ASN-007*20261117*0900","shipment_notice","ASN-007")]
-    [InlineData("940","W05*N*WO-007","warehouse_shipping_order","WO-007")]
-    [InlineData("214","B10*PRO007*SHP007*SCAC","transport_status","SHP007")]
-    [InlineData("997","AK1*PO*700","functional_acknowledgment","700")]
-    public void X12_4010_documents_keep_envelope_and_document_role(string id,string header,string kind,string reference)
+    [InlineData("850","PO","BEG*00*NE*PO-007**20261117","purchase_order","PO-007")]
+    [InlineData("855","PR","BAK*00*AC*PO-007*20261117","purchase_order_response","PO-007")]
+    [InlineData("860","PC","BCH*04*NE*PO-007***20261117","purchase_order_change","PO-007")]
+    [InlineData("865","CA","BCA*00*AC*PO-007***20261117","purchase_order_change_response","PO-007")]
+    [InlineData("940","OW","W05*N*WO-007","warehouse_shipping_order","WO-007")]
+    [InlineData("945","SW","W06*J**20261117*SHP-007","warehouse_shipping_advice","SHP-007")]
+    [InlineData("943","AR","W06*J**20261117*ST-007","stock_transfer_shipment","ST-007")]
+    [InlineData("944","RE","W17*F*20261117*RCT-007","stock_transfer_receipt","RCT-007")]
+    [InlineData("856","SH","BSN*00*ASN-007*20261117*0900","shipment_notice","ASN-007")]
+    [InlineData("846","IB","BIA*00*ZZ*INV-007*20261117","inventory_advice","INV-007")]
+    [InlineData("947","AW","W15*20261117*ADJ-007","inventory_adjustment","ADJ-007")]
+    [InlineData("204","SM","B2**SCAC**LOAD-007**PP","load_tender","LOAD-007")]
+    [InlineData("990","GF","B1*SCAC*LOAD-007*20261117*A","load_tender_response","LOAD-007")]
+    [InlineData("214","QM","B10*PRO007*SHP007*SCAC","transport_status","SHP007")]
+    [InlineData("210","IM","B3**BILL-007*SHP007*PP**20261117*1250","freight_invoice","BILL-007")]
+    [InlineData("997","FA","AK1*PO*700","functional_acknowledgment","700")]
+    [InlineData("999","FA","AK1*PO*700*005010","implementation_acknowledgment","700")]
+    public void X12_documents_keep_envelope_and_document_role(string id,string group,string header,string kind,string reference)
     {
-        string raw=Isa+"GS*PO*SENDER*RECV*20261117*0900*1*X*004010~ST*"+id+"*0001~"+header+"~SE*3*0001~GE*1*1~IEA*1*000000001~";
+        string isa=id=="999"?Isa.Replace("*U*00401*","*^*00501*"):Isa;
+        string release=id=="999"?"005010X231A1":"004010";
+        string raw=isa+"GS*"+group+"*SENDER*RECV*20261117*0900*1*X*"+release+"~ST*"+id+"*0001~"+header+"~SE*3*0001~GE*1*1~IEA*1*000000001~";
         var read=SourceReaders.Read("sample.x12",Bytes(raw));
         Assert.Equal("parsed",read.State);var fields=Assert.Single(read.Rows).Fields;Assert.Equal(kind,fields["documentType"].GetString());
         Assert.Equal(reference,fields["documentReference"].GetString());Assert.Equal(0,SourceReaders.Normalize(read,"handoff").GetArrayLength());
@@ -80,8 +94,14 @@ public sealed class SourceReaderTests
     }
     [Theory]
     [InlineData("ORDERS","BGM+220+PO?+007+9","purchase_order","PO+007")]
+    [InlineData("ORDRSP","BGM+231+RESP-007+9","purchase_order_response","RESP-007")]
+    [InlineData("ORDCHG","BGM+230+CHG-007+9","purchase_order_change","CHG-007")]
     [InlineData("DESADV","BGM+351+ASN-007+9","despatch_advice","ASN-007")]
+    [InlineData("RECADV","BGM+352+RCPT-007+9","receiving_advice","RCPT-007")]
+    [InlineData("INVRPT","BGM+35+INV-007+9","inventory_report","INV-007")]
     [InlineData("IFTMIN","BGM+610+INSTR007+9","transport_instruction","INSTR007")]
+    [InlineData("IFTSTA","BGM+77+STATUS007+9","transport_status","STATUS007")]
+    [InlineData("INVOIC","BGM+380+BILL-007+9","invoice","BILL-007")]
     [InlineData("CONTRL","UCI+0007+S+R+7","syntax_acknowledgment","0007")]
     public void Edifact_D02B_documents_keep_release_and_escaped_values(string id,string header,string kind,string reference)
     {
@@ -89,6 +109,18 @@ public sealed class SourceReaderTests
         var read=SourceReaders.Read("sample.edi",Bytes(raw));Assert.Equal("parsed",read.State);
         var fields=Assert.Single(read.Rows).Fields;Assert.Equal(reference,fields["documentReference"].GetString());
         Assert.Equal(kind,fields["documentType"].GetString());Assert.Equal("D:02B:UN",fields["directory"].GetString());
+    }
+    [Fact]
+    public void Interchange_line_claims_preserve_qualifiers_and_reported_units()
+    {
+        string x=Isa+"GS*PO*S*R*20261117*0900*1*X*004010~ST*850*0001~BEG*00*NE*PO-1**20261117~PO1*20*2.500*EA***VP*A100~SE*4*0001~GE*1*1~IEA*1*000000001~";
+        var xClaims=Assert.Single(SourceReaders.Read("order.x12",Bytes(x)).Rows).Fields["claims"];
+        Assert.Equal("2.500",xClaims[1].GetProperty("value").GetString());
+        Assert.Equal("EA",xClaims[1].GetProperty("qualifier").GetString());
+        string e="UNB+UNOC:3+S+R+261117:0900+0001'UNH+1+ORDERS:D:02B:UN'BGM+220+P1+9'LIN+20++A100:SA'QTY+21:2.500:EA'UNT+5+1'UNZ+1+0001'";
+        var claims=Assert.Single(SourceReaders.Read("order.edi",Bytes(e)).Rows).Fields["claims"];
+        Assert.Equal("2.500",claims[2].GetProperty("value").GetString());Assert.Equal("21",claims[2].GetProperty("qualifier").GetString());
+        Assert.Equal("EA",claims[2].GetProperty("unit").GetString());
     }
     [Fact]
     public void Zpl_and_epcis_only_claim_observed_content()

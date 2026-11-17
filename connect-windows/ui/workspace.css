@@ -5,7 +5,7 @@
 .ws-work { width:min(100% - 32px, 820px); margin:clamp(16px,5vh,56px) auto; }
 .ws-step-header { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:12px; gap:12px; }
 .ws-step-header > span { display:inline-flex; align-items:center; gap:10px; font-size:.94rem; font-weight:600; }
-.ws-icon { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:8px; color:var(--brand); background:var(--brand-soft); font-family:"Segoe Fluent Icons","Segoe MDL2 Assets", sans-serif; }
+.ws-icon { display:inline-grid; place-items:center; width:34px; height:34px; border-radius:8px; color:var(--brand); background:var(--brand-soft); font-family:"Segoe Fluent Icons","Segoe MDL2 Assets","Segoe UI Emoji",sans-serif; }
 .ws-panel { background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-panel); padding:clamp(18px,4vw,44px); min-width:0; }
 .ws-panel h1 { font-size:clamp(1.6rem,3vw,2rem); line-height:1.2; margin:0 0 14px; }
 .ws-panel h2 { font-size:1.25rem; line-height:1.35; margin:24px 0 8px; }

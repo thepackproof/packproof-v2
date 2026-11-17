@@ -71,3 +71,12 @@ BEGIN
  RETURN NEW;
 END $$;
 
+CREATE TABLE record_order_api_progress (
+ installation_id text NOT NULL REFERENCES record_agent_installations(id),
+ source_id text NOT NULL,
+ generation integer NOT NULL CHECK(generation > 0),
+ cursor_proof_id text NOT NULL DEFAULT '',
+ history_finished boolean NOT NULL DEFAULT false,
+ paused boolean NOT NULL DEFAULT false,
+ PRIMARY KEY (installation_id,source_id,generation)
+);

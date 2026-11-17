@@ -37,24 +37,31 @@ function capture(input:unknown){
  const issues=(b.issues??[]) as unknown[];
  return {scopeDigest:digest(b.scopeDigest),sourceId:boundedText(b.sourceId,'source'),generation:positive(b.generation),profileVersion:boundedText(b.profileVersion,'profile'),observationId:boundedText(b.observationId,'observation'),fileName,mediaType:boundedText(b.mediaType,'media type',128),sha,bytes,records:b.records.map(normalizedRecord),issues:issues.map(s=>boundedText(s,'issue',512))};
 }
-export async function ensureOrderRoot(db:Database,clock:Clock,a:PartnerActor,o:Origin,sourceId:string,event:OrderRecord,existingProofId?:string){
+export async function ensureOrderRoot(db:Database,clock:Clock,a:PartnerActor,o:Origin,sourceId:string,event:OrderRecord,existingProofId?:string,native=false){
  if(event.kind!=='order'||event.entity.type!=='order')return;
  const key=refKey(event.entity),found=(await db.query<Root>('SELECT * FROM record_order_roots WHERE operation_key=$1 AND root_key=$2',[o.operation,key])).rows[0];
  if(found){
   if(found.source_id!==sourceId)throw new DomainError('PROFILE_AMBIGUOUS','Two origin sources claim this order namespace. Review their source identities.',409);
   return;
  }
- const externalId='connect-order-'+sha256Hex(canonicalize([o.operation,event.entity]));
+ const externalId=native?event.entity.id:'connect-order-'+sha256Hex(canonicalize([o.operation,event.entity]));
  const proofId=existingProofId??(await importPartnerOrder(db,clock,a,{integrationAccountId:o.account,operatorMembershipId:o.operator,externalId,transaction:{itemTitle:`Order ${event.entity.id}`.slice(0,200)}})).proofId;
  await db.query(`INSERT INTO record_order_roots(proof_id,operation_key,root_key,source_id,organization_id,environment,operator_membership_id,location_id,order_reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[proofId,o.operation,key,sourceId,o.organization,o.environment,o.operator,o.location,event.entity.id]);
  await db.query(`INSERT INTO record_state(proof_id,organization_id,environment,reference,location_id,updated_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,[proofId,o.organization,o.environment,event.entity.id,o.location,clock.now().toISOString()]);
 }
 export async function insertOrderEvent(db:Database,operation:string,source:string,receipt:string,record:OrderRecord){
- const id=newId('order_event'),signature=sha256Hex(canonicalize({...record,locator:undefined}));
+ const id=newId('order_event'),signature=sha256Hex(canonicalize({...record,locator:undefined,fieldLineage:undefined}));
  const inserted=(await db.query<{id:string}>('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING RETURNING id',[id,operation,source,record.eventId,record.version,receipt,signature,JSON.stringify(record)])).rows[0];
  if(!inserted){
   const old=(await db.query<{id:string;payload_digest:string}>('SELECT id,payload_digest FROM record_order_events WHERE operation_key=$1 AND source_id=$2 AND event_id=$3 AND source_version=$4',[operation,source,record.eventId,record.version])).rows[0];
-  if(old.payload_digest!==signature)throw new DomainError('REVISION_CONFLICT','This source event version already has different content.',409);
+  if(old.payload_digest!==signature){
+   // Keep both independently captured claims. A conflicting version must never
+   // change the canonical record until a reviewer resolves its identity.
+   const held='order_conflict_'+sha256Hex(canonicalize([operation,source,receipt,record.eventId,record.version,signature]));
+   await db.query('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING',[held,operation,source,'@conflict:'+held,record.version,receipt,signature,JSON.stringify(record)]);
+   await db.query('INSERT INTO record_order_link_state(event_id,operation_key,proof_ids,unresolved,updated_at) SELECT $1,$2,ARRAY[]::text[],true,received_at FROM record_order_receipts WHERE id=$3 ON CONFLICT DO NOTHING',[held,operation,receipt]);
+   return held;
+  }
   return old.id;
  }
  const refs=[record.entity,...record.references].map(refKey);
@@ -115,12 +122,13 @@ export async function commitOrderGroup(db:Database,clock:Clock,operation:string,
  for(const proof of projections)proofs.push(await publish(db,clock,operation,proof,actorId));
  return {members,proofs};
 }
-export async function ingestOrderFile(deps:Deps,db:Database,a:PartnerActor,i:Installation,input:unknown){
+export async function ingestOrderFile(deps:Deps,db:Database,a:PartnerActor,i:Installation,input:unknown,transport:'folder'|'api'='folder'){
  const x=capture(input),session=await activeScope(db,i,x.scopeDigest),o=originFor(i);
  const source=session.scope.sources.find(s=>s.id===x.sourceId&&s.generation===x.generation&&s.profileVersion===x.profileVersion);
- if(!source||source.transport==='api')throw new DomainError('AUTH_REQUIRED','Approve this source generation and profile before sending records.',403);
+ if(!source||source.transport!==transport)throw new DomainError('AUTH_REQUIRED','Approve this source generation and profile before sending records.',403);
+ if(transport==='api'&&x.records.some(r=>r.entity.type==='order'&&r.entity.namespace!==source.sourceNamespace))throw new DomainError('AUTH_REQUIRED','Use the namespace approved for this API order source.',403);
  const role:Record<string,string>={order:'order',picking:'picking',packing:'packing',label:'shipping',handoff:'handoff',delivery:'delivery',return:'returns'};
- if(x.records.some(r=>role[r.kind]&&!source.roles.includes(role[r.kind])))throw new DomainError('AUTH_REQUIRED','This source role is outside the approved scope.',403);
+ if(x.records.some(r=>role[r.kind]&&!source.roles.includes(role[r.kind])||r.kind==='evidence'&&!source.roles.some(v=>['packing','evidence','shipping','handoff','delivery','returns'].includes(v))))throw new DomainError('AUTH_REQUIRED','This source role is outside the approved scope.',403);
  await lockOperation(db,o.operation);
  const hash=sha256Hex(canonicalize({source:x.sourceId,generation:x.generation,profile:x.profileVersion,original:x.sha,file:x.fileName,media:x.mediaType,records:x.records,issues:x.issues}));
  const old=(await db.query<{id:string;payload_digest:string}>('SELECT id,payload_digest FROM record_order_receipts WHERE operation_key=$1 AND source_id=$2 AND generation=$3 AND observation_id=$4',[o.operation,x.sourceId,x.generation,x.observationId])).rows[0];
@@ -132,11 +140,11 @@ export async function ingestOrderFile(deps:Deps,db:Database,a:PartnerActor,i:Ins
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15)`,[receiptId,o.operation,x.sourceId,x.generation,x.observationId,hash,x.sha,stored.key,stored.version,x.fileName,x.mediaType,x.profileVersion,JSON.stringify(x.issues),deps.clock.now().toISOString(),session.id]);
  }
  const ids:string[]=[];
- for(const r of x.records){await ensureOrderRoot(db,deps.clock,a,o,x.sourceId,r);ids.push(await insertOrderEvent(db,o.operation,x.sourceId,receiptId,r));}
+ for(const r of x.records){const id=await insertOrderEvent(db,o.operation,x.sourceId,receiptId,r);ids.push(id);if(!id.startsWith('order_conflict_'))await ensureOrderRoot(db,deps.clock,a,o,x.sourceId,r,undefined,transport==='api');}
  const mediaKeys=await affectedMediaReferences(db,o.operation,x.sourceId,x.sha);
  const group=await orderComponent(db,o.operation,[...mediaKeys,...x.records.flatMap(r=>[r.entity,...r.references].map(refKey))]);
  const {members,proofs}=await commitOrderGroup(db,deps.clock,o.operation,group,a.actorUserId);
  const pending=x.issues.length>0||!ids.length&&!proofs.length||ids.some(id=>!members.get(id)?.length);
- return {receiptId,state:pending?'pending':'accepted',proofs,originalSha256:x.sha,issues:x.issues};
+ return {receiptId,state:pending?'pending':'accepted',proofs,originalSha256:x.sha,issues:x.issues,...(ids.some(id=>id.startsWith('order_conflict_'))?{code:'REVISION_CONFLICT'}:{})};
 }
 
