@@ -46,6 +46,11 @@ export function connectApprovalReturnPath(href: string): string | null {
     if (backfill) kept.set('backfillJobId', backfill);
     if (manifest) kept.set('manifestSha256', manifest);
     const action = url.searchParams.get('action');
+    const session = url.searchParams.get('workspaceSession');
+    if (session !== null) {
+      if (!validId(session) || !installation || !organization || !environment || subscription !== null || importId !== null || action !== null) return null;
+      kept.set('workspaceSession', session);
+    }
     if (action !== null && (action !== 'resume' || !installation)) return null;
     if (action === 'resume') kept.set('action', 'resume');
     return '/app/records/connect/approve?' + kept.toString();
