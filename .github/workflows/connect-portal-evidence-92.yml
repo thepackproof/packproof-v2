@@ -1,0 +1,47 @@
+name: Verify settled portal approval and order evidence
+on:
+  push:
+    branches: [qa/connect-portal-evidence-92]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portal:
+    runs-on: windows-2025
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.403'
+      - name: Build the isolated portal and its real Windows worker
+        shell: pwsh
+        run: |
+          foreach ($project in @('mobile','web','backend','connect-windows')) {
+            npm ci --prefix $project --no-audit --no-fund --ignore-scripts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          npm --prefix web run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build connect-windows/service-tests/PackProof.Connect.Service.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Set-Location connect-windows
+          node -e 'const fs=require("node:fs"); console.log("Electron",require("electron/package.json").version,fs.statSync(require("electron")).size);'
+      - name: Drive real approval and order review in Chromium
+        working-directory: backend
+        env:
+          PACKPROOF_JOURNEY_REAL_HTTP: '1'
+          PACKPROOF_JOURNEY_BROWSER: '1'
+          PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/http-journey-result.json
+        run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-portal-journey-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            connect-windows/build/workspace-screens/browser-*.png
+            connect-windows/build/http-journey-result.json
