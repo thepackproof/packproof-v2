@@ -15,7 +15,7 @@ import {previewTypedImport,commitTypedImport,readTypedImport,processPendingTyped
 import type {Database} from '../src/db/database.js';
 import {synchronizeOperationalCaseProjection,processPendingCaseProjections} from '../src/records/projection-worker.js';
 import {readProjectionSourceCounter} from '../src/records/projection-store.js';
-import {getOperationalCase,listOperationalCases,loadOperationalCaseProjection} from '../src/records/reconstruction.js';
+import {getOperationalCase,listOperationalCases,loadOperationalCaseProjection,readCaseSourceCoverage,type CaseRow} from '../src/records/reconstruction.js';
 import {synchronizeOperationalCaseIssues,processPendingReconstructionIssues,listOperationalCaseIssues,actOnOperationalCaseIssue,loadOperationalCaseIssueHistory,pageOperationalCaseIssueHistory} from '../src/records/reconstruction-issues.js';
 import {sha256Hex} from '../src/hash.js';
 import type {TypedSourceObservation,TypedSourceBatch} from '../src/records/source-contracts.js';
@@ -30,6 +30,7 @@ describe('bounded operational projection pages and complete worker findings',()=
  type ObservedQuery={sql:string;params:unknown[]};
  const observe=(db:Database,queries:ObservedQuery[]):Database=>({query:<T>(sql:string,params:unknown[]=[])=>{queries.push({sql,params});return db.query<T>(sql,params);},transaction:fn=>db.transaction(tx=>fn(observe(tx,queries)))});
  const caseAccountingReads=(queries:ObservedQuery[],id:string)=>queries.filter(q=>q.sql.startsWith('SELECT COUNT(*)::integer n FROM record_typed_rows r JOIN record_typed_batches b')&&q.sql.includes('b.subscription_id=$1 AND r.id IN')&&q.params[0]===id);
+ const sourceKeyReads=(queries:ObservedQuery[])=>queries.filter(q=>q.sql.includes('SUM(COUNT(*)) OVER (PARTITION BY b.subscription_id)')&&q.params[0]===caseId);
  const counterReconciliations=(queries:ObservedQuery[])=>queries.filter(q=>q.sql.includes('COUNT(*)::text received_count'));
  const fixture=(name:string)=>structuredClone(corpus.find(value=>value.name===name)!.input);
  async function source(name:string,profile:string){
@@ -79,7 +80,8 @@ describe('bounded operational projection pages and complete worker findings',()=
  },60000);
  it('evaluates all active assertions once in the worker and serves the complete summary on every page',async()=>{
   const queries:ObservedQuery[]=[],result=await synchronizeOperationalCaseProjection(observe(opened.db,queries),clock,await workspace(),caseId);expect(result.comparisonCount).toBe(2);
-  for(const id of subscriptions.values())expect(caseAccountingReads(queries,id)).toHaveLength(2);
+  expect(sourceKeyReads(queries)).toHaveLength(2);
+  for(const id of subscriptions.values())expect(caseAccountingReads(queries,id)).toHaveLength(0);
   expect(counterReconciliations(queries)).toHaveLength(subscriptions.size);
   const stored=(await opened.db.query<{source_snapshot:Array<{accountingAvailable:boolean}>;summary:{issueCount:number}}>('SELECT source_snapshot,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot.every(source=>source.accountingAvailable)).toBe(true);expect(stored.summary.issueCount).toBe(1);
   const counter=await readProjectionSourceCounter(opened.db,subscriptions.get('loading')!);expect(counter.ready).toBe(true);expect(counter.counts.received).toBe(603);expect(counter.counts.acceptedLinked).toBe(603);
@@ -88,12 +90,52 @@ describe('bounded operational projection pages and complete worker findings',()=
  },60000);
  it('loads each ready source once per worker evaluation without repeating case accounting or counter readiness reads',async()=>{
   const queries:ObservedQuery[]=[],result=await synchronizeOperationalCaseProjection(observe(opened.db,queries),clock,await workspace(),caseId);expect(result.comparisonCount).toBe(2);
+  expect(sourceKeyReads(queries)).toHaveLength(1);
   for(const id of subscriptions.values()){
-   expect(caseAccountingReads(queries,id)).toHaveLength(1);
+   expect(caseAccountingReads(queries,id)).toHaveLength(0);
    expect(queries.filter(q=>q.sql==='SELECT * FROM record_source_projection_counters WHERE subscription_id=$1'&&q.params[0]===id)).toHaveLength(1);
   }
   expect(counterReconciliations(queries)).toEqual([]);
-  const stored=(await opened.db.query<{source_snapshot:Array<{accountingAvailable:boolean}>;summary:{issueCount:number}}>('SELECT source_snapshot,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot.every(source=>source.accountingAvailable)).toBe(true);expect(stored.summary.issueCount).toBe(1);
+  const stored=(await opened.db.query<{source_keys:string[];source_snapshot:Array<{accountingAvailable:boolean}>;summary:{issueCount:number}}>('SELECT source_keys,source_snapshot,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot.every(source=>source.accountingAvailable)).toBe(true);expect(stored.summary.issueCount).toBe(1);
+  expect(stored.source_keys.map(key=>JSON.parse(key)[0]).sort()).toEqual([...subscriptions.values()].sort());
+ },60000);
+ it('counts all current namespaces of a subscription once while retaining each source key',async()=>{
+  const loading=subscriptions.get('loading')!,w=await workspace(),rollback=new Error('rollback historical namespace fixture');
+  await expect(opened.db.transaction(async tx=>{
+   // An earlier declared namespace of the same subscription remains visible.
+   await tx.query(`INSERT INTO record_typed_batches SELECT (jsonb_populate_record(NULL::record_typed_batches,
+    to_jsonb(b)||jsonb_build_object('id','older-namespace-batch','source_namespace','older-namespace'))).*
+    FROM record_typed_batches b WHERE b.subscription_id=$1 ORDER BY b.id LIMIT 1`,[loading]);
+   await tx.query(`INSERT INTO record_typed_rows SELECT (jsonb_populate_record(NULL::record_typed_rows,
+    to_jsonb(r)||jsonb_build_object('id','older-namespace-row','batch_id','older-namespace-batch','row_number',1))).*
+    FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE b.subscription_id=$1 AND r.case_id=$2 AND r.status='accepted_linked' ORDER BY r.id LIMIT 1`,[loading,caseId]);
+   const c=(await tx.query<CaseRow>('SELECT * FROM record_cases WHERE id=$1',[caseId])).rows[0];
+   const standalone=await readCaseSourceCoverage(tx,clock,w,c,loading,account,'older-namespace');
+   const queries:ObservedQuery[]=[];
+   const projection=await loadOperationalCaseProjection(observe(tx,queries),clock,w,caseId,{evaluation:true});
+   const measured=projection.sources.filter(source=>source.subscriptionId===loading);
+   expect(measured.map(source=>source.sourceNamespace).sort()).toEqual(['older-namespace','pilot-export']);
+   expect(standalone.caseAccounting?.received).toBe(604);
+   expect(measured.map(source=>source.caseAccounting)).toEqual([standalone.caseAccounting,standalone.caseAccounting]);
+   expect(sourceKeyReads(queries)).toHaveLength(1);expect(caseAccountingReads(queries,loading)).toHaveLength(0);
+   throw rollback;
+  })).rejects.toBe(rollback);
+ },60000);
+ it('retains the dependency limit when one subscription has more than 500 distinct source keys',async()=>{
+  const w=await workspace(),loading=subscriptions.get('loading')!,rollback=new Error('rollback source key fanout');
+  await expect(opened.db.transaction(async tx=>{
+   await tx.query(`WITH original AS (SELECT to_jsonb(b) AS data FROM record_typed_batches b WHERE b.subscription_id=$1 ORDER BY b.id LIMIT 1)
+    INSERT INTO record_typed_batches SELECT (jsonb_populate_record(NULL::record_typed_batches,
+    data||jsonb_build_object('id','source-key-batch-'||n,'source_namespace','separate-namespace-'||n))).*
+    FROM original CROSS JOIN generate_series(1,500) n`,[loading]);
+   await tx.query(`WITH original AS (SELECT to_jsonb(r) AS data FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id
+    WHERE b.subscription_id=$1 AND r.case_id=$2 AND r.status='accepted_linked' ORDER BY r.id LIMIT 1)
+    INSERT INTO record_typed_rows SELECT (jsonb_populate_record(NULL::record_typed_rows,
+    data||jsonb_build_object('id','source-key-row-'||n,'batch_id','source-key-batch-'||n,'row_number',1))).*
+    FROM original CROSS JOIN generate_series(1,500) n`,[loading,caseId]);
+   await expect(loadOperationalCaseProjection(tx,clock,w,caseId,{evaluation:true})).rejects.toMatchObject({code:'CASE_SOURCE_LIMIT'});
+   throw rollback;
+  })).rejects.toBe(rollback);
  },60000);
  it('retains source counter initialization when source health is disabled',async()=>{
   const w=await workspace(),rollback=new Error('rollback health-disabled worker fixture');vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');
@@ -101,8 +143,11 @@ describe('bounded operational projection pages and complete worker findings',()=
    // Only the fixture owner resets derived readiness; runtime has no reset path.
    await tx.query('UPDATE record_source_projection_counters SET ready=false WHERE subscription_id=ANY($1::text[])',[[...subscriptions.values()]]);
    const queries:ObservedQuery[]=[];expect((await synchronizeOperationalCaseProjection(observe(tx,queries),clock,w,caseId)).comparisonCount).toBe(0);
+   expect(sourceKeyReads(queries)).toHaveLength(0);
    expect(counterReconciliations(queries)).toHaveLength(subscriptions.size);
-   for(const id of subscriptions.values())expect((await readProjectionSourceCounter(tx,id)).ready).toBe(true);
+   for(const id of subscriptions.values()){
+    expect(caseAccountingReads(queries,id)).toHaveLength(1);expect((await readProjectionSourceCounter(tx,id)).ready).toBe(true);
+   }
    const stored=(await tx.query<{source_snapshot:unknown[];source_keys:string[];summary:{issueCount:number|null}}>('SELECT source_snapshot,source_keys,summary FROM record_case_projection_state WHERE case_id=$1',[caseId])).rows[0];expect(stored.source_snapshot).toEqual([]);expect(stored.source_keys).toHaveLength(subscriptions.size);expect(stored.summary.issueCount).toBeNull();throw rollback;
   })).rejects.toBe(rollback);}finally{vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','true');}
  },60000);

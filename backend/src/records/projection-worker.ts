@@ -4,7 +4,7 @@ import type {RecordWorkspace} from './access.js';
 import {requireRecordWorkspace} from './access.js';
 import {DomainError} from '../domain/errors.js';
 import {requireCaseAccess} from './cases.js';
-import {loadOperationalCaseProjection,readCaseSourceKeys,readCaseSourceCoverage,includePolicySourceCoverage,type CaseRow} from './reconstruction.js';
+import {loadOperationalCaseProjectionWithSourceKeys,readCaseSourceKeys,readCaseSourceCoverage,includePolicySourceCoverage,type CaseRow} from './reconstruction.js';
 import {reconstructionFeatureEnabled} from './reconstruction-features.js';
 import {readProjectionSourceCounter,reconcileProjectionSourceCounter,sourceProjectionSignature,projectionSourceDependencies} from './projection-store.js';
 import {identityMappingDependencies} from './identity-projection.js';
@@ -14,22 +14,24 @@ import {sourceWorkRecheckIntervalMs,type SourceCoverage} from './coverage.js';
  * visibility. Active assertions, not retained timeline history, drive rules. */
 export async function synchronizeOperationalCaseProjection(db:Database,clock:Clock,w:RecordWorkspace,caseId:string){
  const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
- const sourceKeys=await readCaseSourceKeys(db,w,c),sourceHealthAvailable=reconstructionFeatureEnabled('sourceHealth');
+ const sourceHealthAvailable=reconstructionFeatureEnabled('sourceHealth');
  if(!sourceHealthAvailable){
   // The health-disabled loader omits sources; retain its counter preflight.
+  const sourceKeys=await readCaseSourceKeys(db,w,c);
   const sources:SourceCoverage[]=[];
   for(const key of sourceKeys){const [id,connectionId,namespace]=JSON.parse(key) as string[];sources.push(await readCaseSourceCoverage(db,clock,w,c,id,connectionId,namespace));}
   await includePolicySourceCoverage(db,clock,w,c,sources);
   for(const source of sources)if(source.subscriptionId&&!(await readProjectionSourceCounter(db,source.subscriptionId)).ready)await reconcileProjectionSourceCounter(db,clock,source.subscriptionId);
  }
- let projection=await loadOperationalCaseProjection(db,clock,w,caseId,{evaluation:true});
+ let evaluation=await loadOperationalCaseProjectionWithSourceKeys(db,clock,w,caseId,{evaluation:true});
  if(sourceHealthAvailable){
-  const unavailable=[...new Set(projection.sources.flatMap(source=>source.subscriptionId&&source.accountingAvailable===false?[source.subscriptionId]:[]))];
+  const unavailable=[...new Set(evaluation.projection.sources.flatMap(source=>source.subscriptionId&&source.accountingAvailable===false?[source.subscriptionId]:[]))];
   for(const id of unavailable)await reconcileProjectionSourceCounter(db,clock,id);
   // Re-evaluate after initializing counters, never persist the first unknown
   // result. Already-ready sources need only the complete authorized load above.
-  if(unavailable.length)projection=await loadOperationalCaseProjection(db,clock,w,caseId,{evaluation:true});
+  if(unavailable.length)evaluation=await loadOperationalCaseProjectionWithSourceKeys(db,clock,w,caseId,{evaluation:true});
  }
+ const {projection,sourceKeys}=evaluation;
  const now=clock.now(),futureDeadlines=projection.comparisons.flatMap(c=>c.deadlineAt&&Date.parse(c.deadlineAt)>now.getTime()?[Date.parse(c.deadlineAt)]:[]),freshness=projection.sources.flatMap(s=>s.expectedIntervalSeconds&&s.coverage==='qualified'&&['current','quiet_checked'].includes(s.state)?[Math.min(...[s.lastCheckedAt,s.sourceAsOf,s.completeness.asOf].map(t=>Date.parse(t!)))+s.expectedIntervalSeconds*1000]:[]),validUntil=new Date(Math.min(now.getTime()+86400000,...(freshness.length?freshness:[now.getTime()+60000]),...futureDeadlines)).toISOString(),next=new Date(Math.min(now.getTime()+sourceWorkRecheckIntervalMs(projection.sources),Date.parse(validUntil))).toISOString();
  await db.transaction(async tx=>{
   await tx.query('SELECT pg_advisory_xact_lock(1347438167,hashtext($1))',[caseId]);

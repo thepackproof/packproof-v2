@@ -78,6 +78,10 @@ export interface CaseRow {id:string;root_external_id:string;root_namespace:strin
 /** Internal complete projection used by both the paginated portal and the new
  * export profile. There is no first-500 truncation and no raw shared-file URL. */
 export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:RecordWorkspace,caseId:string,options:{evaluation?:boolean}={}) {
+ return (await loadOperationalCaseProjectionWithSourceKeys(db,clock,w,caseId,options)).projection;
+}
+
+export async function loadOperationalCaseProjectionWithSourceKeys(db:Database,clock:Clock,w:RecordWorkspace,caseId:string,options:{evaluation?:boolean}={}) {
  await currentWorkspace(db,clock,w);
  const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
  const [assertionResult,entityResult,relationResult,membersResult,observationResult,receiptLimitations]=await Promise.all([
@@ -115,9 +119,11 @@ export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:Re
   if(rulesAvailable&&assertion.active)comparisonInputs.push(...(splitInputs??[assertion]));
  }
  const relationships=relationResult.rows.map(row=>{const from=entityMap.get(row.from_entity_id)!,to=entityMap.get(row.to_entity_id)!;return {id:row.id,from:{id:from.id,...reference(from)},to:{id:to.id,...reference(to)},type:row.relation_type,quantity:row.quantity==null?null:json(row.quantity),sourceReceiptId:row.assertion_row_id,row:row.row_number,active:row.active,restricted:false};});
- const sourceKeys=await readCaseSourceKeys(db,w,c);
+ const groupedCounts=options.evaluation===true&&sourceHealthAvailable;
+ const sourceRows=await readCaseSourceRows(db,w,c,groupedCounts);
+ const sourceKeys=sourceRows.map(caseSourceKey);
  const sources:SourceCoverage[]=[];
- if(sourceHealthAvailable)for(const key of sourceKeys){const [subscriptionId,connectionId,namespace]=JSON.parse(key) as string[];sources.push(await readCaseSourceCoverage(db,clock,w,c,subscriptionId,connectionId,namespace));}
+ if(sourceHealthAvailable)for(const row of sourceRows)sources.push(await readCaseSourceCoverage(db,clock,w,c,row.subscription_id,row.connection_id,row.source_namespace,row.received));
  await includePolicySourceCoverage(db,clock,w,c,sources);
  const comparisons=rulesAvailable?evaluateReconstructionRules(comparisonInputs,sources,{now:clock.now()}):[];
  const grouped=new Map<string,ReconstructionAssertion[]>();for(const assertion of assertions){const list=grouped.get(assertion.source.observationId)??[];list.push(assertion);grouped.set(assertion.source.observationId,list);}
@@ -130,10 +136,11 @@ export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:Re
  const restrictedAliases=options.evaluation?false:await hasRestrictedCaseAliases(db,clock,w,caseId);
  const after=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
  if(Number(after.revision)!==Number(c.revision))throw new DomainError('CASE_PROJECTION_CHANGED','This case changed during reconstruction. Refresh to view one consistent revision.',409);
- return {schema:RECONSTRUCTION_PROFILE,resourceType:'operational_case' as const,projectionVersion,
+ const projection={schema:RECONSTRUCTION_PROFILE,resourceType:'operational_case' as const,projectionVersion,
   case:{id:c.id,reference:c.root_external_id,namespace:c.root_namespace,type:c.root_type,locationId:c.location_id,state:entities.some(entity=>entity.entity_type==='shipment')?'reconstructed':'provisional',revision:Number(c.revision),createdAt:iso(c.created_at)!,updatedAt:iso(c.updated_at)!,shipmentCount:entities.filter(entity=>entity.entity_type==='shipment').length,issueCount:rulesAvailable?comparisons.filter(comparison=>comparison.outcome==='different').length:null,proofIds:permittedMembers,restrictedMembers},
   assertions,relationships,comparisons,timeline,sources,identityMappings,aliases:identityMappings.aliases,identityRules:identityMappings.rules,restrictedAliases,...associations,ruleCapabilities:{quantityDisagreement:rulesAvailable?'prerequisites_required':'disabled',serialDisagreement:rulesAvailable?'explicit_unit_context_required':'disabled',sourceIdentityConflict:'enforced_at_typed_intake',sourceCoverage:sourceHealthAvailable?'qualified_source_boundaries_required':'disabled',labelWithoutAcceptance:rulesAvailable?'qualified_policy_required':'disabled',handlingUnitHandoffGap:rulesAvailable?'qualified_policy_required':'disabled'},sourceHealthStatus:{available:sourceHealthAvailable,reason:sourceHealthAvailable?null:'Source health is awaiting qualification and activation.'},rulesStatus:{available:rulesAvailable,reason:rulesAvailable?null:'Operational comparisons require activated source health and qualified rules.'},measuredAt:clock.now().toISOString(),
   limitations:['Values are source assertions. Physical contents, custody, responsibility and fraud are not established.','A source-reported completeness marker requires an approved source-owner qualification.','Case access permits scoped source extracts, not complete shared original files.','Source independence is unknown unless declared lineage establishes otherwise.',...receiptLimitations]};
+ return {projection,sourceKeys};
 }
 
 /** Call only after current case authorization. A visible accepted prefix does
@@ -153,7 +160,7 @@ export async function readCaseReceiptLimitations(db:Database,caseId:string):Prom
  return limitations;
 }
 
-export async function readCaseSourceCoverage(db:Database,clock:Clock,w:RecordWorkspace,c:CaseRow,subscriptionId:string,connectionId:string,namespace:string):Promise<SourceCoverage> {
+export async function readCaseSourceCoverage(db:Database,clock:Clock,w:RecordWorkspace,c:CaseRow,subscriptionId:string,connectionId:string,namespace:string,caseReceived?:number):Promise<SourceCoverage> {
  const subscription=subscriptionId?(await db.query<{state:SourceCoverageInput['state'];configuration:Json;configuration_revision:number;last_check_at:Date|string|null;source_as_of:Date|string|null;heartbeat:Json;authority_current:boolean;installation_id:string|null;collector_version:string|null;installation_authority:boolean}>(`SELECT s.installation_id,i.version collector_version,(s.installation_id IS NULL OR (i.id IS NOT NULL AND i.organization_id=s.organization_id AND i.environment=s.environment AND i.principal_id=s.principal_id AND i.integration_account_id=s.connection_id AND i.operator_membership_id=s.operator_membership_id AND i.location_id=s.location_id AND i.status IN ('ready','active') AND i.enrollment_acknowledged_at IS NOT NULL AND i.renewal_credential_id IS NULL AND EXISTS(SELECT 1 FROM platform_credentials installed_credential WHERE installed_credential.id=i.credential_id AND installed_credential.principal_id=s.principal_id AND installed_credential.revoked_at IS NULL AND installed_credential.expires_at>$6 AND installed_credential.scopes ?& ARRAY['imports:read','imports:write']))) installation_authority,s.state,s.last_check_at,s.source_as_of,s.heartbeat,s.configuration_revision,r.configuration,
    (p.revoked_at IS NULL AND principal_user.status='ACTIVE' AND m.revoked_at IS NULL AND u.status='ACTIVE' AND m.role IN ('OWNER','ADMIN','OPERATOR') AND COALESCE(cs.paused,false)=false AND (m.location_scoped=false OR EXISTS(SELECT 1 FROM record_membership_locations g WHERE g.organization_id=s.organization_id AND g.membership_id=m.id AND g.location_id=s.location_id)) AND EXISTS(SELECT 1 FROM platform_credentials credential WHERE credential.principal_id=p.id AND credential.revoked_at IS NULL AND credential.expires_at>$6 AND credential.scopes ? 'imports:write')) AS authority_current
    FROM record_source_subscriptions s JOIN record_source_subscription_revisions r ON r.subscription_id=s.id AND r.revision=s.configuration_revision
@@ -171,7 +178,7 @@ export async function readCaseSourceCoverage(db:Database,clock:Clock,w:RecordWor
   const n=(status:string)=>Number(rows.find(r=>r.status===status)?.n??0);
   counter={subscriptionId,ready:true,counts:{received:rows.reduce((s,r)=>s+Number(r.n),0),processing:n('processing'),acceptedLinked:n('accepted_linked'),acceptedUnlinked:n('accepted_unlinked'),duplicate:n('duplicate'),conflict:n('conflict'),quarantined:n('quarantined'),rejected:n('rejected')},unknownTimeCount:rows.reduce((s,r)=>s+Number(r.unknown_count),0)};
  }
- const caseCounts=(await db.query<{n:number}>(`SELECT COUNT(*)::integer n FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE b.subscription_id=$1 AND r.id IN ${caseObservationCandidatesSql('$2')} AND ${currentCaseObservationSql('r','$2')}`,[subscriptionId,c.id])).rows[0]?.n??0;
+ const caseCounts=caseReceived??(await db.query<{n:number}>(`SELECT COUNT(*)::integer n FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE b.subscription_id=$1 AND r.id IN ${caseObservationCandidatesSql('$2')} AND ${currentCaseObservationSql('r','$2')}`,[subscriptionId,c.id])).rows[0]?.n??0;
  const latestContract=batches[0]?json(batches[0].contract):{},snapshotState=(config.completenessPolicy as {fileBoundary?:unknown}|undefined)?.fileBoundary?await readSourceSnapshotState(db,{subscriptionId,organizationId:w.organizationId,environment:w.environment,locationId:c.location_id,operatorMembershipId:c.operator_membership_id,sourceNamespace:namespace,configurationRevision:Number(subscription.configuration_revision),now:clock.now().toISOString()}):null,complete=snapshotState?.completeness??(latestContract.completeness??{kind:'unknown',asOf:null,marker:null}) as TypedSourceCompleteness;
  const installationError=subscription.installation_id?(!reconstructionFeatureEnabled('multiSourceAgent')||!subscription.installation_authority?'AGENT_AUTHORIZATION_REQUIRED':(!typedCollectorVersionSupported(subscription.collector_version??'',typeof config.batchSchema==='string'?config.batchSchema:'packproof.typed-source-batch/v1')||(config.completenessPolicy as {fileBoundary?:unknown}|undefined)?.fileBoundary&&!supportsSourceBackfills(subscription.collector_version))?'SOURCE_COLLECTOR_VERSION_UNSUPPORTED':null):null;
  const errorCode=installationError??(!subscription?.authority_current?'SOURCE_AUTHORIZATION_REQUIRED':batches[0]&&Number(batches[0].configuration_revision)!==Number(subscription.configuration_revision)?'MAPPING_REVISION_CHANGED':typeof heartbeat.errorCode==='string'?heartbeat.errorCode:null);
@@ -232,10 +239,20 @@ function projectReconstructionAssertion(row:AssertionRow,caseId:string,find:(key
  if(new Set(splitInputs.map(input=>input.comparisonScope.shipment)).size!==splitInputs.length)return {assertion};
  return {assertion,splitInputs};
 }
-export async function readCaseSourceKeys(db:Database,w:RecordWorkspace,c:CaseRow):Promise<string[]> {
- const rows=(await db.query<{subscription_id:string;connection_id:string;source_namespace:string}>(`SELECT DISTINCT b.subscription_id,b.connection_id,b.source_namespace FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE r.id IN ${caseObservationCandidatesSql('$1')} AND ${currentCaseObservationSql('r','$1')} AND b.organization_id=$2 AND b.environment=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 ORDER BY b.subscription_id,b.connection_id,b.source_namespace LIMIT 501`,[c.id,w.organizationId,w.environment,c.location_id,c.operator_membership_id])).rows;
+interface CaseSourceRow {subscription_id:string;connection_id:string;source_namespace:string;received?:number}
+const caseSourceKey=(row:CaseSourceRow)=>canonicalize([row.subscription_id,row.connection_id,row.source_namespace]);
+async function readCaseSourceRows(db:Database,w:RecordWorkspace,c:CaseRow,withCounts:boolean) {
+ const fields='b.subscription_id,b.connection_id,b.source_namespace';
+ // All current case rows already pass the same org, environment, location and
+ // operator checks inside currentCaseObservationSql. Count across namespaces
+ // for subscription-level case accounting while retaining each dependency key.
+ const select=withCounts?fields+', (SUM(COUNT(*)) OVER (PARTITION BY b.subscription_id))::integer AS received':'DISTINCT '+fields;
+ const rows=(await db.query<CaseSourceRow>(`SELECT ${select} FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE r.id IN ${caseObservationCandidatesSql('$1')} AND ${currentCaseObservationSql('r','$1')} AND b.organization_id=$2 AND b.environment=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 ${withCounts?'GROUP BY '+fields+' ':''}ORDER BY ${fields} LIMIT 501`,[c.id,w.organizationId,w.environment,c.location_id,c.operator_membership_id])).rows;
  if(rows.length>500)throw new DomainError('CASE_SOURCE_LIMIT','This case exceeds the supported 500-source dependency profile. Review its source grants before reconstructing it.',409);
- return rows.map(row=>canonicalize([row.subscription_id,row.connection_id,row.source_namespace]));
+ return rows;
+}
+export async function readCaseSourceKeys(db:Database,w:RecordWorkspace,c:CaseRow):Promise<string[]> {
+ return (await readCaseSourceRows(db,w,c,false)).map(caseSourceKey);
 }
 export async function includePolicySourceCoverage(db:Database,clock:Clock,w:RecordWorkspace,c:CaseRow,sources:SourceCoverage[]) {
  const seen=new Set(sources.map(s=>s.subscriptionId));

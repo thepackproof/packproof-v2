@@ -56,9 +56,26 @@ export function currentCaseRelationshipSql(relationshipAlias:string,rowAlias:str
 
 /** Entity history follows its currently retained per-case assertion or edge. */
 export function currentCaseEntitySql(entityAlias='e',activeOnly=false) {
- const active=activeOnly?` AND NOT ${caseObservationSupersededSql('entity_source.id',entityAlias+'.case_id')}`:'';
-
- return `(EXISTS(SELECT 1 FROM record_case_assertions entity_assertion JOIN record_typed_rows entity_source ON entity_source.id=entity_assertion.observation_id WHERE entity_assertion.entity_id=${entityAlias}.id AND entity_assertion.case_id=${entityAlias}.case_id AND ${currentCaseAssertionSql('entity_assertion','entity_source',`${entityAlias}.case_id`)}${active}) OR EXISTS(SELECT 1 FROM record_case_relations entity_relation JOIN record_typed_rows entity_source ON entity_source.id=entity_relation.assertion_row_id WHERE entity_relation.case_id=${entityAlias}.case_id AND (entity_relation.from_entity_id=${entityAlias}.id OR entity_relation.to_entity_id=${entityAlias}.id) AND ${currentCaseRelationshipSql('entity_relation','entity_source',`${entityAlias}.case_id`)}${active}))`;
+ const caseId=`${entityAlias}.case_id`;
+ if(activeOnly){
+  // Search the indexed primary case history newest first. The separate branch
+  // includes rows linked through another primary case or through a partition only.
+  // The ordering favors a recent witness while retaining all older candidates.
+  const columns='candidate.id,candidate.case_id,candidate.batch_id,candidate.status';
+  return `EXISTS(SELECT 1 FROM (
+   (SELECT ${columns} FROM record_typed_rows candidate WHERE candidate.case_id=${caseId} AND candidate.status='accepted_linked'
+    ORDER BY candidate.received_at DESC,candidate.id DESC OFFSET 0)
+   UNION ALL
+   SELECT ${columns} FROM record_case_row_projections p JOIN record_typed_rows candidate ON candidate.id=p.observation_id
+   WHERE p.case_id=${caseId} AND p.state='linked' AND NOT EXISTS(SELECT 1 FROM record_case_row_projections successor WHERE successor.supersedes_id=p.id)
+    AND (candidate.case_id IS DISTINCT FROM ${caseId} OR candidate.status<>'accepted_linked')
+  ) entity_source WHERE ${currentCaseObservationSql('entity_source',caseId)} AND NOT ${caseObservationSupersededSql('entity_source.id',caseId)}
+   AND (EXISTS(SELECT 1 FROM record_case_assertions a WHERE a.entity_id=${entityAlias}.id AND a.case_id=${caseId} AND a.observation_id=entity_source.id
+     AND ${currentCaseAssertionPartitionSql('a','entity_source',caseId)})
+    OR EXISTS(SELECT 1 FROM record_case_relations r WHERE r.case_id=${caseId} AND (r.from_entity_id=${entityAlias}.id OR r.to_entity_id=${entityAlias}.id) AND r.assertion_row_id=entity_source.id
+     AND ${currentCaseRelationshipPartitionSql('r','entity_source',caseId)})))`;
+ }
+ return `(EXISTS(SELECT 1 FROM record_case_assertions entity_assertion JOIN record_typed_rows entity_source ON entity_source.id=entity_assertion.observation_id WHERE entity_assertion.entity_id=${entityAlias}.id AND entity_assertion.case_id=${caseId} AND ${currentCaseAssertionSql('entity_assertion','entity_source',caseId)}) OR EXISTS(SELECT 1 FROM record_case_relations entity_relation JOIN record_typed_rows entity_source ON entity_source.id=entity_relation.assertion_row_id WHERE entity_relation.case_id=${caseId} AND (entity_relation.from_entity_id=${entityAlias}.id OR entity_relation.to_entity_id=${entityAlias}.id) AND ${currentCaseRelationshipSql('entity_relation','entity_source',caseId)}))`;
 }
 /** Resolve current account and membership before filtering any case counts. */
 export async function requireCaseWorkspace(db:Database,clock:Clock,w:RecordWorkspace,write=false) {

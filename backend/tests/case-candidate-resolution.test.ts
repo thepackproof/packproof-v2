@@ -36,17 +36,28 @@ describe('exact case candidate root and retained-entity lookup sets',()=>{
  const lookup=async(branch:Branch,value:Lookup,sql=queries[branch])=>(await opened.db.query<{id:string}>(sql,params(branch,value))).rows.map(r=>r.id).sort();
  async function addCase(id:string,root:string,overrides:Partial<typeof scope>={},namespace='source'){
   const s={...scope,...overrides};await opened.db.query(`INSERT INTO record_cases(id,organization_id,environment,location_id,location_key,operator_membership_id,root_namespace,root_type,root_external_id) VALUES($1,$2,$3,$4,$4,$5,$6,'order',$7)`,[id,s.organization,s.environment,s.site,s.operator,namespace,root]);
+  await opened.db.query('INSERT INTO record_typed_batches(id,organization_id,environment,location_id,operator_membership_id) VALUES($1,$2,$3,$4,$5)',[id,s.organization,s.environment,s.site,s.operator]);
  }
- async function entity(caseId:string,type:string,externalId:string,parent='',namespace='source'){
-  await opened.db.query(`INSERT INTO record_case_entities(id,case_id,organization_id,environment,namespace,entity_type,external_id,parent_external_id) SELECT $1,c.id,c.organization_id,c.environment,$3,$4,$5,$6 FROM record_cases c WHERE c.id=$2`,[`candidate-entity-${++entitySequence}`,caseId,namespace,type,externalId,parent]);
+ async function entity(caseId:string,type:string,externalId:string,parent='',namespace='source',asserted=true){
+  const entityId=`candidate-entity-${++entitySequence}`,rowId=`source-${entityId}`;
+  await opened.db.query(`INSERT INTO record_case_entities(id,case_id,organization_id,environment,namespace,entity_type,external_id,parent_external_id) SELECT $1,c.id,c.organization_id,c.environment,$3,$4,$5,$6 FROM record_cases c WHERE c.id=$2`,[entityId,caseId,namespace,type,externalId,parent]);
+  await opened.db.query("INSERT INTO record_typed_rows(id,batch_id,case_id,status) VALUES($1,$2,$2,'accepted_linked')",[rowId,caseId]);
+  if(asserted)await opened.db.query('INSERT INTO record_case_assertions(id,case_id,entity_id,observation_id) VALUES($1,$2,$3,$4)',[`assertion-${entityId}`,caseId,entityId,rowId]);
+  return {entityId,rowId};
  }
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_CROSS_CASE_ENABLED','true');opened=await openIsolatedTestDatabase();
-  // Keep the production lookup constraints/index keys. No current assertions or
-  // relationships are present: retained entity identities remain resolvable.
+  // Keep the production lookup keys and the provenance columns used to decide
+  // whether an entity still has a current assertion or relationship in its case.
   await opened.db.query(`CREATE TABLE record_cases(id TEXT PRIMARY KEY,organization_id TEXT NOT NULL,environment TEXT NOT NULL,location_id TEXT NOT NULL,location_key TEXT NOT NULL CHECK(location_key=location_id),operator_membership_id TEXT NOT NULL,root_namespace TEXT NOT NULL,root_type TEXT NOT NULL CHECK(root_type IN ('order','shipment','return')),root_external_id TEXT NOT NULL,UNIQUE(id,organization_id,environment),UNIQUE(organization_id,environment,location_key,root_namespace,root_type,root_external_id))`);
   await opened.db.query(`CREATE TABLE record_case_entities(id TEXT PRIMARY KEY,case_id TEXT NOT NULL,organization_id TEXT NOT NULL,environment TEXT NOT NULL,namespace TEXT NOT NULL,entity_type TEXT NOT NULL,external_id TEXT NOT NULL,parent_external_id TEXT NOT NULL DEFAULT '',FOREIGN KEY(case_id,organization_id,environment) REFERENCES record_cases(id,organization_id,environment),UNIQUE(case_id,namespace,entity_type,external_id,parent_external_id))`);
   await opened.db.query('CREATE INDEX record_case_entity_lookup ON record_case_entities(organization_id,environment,namespace,entity_type,external_id,case_id)');
+  await opened.db.query('CREATE TABLE record_typed_batches(id TEXT PRIMARY KEY,organization_id TEXT,environment TEXT,location_id TEXT,operator_membership_id TEXT)');
+  await opened.db.query('CREATE TABLE record_typed_rows(id TEXT PRIMARY KEY,batch_id TEXT REFERENCES record_typed_batches,case_id TEXT REFERENCES record_cases,status TEXT,supersedes_id TEXT REFERENCES record_typed_rows,received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+  await opened.db.query('CREATE TABLE record_case_assertions(id TEXT PRIMARY KEY,case_id TEXT REFERENCES record_cases,entity_id TEXT REFERENCES record_case_entities,observation_id TEXT REFERENCES record_typed_rows)');
+  await opened.db.query('CREATE TABLE record_case_relations(id TEXT PRIMARY KEY,case_id TEXT REFERENCES record_cases,from_entity_id TEXT REFERENCES record_case_entities,to_entity_id TEXT REFERENCES record_case_entities,assertion_row_id TEXT REFERENCES record_typed_rows)');
+  await opened.db.query('CREATE TABLE record_case_row_projections(id TEXT PRIMARY KEY,observation_id TEXT REFERENCES record_typed_rows,case_id TEXT REFERENCES record_cases,state TEXT,supersedes_id TEXT REFERENCES record_case_row_projections,assertion_ids JSONB,relationship_ids JSONB)');
+  await opened.db.query('CREATE TABLE record_typed_snapshot_versions(observation_id TEXT REFERENCES record_typed_rows,organization_id TEXT,environment TEXT,connection_id TEXT,location_id TEXT,subscription_id TEXT,source_namespace TEXT,source_event_id TEXT,source_as_of TIMESTAMPTZ)');
   queries={legacy:await lookupSql('legacy'),mapped:await lookupSql('mapped')};
   await addCase('root-and-entity','ROOT');await entity('root-and-entity','order','ROOT');await entity('root-and-entity','order','ROOT','retained-alternate-parent');
   await addCase('root-only','ROOT-ONLY');
@@ -57,6 +68,32 @@ describe('exact case candidate root and retained-entity lookup sets',()=>{
   await addCase('visible-scope','VISIBLE-ROOT');await entity('visible-scope','order','SCOPE-ROOT');await entity('visible-scope','shipment','SCOPE-ENTITY');
   const foreign=[{organization:'foreign-org'},{environment:'live'},{site:'foreign-site'},{operator:'foreign-operator'}];
   for(const [i,change] of foreign.entries()){await addCase(`foreign-root-${i}`,'SCOPE-ROOT',change);await addCase(`foreign-entity-${i}`,`FOREIGN-ENTITY-${i}`,change);await entity(`foreign-entity-${i}`,'shipment','SCOPE-ENTITY');}
+  await addCase('evidence-case','EVIDENCE-ROOT');
+  const edge=await entity('evidence-case','shipment','EDGE-ONLY','','source',false);
+  const line=await entity('evidence-case','order_line','EDGE-LINE','EVIDENCE-ROOT');
+  await opened.db.query("INSERT INTO record_case_relations VALUES('active-edge','evidence-case',$1,$2,$3)",[edge.entityId,line.entityId,edge.rowId]);
+  await entity('evidence-case','shipment','BARE-IDENTITY','','source',false);
+  const superseded=await entity('evidence-case','shipment','SUPERSEDED');
+  await opened.db.query("INSERT INTO record_typed_rows(id,batch_id,case_id,status,supersedes_id) VALUES('successor','evidence-case',NULL,'accepted_unlinked',$1)",[superseded.rowId]);
+  const removed=await entity('evidence-case','shipment','REMOVED');
+  await opened.db.query("INSERT INTO record_case_row_projections(id,observation_id,case_id,state,assertion_ids) VALUES('previous-projection',$1,'evidence-case','linked',$2::jsonb)",[removed.rowId,JSON.stringify([`assertion-${removed.entityId}`])]);
+  await opened.db.query("INSERT INTO record_case_row_projections(id,observation_id,case_id,state,supersedes_id) VALUES('removed-projection',$1,'evidence-case','removed','previous-projection')",[removed.rowId]);
+  for(const [name,primary,admitted] of [['PARTITION-ONLY',null,true],['OTHER-PRIMARY','line-a',true],['EXCLUDED-FROM-PARTITION',null,false]] as const){
+   const partition=await entity('evidence-case','shipment',name);
+   await opened.db.query('UPDATE record_typed_rows SET case_id=$2,status=$3 WHERE id=$1',[partition.rowId,primary,primary?'accepted_linked':'accepted_unlinked']);
+   await opened.db.query("INSERT INTO record_case_row_projections(id,observation_id,case_id,state,assertion_ids) VALUES($1,$2,'evidence-case','linked',$3::jsonb)",[name,partition.rowId,JSON.stringify(admitted?[`assertion-${partition.entityId}`]:[])]);
+  }
+  const partitionEdge=await entity('evidence-case','shipment','PARTITION-EDGE','','source',false);
+  await opened.db.query("UPDATE record_typed_rows SET case_id=NULL,status='accepted_unlinked' WHERE id=$1",[partitionEdge.rowId]);
+  await opened.db.query("INSERT INTO record_case_relations VALUES('partition-edge','evidence-case',$1,$2,$3)",[partitionEdge.entityId,line.entityId,partitionEdge.rowId]);
+  await opened.db.query(`INSERT INTO record_case_row_projections(id,observation_id,case_id,state,relationship_ids) VALUES('linked-edge',$1,'evidence-case','linked','["partition-edge"]')`,[partitionEdge.rowId]);
+  const oldSnapshot=await entity('evidence-case','shipment','OLD-SNAPSHOT');
+  await opened.db.query("INSERT INTO record_typed_rows(id,batch_id,status) VALUES('later-snapshot','evidence-case','accepted_unlinked')");
+  await opened.db.query(`INSERT INTO record_typed_snapshot_versions
+   SELECT observation_id,'candidate-org','sandbox','source-connection','candidate-site','subscription','source','snapshot-event',as_of
+   FROM (VALUES($1::text,'2026-11-01'::timestamptz),('later-snapshot','2026-11-02'::timestamptz)) snapshots(observation_id,as_of)`,[oldSnapshot.rowId]);
+  const wrongScope=await entity('evidence-case','shipment','WRONG-RECEIPT-SCOPE');
+  await opened.db.query("UPDATE record_typed_rows SET batch_id='foreign-entity-0' WHERE id=$1",[wrongScope.rowId]);
  },30000);
  afterAll(async()=>{await opened?.close();vi.unstubAllEnvs();});
 
@@ -67,6 +104,15 @@ describe('exact case candidate root and retained-entity lookup sets',()=>{
  });
  it.each<Branch>(['legacy','mapped'])('%s scopes root and entity branches to the exact organization, environment, site and operator',async branch=>{
   expect(await lookup(branch,{externalId:'SCOPE-ROOT'})).toEqual(['visible-scope']);expect(await lookup(branch,{type:'shipment',externalId:'SCOPE-ENTITY'})).toEqual(['visible-scope']);
+ });
+ it.each<Branch>(['legacy','mapped'])('%s requires current case evidence for an entity-only anchor',async branch=>{
+  expect(await lookup(branch,{type:'shipment',externalId:'EDGE-ONLY'})).toEqual(['evidence-case']);
+  for(const externalId of ['PARTITION-ONLY','OTHER-PRIMARY','PARTITION-EDGE']){
+   expect(await lookup(branch,{type:'shipment',externalId})).toEqual(['evidence-case']);
+  }
+  for(const externalId of ['BARE-IDENTITY','SUPERSEDED','REMOVED','OLD-SNAPSHOT','EXCLUDED-FROM-PARTITION','WRONG-RECEIPT-SCOPE']){
+   expect(await lookup(branch,{type:'shipment',externalId})).toEqual([]);
+  }
  });
  it.each<Branch>(['legacy','mapped'])('%s preserves distinct-case ambiguity and the outer three-case cap',async branch=>{
   expect(await lookup(branch,{externalId:'DUAL'})).toEqual(['dual-entity','dual-root']);
@@ -80,7 +126,7 @@ describe('exact case candidate root and retained-entity lookup sets',()=>{
   expect(await lookup('legacy',{type:'shipment',externalId:'LEGACY-PARENT'})).toEqual(['entity-only']);expect(await lookup('mapped',{type:'shipment',externalId:'LEGACY-PARENT'})).toEqual([]);
   expect(await lookup('mapped',{type:'shipment',externalId:'LEGACY-PARENT',parent:'retained-parent'})).toEqual(['entity-only']);
  });
- it.each<Branch>(['legacy','mapped'])('%s matches the previous LEFT JOIN lookup result sets across the bounded fixture',async branch=>{
+ it.each<Branch>(['legacy','mapped'])('%s matches the previous LEFT JOIN result sets for roots and currently supported entities',async branch=>{
   const values:Lookup[]=[{externalId:'ROOT'},{externalId:'ROOT-ONLY'},{externalId:'DUAL'},{type:'shipment',externalId:'ENTITY-SHIP'},{type:'return',externalId:'RETAINED'},{externalId:'SCOPE-ROOT'},{type:'shipment',externalId:'SCOPE-ENTITY'},{externalId:'ABSENT'},{type:'shipment',externalId:'LEGACY-PARENT'},{type:'order_line',externalId:'004',parent:'PARENT-A'},{type:'order_line',externalId:'004',parent:'PARENT-B'},{type:'order_line',externalId:'004',parent:'WRONG'},{externalId:'ROOT-ONLY',parent:'not-empty'}];
   for(const value of values)expect(await lookup(branch,value),JSON.stringify(value)).toEqual(await lookup(branch,value,baseline[branch]));
   // LIMIT without ORDER BY deliberately does not promise which three ambiguous
