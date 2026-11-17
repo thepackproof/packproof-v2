@@ -43,13 +43,11 @@ async function run() {
     isolated.webRequest.onBeforeRequest((details, callback) => {
       callback({ cancel: new URL(details.url).origin !== origin });
     });
-    const win = new BrowserWindow({ width: 1280, height: 1024, useContentSize:true, show: false, webPreferences: {
-      session: isolated, nodeIntegration: false, contextIsolation: true, sandbox: true, offscreen: true, backgroundThrottling: false
+    const win = new BrowserWindow({ width: 1280, height: 1024, useContentSize:true, show: true, webPreferences: {
+      session: isolated, nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false
     } });
     const browser = win.webContents;
-    browser.setFrameRate(30);
-    browser.debugger.attach('1.3');
-    await browser.debugger.sendCommand('Page.enable');
+    console.log('Opening the local portal');
     await win.loadURL(origin + '/fixture-session');
     const identity = { apiBaseUrl: origin + '/api', authMode: 'dev', userId: fixture.owner, username: 'fixture-owner',
       displayName: 'Fixture owner', token: fixture.owner, subject: fixture.owner };
@@ -57,6 +55,7 @@ async function run() {
     const locator = new URL(fixture.approvalPath, origin);
     const scope = new URLSearchParams({ organizationId: locator.searchParams.get('organizationId'), environment: locator.searchParams.get('environment') });
     await win.loadURL(fixture.proof ? origin + '/app/order-proofs/' + fixture.proof.id + '?' + scope : locator.href);
+    console.log('Portal document loaded');
     async function until(expression, description) {
       for (let i = 0; i < 120; i++) {
         const value = await browser.executeJavaScript(expression);
@@ -69,8 +68,10 @@ async function run() {
     const shots = path.resolve(__dirname, '../build/workspace-screens');
     await mkdir(shots, { recursive: true });
     async function photograph(name, landmarks, maximumHeight=2000) {
+      console.log('Checking painted page',name);
+      if(!browser.debugger.isAttached()) browser.debugger.attach('1.3');
       await browser.executeJavaScript('window.scrollTo(0,0)');
-      await browser.executeJavaScript('Promise.all([document.fonts.ready,...Array.from(document.images,img=>img.decode())])');
+      await browser.executeJavaScript('Promise.all([document.fonts.ready,...Array.from(document.images,img=>img.decode())]).then(()=>true)');
       // Read text boxes from the current page, then verify their real compositor
       // pixels in the PNG. A matching DOM alone can precede a completed paint.
       const boxesExpression = '(' + function(labels) {
@@ -111,6 +112,7 @@ async function run() {
         }
         if(boxes.every(hasPaint) && (await browser.executeJavaScript(boxesExpression)).every(Boolean)){
           await writeFile(path.join(shots,name),bytes);
+          console.log('Verified painted text',name,width,height);
           return;
         }
         await delay(180);
