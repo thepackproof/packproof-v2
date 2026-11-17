@@ -1,0 +1,22 @@
+{
+  "schema": "packproof.web-double-build/v1",
+  "sourceCommit": "2fe5c5ccdfdd8d7e0fca502813909b495a4bff74",
+  "rootGitTree": "699360965bc7185334d87cec16348569e71fd7ab",
+  "codebuildId": "packproof-v2-staging-api:d625463e-f100-466f-8274-9b048b6690eb",
+  "platform": "Linux",
+  "node": "v22.23.4",
+  "npm": "11.21.1",
+  "buildsCompleted": 2,
+  "indexSha256": "ab77499388bdf82fe7a2f439e428c14e14df07b8a7c5444694cb3e43a3eca290",
+  "manifestsByteIdentical": true,
+  "manifestSha256": null,
+  "manifestDigestObservation": "Both release.json files compared byte for byte. CodeBuild emitted the index hash and did not log the manifest hash before transfer timed out.",
+  "declaredFileCount": 53,
+  "inventoryCountIncludingManifest": 54,
+  "capabilities": {
+    "orderWorkspaceApproval": 1
+  },
+  "overallCodebuildStatus": "FAILED",
+  "failedStage": "After inventory generation, the private transfer descriptor was unavailable within 288 seconds. No candidate files were uploaded by this build.",
+  "published": false
+}
