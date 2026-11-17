@@ -68,9 +68,12 @@ try {
  $preview=Invoke-Bridge localPreview @{fileName='setup.csv'}
  if ($preview.source.samples[0].Reference -ne '000123' -or ($preview.PSObject.Properties.Name -contains 'preview' -and $preview.preview)) { throw 'Local preview must preserve identifiers and must not upload a cloud original.' }
  Record-Pass 'actual service read-only immutable CSV local preview preserves leading zeros'
+ $referenceDecision=@($preview.analysis.decisions | Where-Object { $_.field -eq 'shipmentReference' })
+ if ($preview.analysis.ready -or $referenceDecision.Count -ne 1 -or $referenceDecision[0].state -ne 'needs_confirmation') { throw 'An ambiguous reference must wait for an explicit local decision.' }
+ $preview=Invoke-Bridge analyzeLocal @{mapping=$preview.analysis.configuration.mapping;confirmedFields=@('shipmentReference')}
  if (-not $preview.analysis.ready -or $preview.analysis.shipment.shipmentReference -ne '000123' -or $preview.analysis.shipment.quantity -ne 1) { throw 'The installed service did not return its validated full-value shipment card.' }
  if ($null -ne $preview.analysis.configuration.sourceContract.exporterName -or $null -ne $preview.analysis.configuration.sourceContract.expectedIntervalSeconds) { throw 'Unknown exporter metadata or cadence was fabricated.' }
- Record-Pass 'packaged LocalService returns raw-value validated shipment with honest unknown source metadata'
+ Record-Pass 'operator confirms the ambiguous reference before LocalService returns the raw-value shipment with unknown source metadata'
  $wrong=Invoke-Bridge analyzeLocal @{mapping=@{shipmentReference='Description';itemTitle='Reference';quantity='Shipment date';shippedAt='Shipment date';carrier='Quantity'};confirmedFields=@()}
  if ($wrong.analysis.ready -or @($wrong.analysis.decisions | Where-Object { $_.state -eq 'incompatible' }).Count -lt 1) { throw 'The screenshot-like incorrect mapping was accepted by the installed service.' }
  Record-Pass 'packaged LocalService blocks screenshot-like tampered mapping without uploading an original'

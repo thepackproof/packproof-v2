@@ -1,16 +1,20 @@
 import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {evaluateQuantities,type Quantity} from './quantities.js';
-import type {TypedSourceReference,TypedSourceLocator,TypedSourceObservation} from './source-contracts.js';
+import type {TypedSourceReference,TypedSourceLocator,TypedSourceObservation,TypedSourceRelationship} from './source-contracts.js';
 import type {SourceCoverage} from './coverage.js';
 import type {SourceRulePolicies,RuleSourceBinding,LabelAcceptancePolicy,HandlingUnitHandoffPolicy} from './source-rule-policy.js';
 import {explicitInstant} from './csv-semantics.js';
 
-export const RECONSTRUCTION_RULE_VERSION='packproof.reconstruction-comparison/v1' as const;
-export const OPERATIONAL_PRESENCE_RULE_VERSION='packproof.operational-presence/v1' as const;
+// Existing issue keys keep the original rule family so acknowledgements and
+// corrections remain attached to the same scoped finding after re-evaluation.
+export const RECONSTRUCTION_RULE_FAMILY='packproof.reconstruction-comparison/v1' as const;
+export const RECONSTRUCTION_RULE_VERSION='packproof.reconstruction-comparison/v3' as const;
+const OPERATIONAL_PRESENCE_RULE_FAMILY='packproof.operational-presence/v1' as const;
+export const OPERATIONAL_PRESENCE_RULE_VERSION='packproof.operational-presence/v2' as const;
 export interface ReconstructionAssertion {
  id:string;subject:TypedSourceReference;property:string;value:Quantity|string;unit:string|null;
- source:{subscriptionId?:string;connectionId:string;receiptId:string;observationId:string;sourceEventId:string;historyEligibility?:'within_bounds'|'unknown'|'out_of_bounds';observationKind:'event'|'snapshot'|'correction'|'tombstone';row:number;field:string;locator:TypedSourceLocator;mappingVersion:string;revision:string;reportedAt:string|null;sourceAsOf:string|null;receivedAt:string;timeQuality:string;originalSha256:string;sourceNamespace:string;originSystem:string|null;copiedFromSource:string|null;identityDerivation?:TypedSourceObservation['identityDerivation'];identityBasis?:ReconstructionIdentityBasis[];comparisonIdentity?:{subject:TypedSourceReference;fields:Array<{reference:TypedSourceReference;canonicalReference:TypedSourceReference;basis:ReconstructionIdentityBasis[]}>}};
+ source:{subscriptionId?:string;configurationRevision:number;grantRevision:number;sourceProfile:string;connectionId:string;receiptId:string;observationId:string;sourceEventId:string;historyEligibility?:'within_bounds'|'unknown'|'out_of_bounds';observationKind:'event'|'snapshot'|'correction'|'tombstone';row:number;field:string;locator:TypedSourceLocator;mappingVersion:string;revision:string;reportedAt:string|null;sourceAsOf:string|null;receivedAt:string;timeQuality:string;originalSha256:string;sourceNamespace:string;originSystem:string|null;copiedFromSource:string|null;identityDerivation?:TypedSourceObservation['identityDerivation'];identityBasis?:ReconstructionIdentityBasis[];allocationBasis?:{lineQuantity:Quantity;relationship:TypedSourceRelationship};comparisonIdentity?:{subject:TypedSourceReference;fields:Array<{reference:TypedSourceReference;canonicalReference:TypedSourceReference;basis:ReconstructionIdentityBasis[]}>}};
  active:boolean;
  /** Deterministically resolved line and fulfillment identities, never SKU. */
  comparisonScope:{caseId?:string;line:string|null;shipment:string|null;direction:'outbound'|'return'|'unknown';tracking?:string|null;handlingUnit?:string|null;load?:string|null;stop?:string|null;serializedUnit?:string|null;subjectNamespace?:string};
@@ -53,18 +57,18 @@ export function evaluateReconstructionRules(assertions:readonly ReconstructionAs
    if(!expected.length||!observed.length)continue;
    const inputs=[...expected,...observed].sort((a,b)=>a.id.localeCompare(b.id)),inputAssertionIds=inputs.map(value=>value.id),subject=inputs[0].subject;
    const id=`reconstruction_issue_${sha256Hex(canonicalize({scope,left,right,ruleVersion:RECONSTRUCTION_RULE_VERSION,inputAssertionIds}))}`;
-   const issueKey=`case_issue_${sha256Hex(canonicalize({scope,left,right,ruleVersion:RECONSTRUCTION_RULE_VERSION}))}`;
+   const issueKey=`case_issue_${sha256Hex(canonicalize({scope,left,right,ruleVersion:RECONSTRUCTION_RULE_FAMILY}))}`;
    const common={id,issueKey,category:'quantity_disagreement',subject,ruleVersion:RECONSTRUCTION_RULE_VERSION,inputAssertionIds,inputs:inputs.map(({id,property,value,source})=>({id,property,value,source})),absoluteDifference:null,baseUnit:null,physicalCondition:'not_established',independence:inputs.some(value=>value.source.copiedFromSource!==null)?'copied':'unknown'} as const;
    const no=(explanation:string):ReconstructionComparison=>({...common,outcome:'not_comparable',title:'Reported quantities are not comparable',explanation});
    if(inputs.some(value=>!value.comparisonScope.line||!value.comparisonScope.shipment||value.comparisonScope.direction!=='outbound')){results.push(no('An explicit outbound shipment and stable line relationship is required. Order totals, returns, and ambiguous allocations are not substituted.'));continue;}
    if(expected.length!==1||observed.length!==1){results.push(no('Multiple active assertions exist for the same stage and shipment line. No source wins automatically and competing values are not summed.'));continue;}
-   const modifiers=active.filter(value=>value.comparisonScope.line===inputs[0].comparisonScope.line&&(!value.comparisonScope.shipment||value.comparisonScope.shipment===inputs[0].comparisonScope.shipment)&&((['canceledQuantity','backorderedQuantity','reportedReturnedQuantity'].includes(value.property)&&isQuantity(value.value)&&!/^0(?:\.0+)?$/.test(value.value.amount))||(value.property==='status'&&typeof value.value==='string'&&/^(?:cancelled|canceled|backordered|backorder|substituted|replacement|returned)$/i.test(value.value))));
+   const modifiers=active.filter(value=>value.comparisonScope.caseId===inputs[0].comparisonScope.caseId&&value.comparisonScope.line===inputs[0].comparisonScope.line&&(!value.comparisonScope.shipment||value.comparisonScope.shipment===inputs[0].comparisonScope.shipment)&&((['canceledQuantity','backorderedQuantity','reportedReturnedQuantity'].includes(value.property)&&isQuantity(value.value)&&!/^0(?:\.0+)?$/.test(value.value.amount))||(value.property==='status'&&typeof value.value==='string'&&/^(?:cancelled|canceled|backordered|backorder|substituted|replacement|returned)$/i.test(value.value))));
    if(modifiers.length){results.push(no('A cancellation, backorder, substitution, replacement or return is reported for this line. A qualified active fulfillment adjustment is required before a shortage comparison is meaningful.'));continue;}
    if(inputs.some(value=>!['snapshot','correction'].includes(value.source.observationKind)||value.source.timeQuality==='unknown'||value.source.sourceAsOf===null)){results.push(no('Comparable cumulative stage snapshots require explicit source-as-of times. Individual event quantities and unknown times are not treated as complete shipment totals.'));continue;}
    const sourceHealth=inputs.map(value=>sources.find(source=>source.connectionId===value.source.connectionId&&source.sourceNamespace===value.source.sourceNamespace&&(!value.source.subscriptionId||source.subscriptionId===value.source.subscriptionId)));
    if(sourceHealth.some(source=>!source||source.coverage!=='qualified'||source.completeness.scope!=='shipment_line')){results.push(no('The relevant shipment-line source interval has not been qualified as complete. These reported values may be reviewed, but additional shipments or source changes cannot be ruled out.'));continue;}
    if(sourceHealth.some(source=>source!.state!=='current'&&source!.state!=='quiet_checked')){results.push({...common,outcome:'suppressed',title:'Comparison waiting for current source data',explanation:'A required source is delayed, paused, unresolved, or unavailable. Missing updates do not establish missing goods.'});continue;}
-   if(inputs.some((value,index)=>Date.parse(value.source.sourceAsOf!)>Date.parse(sourceHealth[index]!.completeness.asOf!))){results.push(no('A source assertion falls beyond its qualified completeness boundary. Reconcile that interval before comparing stage totals.'));continue;}
+   if(inputs.some((value,index)=>!assertionWithinBoundary(value,sourceHealth[index]))){results.push(no('An assertion must fall within the qualified interval for its captured source configuration. Review the source revision and its coverage before comparing stage totals.'));continue;}
    const e=expected[0].value,o=observed[0].value;
    if(!isQuantity(e)||!isQuantity(o)){results.push(no('Both stage assertions must contain an explicit decimal quantity and a compatible unit.'));continue;}
    const evaluation=evaluateQuantities(e,[o]);
@@ -82,11 +86,15 @@ export function evaluateReconstructionRules(assertions:readonly ReconstructionAs
  for(const value of active.filter(value=>value.property==='serial'&&value.subject.type==='serialized_unit')){const key=canonicalize([value.comparisonScope.caseId??null,value.comparisonScope.serializedUnit??referenceKey(value.subject),value.comparisonScope.shipment,value.comparisonScope.direction]),list=serials.get(key)??[];list.push(value);serials.set(key,list);}
  for(const [scope,values]of [...serials].sort(([a],[b])=>a.localeCompare(b))){
   if(values.length<2)continue;
-  const inputs=[...values].sort((a,b)=>a.id.localeCompare(b.id)),inputAssertionIds=inputs.map(value=>value.id),issueKey=`case_issue_${sha256Hex(canonicalize({scope,rule:'serial',ruleVersion:RECONSTRUCTION_RULE_VERSION}))}`;
-  const common={id:`reconstruction_issue_${sha256Hex(canonicalize({issueKey,inputAssertionIds}))}`,issueKey,category:'serial_disagreement',subject:inputs[0].subject,ruleVersion:RECONSTRUCTION_RULE_VERSION,inputAssertionIds,inputs:inputs.map(({id,property,value,source})=>({id,property,value,source})),absoluteDifference:null,baseUnit:null,physicalCondition:'not_established',independence:inputs.some(value=>value.source.copiedFromSource!==null)?'copied':'unknown'} as const;
+  const inputs=[...values].sort((a,b)=>a.id.localeCompare(b.id)),inputAssertionIds=inputs.map(value=>value.id),issueKey=`case_issue_${sha256Hex(canonicalize({scope,rule:'serial',ruleVersion:RECONSTRUCTION_RULE_FAMILY}))}`;
+  const common={id:`reconstruction_issue_${sha256Hex(canonicalize({issueKey,inputAssertionIds,ruleVersion:RECONSTRUCTION_RULE_VERSION}))}`,issueKey,category:'serial_disagreement',subject:inputs[0].subject,ruleVersion:RECONSTRUCTION_RULE_VERSION,inputAssertionIds,inputs:inputs.map(({id,property,value,source})=>({id,property,value,source})),absoluteDifference:null,baseUnit:null,physicalCondition:'not_established',independence:inputs.some(value=>value.source.copiedFromSource!==null)?'copied':'unknown'} as const;
   const sourceHealth=inputs.map(value=>sources.find(source=>source.connectionId===value.source.connectionId&&source.sourceNamespace===value.source.sourceNamespace&&(!value.source.subscriptionId||source.subscriptionId===value.source.subscriptionId)));
   if(inputs.some(value=>typeof value.value!=='string'||!value.value||!value.comparisonScope.shipment)||new Set(inputs.map(value=>value.source.subscriptionId??value.source.connectionId)).size!==inputs.length||sourceHealth.some(source=>!source||source.coverage!=='qualified'||source.completeness.scope!=='shipment_line')){results.push({...common,outcome:'not_comparable',title:'Serial assertions need qualified unit context',explanation:'Serial disagreement requires the same explicit serialized unit, one active assertion per source, and qualified shipment-line source intervals. Missing serials and repeated line/SKU values are not mismatches.'});continue;}
   if(sourceHealth.some(source=>!['current','quiet_checked'].includes(source!.state))){results.push({...common,outcome:'suppressed',title:'Serial comparison waiting for source data',explanation:'A relevant source is delayed or unavailable. Physical contents and responsibility are not established.'});continue;}
+  if(inputs.some((value,index)=>!assertionWithinBoundary(value,sourceHealth[index]))){
+   results.push({...common,outcome:'not_comparable',title:'Serial comparison needs a qualified source time',explanation:'Each serial assertion requires a known reported time within a qualified interval for its captured source configuration.'});
+   continue;
+  }
   const same=new Set(inputs.map(value=>value.value)).size===1;
   results.push({...common,outcome:same?'within_tolerance':'different',title:same?'Source-reported serials agree':'Source-reported serials disagree',explanation:same?'The qualified sources report the same serial for this explicitly related unit. Physical contents and source independence are not established.':'The qualified sources report different serial values for the same explicitly related unit. Open both source rows to review the disagreement; responsibility is not established.'});
  }
@@ -114,14 +122,18 @@ function sourceReadiness(sources:readonly SourceCoverage[],binding:RuleSourceBin
 }
 function withinSourceBoundary(value:ReconstructionAssertion,sources:readonly SourceCoverage[],binding:RuleSourceBinding,now:number){
  const source=sources.find(source=>source.subscriptionId===binding.subscriptionId&&source.sourceNamespace===binding.sourceNamespace);
+ return assertionWithinBoundary(value,source,now);
+}
+function assertionWithinBoundary(value:ReconstructionAssertion,source:SourceCoverage|undefined,now=Infinity){
+ if(value.source.timeQuality==='unknown'||!source||source.configurationRevision!==value.source.configurationRevision)return false;
  const time=value.source.observationKind==='event'?eventInstant(value):value.source.sourceAsOf===null?null:explicitInstant(value.source.sourceAsOf);
  const boundary=source?.completeness.asOf==null?null:explicitInstant(source.completeness.asOf);
  return time!==null&&boundary!==null&&time<=boundary&&time<=now;
 }
 function result(policy:SourceRulePolicies,category:PresenceCategory,scope:unknown,subject:TypedSourceReference,values:readonly ReconstructionAssertion[],outcome:PresenceOutcome,title:string,explanation:string,deadline:number|null=null):ReconstructionComparison {
  const inputs=[...new Map(values.map(value=>[value.id,value])).values()].sort((a,b)=>a.id.localeCompare(b.id));
- const inputAssertionIds=inputs.map(input=>input.id),issueKey=`case_issue_${sha256Hex(canonicalize({ruleVersion:OPERATIONAL_PRESENCE_RULE_VERSION,policy,category,scope}))}`;
- return {id:`reconstruction_issue_${sha256Hex(canonicalize({issueKey,inputAssertionIds,outcome}))}`,issueKey,category,subject,ruleVersion:OPERATIONAL_PRESENCE_RULE_VERSION,policyVersion:policy.version,outcome,title,explanation,inputAssertionIds,inputs:inputs.map(({id,property,value,source})=>({id,property,value,source})),absoluteDifference:null,baseUnit:null,physicalCondition:'not_established',independence:inputs.some(input=>input.source.copiedFromSource!==null)?'copied':'unknown',deadlineAt:deadline===null?null:new Date(deadline).toISOString()};
+ const inputAssertionIds=inputs.map(input=>input.id),issueKey=`case_issue_${sha256Hex(canonicalize({ruleVersion:OPERATIONAL_PRESENCE_RULE_FAMILY,policy,category,scope}))}`;
+ return {id:`reconstruction_issue_${sha256Hex(canonicalize({issueKey,inputAssertionIds,outcome,ruleVersion:OPERATIONAL_PRESENCE_RULE_VERSION}))}`,issueKey,category,subject,ruleVersion:OPERATIONAL_PRESENCE_RULE_VERSION,policyVersion:policy.version,outcome,title,explanation,inputAssertionIds,inputs:inputs.map(({id,property,value,source})=>({id,property,value,source})),absoluteDifference:null,baseUnit:null,physicalCondition:'not_established',independence:inputs.some(input=>input.source.copiedFromSource!==null)?'copied':'unknown',deadlineAt:deadline===null?null:new Date(deadline).toISOString()};
 }
 function policyReadiness(policy:SourceRulePolicies):SourceReadiness {return policy.sourceOwnerQualified&&!!policy.qualificationReference?null:{outcome:'not_comparable',reason:'The source owner has not qualified this exact policy, status vocabulary and timing contract.'};}
 function explicitCarrierContext(values:readonly ReconstructionAssertion[],anchor:ReconstructionAssertion,binding:RuleSourceBinding,policy:LabelAcceptancePolicy){
@@ -169,6 +181,7 @@ function evaluateLabels(policy:SourceRulePolicies,p:LabelAcceptancePolicy,active
   if(hasFulfillmentModifier(active,label)){output.push(emit('not_comparable','Fulfillment change needs review','A cancellation, backorder, replacement or return changes the applicable shipment question. The rule does not interpret it as an unaccepted shipment.',labels,deadline));continue;}
   const labelCarrier=explicitCarrierContext(active,label,p.labelSource,p);
   if(!labelCarrier){output.push(emit('not_comparable','Carrier account or service context is unresolved','Exact carrier, account and service assertions matching the approved policy are required. Tracking numbers alone are not globally unique.',labels,deadline));continue;}
+  if(labelCarrier.some(value=>!withinSourceBoundary(value,sources,p.labelSource,now))){output.push(emit('not_comparable','Label carrier context needs review','The carrier, account and service assertions must come from the approved label source configuration and fall within its qualified time boundary.',[...labels,...labelCarrier],deadline));continue;}
   const acceptances=active.filter(value=>value.property==='carrierAcceptanceStatus'&&value.subject.type==='tracking'&&sameSource(value,p.acceptanceSource)&&subjectIdentity(value)===subjectIdentity(label)&&sameCaseShipment(value,label)&&operationalNamespace(value)===p.subjectNamespace);
   const input=[label,...labelCarrier,...acceptances];
   const carrier=acceptances.length?explicitCarrierContext(active,label,p.acceptanceSource,p):[];
@@ -176,6 +189,7 @@ function evaluateLabels(policy:SourceRulePolicies,p:LabelAcceptancePolicy,active
   input.push(...carrier);
   const acceptanceReadiness=sourceReadiness(sources,p.acceptanceSource,'tracking_package');
   if(acceptanceReadiness){output.push(emit(acceptanceReadiness.outcome,'Carrier acceptance check waiting for source data',acceptanceReadiness.reason,input,deadline));continue;}
+  if(carrier.some(value=>!withinSourceBoundary(value,sources,p.acceptanceSource,now))){output.push(emit('not_comparable','Acceptance carrier context needs review','The carrier, account and service assertions must come from the approved acceptance source configuration and fall within its qualified time boundary.',input,deadline));continue;}
   if(acceptances.length>1||acceptances.some(value=>typeof value.value!=='string'||!p.acceptedValues.includes(value.value))){output.push(emit('not_comparable','Acceptance status needs review','Multiple or unmapped active carrier statuses prevent a deterministic acceptance conclusion. Source rows remain available.',input,deadline));continue;}
   if(acceptances.length){
    if(acceptances[0].source.copiedFromSource!==null){output.push(emit('not_comparable','Acceptance source lineage needs review','The connected acceptance status declares copied information. It cannot establish an independent carrier acceptance observation or resolve this package check.',input,deadline));continue;}

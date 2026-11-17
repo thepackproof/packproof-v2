@@ -11,7 +11,7 @@ import { previewRecordImport, commitRecordImport, processPendingRecordImports, r
 import { parseShipmentCsv, csvCell, CSV_LIMITS } from '../src/records/csv.js';
 import { createRecordImportsRouter } from '../src/records/imports-router.js';
 import { DomainError } from '../src/domain/errors.js';
-import type { AppDependencies } from '../src/app.js';
+import { createApp, type AppDependencies } from '../src/app.js';
 import { sha256Hex } from '../src/hash.js';
 
 describe('bounded spreadsheet parsing',()=>{
@@ -154,6 +154,15 @@ describe('durable human CSV import through canonical Proof services',()=>{
   const preview=await previewRecordImport(deps,owner,input('Reference,Description,Quantity\nIMMUTABLE-1,Fixture,1'));
   await expect(opened.db.query("UPDATE record_import_jobs SET original_sha256=repeat('0',64) WHERE id=$1",[preview.id])).rejects.toThrow(/immutable/);
   await expect(opened.db.query("UPDATE record_import_rows SET normalized='{}'::jsonb WHERE import_id=$1",[preview.id])).rejects.toThrow(/immutable/);
+ });
+ it('rejects malformed UTF-8 before a JSON decoder can replace original bytes',async()=>{
+  const app=createApp({...deps,publicBaseUrl:'http://127.0.0.1'});
+  const invalid=Buffer.concat([Buffer.from('{"csv":"Pipe'),Buffer.from([255]),Buffer.from('"}')]);
+  for(const path of ['/v1/partner/imports/preview','/v1/partner/typed-imports/preview','/me/records/imports/preview']){
+   const result=await request(app).post(path).set('content-type','application/json; charset=utf-8').sendBytes(invalid);
+   expect(result.status,result.text).toBe(400);
+   expect(result.text).toContain('CSV_ENCODING_UNSUPPORTED');
+  }
  });
  it('exposes authenticated receipts and safe downloads through the HTTP router',async()=>{
   const app=express();app.use(express.json());app.use('/me/records/imports',createRecordImportsRouter(deps));app.use((e:unknown,_r:express.Request,s:express.Response,_n:express.NextFunction)=>{s.status(e instanceof DomainError?e.httpStatus:500).json({code:e instanceof DomainError?e.code:'UNEXPECTED'});});

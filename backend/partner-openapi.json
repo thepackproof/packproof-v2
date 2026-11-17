@@ -48896,6 +48896,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 2000
+          },
+          "interpretation": {
+            "$ref": "#/components/schemas/ShipmentInterpretationDecision"
           }
         },
         "required": [
@@ -53159,50 +53162,207 @@
             ]
           },
           "sourceContract": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "schema": {
-                "const": "packproof.scheduled-csv/v1"
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "schema": {
+                    "const": "packproof.scheduled-csv/v1"
+                  },
+                  "exporterName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "exporterVersion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "expectedHeaders": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "expectedIntervalSeconds": {
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 604800
+                  },
+                  "backfillFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "schema",
+                  "exporterName",
+                  "exporterVersion",
+                  "expectedHeaders",
+                  "expectedIntervalSeconds",
+                  "backfillFrom"
+                ]
               },
-              "exporterName": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 100
-              },
-              "exporterVersion": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 80
-              },
-              "expectedHeaders": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 50,
-                "uniqueItems": true,
-                "items": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 200
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "schema": {
+                    "const": "packproof.scheduled-csv/v2"
+                  },
+                  "exporterName": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "exporterVersion": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expectedHeaders": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "expectedIntervalSeconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 60,
+                        "maximum": 604800
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "backfillFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "rulesVersion": {
+                    "const": "packproof.csv-semantics/v2"
+                  },
+                  "profileVersion": {
+                    "const": "packproof.shipment-csv/v2"
+                  },
+                  "analysisRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "interpretationVersion": {
+                    "const": "packproof.shipment-interpretation/v1"
+                  },
+                  "basedOnConfigRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "headerPolicy": {
+                    "const": "same_names_any_order/v1"
+                  },
+                  "confirmedFields": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "shipmentReference",
+                        "itemTitle",
+                        "quantity",
+                        "trackingNumber",
+                        "carrier",
+                        "shippedAt",
+                        "locationId"
+                      ]
+                    }
+                  },
+                  "historyPolicy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "const": "selected_then_new"
+                      },
+                      "baselineSha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "observedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "initialFileName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "initialFileSha256": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "baselineSha256",
+                      "observedAt",
+                      "initialFileName",
+                      "initialFileSha256"
+                    ]
+                  }
+                },
+                "required": [
+                  "schema",
+                  "exporterName",
+                  "exporterVersion",
+                  "expectedHeaders",
+                  "expectedIntervalSeconds",
+                  "backfillFrom",
+                  "rulesVersion",
+                  "profileVersion",
+                  "confirmedFields",
+                  "analysisRevision",
+                  "historyPolicy"
+                ],
+                "dependentRequired": {
+                  "headerPolicy": [
+                    "interpretationVersion",
+                    "basedOnConfigRevision"
+                  ],
+                  "interpretationVersion": [
+                    "basedOnConfigRevision"
+                  ],
+                  "basedOnConfigRevision": [
+                    "interpretationVersion"
+                  ]
                 }
-              },
-              "expectedIntervalSeconds": {
-                "type": "integer",
-                "minimum": 60,
-                "maximum": 604800
-              },
-              "backfillFrom": {
-                "type": "string",
-                "format": "date-time"
               }
-            },
-            "required": [
-              "schema",
-              "exporterName",
-              "exporterVersion",
-              "expectedHeaders",
-              "expectedIntervalSeconds",
-              "backfillFrom"
             ]
           }
         },
@@ -55210,6 +55370,42 @@
           },
           "physicalCondition": {
             "const": "not_established"
+          },
+          "columnReview": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policy": {
+                "const": "same_names_any_order/v1"
+              },
+              "disposition": {
+                "enum": [
+                  "exact",
+                  "reordered",
+                  "schema_changed",
+                  "disclosure_changed"
+                ]
+              },
+              "configurationRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "observedHeaderSha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "mappingFingerprint": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "policy",
+              "disposition",
+              "configurationRevision",
+              "observedHeaderSha256",
+              "mappingFingerprint"
+            ]
           }
         },
         "required": [
@@ -55347,6 +55543,10 @@
             },
             "maxItems": 50,
             "uniqueItems": true
+          },
+          "headerPolicy": {
+            "const": "same_names_any_order/v1",
+            "description": "Optional source-owner approved permutation of the complete exact CSV column names. Omission requires exact order."
           },
           "historyFrom": {
             "type": "string",
@@ -55709,8 +55909,45 @@
               },
               "csvSnapshotBoundary": {
                 "type": "boolean"
+              },
+              "csvHeaderReorder": {
+                "type": "boolean"
               }
             }
+          },
+          "previousColumns": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedHeaders": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "maxItems": 50
+                  },
+                  "mapping": {
+                    "$ref": "#/components/schemas/TypedCsvMappingV2"
+                  }
+                },
+                "required": [
+                  "revision",
+                  "expectedHeaders",
+                  "mapping"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -57739,6 +57976,220 @@
           "rowCountColumn"
         ],
         "description": "Three distinct exact approved CSV headers containing exporter-reported snapshot marker, explicit-offset boundary timestamp and canonical integer control total. Values must repeat consistently on every raw row, and the reported total must match all raw business rows. No marker, timestamp or completeness claim is derived from a filename, receipt, hash or PackProof row count."
+      },
+      "ShipmentInterpretationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema": {
+            "const": "packproof.automation-decision/v1"
+          },
+          "kind": {
+            "const": "mapping"
+          },
+          "decisionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "version": {
+            "const": "packproof.shipment-interpretation/v1"
+          },
+          "outcome": {
+            "const": "automatic"
+          },
+          "grain": {
+            "const": "shipment"
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "configurationRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999999999
+          },
+          "sourceControlRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "policyRevision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rulesVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "profileVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "originalSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "rowCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "confirmedFields": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "shipmentReference",
+                "itemTitle",
+                "quantity",
+                "trackingNumber",
+                "carrier",
+                "shippedAt",
+                "locationId"
+              ]
+            }
+          },
+          "headerPolicy": {
+            "enum": [
+              "exact",
+              "same_names_any_order/v1"
+            ]
+          },
+          "headerDisposition": {
+            "enum": [
+              "exact",
+              "reordered"
+            ]
+          },
+          "expectedHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "actor": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "system"
+              },
+              "id": {
+                "const": "shipment-csv-validator"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "enum": [
+                    "shipmentReference",
+                    "itemTitle",
+                    "quantity",
+                    "trackingNumber",
+                    "carrier",
+                    "shippedAt",
+                    "locationId"
+                  ]
+                },
+                "sourceColumnId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "validated",
+                    "missing_optional"
+                  ]
+                },
+                "origin": {
+                  "enum": [
+                    "source_column",
+                    "approved_binding",
+                    "absent"
+                  ]
+                },
+                "reasonCodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "validRowCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "invalidRowCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "field",
+                "sourceColumnId",
+                "state",
+                "origin",
+                "reasonCodes",
+                "validRowCount",
+                "invalidRowCount"
+              ]
+            }
+          }
+        },
+        "required": [
+          "schema",
+          "kind",
+          "decisionId",
+          "version",
+          "outcome",
+          "grain",
+          "reasonCodes",
+          "sourceId",
+          "configurationRevision",
+          "sourceControlRevision",
+          "policyRevision",
+          "rulesVersion",
+          "profileVersion",
+          "originalSha256",
+          "rowCount",
+          "confirmedFields",
+          "headerPolicy",
+          "headerDisposition",
+          "expectedHeaders",
+          "actor",
+          "fields"
+        ]
       }
     }
   },

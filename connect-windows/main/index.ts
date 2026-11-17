@@ -5,7 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
-import {currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,submitConfigurationForReview} from './approval-target';
+import {currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
 import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {ConnectStatus} from '../ui/types';
@@ -55,12 +55,10 @@ function setup(){
  bind('commitSubscription',input=>mutate('commitSubscription',input));
  for(const method of ['verifySubscription','pauseSubscription','resumeSubscription'] as const)bind(method,id=>mutate(method,{id}));
  bind('openSubscriptionApproval',async id=>open(approvalUrl(currentSubscriptionApprovalPath(await status(),id),config.webBaseUrl)));
- bind('openSubscriptionCase',async id=>{
-  const source=(await status()).sourceSubscriptions?.find(s=>s.id===id);
-  if(!source?.verifiedCaseId||!/^[A-Za-z0-9_-]{1,160}$/.test(source.verifiedCaseId))throw Error('Retrieve and verify the first real case before opening it.');
-  await open(new URL(`/app/records/cases/${encodeURIComponent(source.verifiedCaseId)}`,config.webBaseUrl).href);
- });
- bind('getStatus',async()=>{try{await bridge.request('refresh');return status();}catch{const cached=await status();return {...cached,state:cached.state==='revoked'?'revoked':'action_needed',verification:{complete:false},authorizationNotice:'Current PackProof approval could not be refreshed. Check service network access, or begin approved recovery when access has expired or been revoked.'};}});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown};return {...await status(),checks:result.checks};});
+ bind('openSubscriptionCase',async id=>open(new URL(verifiedDetailPath(await mutate('refresh'),id),config.webBaseUrl).href));
+ // A failed policy refresh does not erase the saved local review or canonical
+ // receipt. The service's timestamped observation owns current remote readiness.
+ bind('getStatus',async()=>{try{await bridge.request('refresh');}catch{/* Return preserved local state with the service's failed transport observation. */}return status();});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown;transport?:unknown;versions?:unknown};return {...await status(),checks:result.checks,transport:result.transport,versions:result.versions};});
  for(const [method,operation] of Object.entries({pollEnrollment:'pollEnrollment',verifyImport:'verify',proposeActivation:'proposeActivation',activate:'activate',pause:'pause',resume:'resume',refresh:'refresh'}))bind(method as Method,()=>mutate(operation));
  bind('chooseFolder',async()=>{
   const prepared=preparedExportPath(config.channel,process.env.ProgramData);
@@ -80,7 +78,7 @@ function setup(){
  bind('proposeConfiguration',value=>submitConfigurationForReview(()=>mutate('proposeConfiguration',value),open,config.webBaseUrl));
  bind('previewCloud',consent=>mutate('preview',consent));bind('commitBatch',consent=>mutate('commit',consent));
  bind('openApproval',async()=>open(approvalUrl(currentApprovalPath(await status()),config.webBaseUrl)));
- bind('openRecord',async id=>{const s=await status();if(!id)id=s.verification?.recordId;if(!id||!s.verification?.complete||id!==s.verification.recordId)throw Error('Verify the completed record before opening it.');await open(new URL(`/app/records/${encodeURIComponent(id)}`,config.webBaseUrl).href);});
+ bind('openRecord',async id=>{const s=await mutate('refresh');if(!id)id=s.verification?.recordId;if(!id||!s.verification?.complete||id!==s.verification.recordId)throw Error('Verify the completed record before opening it.');await open(new URL(verifiedDetailPath(s),config.webBaseUrl).href);});
  bind('openPortal',()=>open(new URL('/app/connections',config.webBaseUrl).href));
  bind('exportDiagnostics',async()=>{const report=rendererSafe(await bridge.request('diagnostics'));const answer=await dialog.showMessageBox(win!,{type:'info',title:'Review diagnostic export',message:'Export a redacted support report?',detail:'Review this redacted report before saving. Shipment rows, service credentials and source paths are excluded. You choose whether to share it.\n\n'+JSON.stringify(report,null,2).slice(0,12000),buttons:['Cancel','Save report'],defaultId:0,cancelId:0});if(answer.response!==1)return {saved:false};const target=await dialog.showSaveDialog(win!,{title:'Save redacted diagnostics',defaultPath:'PackProof-Connect-diagnostics.json',filters:[{name:'JSON report',extensions:['json']}]});if(target.canceled||!target.filePath)return {saved:false};await writeFile(target.filePath,JSON.stringify(report,null,2),{mode:0o600});return {saved:true};});
 }

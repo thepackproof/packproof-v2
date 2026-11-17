@@ -7,6 +7,7 @@ namespace PackProof.Connect;
 /// queued work retains its original installation, credential and approval.</summary>
 public sealed class SourceSubscriptionState
 {
+    [System.Text.Json.Serialization.JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
     public const string LegacyId = "legacy";
     public const string LegacyProfile = "shipment-csv/v1";
     public required string Id { get; set; }
@@ -22,6 +23,8 @@ public sealed class SourceSubscriptionState
     public string? PauseAuthorizationTimestamp { get; set; }
     public DateTimeOffset? LastPolicyCheckAt { get; set; }
     public DateTimeOffset? LastCheckAt { get; set; }
+    public int PublicationAttempts { get; set; }
+    public DateTimeOffset? NextPublicationCheckAt { get; set; }
     public DateTimeOffset? LastCollectedAt { get; set; }
     public DateTimeOffset? LastReceiptAt { get; set; }
     public string? CursorFileName { get; set; }
@@ -51,9 +54,39 @@ public sealed record QueueSourceIdentity(string SourceId, string SourceProfile, 
 public static class SourceStateMigration
 {
     public const int Version = 4;
+    internal static void ValidatePropertyNames(JsonElement root)
+    {
+        // Only reject ambiguous serialized state keys. A raw source document or
+        // opaque extension value may itself have case-sensitive property names.
+        static void Unique(JsonElement obj)
+        {
+            if (obj.ValueKind != JsonValueKind.Object) return;
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in obj.EnumerateObject())
+                if (!names.Add(property.Name))
+                    throw new ConnectException("LOCAL_STATE_UNSUPPORTED", "Protected state contains ambiguous property names. Preserve the original state for review.");
+        }
+        Unique(root);
+        if (root.ValueKind != JsonValueKind.Object) return;
+        foreach (var property in root.EnumerateObject())
+        {
+            if (property.Name.Equals("subscriptionDraft", StringComparison.OrdinalIgnoreCase)) Unique(property.Value);
+            if (!property.Name.Equals("sourceSubscriptions", StringComparison.OrdinalIgnoreCase) || property.Value.ValueKind != JsonValueKind.Array) continue;
+            foreach (var source in property.Value.EnumerateArray())
+            {
+                Unique(source);
+                if (source.ValueKind != JsonValueKind.Object) continue;
+                foreach (var field in source.EnumerateObject())
+                    if (field.Name.Equals("backfillJobs", StringComparison.OrdinalIgnoreCase) && field.Value.ValueKind == JsonValueKind.Array)
+                        foreach (var job in field.Value.EnumerateArray()) Unique(job);
+            }
+        }
+    }
     public static void Validate(LocalState state)
     {
-        if (state.StateVersion is < 1 or > Version || state.SourceSubscriptions is null || state.SourceSubscriptions.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != state.SourceSubscriptions.Count)
+        if (state.StateVersion is < 1 or > Version || state.SourceSubscriptions is null || state.SourceSubscriptions.Any(s => s is null || string.IsNullOrWhiteSpace(s.Id) || s.GrantRevision < 0 ||
+                s.Id == SourceSubscriptionState.LegacyId && (s.SourceProfile != SourceSubscriptionState.LegacyProfile || s.GrantRevision != 0 || s.CapabilityApproved)) ||
+            state.SourceSubscriptions.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != state.SourceSubscriptions.Count)
             throw new ConnectException("LOCAL_STATE_UNSUPPORTED", "Install the compatible collector. Protected approvals and pending originals have been preserved.");
     }
     public static void SynchronizeLegacy(LocalState state)
@@ -88,6 +121,7 @@ public static class SourceStateMigration
 
 public sealed class SubscriptionDraftState
 {
+    [System.Text.Json.Serialization.JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
     public required string Folder { get; set; }
     public required string FolderDigest { get; set; }
     public string[] ExcludedFileNames { get; set; } = [];
@@ -100,6 +134,7 @@ public sealed class SubscriptionDraftState
 
 public sealed class SourceBackfillState
 {
+    [System.Text.Json.Serialization.JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
     public required string Id { get; set; }
     public JsonElement Job { get; set; }
     public bool LocalPaused { get; set; }

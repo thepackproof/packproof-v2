@@ -10,8 +10,11 @@ import { auditOrganization, reauthorizePartner, authorizePartnerProof, strictBod
 import { importPartnerOrder } from '../platform/partner-proofs.js';
 import { idempotent } from '../platform/idempotency.js';
 import { textField } from '../platform/tenants.js';
-import { parseShipmentCsv, correctionCsv, type ShipmentCsvRow, type CsvMapping } from './csv.js';
-import { authorizeAgentPreview, authorizeAgentImport, agentRestriction } from './agent-restrictions.js';
+import { parseCsv, parseShipmentCsv, correctionCsv, type ShipmentCsvRow, type CsvMapping } from './csv.js';
+import { authorizeAgentPreview, authorizeAgentImport, agentRestriction, type AgentRestriction } from './agent-restrictions.js';
+import {observeShipmentInterpretation} from './shipment-interpretation-shadow.js';
+import {csvHeaderChange} from './csv-header-policy.js';
+import {analyzeColumns, shipmentInterpretation} from './csv-semantics.js';
 import {shipmentBindingKey} from './source-reference.js';
 type Deps = Pick<AppDependencies, 'db' | 'clock' | 'objectStore' | 'devAuth'>;
 type State = 'previewed' | 'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed' | 'action_needed';
@@ -20,6 +23,7 @@ interface Job {
     agent_installation_id: string | null;
     agent_config_revision: number | null;
     source_control_revision: number | string;
+    shipment_interpretation: ReturnType<typeof captureShipmentDecision>;
     organization_id: string;
     environment: 'sandbox' | 'live';
     actor: PartnerActor;
@@ -120,11 +124,33 @@ async function authorize(deps: Deps, db: Database, a: PartnerActor, j: Job, writ
     for (const proofId of proofs)
         await authorizePartnerProof(db, deps.clock, a, proofId, 'proofs:read');
 }
+function captureShipmentDecision(installation: AgentRestriction | null, parsed: ReturnType<typeof parseShipmentCsv>, receiptId: string, digest: string, controlRevision: number) {
+    const config = installation?.approved_config;
+    const policy = config?.sourceContract;
+    if (!installation || !config || !policy?.interpretationVersion) return null;
+    const values = parsed.rows.map(r => r.values);
+    const fields = analyzeColumns(parsed.headers,values,config.mapping,policy.confirmedFields,config.locationId,true,true);
+    const interpretation = shipmentInterpretation(parsed.headers,values,fields);
+    if (interpretation.outcome !== 'automatic' || !installation.config_sha256)
+        throw new DomainError('MAPPING_NEEDS_REVIEW','The admitted source needs a current, validated interpretation.',409);
+    return {
+        ...interpretation,
+        schema: 'packproof.automation-decision/v1', kind: 'mapping', decisionId: receiptId,
+        sourceId: installation.id, configurationRevision: installation.config_revision,
+        sourceControlRevision: controlRevision, policyRevision: installation.config_sha256,
+        rulesVersion: policy.rulesVersion, profileVersion: policy.profileVersion,
+        originalSha256: digest, rowCount: values.length,
+        confirmedFields: policy.confirmedFields, headerPolicy: policy.headerPolicy ?? 'exact',
+        headerDisposition: csvHeaderChange(policy.expectedHeaders,parsed.headers), expectedHeaders: policy.expectedHeaders, actor: {kind:'system',id:'shipment-csv-validator'},
+        fields: fields.map(({field,sourceColumnId,state,origin,reasonCodes,validRowCount,invalidRowCount}) =>
+            ({field,sourceColumnId,state,origin,reasonCodes,validRowCount,invalidRowCount})),
+    };
+}
 function view(j: Job, rs: Row[]) {
     const counts = { valid: 0, invalid: 0, duplicate: 0, ambiguous: 0, imported: 0, failed: 0 };
     for (const r of rs)
         counts[r.status]++;
-    return { id: j.id, state: j.state, organizationId: j.organization_id, environment: j.environment, previewVersion: j.preview_version, sourceName: j.source_name, integrationAccountId: j.integration_account_id, operatorMembershipId: j.operator_membership_id, mappingVersion: j.mapping_version, mapping: j.mapping, headers: j.headers, delimiter: j.delimiter, timeZone: j.time_zone, encoding: 'UTF-8', receivedAt: iso(j.received_at), updatedAt: iso(j.updated_at), original: { sha256: j.original_sha256, byteSize: j.original_byte_size, versionBound: j.original_version_id !== 'null' }, counts, rows: rs.map(rowView), correctionsCsv: correctionCsv(j.headers, rs.map(rowView)), recordIds: [...new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []))], lastErrorCode: j.last_error_code, syncStatus: 'not_applicable' };
+    return { id: j.id, state: j.state, organizationId: j.organization_id, environment: j.environment, previewVersion: j.preview_version, sourceName: j.source_name, integrationAccountId: j.integration_account_id, operatorMembershipId: j.operator_membership_id, mappingVersion: j.mapping_version, ...(j.shipment_interpretation ? {interpretation:j.shipment_interpretation} : {}), mapping: j.mapping, headers: j.headers, delimiter: j.delimiter, timeZone: j.time_zone, encoding: 'UTF-8', receivedAt: iso(j.received_at), updatedAt: iso(j.updated_at), original: { sha256: j.original_sha256, byteSize: j.original_byte_size, versionBound: j.original_version_id !== 'null' }, counts, rows: rs.map(rowView), correctionsCsv: correctionCsv(j.headers, rs.map(rowView)), recordIds: [...new Set(rs.flatMap(r => r.proof_id ? [r.proof_id] : []))], lastErrorCode: j.last_error_code, syncStatus: 'not_applicable' };
 }
 export async function readPartnerImport(deps: Deps, a: PartnerActor, id: string) {
     const j = await job(deps.db, id);
@@ -140,11 +166,16 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
     await reauthorizePartner(deps.db, deps.clock, a, 'imports:read');
     await reauthorizePartner(deps.db, deps.clock, a, 'proofs:read');
     const sourceRestriction=await agentRestriction(deps.db,a);
+    if(sourceRestriction?.approved_config?.sourceContract && parsed.rows.some(row=>row.errors.length) &&
+       parseCsv((b.csv as string).replace(/^\uFEFF/,''),parsed.delimiter).some(row=>row.length>parsed.headers.length)){
+        throw new DomainError('SOURCE_SCHEMA_CHANGED','An original row contains extra cells outside the approved CSV header schema.',409);
+    }
     if(sourceRestriction?.approved_config?.sourceContract?.schema==='packproof.scheduled-csv/v2' && !parsed.mapping.locationId){
         for(const row of parsed.rows)if(row.normalized){row.normalized.locationId=sourceRestriction.location_id;row.payloadSha256=sha256Hex(canonicalize(row.normalized));}
     }
     const approvedInput = {originalSha256:digest,integrationAccountId:account,operatorMembershipId:operator,sourceName:name,mapping:parsed.mapping,timeZone:parsed.timeZone,headers:parsed.headers};
     await authorizeAgentPreview(deps.db,deps.clock,a,approvedInput,parsed.rows);
+    let admittedSource: AgentRestriction | null = null;
     const result = await idempotent(deps.db, deps.clock, a.tenantId, `service-import-preview:${a.principalId}:${a.credentialId}:${a.delegationGrantId ?? ''}`, key, b, async (tx) => {
         await reauthorizePartner(tx, deps.clock, a, 'imports:write');
         await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
@@ -193,13 +224,17 @@ export async function previewPartnerImport(deps: Deps, a: PartnerActor, key: unk
         for(const r of parsed.rows)await requireOperator(tx,a,operator,parsed.mapping.locationId?(r.values[parsed.mapping.locationId]??'').trim()||null:r.normalized?.locationId??null);
         const installation = await authorizeAgentPreview(tx,deps.clock,a,approvedInput,parsed.rows);
         const now = deps.clock.now().toISOString(), version = sha256Hex(canonicalize({ schema: MAPPING_VERSION, sha256: digest, mapping: parsed.mapping, timeZone: parsed.timeZone, account, operator, sourceName: name }));
-        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision,source_control_revision) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23,$24)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null,control?.control_revision??0]);
+        const decision = captureShipmentDecision(installation,parsed,id,digest,Number(control?.control_revision??0));
+        await tx.query(`INSERT INTO partner_import_jobs(id,organization_id,environment,actor,principal_id,credential_id,delegation_id,integration_account_id,operator_membership_id,source_name,preview_version,mapping_version,mapping,headers,delimiter,time_zone,original_object_key,original_version_id,original_sha256,original_byte_size,state,received_at,updated_at,agent_installation_id,agent_config_revision,source_control_revision,shipment_interpretation) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16,$17,$18,$19,$20,'previewed',$21,$21,$22,$23,$24,$25::jsonb)`, [id, a.merchantId, a.environment, JSON.stringify(a), a.principalId, a.credentialId, a.delegationGrantId, account, operator, name, version, MAPPING_VERSION, JSON.stringify(parsed.mapping), JSON.stringify(parsed.headers), parsed.delimiter, parsed.timeZone, objectKey, stored.versionId, digest, bytes.length, now, installation?.id ?? null, installation?.config_revision ?? null,control?.control_revision??0,decision ? JSON.stringify(decision) : null]);
         for (const r of parsed.rows)
             await tx.query('INSERT INTO partner_import_rows(import_id,row_number,status,source_values,normalized,payload_sha256,errors,proof_id) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7::jsonb,$8)', [id, r.rowNumber, r.status, JSON.stringify(r.values), JSON.stringify(r.normalized), r.payloadSha256, JSON.stringify(r.errors), r.proofId ?? null]);
         await auditOrganization(tx, deps.clock, { actor: a, requestId: a.requestId, operation: 'SERVICE_CSV_PREVIEWED', resourceId: id });
+        admittedSource = installation;
         return { id };
     });
-    return { ...result, value: await readPartnerImport(deps, a, result.value.id) };
+    const receipt = await readPartnerImport(deps, a, result.value.id);
+    if (!result.replayed) observeShipmentInterpretation(admittedSource, parsed);
+    return { ...result, value: receipt };
 }
 export async function commitPartnerImport(deps: Deps, a: PartnerActor, id: string, key: unknown, input: unknown) {
     const b = strictBody(input, ['previewVersion', 'importValidRows']);

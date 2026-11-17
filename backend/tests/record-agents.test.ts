@@ -210,3 +210,111 @@ it('revalidates a legacy saved proposal at approval instead of trusting its old 
  await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'INVALID_MAPPING'});
  const held=await loadInstallation(opened.db,a.result.installationId);expect(held.approved_config).toBeNull();expect(held.status).toBe('setup');expect(held.pending_proposal_sha256).toBe(digest);
 });
+
+it('rejects mismatched server rules, expired exact reviews and another workspace without changing protected receipts',async()=>{
+ const {CSV_RULES}=await import('../src/records/csv-semantics.js');
+ const {canonicalize}=await import('../src/canonical.js');
+ const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
+ const a=await enroll();await ack(a);
+ const original=`Shipment reference,Description,Quantity,Shipment date\nEXACT-REVIEW-001,Review fixture parcel,2,${clock.now().toISOString()}\n`;
+ const sourceContract={schema:'packproof.scheduled-csv/v2' as const,exporterName:null,exporterVersion:null,expectedHeaders:['Shipment reference','Description','Quantity','Shipment date'],expectedIntervalSeconds:null,backfillFrom:new Date(time-86400000).toISOString(),rulesVersion:CSV_RULES.version,profileVersion:CSV_RULES.profile,analysisRevision:1,confirmedFields:[],historyPolicy:{mode:'selected_then_new' as const,baselineSha256:'b'.repeat(64),observedAt:clock.now().toISOString(),initialFileName:'exact-review.csv',initialFileSha256:sha256Hex(Buffer.from(original))}};
+ const c={...config(a.account),timeZone:'source-offset',mapping:{shipmentReference:'Shipment reference',itemTitle:'Description',quantity:'Quantity',shippedAt:'Shipment date'},sourceContract};
+ const incompatible={...c,sourceContract:{...sourceContract,rulesVersion:'unsupported-rules'}};
+ await expect(proposeAgentConfig(deps,a.actor,incompatible)).rejects.toMatchObject({code:'SOURCE_CONTRACT_UNSUPPORTED'});
+ const digest=sha256Hex(canonicalize(incompatible));
+ await opened.db.query('UPDATE record_agent_installations SET pending_proposal=$2::jsonb,pending_proposal_sha256=$3 WHERE id=$1',[a.result.installationId,JSON.stringify(incompatible),digest]);
+ await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:digest})).rejects.toMatchObject({code:'SOURCE_CONTRACT_UNSUPPORTED'});
+ expect((await loadInstallation(opened.db,a.result.installationId)).approved_config).toBeNull();
+ const proposal=await proposeAgentConfig(deps,a.actor,c);
+ const start=time;
+ try{
+  time+=31*60000;
+  await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:proposal.proposalSha256})).rejects.toMatchObject({code:'APPROVAL_EXPIRED'});
+  const fresh=await proposeAgentConfig(deps,a.actor,{...c,sourceContract:{...sourceContract,historyPolicy:{...sourceContract.historyPolicy,observedAt:clock.now().toISOString()}}});
+  await humanAction(a.result.installationId,{action:'configure',proposalSha256:fresh.proposalSha256});
+  const first=(await previewPartnerImport(deps,a.actor,'exact-review-expiry-preview',{integrationAccountId:a.account,operatorMembershipId:member,sourceName:c.sourceName,mapping:c.mapping,timeZone:c.timeZone,csv:original})).value;
+  await expect(readAgentDetail(deps,{...w,organizationId:'another-workspace'},a.result.installationId,first.id)).rejects.toMatchObject({code:'INSTALLATION_NOT_FOUND'});
+  await expect(readAgentDetail(deps,w,a.result.installationId,'another-receipt')).rejects.toMatchObject({code:'IMPORT_NOT_FOUND'});
+  time+=31*60000;
+  await expect(humanAction(a.result.installationId,{action:'authorize_test',importId:first.id})).rejects.toMatchObject({code:'APPROVAL_EXPIRED'});
+  expect((await loadInstallation(opened.db,a.result.installationId)).test_import_id).toBeNull();
+  const retained=await readPartnerImport(deps,a.actor,first.id);expect(retained.state).toBe('previewed');expect(retained.original.sha256).toBe(sourceContract.historyPolicy.initialFileSha256);
+ }finally{time=start;}
+});
+
+it('keeps a historical transport error inspectable without claiming an outage after a fresh authenticated heartbeat',async()=>{
+ const a=await enroll();await ack(a);
+ const current=await heartbeatAgent(deps,a.actor,{version:'0.1.2',queueCount:0,lastErrorCode:'NETWORK_UNAVAILABLE'});
+ expect(current.health.serviceOnline).toBe(true);
+ expect(current.health.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+ expect(current.health.conditions).not.toContainEqual(expect.objectContaining({code:'NETWORK_UNAVAILABLE'}));
+ expect(current.health.history.at(-1)?.codes).not.toContain('NETWORK_UNAVAILABLE');
+});
+
+it('pins the value-validated decision to the receipt, checks stale source revisions and preserves accepted work on disable',async()=>{
+ const {CSV_RULES}=await import('../src/records/csv-semantics.js');
+ const rules=CSV_RULES.interpretation.version;
+ const a=await enroll();
+ const heartbeat=(version:string)=>heartbeatAgent(deps,a.actor,{version,queueCount:0,enrollmentAcknowledged:true});
+ vi.stubEnv('PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED','true');
+ vi.stubEnv('PACKPROOF_SHIPMENT_WORKER_INTERPRETATION','unqualified');
+ expect((await heartbeat('0.4.1')).capabilities.interpretationVersions).toEqual([]);
+ vi.stubEnv('PACKPROOF_SHIPMENT_WORKER_INTERPRETATION',rules);
+ expect((await heartbeat('0.2.3')).capabilities.interpretationVersions).toEqual([]);
+ expect((await heartbeat('0.4.1')).capabilities.interpretationVersions).toEqual([rules]);
+ const csv='Dispatch key,Description,Quantity,Shipment date\n0007,Pipe,2,'+clock.now().toISOString()+'\n';
+ const digest=sha256Hex(Buffer.from(csv));
+ const c={...config(a.account),timeZone:'source-offset',mapping:{shipmentReference:'Dispatch key',itemTitle:'Description',quantity:'Quantity',shippedAt:'Shipment date'},
+  sourceContract:{schema:'packproof.scheduled-csv/v2',exporterName:null,exporterVersion:null,expectedHeaders:['Dispatch key','Description','Quantity','Shipment date'],
+  expectedIntervalSeconds:null,backfillFrom:clock.now().toISOString(),rulesVersion:CSV_RULES.version,profileVersion:CSV_RULES.profile,interpretationVersion:rules,basedOnConfigRevision:0,
+  analysisRevision:1,confirmedFields:['shipmentReference'],historyPolicy:{mode:'selected_then_new',baselineSha256:'a'.repeat(64),observedAt:clock.now().toISOString(),initialFileName:'checked.csv',initialFileSha256:digest}}};
+ const input={integrationAccountId:a.account,operatorMembershipId:member,sourceName:c.sourceName,mapping:c.mapping,timeZone:c.timeZone,csv};
+ const proposal=await proposeAgentConfig(deps,a.actor,c);
+ await humanAction(a.result.installationId,{action:'configure',proposalSha256:proposal.proposalSha256});
+ await expect(proposeAgentConfig(deps,a.actor,c)).rejects.toMatchObject({code:'CONFIGURATION_CHANGED'});
+ const receipt=(await previewPartnerImport(deps,a.actor,'checked-source-preview',input)).value;
+ expect(receipt.interpretation).toMatchObject({decisionId:receipt.id,sourceId:a.result.installationId,outcome:'automatic',grain:'shipment',originalSha256:digest,rowCount:1,configurationRevision:1,version:rules,confirmedFields:['shipmentReference'],policyRevision:proposal.proposalSha256});
+ expect(receipt.interpretation?.fields).toContainEqual(expect.objectContaining({field:'shipmentReference',sourceColumnId:'Dispatch key',validRowCount:1,invalidRowCount:0}));
+ await expect(opened.db.query("UPDATE partner_import_jobs SET shipment_interpretation='{}'::jsonb WHERE id=$1",[receipt.id])).rejects.toThrow(/immutable/);
+ await humanAction(a.result.installationId,{action:'authorize_test',importId:receipt.id});
+ await commitPartnerImport(deps,a.actor,receipt.id,'checked-source-commit',{previewVersion:receipt.previewVersion,importValidRows:false});
+ vi.stubEnv('PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED','false');
+ await expect(previewPartnerImport(deps,a.actor,'paused-source-preview',input)).rejects.toMatchObject({code:'SOURCE_CONTRACT_UNSUPPORTED'});
+ await processPendingPartnerImports(deps);
+ const terminal=await readPartnerImport(deps,a.actor,receipt.id);
+ expect(terminal.state).toBe('succeeded'); expect(terminal.interpretation).toEqual(receipt.interpretation);
+});
+
+it('shadow-compares an opted-in scheduled revision after authorized receipt creation without changing admission, logging private fields or counting replays',async()=>{
+ const a=await enroll();await ack(a);
+ const c={...config(a.account),mapping:{shipmentReference:'Reference',itemTitle:'Description',quantity:'Quantity',shippedAt:'Reported at'},sourceContract:{schema:'packproof.scheduled-csv/v1' as const,exporterName:'Pilot',exporterVersion:'test',expectedHeaders:['Reference','Description','Quantity','Reported at'],expectedIntervalSeconds:60,backfillFrom:new Date(time-3600000).toISOString()}};
+ const proposal=await proposeAgentConfig(deps,a.actor,c);
+ const input={integrationAccountId:a.account,operatorMembershipId:member,sourceName:c.sourceName,mapping:c.mapping,timeZone:c.timeZone,csv:`Reference,Description,Quantity,Reported at\nPRIVATE-0008,Private item,1,${clock.now().toISOString()}\n`};
+ const messages=vi.spyOn(console,'info').mockImplementation(()=>{});
+ const previous=process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES;
+ try{
+  process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES=a.result.installationId+':1';
+  await expect(previewPartnerImport(deps,a.actor,'shadow-before-approval',input)).rejects.toMatchObject({code:'AGENT_AUTHORIZATION_REQUIRED'});
+  expect(messages).not.toHaveBeenCalled();
+  await humanAction(a.result.installationId,{action:'configure',proposalSha256:proposal.proposalSha256});
+  const receipt=(await previewPartnerImport(deps,a.actor,'shadow-approved',input)).value;
+  expect(receipt.interpretation).toBeUndefined();
+  expect(receipt.state).toBe('previewed');
+  expect(messages).toHaveBeenCalledTimes(1);
+  const metrics=JSON.parse(messages.mock.calls[0][0] as string);
+  expect(metrics).toMatchObject({event:'scheduled_csv_interpretation_shadow',outcome:'needs_review',rowCount:1,abstainedFields:2,agreeingFields:2,differentFields:0});
+  for(const privateValue of ['PRIVATE-0008','Private item','Reference','Description',a.account,a.result.installationId,receipt.id])expect(JSON.stringify(metrics)).not.toContain(privateValue);
+  const replay=await previewPartnerImport(deps,a.actor,'shadow-approved',input);
+  expect(replay.value.id).toBe(receipt.id);expect(messages).toHaveBeenCalledTimes(1);
+  process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES=a.result.installationId+':2';
+  const other=await previewPartnerImport(deps,a.actor,'shadow-other-revision',{...input,csv:input.csv.replace('PRIVATE-0008','PRIVATE-0009')});
+  expect(other.value.state).toBe('previewed');expect(messages).toHaveBeenCalledTimes(1);
+  process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES=a.result.installationId+':1';
+  messages.mockImplementation(()=>{throw new Error('Unavailable log destination')});
+  const loggingFailure=await previewPartnerImport(deps,a.actor,'shadow-log-failure',{...input,csv:input.csv.replace('PRIVATE-0008','PRIVATE-0010')});
+  expect(loggingFailure.value.state).toBe('previewed');
+ }finally{
+  if(previous===undefined)delete process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES;else process.env.PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES=previous;
+  messages.mockRestore();
+ }
+});

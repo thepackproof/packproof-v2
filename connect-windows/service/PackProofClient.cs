@@ -6,6 +6,9 @@ namespace PackProof.Connect;
 public sealed class ApiException(string code, int status, TimeSpan? retryAfter = null) : Exception(code) { public string Code { get; } = code; public int Status { get; } = status; public TimeSpan? RetryAfter { get; } = retryAfter; public bool Transient => Status is 408 or 429 or >= 500; }
 public sealed class PackProofClient : IDisposable
 {
+    internal static string BoundedErrorCode(string? code) =>
+        code is { Length: > 0 and <= 64 } && code[0] is >= 'A' and <= 'Z' &&
+        code.All(c => c is >= 'A' and <= 'Z' or >= '0' and <= '9' or '_') ? code : "PACKPROOF_REQUEST_FAILED";
     private readonly HttpClient http;
     private readonly TimeProvider time;
     private DateTimeOffset? serverDate;
@@ -14,6 +17,8 @@ public sealed class PackProofClient : IDisposable
     // Project it using elapsed (Stopwatch) time, independent of wall-clock edits.
     public DateTimeOffset? LastServerDate => serverDate is { } observed ? observed + time.GetElapsedTime(serverDateTimestamp) : null;
     public bool LastResponseHadServerDate { get; private set; }
+    public int? LastHttpStatus { get; private set; }
+    public string? LastCorrelationId { get; private set; }
     public PackProofClient(HostConfiguration host, HttpMessageHandler? handler = null, TimeProvider? timeProvider = null)
     {
         host.Validate(); time = timeProvider ?? TimeProvider.System;
@@ -31,15 +36,22 @@ public sealed class PackProofClient : IDisposable
         if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (key is not null) request.Headers.Add("Idempotency-Key", key);
         if (body is not null) { var bytes = body is ExactJsonBody exact ? exact.Bytes : Json.Bytes(body); if (body is ExactJsonBody checkedBody && Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)) != checkedBody.Sha256) throw new ConnectException("REQUEST_BODY_INTEGRITY_FAILED", "The preserved upload request failed its integrity check. Queued work is preserved."); if (bytes.Length > 6 * 1024 * 1024) throw new ConnectException("CSV_WIRE_LIMIT", "The encoded source exceeds the upload limit. Ask the source owner for a smaller approved export."); request.Content = new ByteArrayContent(bytes); request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json"); }
-        LastResponseHadServerDate = false;
+        LastResponseHadServerDate = false; LastHttpStatus = null; LastCorrelationId = null;
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        LastHttpStatus = (int)response.StatusCode;
+        // Correlation identifiers are opaque, bounded support references, never URLs or tokens.
+        if (response.Headers.TryGetValues("X-Request-Id", out var references))
+        {
+            var reference = references.FirstOrDefault();
+            if (reference is not null && System.Text.RegularExpressions.Regex.IsMatch(reference, @"^[A-Za-z0-9_.:-]{1,128}$")) LastCorrelationId = reference;
+        }
         LastResponseHadServerDate = response.Headers.Date is not null;
         if (response.Headers.Date is { } observedDate) { serverDate = observedDate; serverDateTimestamp = time.GetTimestamp(); }
         // A missing Date header must not erase a previously observed clock skew.
         if (!response.IsSuccessStatusCode)
         {
             string code = "PACKPROOF_REQUEST_FAILED";
-            try { await using var errorStream = await response.Content.ReadAsStreamAsync(ct); using var safeBody = new MemoryStream(); var part = new byte[4096]; int n; while ((n = await errorStream.ReadAsync(part, ct)) > 0) { if (safeBody.Length + n > 65536) break; safeBody.Write(part, 0, n); } if (n == 0) { var error = Json.Read<JsonElement>(safeBody.ToArray()); if (error.TryGetProperty("code", out var c)) code = c.GetString() ?? code; } }
+            try { await using var errorStream = await response.Content.ReadAsStreamAsync(ct); using var safeBody = new MemoryStream(); var part = new byte[4096]; int n; while ((n = await errorStream.ReadAsync(part, ct)) > 0) { if (safeBody.Length + n > 65536) break; safeBody.Write(part, 0, n); } if (n == 0) { var error = Json.Read<JsonElement>(safeBody.ToArray()); if (error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String) code = BoundedErrorCode(c.GetString()); } }
             catch (Exception e) when (e is JsonException or HttpRequestException) { }
             var retry = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow); if (retry < TimeSpan.Zero) retry = TimeSpan.Zero;
             throw new ApiException(code, (int)response.StatusCode, retry);

@@ -69,15 +69,26 @@ export function parseShipmentCsv(csv: unknown, mappingInput: unknown, timeZoneIn
   try { if(timeZoneInput !== 'source-offset') new Intl.DateTimeFormat('en-US', { timeZone: timeZoneInput }).format(); }
   catch { throw new DomainError('INVALID_TIME_ZONE', 'Choose a valid IANA time zone, such as America/New_York or UTC.', 400); }
   const source = csv.replace(/^\uFEFF/, '');
-  const candidates = ([',',';','\t'] as const).map(delimiter => {
-    try { const parsed = parseCsv(source, delimiter); return { delimiter, parsed, score: parsed[0]?.length ?? 0 }; }
-    catch { return { delimiter, parsed: null, score: -1 }; }
-  }).sort((a,b) => b.score - a.score);
-  if (!candidates[0].parsed) return parseCsv(source, ',') as never;
-  const { delimiter, parsed } = candidates[0];
+  // Choose from the header before validating the data. Re-parsing malformed or
+  // over-limit data under another delimiter can conceal a structural failure.
+  const delimiters = [',',';','\t'] as const;
+  const counts = new Map<string, number>(delimiters.map(d => [d, 0]));
+  let quoted = false;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '"') {
+      if (quoted && source[i + 1] === '"') i++;
+      else quoted = !quoted;
+    } else if (!quoted) {
+      if (ch === '\r' || ch === '\n') break;
+      if (counts.has(ch)) counts.set(ch, counts.get(ch)! + 1);
+    }
+  }
+  const delimiter = delimiters.reduce((best, d) => counts.get(d)! > counts.get(best)! ? d : best);
+  const parsed = parseCsv(source, delimiter);
   if (!parsed || parsed.length < 2) throw invalid('Include a header row and at least one shipment row.');
   const headers = parsed[0];
-  if (headers.some(header => !header || header.length > 200)) throw invalid('Every spreadsheet column needs a nonempty header of at most 200 characters.');
+  if (headers.some(header => !header.trim() || header.length > 200)) throw invalid('Every spreadsheet column needs a nonempty header of at most 200 characters.');
   if (new Set(headers.map(headerKey)).size !== headers.length) throw invalid('Two columns have the same heading. Rename one so the mapping is unambiguous.');
   const mapping: CsvMapping = {};
   const mappingProblems: string[] = [];

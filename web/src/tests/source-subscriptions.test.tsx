@@ -125,3 +125,34 @@ it('shows an actual source compatibility block in both its source card and exact
   expect(await screen.findByText('Install the matching collector version before using this source contract.')).toBeVisible();
   expect(screen.getByText('Collection needs attention.')).toBeVisible();
 });
+
+it('shows the change in whole-file disclosure and stages a column-order policy for separate approval',async()=>{
+ const current={...subscription,capabilities:{csvHeaderReorder:true},previousColumns:{revision:1,expectedHeaders:['Shipment','LoadedQty','Old'],mapping:{shipmentId:'Shipment',reportedLoadedQuantity:'Old'}}};
+ const request=vi.fn(async (_path:string,method?:string)=>method==='POST'?{...current,configurationRevision:3,config:{...config,headerPolicy:'same_names_any_order/v1'}}:current);
+ const user=userEvent.setup();render(approval({recordsRequest:request} as unknown as PackProofApi));
+ expect(await screen.findByText(/additional columns will be preserved in full if approved: Customer/)).toBeVisible();
+ expect(screen.getByText(/missing from the proposed report: Old/)).toBeVisible();
+ expect(screen.getByText('Old → LoadedQty')).toBeVisible();
+ await user.click(screen.getByText('Change the column order policy'));
+ const propose=screen.getByRole('button',{name:'Propose column policy'});
+ expect(propose).toBeDisabled();
+ await user.click(screen.getByRole('checkbox',{name:'Allow the listed columns in any order.'}));
+ await user.click(propose);
+ const writes=request.mock.calls as unknown as Array<[string,string,Record<string,unknown>]>;
+ expect(writes.filter(([,method])=>method==='POST')).toHaveLength(1);
+ expect(writes.find(([,method])=>method==='POST')![2]).toMatchObject({action:'revise',configurationRevision:2,config:{...config,headerPolicy:'same_names_any_order/v1'}});
+});
+
+it('keeps an approval addressed to a different workspace out of the source review', async () => {
+  const request=vi.fn();
+  render(approval({recordsRequest:request} as unknown as PackProofApi,{organizationId:'elsewhere'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('does not match');
+  expect(request).not.toHaveBeenCalled();
+});
+
+it('hides source approval controls if the response substitutes a different subscription', async () => {
+  const request=vi.fn(async()=>({...subscription,id:'source-b',subscriptionId:'source-b'}));
+  render(approval({recordsRequest:request} as unknown as PackProofApi));
+  expect(await screen.findByRole('alert')).toHaveTextContent('does not match');
+  expect(screen.queryByRole('button',{name:'Approve this source and first original'})).not.toBeInTheDocument();
+});

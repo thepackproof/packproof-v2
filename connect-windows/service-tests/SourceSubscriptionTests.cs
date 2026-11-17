@@ -15,7 +15,7 @@ public sealed class SourceSubscriptionTests:IDisposable
         using(var queue=new DurableQueue(store)){var entry=queue.Stage(original,"source.csv",new(Json.Element(new{integrationAccountId="integration",operatorMembershipId="member",sourceName="source",mapping=new{shipmentReference="Reference",itemTitle="Description",quantity="Quantity"},timeZone="UTC"})),"old-credential","old-config",true);id=entry.Id;key=entry.PreviewKey;commit=entry.CommitKey;}
         // Restore an actual v1 table shape around the untouched encrypted spool,
         // then open with the new reader to exercise additive migration.
-        using(var db=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}")){db.Open();using var c=db.CreateCommand();c.CommandText="DROP INDEX queue_source_due; DROP INDEX queue_source_page; ALTER TABLE queue DROP COLUMN source_id; ALTER TABLE queue DROP COLUMN source_profile; ALTER TABLE queue DROP COLUMN grant_revision; UPDATE meta SET version=1; PRAGMA user_version=1;";c.ExecuteNonQuery();}
+        using(var db=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}")){db.Open();using var c=db.CreateCommand();c.CommandText="DROP TABLE queue_backfill_items; DROP TABLE queue_work; DROP INDEX queue_source_due; DROP INDEX queue_source_page; ALTER TABLE queue DROP COLUMN source_id; ALTER TABLE queue DROP COLUMN source_profile; ALTER TABLE queue DROP COLUMN grant_revision; UPDATE meta SET version=1; PRAGMA user_version=1;";c.ExecuteNonQuery();}
         using var reopened=new DurableQueue(store);var kept=reopened.Find(id)!;Assert.Equal(key,kept.PreviewKey);Assert.Equal(commit,kept.CommitKey);Assert.Equal("old-credential",kept.CredentialGeneration);Assert.Equal("old-config",kept.ConfigDigest);Assert.Equal("legacy",kept.SourceId);Assert.Equal(0,kept.GrantRevision);Assert.Equal(original,Encoding.UTF8.GetBytes(reopened.Payload(kept).Csv));
     }
     [Fact]public void Protected_state_migration_does_not_reinterpret_legacy_approval_as_typed_authority()
@@ -74,15 +74,15 @@ public sealed class SourceSubscriptionTests:IDisposable
         Assert.Equal("SOURCE_CASE_VERIFICATION_FAILED",Assert.Throws<ConnectException>(()=>AgentRuntime.ValidateTypedStoredRecords(receipt,Stored("different"),"batch-a","digest")).Code);
         Assert.Equal("SOURCE_CASE_VERIFICATION_FAILED",Assert.Throws<ConnectException>(()=>AgentRuntime.ValidateTypedStoredRecords(receipt,Stored("loaded"),"another-batch","digest")).Code);
     }
-    private sealed class FakeSources(Dictionary<string,byte[]> files):ISourceAdapter
+    private sealed class FakeSources(Dictionary<string,byte[]> files, bool middleBusy=false):ISourceAdapter
     {
         public IReadOnlyList<string> Inspect(SourceSubscriptionState source)=>[source.Id+".csv"];
-        public CollectedSourceFile Read(SourceSubscriptionState source,string name)=>new(name,files[source.Id]);
+        public CollectedSourceFile Read(SourceSubscriptionState source,string name)=>middleBusy && source.Id=="source-b" ? throw new ConnectException("SOURCE_BUSY","Fixture still publishing") : new(name,files[source.Id]);
         public void Dispose() { }
     }
     private sealed class Replies(Func<HttpRequestMessage,Task<HttpResponseMessage>> reply):HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>reply(request); }
-    [Theory][InlineData(false,"active")][InlineData(true,"active")][InlineData(false,"ready")]public async Task Runtime_collects_three_approved_feeds_without_UI_and_isolates_schema_drift(bool driftingMiddleSource,string installationState)
+    [Theory][InlineData(false,"active",false)][InlineData(true,"active",false)][InlineData(false,"ready",false)][InlineData(false,"active",true)]public async Task Runtime_collects_three_approved_feeds_without_UI_and_isolates_schema_drift(bool driftingMiddleSource,string installationState,bool middleBusy)
     {
         using var corpus=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"source-contract-corpus.json")));
         var input=corpus.RootElement.GetProperty("cases").EnumerateArray().First(f=>f.GetProperty("name").GetString()=="csv-loading").GetProperty("input");
@@ -119,13 +119,21 @@ public sealed class SourceSubscriptionTests:IDisposable
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK){Content=new StringContent(Json.Element(Reply(response)).GetRawText())};
         });
         var host=new HostConfiguration("development","https://api.example.test","https://web.example.test","S-1-5-32-545");var storage=Store();
-        using(var runtime=new AgentRuntime(host,storage,new PackProofClient(host,handler),new LocalState{Token="preserved-credential",InstallationId="installation",CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(30),ServerConfig=policy,SourceSubscriptions=sources},sourceAdapter:()=>new FakeSources(files)))
+        using(var runtime=new AgentRuntime(host,storage,new PackProofClient(host,handler),new LocalState{Token="preserved-credential",InstallationId="installation",CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(30),ServerConfig=policy,SourceSubscriptions=sources},sourceAdapter:()=>new FakeSources(files,middleBusy)))
         {
             await runtime.Tick(default);await runtime.Tick(default);
         }
-        using var queue=new DurableQueue(storage);Assert.Equal(driftingMiddleSource?2:3,commits);
+        using var queue=new DurableQueue(storage);Assert.Equal(driftingMiddleSource||middleBusy?2:3,commits);
         foreach(var source in sources.Where(s=>s.Id!=SourceSubscriptionState.LegacyId))
         {
+            if (middleBusy && source.Id=="source-b")
+            {
+                Assert.Empty(queue.Page(source.Id)); Assert.False(source.LocalPaused);
+                var held=storage.Read<LocalState>("state.bin")!.SourceSubscriptions.Single(s=>s.Id==source.Id);
+                Assert.Equal(1,held.PublicationAttempts); Assert.NotNull(held.NextPublicationCheckAt);
+                Assert.Equal("SOURCE_BUSY",held.LastErrorCode); Assert.Null(held.CursorFileName);
+                continue;
+            }
             var work=Assert.Single(queue.Page(source.Id));Assert.Equal(driftingMiddleSource&&source.Id=="source-b"?"action_needed":"complete",work.State);
             if(driftingMiddleSource&&source.Id=="source-b"){Assert.True(source.LocalPaused);Assert.Equal(files[source.Id],queue.Payload(work).QuarantinedOriginalBytes);}
             else{Assert.False(source.LocalPaused);Assert.Equal(content,queue.Payload(work).Csv);Assert.NotNull(source.LastReceiptAt);}

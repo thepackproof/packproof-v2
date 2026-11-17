@@ -1,3 +1,4 @@
+import {csvHeaderPolicyAvailable} from './csv-header-policy.js';
 import { getProofView } from '../domain/proofs.js';
 import { eligibleHeader, type SemanticField, CSV_RULES } from './csv-semantics.js';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -8,14 +9,14 @@ import { newId } from '../ids.js';
 import { sha256Hex } from '../hash.js';
 import { canonicalize } from '../canonical.js';
 import { CSV_MAPPING_FIELDS, type CsvMapping, type ShipmentCsvRow } from './csv.js';
-import {validateScheduledCsvSourceContract,validateScheduledCsvRows,type ScheduledCsvSourceContract} from './agent-restrictions.js';
+import {interpretationAvailable,validateScheduledCsvSourceContract,validateScheduledCsvRows,type ScheduledCsvSourceContract} from './agent-restrictions.js';
 import { requireRecordWorkspace, requireRecordLocation, listRecordLocations, type RecordWorkspace } from './access.js';
 import { strictBody, organizationAdmin, createServicePrincipal, createIntegrationAccount, issuePartnerCredential, auditOrganization, reauthorizePartner, type PartnerActor } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
 import { protectWebhookResponse, webhookConfigFromEnv } from '../platform/webhooks.js';
-import {reconstructionFeatureEnabled,typedCollectorVersionSupported} from './reconstruction-features.js';
+import {reconstructionFeatureEnabled,typedCollectorVersionSupported,supportsSourceBackfills} from './reconstruction-features.js';
 
-const typedSetupEnabled=(version:string)=>(version==='0.3.0'||version==='0.4.0')&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake');
+const typedSetupEnabled=(version:string)=>(version==='0.3.0'||supportsSourceBackfills(version))&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake');
 
 type Deps = Pick<AppDependencies, 'db'|'clock'|'auth'|'devAuth'|'testFixtures'|'webhookConfig'>;
 export interface AgentConfig {
@@ -173,9 +174,11 @@ export async function agentView(deps:Deps,i:Installation,db=deps.db){
  if(sourceFreshness==='delayed')conditions.push({code:'SOURCE_DELAYED',repair:'Ask the source owner to check the scheduled exporter and publish a fresh immutable CSV within the approved cadence.'});
  if(expiry?.expires_at&&new Date(expiry.expires_at).getTime()-measuredAt<7*86400000)conditions.push({code:'CREDENTIAL_EXPIRING',repair:'Keep the computer online so queued receipts finish and the approved service can renew its credential.'});
  if(accounting?.oldest_pending_at&&measuredAt-new Date(accounting.oldest_pending_at).getTime()>=180000)conditions.push({code:'PROCESSING_DELAYED',repair:'Preserve queued originals and receipts; inspect the import worker before replaying an existing operation.'});
- if(typeof i.heartbeat.lastErrorCode==='string'&&/^[A-Z0-9_]{1,80}$/.test(i.heartbeat.lastErrorCode)&&!conditions.some(condition=>condition.code===i.heartbeat.lastErrorCode))conditions.push({code:i.heartbeat.lastErrorCode,repair:'Review the affected files on this computer. Preserve originals and correct the exporter or approved configuration before resuming.'});
+ // A successful authenticated heartbeat is current network evidence. Preserve
+ // an older transport failure as diagnostics instead of asserting an outage.
+ if(typeof i.heartbeat.lastErrorCode==='string'&&i.heartbeat.lastErrorCode!=='NETWORK_UNAVAILABLE'&&/^[A-Z0-9_]{1,80}$/.test(i.heartbeat.lastErrorCode)&&!conditions.some(condition=>condition.code===i.heartbeat.lastErrorCode))conditions.push({code:i.heartbeat.lastErrorCode,repair:'Review the affected files on this computer. Preserve originals and correct the exporter or approved configuration before resuming.'});
 
- return {id:i.id,installationId:i.id,state:i.status,authorizationUpdatedAt:iso(i.updated_at),deviceName:i.device_name,version:i.version,integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name,organizationId:i.organization_id,organizationName,environment:i.environment,configRevision:i.config_revision,configSha256:i.config_sha256,config:i.approved_config,pendingProposal:i.pending_proposal,pendingProposalSha256:i.pending_proposal_sha256,testImportId:i.test_import_id,verifiedImportId:i.verified_import_id,lastSeenAt:iso(i.last_seen_at),credentialExpiresAt:iso(expiry?.expires_at??null),health:{serviceOnline:!!i.last_seen_at&&deps.clock.now().getTime()-new Date(i.last_seen_at).getTime()<180000,lastFolderScanAt:i.heartbeat.lastScanAt??null,lastObservedExportAt:i.heartbeat.lastExportAt??null,lastCompletedImportAt:iso(last?.completed_at??null),completedImports:Number(last?.completed_imports??0),queueCount:i.heartbeat.queueCount??null,conditions,history:healthHistory(i),sourceFreshness,expectedIntervalSeconds:interval,sourceWatermarkAt:Number.isFinite(watermark)?new Date(watermark).toISOString():null,lastReceiptReconciledAt:i.heartbeat.lastReceiptReconciledAt??null,sourceAccounting:{receivedExports:Number(accounting?.received_exports??0),acceptedRows:Number(accounting?.accepted_rows??0),duplicateRows:Number(accounting?.duplicate_rows??0),rejectedRows:Number(accounting?.rejected_rows??0),pendingRows:Number(accounting?.pending_rows??0),linkedProofs:Number(accounting?.linked_proofs??0)},lastErrorCode:i.heartbeat.lastErrorCode??null},capabilities:{sourceBackfillJobs:i.version==='0.4.0'&&typedSetupEnabled(i.version)&&reconstructionFeatureEnabled('sourceBackfillJobs')&&['ready','active'].includes(i.status)&&!!i.enrollment_acknowledged_at&&!i.renewal_credential_id,sourceSetupApproval:typedSetupEnabled(i.version)&&i.status==='setup'&&!!i.enrollment_acknowledged_at,typedSourceBatchSchemas:typedCollectorVersionSupported(i.version,'packproof.typed-source-batch/v2')&&reconstructionFeatureEnabled('sourceIdentityV2')?['packproof.typed-source-batch/v1','packproof.typed-source-batch/v2']:['packproof.typed-source-batch/v1'],sourceContracts:['packproof.scheduled-csv/v1','packproof.scheduled-csv/v2'],rulesVersion:CSV_RULES.version,typedSourceSubscriptions:typedCollectorVersionSupported(i.version)&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'),sourceSubscriptionsSchema:'packproof.source-subscriptions/v1'},limits:{maxCsvBytes:2097152,maxRows:1000,maxColumns:50,maxJsonBytes:6291456,scanIntervalSeconds:30,heartbeatIntervalSeconds:60,offlineWindowSeconds:(i.approved_config?.offlineWindowHours??0)*3600}};
+ return {id:i.id,installationId:i.id,state:i.status,authorizationUpdatedAt:iso(i.updated_at),deviceName:i.device_name,version:i.version,integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name,organizationId:i.organization_id,organizationName,environment:i.environment,configRevision:i.config_revision,configSha256:i.config_sha256,config:i.approved_config,pendingProposal:i.pending_proposal,pendingProposalSha256:i.pending_proposal_sha256,testImportId:i.test_import_id,verifiedImportId:i.verified_import_id,lastSeenAt:iso(i.last_seen_at),credentialExpiresAt:iso(expiry?.expires_at??null),health:{serviceOnline:!!i.last_seen_at&&deps.clock.now().getTime()-new Date(i.last_seen_at).getTime()<180000,lastFolderScanAt:i.heartbeat.lastScanAt??null,lastObservedExportAt:i.heartbeat.lastExportAt??null,lastCompletedImportAt:iso(last?.completed_at??null),completedImports:Number(last?.completed_imports??0),queueCount:i.heartbeat.queueCount??null,conditions,history:healthHistory(i),sourceFreshness,expectedIntervalSeconds:interval,sourceWatermarkAt:Number.isFinite(watermark)?new Date(watermark).toISOString():null,lastReceiptReconciledAt:i.heartbeat.lastReceiptReconciledAt??null,sourceAccounting:{receivedExports:Number(accounting?.received_exports??0),acceptedRows:Number(accounting?.accepted_rows??0),duplicateRows:Number(accounting?.duplicate_rows??0),rejectedRows:Number(accounting?.rejected_rows??0),pendingRows:Number(accounting?.pending_rows??0),linkedProofs:Number(accounting?.linked_proofs??0)},lastErrorCode:i.heartbeat.lastErrorCode??null},capabilities:{sourceBackfillJobs:supportsSourceBackfills(i.version)&&typedSetupEnabled(i.version)&&reconstructionFeatureEnabled('sourceBackfillJobs')&&['ready','active'].includes(i.status)&&!!i.enrollment_acknowledged_at&&!i.renewal_credential_id,sourceSetupApproval:typedSetupEnabled(i.version)&&i.status==='setup'&&!!i.enrollment_acknowledged_at,typedSourceBatchSchemas:typedCollectorVersionSupported(i.version,'packproof.typed-source-batch/v2')&&reconstructionFeatureEnabled('sourceIdentityV2')?['packproof.typed-source-batch/v1','packproof.typed-source-batch/v2']:['packproof.typed-source-batch/v1'],sourceContracts:['packproof.scheduled-csv/v1','packproof.scheduled-csv/v2'],rulesVersion:CSV_RULES.version,interpretationVersions:interpretationAvailable(i.version)?[CSV_RULES.interpretation.version]:[],csvHeaderPolicies:csvHeaderPolicyAvailable(i.version)?['same_names_any_order/v1']:[],typedSourceSubscriptions:typedCollectorVersionSupported(i.version)&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'),sourceSubscriptionsSchema:'packproof.source-subscriptions/v1'},limits:{maxCsvBytes:2097152,maxRows:1000,maxColumns:50,maxJsonBytes:6291456,scanIntervalSeconds:30,heartbeatIntervalSeconds:60,offlineWindowSeconds:(i.approved_config?.offlineWindowHours??0)*3600}};
 }
 export async function readAgentInventory(deps:Deps,w:RecordWorkspace){
  const rs=(await deps.db.query<Installation>('SELECT * FROM record_agent_installations WHERE organization_id=$1 AND environment=$2 ORDER BY created_at DESC,id LIMIT 100',[w.organizationId,w.environment])).rows;
@@ -232,7 +235,7 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
  }else if(b.action==='configure'){
   if(!i.pending_proposal||b.proposalSha256!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','Refresh and review the exact proposed configuration');
   if(i.pending_proposal!.sourceContract?.schema==='packproof.scheduled-csv/v2'&&deps.clock.now().getTime()>Date.parse(i.pending_proposal!.sourceContract!.historyPolicy!.observedAt)+30*60000)fail('APPROVAL_EXPIRED','This source review expired. Reopen the selected local report and request a fresh review.');
-  validateAgentConfig(i.pending_proposal,i);
+  checkSourceProposal(validateAgentConfig(i.pending_proposal,i),i);
   await validateBinding(tx,w,i.pending_proposal as unknown as Record<string,unknown>);
   if((await tx.query("SELECT 1 FROM partner_import_jobs WHERE principal_id=$1 AND state IN ('queued','running') LIMIT 1",[i.principal_id])).rows[0])fail('IMPORTS_PENDING','Wait for accepted imports before changing configuration');
   // Configuration approval explicitly supersedes only uncommitted previews.
@@ -285,11 +288,20 @@ export function validateAgentConfig(input:unknown,i:Installation):AgentConfig{
  if((b.sourceContract as ScheduledCsvSourceContract|undefined)?.schema==='packproof.scheduled-csv/v2'&&(b.timeZone!=='source-offset'||b.importValidRows!==false))fail('INVALID_REQUEST','The v2 shipment profile preserves source offsets and holds whole invalid files',400);
  return b as unknown as AgentConfig;
 }
+function checkSourceProposal(config: AgentConfig, installation: Installation) {
+ const contract = config.sourceContract;
+ if (contract?.headerPolicy && !csvHeaderPolicyAvailable(installation.version)) fail('SOURCE_CONTRACT_UNSUPPORTED','The approved header policy requires compatible collector, API and worker support',409);
+ if (!contract?.interpretationVersion) return;
+ if (!interpretationAvailable(installation.version)) fail('SOURCE_CONTRACT_UNSUPPORTED','Shipment interpretation admission is unavailable for this collector',409);
+ if (contract.basedOnConfigRevision !== Number(installation.config_revision)) fail('CONFIGURATION_CHANGED','The source revision changed. Review the current interpretation before approval.',409);
+}
+
 export async function proposeAgentConfig(deps:Deps,a:PartnerActor,input:unknown){
  return deps.db.transaction(async tx=>{
   await reauthorizePartner(tx,deps.clock,a,'imports:read');const i=await installationForActor(tx,a,true);
   if(i.status==='revoked')fail('INSTALLATION_REVOKED','This installation was revoked',403);
   const config=validateAgentConfig(input,i);
+  checkSourceProposal(config,i);
   if(config.sourceContract?.schema==='packproof.scheduled-csv/v2'&&(Date.parse(config.sourceContract.historyPolicy!.observedAt)>deps.clock.now().getTime()+60000||deps.clock.now().getTime()>Date.parse(config.sourceContract.historyPolicy!.observedAt)+30*60000))fail('APPROVAL_EXPIRED','Review the current local report before proposing this source.');
   const digest=sha256Hex(canonicalize(config));
   await tx.query('UPDATE record_agent_installations SET pending_proposal=$2::jsonb,pending_proposal_sha256=$3 WHERE id=$1',[i.id,JSON.stringify(config),digest]);

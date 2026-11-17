@@ -12,6 +12,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {execFileSync} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {openIsolatedTestDatabase} from '../tests/isolated-test-database.js';
+import {createPgDatabase} from '../src/db/postgres.js';
 import {migrate} from '../src/db/migrate.js';
 import {insertUser} from '../src/domain/users.js';
 import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
@@ -140,8 +141,23 @@ const schedulerStops=new Set<()=>Promise<void>>();
 async function stopAllSchedulers(){const stops=[...schedulerStops];schedulerStops.clear();if(!stops.length)return;const started=performance.now(),results=await Promise.allSettled(stops.map(stop=>stop()));report.schedulerTeardown={stopped:true,schedulers:stops.length,jobs:3,elapsedMs:performance.now()-started,errors:results.flatMap(result=>result.status==='rejected'?[errorClass(result.reason)]:[])};const failure=results.find(result=>result.status==='rejected');if(failure?.status==='rejected')throw failure.reason;}
 try{
  await checkpoint('migrations');
- if(process.env.PACKPROOF_TEST_DATABASE_URL){const schema=(await opened.db.query<{schema:string}>('SELECT current_schema() schema')).rows[0].schema;if(!/^partner_services_[a-f0-9]{16}$/.test(schema))throw new Error('Benchmark requires its own isolated random test schema');report.isolatedSchema=schema;}
- await migrate(opened.db);report.databaseVersion=(await opened.db.query<{version:string}>('SELECT version()')).rows[0].version;await checkpoint('source_setup');
+ const testDatabaseUrl=process.env.PACKPROOF_TEST_DATABASE_URL;
+ if(testDatabaseUrl){
+  const schema=(await opened.db.query<{schema:string}>('SELECT current_schema() schema')).rows[0].schema;
+  if(!/^partner_services_[a-f0-9]{16}$/.test(schema))throw new Error('Benchmark requires its own isolated random test schema');
+  report.isolatedSchema=schema;
+  // Run the exact historical DDL on its own connection as in a release.
+  // Migration-local session settings must never become runtime-pool settings.
+  const migrationUrl=new URL(testDatabaseUrl);
+  migrationUrl.searchParams.set('options',`-c search_path=${schema}`);
+  const migrator=createPgDatabase(migrationUrl.toString());
+  try{await migrate(migrator.db);}
+  finally{await migrator.close();}
+  report.runtimeLockTimeout=(await opened.db.query<{lock_timeout:string}>('SHOW lock_timeout')).rows[0].lock_timeout;
+ }else{
+  await migrate(opened.db);
+ }
+ report.databaseVersion=(await opened.db.query<{version:string}>('SELECT version()')).rows[0].version;await checkpoint('source_setup');
  const admin=await insertUser(opened.db,clock),owner=await insertUser(opened.db,clock);
  await opened.db.query("INSERT INTO user_system_roles(user_id,role,granted_at) VALUES($1,'SYSTEM_ADMIN',$2)",[admin,clock.now().toISOString()]);
  await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);

@@ -24,8 +24,12 @@ export function previewValid(status: ConnectStatus): boolean {
   const counts = status.preview?.counts;
   return !!counts && (counts.valid > 0) && !counts.duplicate && !counts.invalid && !counts.ambiguous && !counts.failed;
 }
+export function accessUnavailable(status: ConnectStatus): boolean {
+  return status.state === 'revoked' || status.state === 'permission_required'
+    || status.transport?.state === 'forbidden' || status.transport?.state === 'unauthenticated';
+}
 export function verificationCurrent(status: ConnectStatus, draft: Configuration | undefined, dirty: boolean): boolean {
-  return status.state !== 'revoked' && !dirty && !status.pendingProposal && !!status.verification?.complete && !!status.verification.recordId && configKey(draft) === configKey(status.config)
+  return !accessUnavailable(status) && !dirty && !status.pendingProposal && !!status.verification?.complete && !!status.verification.recordId && configKey(draft) === configKey(status.config)
     && typeof status.configRevision === 'number' && status.verification.configRevision === status.configRevision
     && !!status.source?.fileSha256 && status.verification.fileSha256 === status.source.fileSha256;
 }

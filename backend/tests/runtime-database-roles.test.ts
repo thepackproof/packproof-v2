@@ -72,8 +72,8 @@ beforeAll(async()=>{
   await h.db.query('GRANT UPDATE(status,manifest_id,finalized_at,updated_at) ON proofs TO '+workerRole);
   await h.db.query('GRANT INSERT(operation_id,next_attempt_at) ON recovery_delivery TO '+workerRole);
   for(const table of ['users','platform_organizations','platform_memberships'])await h.db.query('GRANT UPDATE(id) ON '+table+' TO '+workerRole);
-  const inventory=await recordsMigrationInventory();
-  privileges={runtimeRole:apiRole,workerRole,schema:'public',reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256};
+  const inventory=await recordsMigrationInventory(121);
+  privileges={throughMigration:121,runtimeRole:apiRole,workerRole,schema:'public',reviewedSourceCommit:source,reviewedMigrationSha256:inventory.migrationSha256};
   const plan=await planRecordsRuntimePrivileges(h.db,privileges);
   await h.db.transaction(async tx=>{for(const sql of plan.statements)await tx.query(sql);});
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);

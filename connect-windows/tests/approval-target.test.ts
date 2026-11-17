@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {currentApprovalPath,submitConfigurationForReview} from '../main/approval-target';
+import {verifiedDetailPath,currentApprovalPath,submitConfigurationForReview} from '../main/approval-target';
 import type {ConnectStatus,Configuration} from '../ui/types';
 const base:ConnectStatus={state:'source_selected',environment:'development',installationId:'install-123',health:{serviceOnline:true,queueCount:0},approvalPath:'/app/records/connect/approve?enrollmentId=used-up'};
 const config={folderDigest:'folder',sourceName:'test',mapping:{shipmentReference:'Reference'},timeZone:'America/New_York',importValidRows:false,offlineWindowHours:24} satisfies Configuration;
@@ -17,4 +17,23 @@ describe('stage-correct browser review',()=>{
  it('opens the browser only after configuration has been saved',async()=>{const order:string[]=[];const submit=async()=>{order.push('saved');return {...base,pendingProposal:config};};await submitConfigurationForReview(submit,async url=>{order.push('opened');expect(url).toBe(origin+'/app/records/connect/approve?installationId=install-123');},origin);expect(order).toEqual(['saved','opened']);});
  it('never opens a browser when submission fails',async()=>{const open=vi.fn();await expect(submitConfigurationForReview(async()=>{throw Error('CLOCK_UNCERTAIN');},open,origin)).rejects.toThrow('CLOCK_UNCERTAIN');expect(open).not.toHaveBeenCalled();});
  it('keeps the saved proposal when opening the browser fails',async()=>{const next=await submitConfigurationForReview(async()=>({...base,pendingProposal:config}),async()=>{throw Error('browser unavailable');},origin);expect(next.pendingProposal).toEqual(config);expect(next.authorizationNotice).toContain('was saved');});
+});
+
+it('retains the exact guided batch and workspace across browser review',()=>{
+ const status:ConnectStatus={...base, config, binding:{organizationId:'org-17',sourceName:'Shipping',integrationAccountId:'int',operatorMembershipId:'user',locationId:null}, setup:{running:true,phase:'batch_review'},preview:{id:'batch-8'} as ConnectStatus['preview']};
+ const params=new URL(currentApprovalPath(status),origin).searchParams;
+ expect(Object.fromEntries(params)).toEqual({installationId:'install-123',organizationId:'org-17',environment:'sandbox',importId:'batch-8'});
+ expect(()=>currentApprovalPath({...status,preview:undefined})).toThrow('current batch receipt');
+ expect(currentApprovalPath({...status,setup:{running:true,phase:'permission_review'}})).not.toContain('importId=');
+});
+
+it('opens a verified source case on the portal case route and refuses a revoked source',()=>{
+ const source={id:'source-5',state:'active',verifiedCaseId:'case-7'} as NonNullable<ConnectStatus['sourceSubscriptions']>[number];
+ const status={...base,capabilities:{sourceContracts:[],rulesVersion:'v2',typedSourceSubscriptions:true},sourceSubscriptions:[source]};
+ expect(verifiedDetailPath(status,source.id)).toBe('/app/cases/case-7');
+ expect(()=>verifiedDetailPath({...status,sourceSubscriptions:[{...source,state:'revoked'}]},source.id)).toThrow();
+ expect(()=>verifiedDetailPath(status,'another-source')).toThrow();
+ expect(()=>verifiedDetailPath({...status,capabilities:undefined},source.id)).toThrow();
+ expect(()=>verifiedDetailPath({...status,sourceSubscriptions:[{...source,lastErrorCode:'SOURCE_AUTHORIZATION_REQUIRED'}]},source.id)).toThrow();
+ expect(()=>verifiedDetailPath({...status,state:'permission_required'},source.id)).toThrow();
 });

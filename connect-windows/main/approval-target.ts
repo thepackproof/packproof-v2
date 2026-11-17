@@ -2,6 +2,30 @@ import type {ConnectStatus} from '../ui/types';
 import {approvalUrl} from './security';
 const validId=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
 const route='/app/records/connect/approve';
+function workspaceParams(status: ConnectStatus): URLSearchParams {
+ const params = new URLSearchParams();
+ if (!status.binding?.organizationId) return params;
+ if (!validId(status.binding.organizationId)) throw Error('Refresh the current workspace before opening this review.');
+ const env = status.environment;
+ if (!['development','staging','sandbox','live','production'].includes(env)) throw Error('Refresh the installation environment before opening this review.');
+ params.set('organizationId',status.binding.organizationId);
+ params.set('environment',env === 'live' || env === 'production' ? 'live' : 'sandbox');
+ return params;
+}
+
+export function verifiedDetailPath(status: ConnectStatus, sourceId?: string): string {
+ if (status.state === 'revoked' || status.state === 'permission_required' || status.transport?.state === 'forbidden' || status.transport?.state === 'unauthenticated')
+   throw Error('This installation no longer has access.');
+ const source = sourceId === undefined ? undefined : status.sourceSubscriptions?.find(item => item.id === sourceId);
+ const id = sourceId === undefined ? status.verification?.recordId : source?.verifiedCaseId;
+ const verified = sourceId === undefined ? status.verification?.complete
+   : status.capabilities?.typedSourceSubscriptions && source && ['active','approved','paused'].includes(source.state)
+     && source.lastErrorCode !== 'SOURCE_AUTHORIZATION_REQUIRED';
+ if (!verified || !validId(id)) throw Error('Verify the completed record before opening it.');
+ const scope = workspaceParams(status).toString();
+ return `/app/${sourceId === undefined ? 'records' : 'cases'}/${id}${scope ? '?' + scope : ''}`;
+}
+
 /** Resolve from current service state, never reuse an enrollment link after enrollment. */
 export function currentApprovalPath(status:ConnectStatus, now=Date.now()):string {
  if(status.state==='revoked')throw Error('This installation was revoked. Use the recovery action before requesting a new approval.');
@@ -13,7 +37,10 @@ export function currentApprovalPath(status:ConnectStatus, now=Date.now()):string
  }
  if(!validId(status.installationId))throw Error('Refresh this installation before opening its approval.');
  const query=new URLSearchParams({installationId:status.installationId});
- if(status.preview && !status.setup?.running){
+ for (const [key,value] of workspaceParams(status)) query.set(key,value);
+ const batchReview = status.setup?.running && status.setup.phase === 'batch_review';
+ if(batchReview && !status.preview) throw Error('Wait for the current batch receipt before opening its review.');
+ if(status.preview && (!status.setup?.running || batchReview)){
   if(!validId(status.preview.id))throw Error('Create a valid secure preview before reviewing the shipment batch.');
   query.set('importId',status.preview.id);
  }else if(!status.pendingProposal&&!status.config){
@@ -36,6 +63,7 @@ export function currentSubscriptionApprovalPath(status:ConnectStatus, id:string)
  const source=status.sourceSubscriptions?.find(s=>s.id===id);
  if(!source||source.state==='revoked')throw Error('This source is unavailable for approval. Refresh its current state.');
  const query=new URLSearchParams({installationId:status.installationId,subscriptionId:id,configurationRevision:String(source.configurationRevision)});
+ for (const [key,value] of workspaceParams(status)) query.set(key,value);
  if(source.verifiedCaseId&&source.receipt&&validId(source.receipt.id))query.set('initialBatchId',source.receipt.id);
  return `${route}?${query}`;
 }

@@ -11,7 +11,7 @@ import {requireRecordWorkspace,type RecordWorkspace} from './access.js';
 import {requireCaseAccess,currentCaseAssertionSql} from './cases.js';
 import {loadOperationalCaseProjection} from './reconstruction.js';
 import {requireReconstructionFeature,reconstructionFeatureEnabled} from './reconstruction-features.js';
-import {RECONSTRUCTION_RULE_VERSION,type ReconstructionComparison} from './reconstruction-rules.js';
+import {RECONSTRUCTION_RULE_FAMILY,RECONSTRUCTION_RULE_VERSION,type ReconstructionComparison} from './reconstruction-rules.js';
 import {sourceWorkRecheckIntervalMs} from './coverage.js';
 
 interface IssueRow {id:string;case_id:string;category:string;rule_version:string;subject:unknown;created_at:string|Date}
@@ -56,7 +56,7 @@ export async function synchronizeOperationalCaseIssues(db:Database,clock:Clock,w
   // action. Unknown/unqualified cadence does not manufacture an overdue alert.
   for(const source of projection.sources){
    if(source.coverage!=='qualified')continue;
-   const key=`case_issue_${sha256Hex(canonicalize({caseId,subscriptionId:source.subscriptionId??source.connectionId,rule:'source_coverage',version:RECONSTRUCTION_RULE_VERSION}))}`;
+   const key=`case_issue_${sha256Hex(canonicalize({caseId,subscriptionId:source.subscriptionId??source.connectionId,rule:'source_coverage',version:RECONSTRUCTION_RULE_FAMILY}))}`;
    const good=['current','quiet_checked'].includes(source.state);
    const inputs=projection.assertions.filter(assertion=>assertion.source.subscriptionId===source.subscriptionId&&assertion.active).map(assertion=>assertion.id).sort();
    const value:Evaluation={outcome:good?'within_tolerance':'different',title:good?'Source interval current':'Source information needs review',explanation:good?'The source has a current qualified boundary. Earlier coverage warnings remain in history.':`${source.label}. ${source.nextAction} This describes unavailable or incomplete source information, not a proven missing warehouse action or lost goods.`,inputAssertionIds:inputs,sourceHealth:source,ruleVersion:RECONSTRUCTION_RULE_VERSION,physicalCondition:'not_established'};

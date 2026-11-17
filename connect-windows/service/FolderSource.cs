@@ -89,13 +89,18 @@ public static class FolderSource
         if(bytes.Length is 0 or >MaxCsvBytes)throw new ConnectException("CSV_SIZE_UNSUPPORTED","Use a nonempty UTF-8 CSV no larger than 2 MiB.");
         string text;try{text=new UTF8Encoding(false,true).GetString(bytes);}catch(DecoderFallbackException){throw new ConnectException("CSV_ENCODING_UNSUPPORTED","Save the export as UTF-8 CSV.");}
         if(text.Contains('\0'))throw new ConnectException("INVALID_CSV","The export contains a null character.");
-        var config=new CsvConfiguration(CultureInfo.InvariantCulture){HasHeaderRecord=true,DetectDelimiter=true,DetectDelimiterValues=[",",";","\t"],MaxFieldSize=10000,ExceptionMessagesContainRawData=false};
+        var config=new CsvConfiguration(CultureInfo.InvariantCulture){HasHeaderRecord=true,IgnoreBlankLines=false,DetectDelimiter=true,DetectDelimiterValues=[",",";","\t"],MaxFieldSize=10000,ExceptionMessagesContainRawData=false};
         using var reader=new CsvReader(new StringReader(text.TrimStart('\uFEFF')),config);
         try{
             if(!reader.Read())throw new ConnectException("INVALID_CSV","Include a header and at least one shipment row.");reader.ReadHeader();var headers=reader.HeaderRecord??[];
             if(headers.Length is 0 or >50||headers.Any(h=>string.IsNullOrWhiteSpace(h)||h.Length>200)||headers.Select(CsvSemantics.Key).Distinct(StringComparer.Ordinal).Count()!=headers.Length)throw new ConnectException("INVALID_CSV","Use at most 50 unique columns without normalized heading collisions.");
-            var rows=new List<Dictionary<string,string>>();while(reader.Read()){
-                if(rows.Count>=1000)throw new ConnectException("CSV_ROW_LIMIT","Use at most 1,000 shipment rows per report.");
+            var rows=new List<Dictionary<string,string>>();
+            int physicalRows=0;
+            bool trailingEmpty=false;
+            while(reader.Read()){
+                if(++physicalRows>1000)throw new ConnectException("CSV_ROW_LIMIT","Use at most 1,000 shipment rows per report.");
+                if(reader.Parser.Record!.All(string.IsNullOrEmpty)){trailingEmpty=true;continue;}
+                if(trailingEmpty)throw new ConnectException("INVALID_CSV","The report contains an empty row between data rows.");
                 if(reader.Parser.Count!=headers.Length)throw new ConnectException("INVALID_CSV","A row has a different number of columns from its header.");
                 rows.Add(headers.Select((h,i)=>(h,i)).ToDictionary(x=>x.h,x=>reader.GetField(x.i)??""));
             }
@@ -115,9 +120,9 @@ public static class FolderSource
         if(contract.GetProperty("schema").GetString() is not("packproof.scheduled-csv/v1" or "packproof.scheduled-csv/v2"))throw new ConnectException("MAPPING_NEEDS_REVIEW","The source contract is not supported by this service version.");
         if(contract.GetProperty("schema").GetString()=="packproof.scheduled-csv/v2" && (contract.GetProperty("rulesVersion").GetString()!=CsvSemantics.Version||contract.GetProperty("profileVersion").GetString()!=CsvSemantics.Profile))throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","Install the matching source validation version.");
         var preview=Json.Element(Preview(bytes));
-        var actual=preview.GetProperty("headers").EnumerateArray().Select(x=>x.GetString()).ToArray();
-        var expected=contract.GetProperty("expectedHeaders").EnumerateArray().Select(x=>x.GetString()).ToArray();
-        if(!actual.SequenceEqual(expected,StringComparer.Ordinal))throw new ConnectException("MAPPING_NEEDS_REVIEW","The export headers changed. Ask the source owner to review the version and mapping in PackProof.");
+        var actual=preview.GetProperty("headers").EnumerateArray().Select(x=>x.GetString()!).ToArray();
+        var expected=contract.GetProperty("expectedHeaders").EnumerateArray().Select(x=>x.GetString()!).ToArray();
+        CsvHeaderPolicy.Require(contract,expected,actual,"MAPPING_NEEDS_REVIEW");
         if(!approved.GetProperty("mapping").TryGetProperty("shippedAt",out var field))throw new ConnectException("MAPPING_NEEDS_REVIEW","This source needs an explicit-offset shipment timestamp column.");
         var cutoff=DateTimeOffset.Parse(contract.GetProperty("backfillFrom").GetString()!,CultureInfo.InvariantCulture);
         var config=new CsvConfiguration(CultureInfo.InvariantCulture){HasHeaderRecord=true,DetectDelimiter=true,DetectDelimiterValues=[",",";","\t"],MaxFieldSize=10000,ExceptionMessagesContainRawData=false};

@@ -19,6 +19,67 @@ public sealed class RecoveryTests : IDisposable {
         string id;using(var queue=new DurableQueue(Store())){var e=queue.Stage(Original,"source.csv",Body,"credential-a","config",true);var p=queue.Payload(e);p.Receipt=Json.Element(new{id="import-a",previewVersion="v1",state="previewed"});queue.Save(e,p,"commit_pending","import-a", "NETWORK_UNAVAILABLE",true);id=e.Id;}
         using var recovered=new DurableQueue(Store());var work=recovered.Find(id)!;Assert.Equal("commit_pending",work.State);Assert.Equal("import-a",work.ImportId);Assert.True(recovered.Payload(work).CommitApproved);Assert.Equal(1,work.Attempts);Assert.NotEqual(work.PreviewKey,work.CommitKey);
     }
+    [Fact] public void Transient_failures_use_a_bounded_short_budget_then_survive_restart_with_receipt_and_original()
+    {
+        string id;
+        using (var queue = new DurableQueue(Store()))
+        {
+            var entry = queue.Stage(Original,"private-warehouse.csv",Body,"private-credential","private-config",true);
+            var payload = queue.Payload(entry);
+            payload.Receipt = Json.Element(new { id="same-receipt", state="processing" });
+            id = entry.Id;
+            for (var attempt=1; attempt<=10; attempt++)
+            {
+                queue.Save(entry,payload,"server_processing","same-receipt","NETWORK_UNAVAILABLE",true);
+                entry = queue.Find(id)!;
+                var latest = queue.Payload(entry).RecentRetries![^1];
+                var baseSeconds = attempt<=5 ? 2 << (attempt-1) : 300;
+                Assert.InRange((latest.NextAttemptAt-latest.AttemptedAt).TotalSeconds,baseSeconds,baseSeconds*1.1);
+                Assert.Equal(entry.NextAttemptAt, latest.NextAttemptAt);
+            }
+        }
+        using var restarted = new DurableQueue(Store());
+        var kept = restarted.Find(id)!;
+        Assert.Equal(10,kept.Attempts); Assert.Equal("same-receipt",kept.ImportId);
+        Assert.Null(restarted.NextDue(kept.SourceId,kept.CredentialGeneration,kept.ConfigDigest,kept.NextAttemptAt.AddTicks(-1)));
+        Assert.Equal(kept,restarted.NextDue(kept.SourceId,kept.CredentialGeneration,kept.ConfigDigest,kept.NextAttemptAt));
+        var retained = restarted.Payload(kept);
+        Assert.Equal(Original,Encoding.UTF8.GetBytes(retained.Csv));
+        Assert.Equal(Enumerable.Range(3,8),retained.RecentRetries!.Select(x=>x.Attempt));
+        var summary=Json.Element(restarted.RecoverySummary()).GetRawText();
+        Assert.Contains("NETWORK_UNAVAILABLE",summary); Assert.DoesNotContain("private-",summary);
+    }
+    [Fact] public void Retry_after_is_a_lower_bound_even_after_the_short_budget_expires()
+    {
+        var now=DateTimeOffset.UtcNow;
+        Assert.Equal(now.AddHours(2),DurableQueue.RetryAt(now,8,TimeSpan.FromHours(2)));
+        Assert.Equal(DateTimeOffset.MaxValue,DurableQueue.RetryAt(now,1,TimeSpan.MaxValue));
+        Assert.True(DurableQueue.RetryAt(now,4,TimeSpan.Zero)>=now.AddSeconds(16));
+        Assert.Equal("PACKPROOF_REQUEST_FAILED",PackProofClient.BoundedErrorCode("private customer value"));
+    }
+    [Fact] public async Task Lost_queue_table_during_operation_exposes_support_status_and_preserves_the_pending_original()
+    {
+        var store=Store();
+        QueueEntry entry;
+        using (var queue=new DurableQueue(store)) entry=queue.Stage(Original,"private-warehouse.csv",Body,"retained-generation","retained-config",false);
+        var path=Path.Combine(root,"spool",entry.PayloadPath);
+        var protectedOriginal=File.ReadAllBytes(path);
+        var key=File.ReadAllBytes(Path.Combine(root,"spool-key.bin"));
+        using var runtime=new AgentRuntime(Host(),store,new PackProofClient(Host()),new LocalState());
+        using(var db=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(root,"queue.sqlite")}"))
+        {
+            db.Open(); using var command=db.CreateCommand();
+            command.CommandText="ALTER TABLE queue RENAME TO retained_fixture_queue"; command.ExecuteNonQuery();
+        }
+        var fault=await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("status",null,default));
+        Assert.Equal("LOCAL_QUEUE_UNAVAILABLE",fault.Code);
+        var status=Json.Element(await runtime.Command("status",null,default));
+        Assert.Equal("action_needed",status.GetProperty("state").GetString());
+        Assert.Equal("LOCAL_QUEUE_UNAVAILABLE",status.GetProperty("health").GetProperty("lastErrorCode").GetString());
+        await runtime.Tick(default);
+        Assert.Equal(protectedOriginal,File.ReadAllBytes(path));
+        Assert.Equal(key,File.ReadAllBytes(Path.Combine(root,"spool-key.bin")));
+    }
     [Fact] public void Sensitive_original_and_names_do_not_appear_in_database_WAL_or_spool(){
         using var queue=new DurableQueue(Store());queue.Stage(Original,"secret-customer-name.csv",Body,"credential-fingerprint","config",false);queue.Checkpoint();foreach(var path in Directory.EnumerateFiles(root,"*",SearchOption.AllDirectories)){using var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.ReadWrite|FileShare.Delete);using var snapshot=new MemoryStream();stream.CopyTo(snapshot);var text=Encoding.UTF8.GetString(snapshot.ToArray());Assert.DoesNotContain("Fixture, private 6fd1",text);Assert.DoesNotContain("secret-customer-name.csv",text);Assert.DoesNotContain("0000123",text);}
     }

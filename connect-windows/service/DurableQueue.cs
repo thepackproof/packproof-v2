@@ -17,6 +17,17 @@ public sealed partial class DurableQueue : IDisposable
     {
         if (originalFileLimit is < 1 or > MaxFiles) throw new ArgumentOutOfRangeException(nameof(originalFileLimit));
         this.originalFileLimit = originalFileLimit;
+        // Inspect retained format read-only before creating directories, keys or
+        // changing SQLite settings. A rejected source-aware queue is untouched.
+        var databasePath = Path.Combine(store.Root, "queue.sqlite");
+        if (File.Exists(databasePath))
+        {
+            // Ordinary read-only SQLite honors committed WAL frames. SQLite
+            // may create coordination sidecars; it cannot alter retained rows,
+            // version markers, originals, credentials or key material here.
+            using var retained = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            retained.Open(); _ = QueueSchemaCompatibility.Inspect(retained, sourceAware: true);
+        }
         spoolRoot = Path.Combine(store.Root, "spool"); Directory.CreateDirectory(spoolRoot); encryption = new(store.Key());
         db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(store.Root, "queue.sqlite"), Mode = SqliteOpenMode.ReadWriteCreate }.ToString()); db.Open();
         try
@@ -31,18 +42,10 @@ public sealed partial class DurableQueue : IDisposable
     private const string Columns = "id,digest,state,preview_key,commit_key,credential_generation,config_digest,import_id,attempts,next_attempt_at,error_code,payload_path,source_id,source_profile,grant_revision";
     private void InitializeSchema()
     {
-        using var command = db.CreateCommand(); command.CommandText = "PRAGMA user_version";
-        var userVersion = Convert.ToInt32(command.ExecuteScalar());
-        if (userVersion > 4) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta'";
-        var hasMeta = Convert.ToInt32(command.ExecuteScalar()) > 0;
-        if (hasMeta)
-        {
-            command.CommandText = "SELECT version FROM meta"; var values = new List<int>();
-            using (var reader = command.ExecuteReader()) while (reader.Read()) values.Add(reader.GetInt32(0));
-            if (values.Count != 1 || values[0] is < 1 or > 4 || (userVersion != 0 && values[0] != userVersion)) throw new ConnectException("QUEUE_SCHEMA_UNSUPPORTED", "Install the compatible PackProof version to preserve this queue.");
-        }
+        var inspectedVersion = QueueSchemaCompatibility.Inspect(db, sourceAware: true);
+        using var command = db.CreateCommand();
         Execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON;");
+        if (inspectedVersion == 4) return;
         using var transaction = db.BeginTransaction(); command.Transaction = transaction;
         command.CommandText = "CREATE TABLE IF NOT EXISTS meta (version INTEGER NOT NULL); INSERT INTO meta(version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta); CREATE TABLE IF NOT EXISTS queue(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL,preview_key TEXT NOT NULL,commit_key TEXT NOT NULL,credential_generation TEXT NOT NULL,config_digest TEXT NOT NULL,import_id TEXT,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at TEXT NOT NULL,error_code TEXT,payload_path TEXT NOT NULL,UNIQUE(digest,config_digest));";
         command.ExecuteNonQuery(); command.CommandText = "SELECT version FROM meta"; var version = Convert.ToInt32(command.ExecuteScalar());
@@ -74,10 +77,10 @@ public sealed partial class DurableQueue : IDisposable
         using var command = db.CreateCommand(); command.CommandText = $"SELECT {Columns} FROM queue WHERE source_id=$source AND ($after IS NULL OR id>$after) AND ($generation IS NULL OR credential_generation=$generation) AND ($configuration IS NULL OR config_digest=$configuration) AND ($pending=0 OR state!='complete') ORDER BY id LIMIT $limit";
         command.Parameters.AddWithValue("$source", sourceId); command.Parameters.AddWithValue("$after", (object?)afterId ?? DBNull.Value); command.Parameters.AddWithValue("$generation", (object?)generation ?? DBNull.Value); command.Parameters.AddWithValue("$configuration", (object?)configuration ?? DBNull.Value); command.Parameters.AddWithValue("$pending", pendingOnly ? 1 : 0); command.Parameters.AddWithValue("$limit", limit); return ReadEntries(command);
     }
-    public QueueEntry? NextDue(string sourceId, string generation, string configuration, DateTimeOffset now)
+    public QueueEntry? NextDue(string sourceId, string generation, string configuration, DateTimeOffset now, bool receiptsOnly=false)
     {
-        using var command = db.CreateCommand(); command.CommandText = $"SELECT {Columns} FROM queue WHERE source_id=$source AND credential_generation=$generation AND config_digest=$configuration AND state NOT IN ('complete','partial','action_needed','awaiting_review') AND next_attempt_at<=$now ORDER BY next_attempt_at,rowid LIMIT 1";
-        command.Parameters.AddWithValue("$source", sourceId); command.Parameters.AddWithValue("$generation", generation); command.Parameters.AddWithValue("$configuration", configuration); command.Parameters.AddWithValue("$now", now.ToString("O")); return ReadEntries(command).FirstOrDefault();
+        using var command = db.CreateCommand(); command.CommandText = $"SELECT {Columns} FROM queue WHERE source_id=$source AND credential_generation=$generation AND config_digest=$configuration AND state NOT IN ('complete','partial','action_needed','awaiting_review') AND ($receiptsOnly=0 OR import_id IS NOT NULL) AND next_attempt_at<=$now ORDER BY next_attempt_at,rowid LIMIT 1";
+        command.Parameters.AddWithValue("$source", sourceId); command.Parameters.AddWithValue("$generation", generation); command.Parameters.AddWithValue("$configuration", configuration); command.Parameters.AddWithValue("$receiptsOnly", receiptsOnly?1:0); command.Parameters.AddWithValue("$now", now.ToString("O")); return ReadEntries(command).FirstOrDefault();
     }
     public Dictionary<string,int> Counts(string? sourceId = null, string? generation = null, string? configuration = null)
     {
@@ -131,11 +134,38 @@ public sealed partial class DurableQueue : IDisposable
     }
     public void Save(QueueEntry entry, QueuePayload payload, string state, string? importId = null, string? error = null, bool failed = false, TimeSpan? retryAfter = null)
     {
-        if (state == "complete") payload.CompletedAt ??= DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        if (state == "complete") payload.CompletedAt ??= now;
+        var attempts = failed && entry.Attempts < int.MaxValue ? entry.Attempts + 1 : entry.Attempts;
+        var nextAttempt = failed ? RetryAt(now, attempts, retryAfter) : now;
+        if (failed)
+        {
+            var history = payload.RecentRetries ??= [];
+            // The encrypted body may be one commit ahead of SQLite after a crash.
+            history.RemoveAll(retry => retry.Attempt >= attempts);
+            history.Add(new(attempts, now, nextAttempt, state, error ?? "TRANSIENT_FAILURE"));
+            if (history.Count > 8) history.RemoveRange(0, history.Count - 8);
+        }
         ProtectedStore.AtomicWrite(Path.Combine(spoolRoot, entry.PayloadPath), encryption.Encrypt(Json.Bytes(payload), entry.Id));
-        var attempts = failed ? entry.Attempts + 1 : entry.Attempts; var delay = failed ? retryAfter ?? TimeSpan.FromSeconds(Math.Min(300, 2 * Math.Pow(2, Math.Min(attempts, 8))) + Random.Shared.NextDouble() * 2) : TimeSpan.Zero;
         using var tx = db.BeginTransaction(); using var c = db.CreateCommand(); c.Transaction = tx; c.CommandText = "UPDATE queue SET state=$state,import_id=$import,attempts=$attempts,next_attempt_at=$next,error_code=$error WHERE id=$id";
-        c.Parameters.AddWithValue("$state", state); c.Parameters.AddWithValue("$import", (object?)importId ?? entry.ImportId ?? (object)DBNull.Value); c.Parameters.AddWithValue("$attempts", attempts); c.Parameters.AddWithValue("$next", DateTimeOffset.UtcNow.Add(delay).ToString("O")); c.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value); c.Parameters.AddWithValue("$id", entry.Id); c.ExecuteNonQuery(); tx.Commit();
+        c.Parameters.AddWithValue("$state", state); c.Parameters.AddWithValue("$import", (object?)importId ?? entry.ImportId ?? (object)DBNull.Value); c.Parameters.AddWithValue("$attempts", attempts); c.Parameters.AddWithValue("$next", nextAttempt.ToString("O")); c.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value); c.Parameters.AddWithValue("$id", entry.Id); c.ExecuteNonQuery(); tx.Commit();
+    }
+    internal static DateTimeOffset RetryAt(DateTimeOffset now, int attempt, TimeSpan? serverDelay = null)
+    {
+        // Five short attempts, then a persisted five-minute interval with jitter.
+        var seconds = attempt <= 5 ? 2 << Math.Clamp(attempt - 1, 0, 4) : 300;
+        var delay = TimeSpan.FromSeconds(seconds + Random.Shared.NextDouble() * seconds / 10);
+        if (serverDelay is { } minimum && minimum > delay) delay = minimum;
+        return delay > DateTimeOffset.MaxValue - now ? DateTimeOffset.MaxValue : now.Add(delay);
+    }
+    internal object[] RecoverySummary()
+    {
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT error_code,COUNT(*),MAX(attempts),MIN(next_attempt_at) FROM queue WHERE attempts>0 AND error_code IS NOT NULL AND state NOT IN ('complete','partial','action_needed','awaiting_review') GROUP BY error_code ORDER BY COUNT(*) DESC,error_code LIMIT 20";
+        var groups = new List<object>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) groups.Add(new { reason = PackProofClient.BoundedErrorCode(reader.GetString(0)), pending = reader.GetInt64(1), mostAttempts = reader.GetInt32(2), nextAttemptAt = reader.GetString(3) });
+        return groups.ToArray();
     }
     public int CompactCompleted(DateTimeOffset now)
     {

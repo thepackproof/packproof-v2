@@ -5,8 +5,8 @@ import {evaluateReconstructionRules,type ReconstructionAssertion} from '../src/r
 const now=new Date('2026-11-14T18:00:00Z');
 const counts={received:1,acceptedLinked:1,acceptedUnlinked:0,duplicate:0,conflict:0,quarantined:0,rejected:0,processing:0};
 const input=(connectionId:string,extra:Partial<SourceCoverageInput>={}):SourceCoverageInput=>({connectionId,sourceNamespace:connectionId,state:'active',lastReceivedAt:'2026-11-14T18:00:00Z',sourceAsOf:'2026-11-14T18:00:00Z',lastCheckedAt:'2026-11-14T18:00:00Z',expectedIntervalSeconds:3600,completeness:{kind:'snapshot',asOf:'2026-11-14T18:00:00Z',marker:'source-inventory-0042'},completenessPolicy:{kind:'snapshot',scope:'shipment_line',sourceOwnerQualified:true,qualificationReference:'synthetic-owner-contract/v1'},counts,...extra});
-const health=(connectionId:string,extra:Partial<SourceCoverageInput>={})=>deriveSourceCoverage(input(connectionId,extra),now);
-const assertion=(id:string,property:string,amount:string,extra:Partial<ReconstructionAssertion>={}):ReconstructionAssertion=>({id,subject:{namespace:'erp',type:'order_line',externalId:'0010482/004'},property,value:{amount,unit:'each'},unit:'each',active:true,comparisonScope:{line:'erp:order_line:0010482/004',shipment:'erp:shipment:S-0021',direction:'outbound'},source:{connectionId:id,receiptId:`batch-${id}`,observationId:`row-${id}`,sourceEventId:`event-${id}`,observationKind:'snapshot',row:12,field:property,locator:{row:12,field:property},mappingVersion:'synthetic/1',revision:'2',reportedAt:null,sourceAsOf:'2026-11-14T17:55:00Z',receivedAt:'2026-11-14T18:00:00Z',timeQuality:'snapshot_time_only',originalSha256:'a'.repeat(64),sourceNamespace:id,originSystem:null,copiedFromSource:null},...extra});
+const health=(connectionId:string,extra:Partial<SourceCoverageInput>={})=>({...deriveSourceCoverage(input(connectionId,extra),now),configurationRevision:1});
+const assertion=(id:string,property:string,amount:string,extra:Partial<ReconstructionAssertion>={}):ReconstructionAssertion=>({id,subject:{namespace:'erp',type:'order_line',externalId:'0010482/004'},property,value:{amount,unit:'each'},unit:'each',active:true,comparisonScope:{line:'erp:order_line:0010482/004',shipment:'erp:shipment:S-0021',direction:'outbound'},source:{configurationRevision:1,grantRevision:1,sourceProfile:'packproof.operational-observations/v1',connectionId:id,receiptId:`batch-${id}`,observationId:`row-${id}`,sourceEventId:`event-${id}`,observationKind:'snapshot',row:12,field:property,locator:{row:12,field:property},mappingVersion:'synthetic/1',revision:'2',reportedAt:null,sourceAsOf:'2026-11-14T17:55:00Z',receivedAt:'2026-11-14T18:00:00Z',timeQuality:'snapshot_time_only',originalSha256:'a'.repeat(64),sourceNamespace:id,originSystem:null,copiedFromSource:null},...extra});
 
 describe('qualified source coverage and exact receipt accounting',()=>{
  it('reconciles all mutually exclusive outcomes and exposes incomplete accounting',()=>{
@@ -72,6 +72,11 @@ describe('source-linked shipment-line reconstruction comparisons',()=>{
   const allocated=assertion('orders','allocatedQuantity','10'),loaded=assertion('wms','reportedLoadedQuantity','8');loaded.source.sourceAsOf='2026-11-14T19:00:00Z';
   expect(evaluateReconstructionRules([allocated,loaded],[health('orders'),health('wms')])[0]).toMatchObject({outcome:'not_comparable'});
  });
+ it('does not apply a new source configuration’s coverage to an earlier assertion',()=>{
+  const allocated=assertion('orders','allocatedQuantity','10'),loaded=assertion('wms','reportedLoadedQuantity','8');
+  const current=[health('orders'),{...health('wms'),configurationRevision:2}];
+  expect(evaluateReconstructionRules([allocated,loaded],current)[0]).toMatchObject({outcome:'not_comparable'});
+ });
  it('withholds a shortage finding when a current cancellation or backorder changes the fulfillment question',()=>{
   const values=[assertion('orders','allocatedQuantity','10'),assertion('wms','reportedLoadedQuantity','8'),assertion('cancellation','canceledQuantity','2',{comparisonScope:{line:'erp:order_line:0010482/004',shipment:null,direction:'unknown'}})];
   expect(evaluateReconstructionRules(values,values.map(value=>health(value.source.connectionId)))[0]).toMatchObject({outcome:'not_comparable'});
@@ -81,6 +86,18 @@ describe('source-linked shipment-line reconstruction comparisons',()=>{
   const a=assertion('orders','serial','0',{subject,value:'SERIAL-0001',unit:null}),b=assertion('delivery','serial','0',{subject,value:'SERIAL-0002',unit:null});
   expect(evaluateReconstructionRules([a,b],[health('orders'),health('delivery')])[0]).toMatchObject({outcome:'different',category:'serial_disagreement'});
   expect(evaluateReconstructionRules([{...a,subject:{namespace:'erp',type:'order_line',externalId:'004',parentExternalId:'0010482'}},{...b,subject:{namespace:'erp',type:'order_line',externalId:'004',parentExternalId:'0010482'}}],[health('orders'),health('delivery')])).toEqual([]);
+ });
+ it('compares serial observations only at a known time within each source boundary',()=>{
+  const subject={namespace:'serialized',type:'serialized_unit' as const,externalId:'001'};
+  const first=assertion('orders','serial','0',{subject,value:'A',unit:null});
+  const second=assertion('delivery','serial','0',{subject,value:'B',unit:null});
+  const sources=[health('orders'),health('delivery')];
+  const compare=(changes:Partial<ReconstructionAssertion['source']>)=>
+   evaluateReconstructionRules([first,{...second,source:{...second.source,...changes}}],sources)[0].outcome;
+  expect(compare({sourceAsOf:'2026-11-14T18:01:00Z'})).toBe('not_comparable');
+  expect(compare({sourceAsOf:null,timeQuality:'unknown'})).toBe('not_comparable');
+  expect(compare({observationKind:'event',timeQuality:'event_time',sourceAsOf:null,reportedAt:'2026-11-14T18:01:00Z'})).toBe('not_comparable');
+  expect(compare({observationKind:'event',timeQuality:'event_time',sourceAsOf:null,reportedAt:'2026-11-14T18:00:00Z'})).toBe('different');
  });
  it('keeps issue keys distinct across scoped cases reusing the same external identifiers',()=>{
   const values=[assertion('orders','allocatedQuantity','10'),assertion('wms','reportedLoadedQuantity','8')];

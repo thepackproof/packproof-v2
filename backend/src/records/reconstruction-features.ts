@@ -19,11 +19,15 @@ export const RECONSTRUCTION_FLAGS={
 } as const;
 export type ReconstructionFeature=keyof typeof RECONSTRUCTION_FLAGS;
 export function reconstructionFeatureEnabled(feature:ReconstructionFeature){return process.env[RECONSTRUCTION_FLAGS[feature]]==='true';}
+// These versions implement the v4 queue, historical jobs and exporter boundaries.
+export function supportsSourceBackfills(version: string | null | undefined) {
+ return version === '0.4.0' || version === '0.4.1';
+}
 /** Explicit candidate compatibility; expanding this set requires parity and
  * migration qualification, not a guessed semver range. */
 export function typedCollectorVersionSupported(version:string,batchSchema='packproof.typed-source-batch/v1'){
- return batchSchema==='packproof.typed-source-batch/v1'?(version==='0.2.0'||version==='0.3.0'||version==='0.4.0'):
-  batchSchema==='packproof.typed-source-batch/v2'&&(version==='0.3.0'||version==='0.4.0');
+ return batchSchema==='packproof.typed-source-batch/v1'?(version==='0.2.0'||version==='0.3.0'||supportsSourceBackfills(version)):
+  batchSchema==='packproof.typed-source-batch/v2'&&(version==='0.3.0'||supportsSourceBackfills(version));
 }
 export function requireReconstructionFeature(feature:ReconstructionFeature){
  if(!reconstructionFeatureEnabled(feature))throw new DomainError('RECONSTRUCTION_CAPABILITY_DISABLED','This operational source capability is awaiting qualification and activation',503);

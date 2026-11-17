@@ -6,6 +6,8 @@ import {sha256Hex} from '../hash.js';
 import {newId} from '../ids.js';
 import {idempotent} from '../platform/idempotency.js';
 import {auditOrganization,strictBody,type PartnerActor} from '../platform/organizations.js';
+import {csvHeaderChange} from './csv-header-policy.js';
+import {parseTypedCsvRecords} from './typed-csv.js';
 import {parseTypedSourceBatch,type TypedSourceBatch,type TypedSourceObservation,type TypedSourceRow} from './source-contracts.js';
 import {applyOperationalObservation,currentCaseObservationSql,observationCaseCandidatesSql,currentCaseObservationProjectionSql,currentCaseAssertionSql,currentCaseRelationshipSql,caseObservationSupersededSql} from './cases.js';
 import {requireTypedSourceAuthority,type SourceSubscriptionConfig} from './source-subscriptions.js';
@@ -67,7 +69,20 @@ export async function readTypedImport(deps:TypedImportDeps,a:PartnerActor,id:str
   const before=await batch(tx,id);await current(deps,tx,a,before);
   // A worker may have committed while the first authority lock was waiting.
   const j=await batch(tx,id),rs=await items(tx,id),result=view(j,rs,await currentSourceCases(tx,j,rs,true));
-  await current(deps,tx,a,j);return result;
+  const approved=await current(deps,tx,a,j);
+  const config=approved.config;
+  if(!config.headerPolicy || j.original_media_type!=='text/csv')return result;
+  const change=csvHeaderChange(config.expectedHeaders,j.contract.headers);
+  const mappingFingerprint=sha256Hex(canonicalize({
+   schema:'packproof.csv-mapping-fingerprint/v1',policy:config.headerPolicy,
+   headers:[...config.expectedHeaders].sort(),mapping:config.mapping,constants:config.constants,
+   batchSchema:j.contract.schema,identityPolicy:config.identityPolicy??null,sourceProfile:config.sourceProfile,
+   sourceNamespace:config.sourceNamespace,mappingVersion:config.mappingVersion,unknownTimePolicy:config.unknownTimePolicy,
+   completenessPolicy:config.completenessPolicy,
+  }));
+  return {...result,columnReview:{policy:config.headerPolicy,disposition:change,configurationRevision:Number(j.configuration_revision),
+   observedHeaderSha256:sha256Hex(canonicalize(j.contract.headers)),mappingFingerprint}};
+
  });
 }
 
@@ -107,6 +122,10 @@ export async function previewTypedImport(deps:TypedImportDeps,a:PartnerActor,inp
  if(!parsed.subscriptionId||parsed.configurationRevision===null)fail('SOURCE_AUTHORIZATION_REQUIRED','Approve this exact source subscription before uploading',403);
  await deps.db.transaction(async tx=>{
   const initialApproval=await requireTypedSourceAuthority(tx,deps.clock,a,authorityInput(parsed),'preview');
+  if(parsed.original.mediaType==='text/csv' && parsed.rows.some(row=>row.errors.length) &&
+     parseTypedCsvRecords(parsed.original.content).some(row=>row.length>parsed.headers.length)){
+   throw new DomainError('SOURCE_SCHEMA_CHANGED','An original row contains extra cells outside the approved CSV header schema.',409);
+  }
   assertSourceSnapshotBoundary(initialApproval.config,parsed);
   await validateSourceBackfillAdmission({...deps,db:tx},a,parsed);
  });
@@ -132,9 +151,18 @@ export async function previewTypedImport(deps:TypedImportDeps,a:PartnerActor,inp
   const now=deps.clock.now().toISOString(),previewVersion=sha256Hex(canonicalize({schema:parsed.schema,identityPolicy:parsed.identityPolicy??null,...(parsed.collectionContext?{collectionContext:parsed.collectionContext}:{}),subscriptionId:parsed.subscriptionId,configurationRevision:parsed.configurationRevision,sha256:digest,profile:parsed.sourceProfile,mappingVersion:parsed.mappingVersion,mapping:parsed.mapping,constants:parsed.constants,locationId:parsed.locationId,sourceNamespace:parsed.sourceNamespace,completeness:parsed.completeness}));
   await tx.query(`INSERT INTO record_typed_batches(id,organization_id,environment,connection_id,location_id,subscription_id,configuration_revision,principal_id,credential_id,actor_context,operator_membership_id,source_profile,source_namespace,mapping_version,preview_version,source_control_revision,original_name,original_media_type,original_object_key,original_version_id,original_sha256,original_byte_size,contract,row_count,state,received_at,updated_at,next_attempt_at,grant_revision,csv_snapshot_boundary_at)
    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,'previewed',$25,$25,$25,$26,$27)`,[id,a.merchantId,a.environment,parsed.connectionId,parsed.locationId,parsed.subscriptionId,parsed.configurationRevision,a.principalId,a.credentialId,JSON.stringify(a),approved.operatorMembershipId,parsed.sourceProfile,parsed.sourceNamespace,parsed.mappingVersion,previewVersion,control?.control_revision??0,parsed.original.name,parsed.original.mediaType,objectKey,stored!.versionId,digest,bytes.length,JSON.stringify(contract),parsed.rows.length,now,approved.grantRevision,verifiedBoundary?.asOf??null]);
-  for(const row of parsed.rows){const history=row.normalized?historyError(row.normalized,approved.config):null;
-   await tx.query(`INSERT INTO record_typed_rows(id,batch_id,row_number,source_event_id,source_revision,payload_sha256,source_values,normalized,errors,status,error_code,received_at,history_eligibility) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13)`,[newId('typed_row'),id,row.rowNumber,row.normalized?.sourceEventId??null,row.normalized?.sourceRevision??null,row.payloadSha256,JSON.stringify(row.raw),JSON.stringify(row.normalized),JSON.stringify(row.errors),row.normalized&&!history?'processing':'quarantined',history??(row.normalized?null:'SOURCE_ROW_INVALID'),now,row.normalized?historyEligibility(row.normalized,approved.config):'unknown']);
-  }
+  const receiptRows=parsed.rows.map(row=>{
+   const errorCode=row.normalized?historyError(row.normalized,approved.config):'SOURCE_ROW_INVALID';
+   return {id:newId('typed_row'),rowNumber:row.rowNumber,raw:row.raw,normalized:row.normalized,
+    payloadSha256:row.payloadSha256,errors:row.errors,status:errorCode?'quarantined':'processing',errorCode,
+    historyEligibility:row.normalized?historyEligibility(row.normalized,approved.config):'unknown'};
+  });
+  await tx.query(`INSERT INTO record_typed_rows(id,batch_id,row_number,source_event_id,source_revision,payload_sha256,
+     source_values,normalized,errors,status,error_code,received_at,history_eligibility)
+   SELECT entry->>'id',$1,(entry->>'rowNumber')::integer,entry->'normalized'->>'sourceEventId',
+     entry->'normalized'->>'sourceRevision',entry->>'payloadSha256',entry->'raw',entry->'normalized',
+     entry->'errors',entry->>'status',entry->>'errorCode',$2,entry->>'historyEligibility'
+   FROM jsonb_array_elements($3::jsonb) AS receipt(entry)`,[id,now,JSON.stringify(receiptRows)]);
   if(parsed.collectionContext)await recordSourceBackfillReceipt({...deps,db:tx},a,parsed.collectionContext,id);
   await auditOrganization(tx,deps.clock,{actor:a,requestId:a.requestId,operation:'TYPED_SOURCE_PREVIEWED',resourceId:id});
   return {id};
@@ -150,9 +178,12 @@ export async function commitTypedImport(deps:TypedImportDeps,a:PartnerActor,id:s
   await current(deps,tx,a,await batch(tx,id),'commit',approval.verifiedOriginal);await tx.query('SELECT pg_advisory_xact_lock(1347438158,hashtext($1))',[id]);const j=await batch(tx,id,true);await current(deps,tx,a,j,'commit',approval.verifiedOriginal);
   if(j.preview_version!==body.previewVersion||j.original_sha256!==body.originalSha256)fail('TYPED_PREVIEW_CHANGED','Review the exact retained original and its current preview before committing');
   if(j.state!=='previewed')return {id};
-  const rs=await items(tx,id);
-  if(!body.importValidRows&&rs.some(r=>r.status==='quarantined'))fail('TYPED_IMPORT_HAS_ROW_ERRORS','Repair the highlighted rows or explicitly approve importing the valid subset');
-  if(!rs.some(r=>r.status==='processing'))fail('TYPED_IMPORT_NO_VALID_ROWS','Review source errors before starting this import');
+  const {has_errors,has_valid_rows}=(await tx.query<{has_errors:boolean;has_valid_rows:boolean}>(`
+   SELECT COUNT(*) FILTER (WHERE status='quarantined')>0 AS has_errors,
+          COUNT(*) FILTER (WHERE status='processing')>0 AS has_valid_rows
+   FROM record_typed_rows WHERE batch_id=$1`,[id])).rows[0];
+  if(!body.importValidRows&&has_errors)fail('TYPED_IMPORT_HAS_ROW_ERRORS','Repair the highlighted rows or explicitly approve importing the valid subset');
+  if(!has_valid_rows)fail('TYPED_IMPORT_NO_VALID_ROWS','Review source errors before starting this import');
   await tx.query("UPDATE record_typed_batches SET state='queued',import_valid_rows=$2,updated_at=$3 WHERE id=$1",[id,body.importValidRows,deps.clock.now().toISOString()]);
   await auditOrganization(tx,deps.clock,{actor:a,requestId:a.requestId,operation:'TYPED_SOURCE_COMMITTED',resourceId:id});return {id};
  });

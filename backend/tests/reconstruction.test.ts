@@ -110,6 +110,75 @@ describe('source receipts to scoped operational reconstruction and issue history
   vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');const unavailable=await getOperationalCase(opened.db,clock,await workspace(),caseId);expect(unavailable.sourceHealthStatus.available).toBe(false);expect(unavailable.sources).toEqual([]);expect(unavailable.comparisons).toEqual([]);expect(unavailable.case.issueCount).toBeNull();
   vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','true');vi.stubEnv('PACKPROOF_RECONSTRUCTION_RULES_ENABLED','false');const shadow=await getOperationalCase(opened.db,clock,await workspace(),caseId);expect(shadow.sources).toHaveLength(3);expect(shadow.rulesStatus.available).toBe(false);expect(shadow.comparisons).toEqual([]);vi.stubEnv('PACKPROOF_RECONSTRUCTION_RULES_ENABLED','true');
  });
+ it('retains a source line quantity without attributing a different line’s shipment to it',async()=>{
+  const original=JSON.parse((fixture('loading-eight-revision-two').original as {content:string}).content)[0] as TypedSourceObservation;
+  const root='EXPLICIT-LINE-SCOPE',order={namespace:'pilot-export',type:'order' as const,externalId:root};
+  const line={namespace:'pilot-export',type:'order_line' as const,parentExternalId:root,externalId:'004'};
+  const neighbor={...line,externalId:'005'},shipment={namespace:'pilot-export',type:'shipment' as const,externalId:'NEIGHBOR-SHIPMENT'};
+  const observation:TypedSourceObservation={...original,sourceEventId:root,references:[order,line,neighbor,shipment],
+   assertions:[{...original.assertions[0],subjectReference:line}],
+   relationships:[{type:'has_line',from:order,to:line,quantity:null},{type:'has_line',from:order,to:neighbor,quantity:null},{type:'fulfills',from:shipment,to:neighbor,quantity:null}]};
+  const orderInput=fixture('order-and-explicit-shipment-allocation').original as {content:string};
+  const ordered=JSON.parse(orderInput.content.replaceAll('0010482',root))[0] as TypedSourceObservation;
+  await ingest(envelope([ordered],'orders','packproof.order-lines/v1'),'orders',root+'-order');
+  const receipt=await ingest(envelope([observation],'loading','packproof.operational-observations/v1'),'loading',root);
+  expect(receipt.counts.acceptedLinked).toBe(1);
+  const result=await loadOperationalCaseProjection(opened.db,clock,await workspace(),receipt.caseIds[0]);
+  expect(result.assertions.find(fact=>fact.source.receiptId===receipt.id)).toMatchObject({
+   subject:line,property:'reportedLoadedQuantity',comparisonScope:{shipment:null},
+   source:{subscriptionId:subscriptions.get('loading'),configurationRevision:1,sourceProfile:'packproof.operational-observations/v1'}
+  });
+  expect(result.relationships.find(edge=>edge.type==='fulfills')?.to).toMatchObject(neighbor);
+ });
+ it('compares each explicitly allocated shipment while retaining the original ten-unit assertion',async()=>{
+  const root='JOINT-ALLOCATION',order={namespace:'pilot-export',type:'order' as const,externalId:root};
+  const line={...order,type:'order_line' as const,parentExternalId:root,externalId:'004'};
+  const shipA={...order,type:'shipment' as const,externalId:'JOINT-SHIP-A'},shipB={...shipA,externalId:'JOINT-SHIP-B'};
+  const quantity=(amount:string)=>({amount,unit:'each'});
+  const base=JSON.parse((fixture('order-and-explicit-shipment-allocation').original as {content:string}).content)[0] as TypedSourceObservation;
+  const allocated:TypedSourceObservation={...base,sourceEventId:root,references:[order,line,shipA,shipB],
+   assertions:[{...base.assertions[0],subjectReference:line,property:'allocatedQuantity',value:quantity('10')}],
+   relationships:[{type:'has_line',from:order,to:line,quantity:null},
+    {type:'fulfills',from:shipA,to:line,quantity:quantity('8')},{type:'fulfills',from:shipB,to:line,quantity:quantity('2')}]};
+  const loaded=(shipment:typeof shipA,amount:string):TypedSourceObservation=>({...base,
+   sourceEventId:'loaded-'+shipment.externalId,references:[order,line,shipment],
+   assertions:[{...base.assertions[0],subjectReference:line,property:'reportedLoadedQuantity',value:quantity(amount)}],
+   relationships:[{type:'fulfills',from:shipment,to:line,quantity:null}]});
+  const orders='joint-orders',loading='joint-loading';
+  await source(orders,'packproof.order-lines/v1');
+  const orderBatch=await ingest(envelope([allocated],orders,'packproof.order-lines/v1'),orders,orders);
+  await activate(orders,orderBatch.id);
+  await source(loading,'packproof.operational-observations/v1');
+  const loadBatch=await ingest(envelope([loaded(shipA,'7'),loaded(shipB,'2')],loading,'packproof.operational-observations/v1'),loading,loading);
+  await activate(loading,loadBatch.id);
+  const projection=await loadOperationalCaseProjection(opened.db,clock,await workspace(),orderBatch.caseIds[0]);
+  const totals=projection.assertions.filter(a=>a.property==='allocatedQuantity');
+  expect(totals).toHaveLength(1);
+  expect(totals[0]).toMatchObject({value:quantity('10'),comparisonScope:{shipment:null}});
+  expect(totals[0].source).not.toHaveProperty('allocationBasis');
+  expect(projection.comparisons).toHaveLength(2);
+  for(const [index,shipment] of [shipA,shipB].entries()){
+   const expected=allocated.relationships[index+1].quantity!;
+   const compared=projection.comparisons.find(c=>c.inputs.some(input=>input.source.allocationBasis?.relationship.from.externalId===shipment.externalId))!;
+   expect(compared).toMatchObject({outcome:index===0?'different':'within_tolerance',absoluteDifference:{numerator:index===0?'1':'0',denominator:'1'}});
+   expect(compared.inputs.find(input=>input.property==='allocatedQuantity')).toMatchObject({id:totals[0].id,value:expected,
+    source:{receiptId:orderBatch.id,observationId:totals[0].source.observationId,originalSha256:totals[0].source.originalSha256,
+     locator:totals[0].source.locator,allocationBasis:{lineQuantity:quantity('10'),relationship:allocated.relationships[index+1]}}});
+  }
+  expect(new Set(projection.comparisons.map(c=>c.issueKey)).size).toBe(2);
+  const unbalanced:TypedSourceObservation={...allocated,sourceRevision:'2',observationKind:'correction',
+   supersedes:{sourceEventId:root,sourceRevision:'1'},relationships:allocated.relationships.map(edge=>edge.from===shipB?{...edge,quantity:quantity('3')}:edge)};
+  await ingest(envelope([unbalanced],orders,'packproof.order-lines/v1'),orders,orders+'-corrected');
+  const corrected=await loadOperationalCaseProjection(opened.db,clock,await workspace(),orderBatch.caseIds[0]);
+  expect(corrected.assertions.filter(a=>a.property==='allocatedQuantity'&&a.active)).toHaveLength(1);
+  expect(corrected.comparisons).toEqual([]);
+  const aliased:TypedSourceObservation={...allocated,sourceRevision:'3',observationKind:'correction',supersedes:{sourceEventId:root,sourceRevision:'2'},
+   relationships:[...allocated.relationships,{type:'same_as',from:shipB,to:shipA,quantity:null}]};
+  await ingest(envelope([aliased],orders,'packproof.order-lines/v1'),orders,orders+'-aliased');
+  const ambiguous=await loadOperationalCaseProjection(opened.db,clock,await workspace(),orderBatch.caseIds[0]);
+  expect(ambiguous.relationships.some(edge=>edge.type==='same_as'&&edge.active)).toBe(true);
+  expect(ambiguous.comparisons).toEqual([]);
+ });
  it('paginates more than 500 assertions without a hidden cap and rejects an outdated revision cursor',async()=>{
   const base=JSON.parse((fixture('order-and-explicit-shipment-allocation').original as {content:string}).content)[0] as TypedSourceObservation;
   const rows=Array.from({length:510},(_,i):TypedSourceObservation=>({...structuredClone(base),sourceEventId:`history-${i}`,assertions:[structuredClone(base.assertions[0]),{...base.assertions[0],property:'description',value:`reported-${i}`}]}));
@@ -152,6 +221,12 @@ describe('source receipts to scoped operational reconstruction and issue history
   expect(await listOperationalCases(opened.db,clock,w,{q:removedReference})).toMatchObject({total:0,cases:[]});
   expect(old.assertions.some(value=>value.subject.externalId===removedReference)).toBe(false);
   expect((await opened.db.query('SELECT 1 FROM record_case_entities WHERE case_id=$1 AND external_id=$2',[caseId,removedReference])).rows).toHaveLength(1);
+  const sourceName='followup-after-correction',profile='packproof.operational-observations/v1';
+  await source(sourceName,profile);
+  const followup={...sourceRow,references:[shipment],sourceEventId:'followup-after-correction'};
+  const offered=await ingest(envelope([followup],sourceName,profile),sourceName,'followup-after-correction');
+  expect(offered.counts.acceptedUnlinked).toBe(1);
+  expect(offered.caseIds).toEqual([]);
   const history=await loadOperationalCaseIssueHistory(opened.db,clock,w,caseId);expect(history.evaluations.some(value=>(value.evaluation as {historyVisibility?:string}).historyVisibility==='restricted')).toBe(true);
   expect((await opened.db.query('SELECT 1 FROM record_case_members WHERE case_id=$1 AND proof_id=$2',[caseId,proof.proofId])).rows).toHaveLength(1);
  });

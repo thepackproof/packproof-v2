@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PackProofApi } from '../api/client';
 import { canonicalWorkspacePath } from '../proof-list-state';
 import { AgentApproval, AgentConnections } from '../records/AgentConnections';
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 const enrollment = { id: 'enroll-a', comparisonCode: 'ABC-123', deviceName: 'Warehouse PC', version: '0.1.0', state: 'pending', expiresAt: '2026-11-06T14:00:00Z', choices: { integrationAccounts: [{ id: 'source-a', name: 'Dispatch export' }], operators: [{ id: 'member-a', name: 'Collin', role: 'OWNER' }], locations: [{ id: 'site-a', name: 'Main warehouse' }] } };
 const installation = { id: 'agent-a', state: 'ready', deviceName: 'Warehouse PC', version: '0.1.0', configRevision: 4, configSha256: 'digest-a', config: { sourceName: 'Dispatch', mapping: { shipmentReference: 'Reference', itemTitle: 'Description', quantity: 'Quantity' }, timeZone: 'UTC' }, testImportId: 'import-a', verifiedImportId: null, health: { serviceOnline: true } };
 it('keeps setup enrollment limited and requires the matching local comparison code and named choices', async () => {
@@ -61,8 +61,9 @@ it('keeps an online service separate from an overdue source and gives a recovery
   expect(await screen.findByText('Online')).toBeVisible();
   expect(screen.getByText('Delayed — expected source update overdue')).toBeVisible();
   expect(screen.getByText(/Check the scheduled exporter/)).toBeVisible();
-  expect(screen.getByRole('alert')).toHaveTextContent('NETWORK_UNAVAILABLE');
-  expect(screen.getByRole('alert')).toHaveTextContent('Check the network connection on this computer');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Last reported diagnostic'));
+  expect(screen.getByText(/This is a previous computer report/)).toHaveTextContent('NETWORK_UNAVAILABLE');
 });
 it('shows server repair instructions and bounded condition history without repeating a reported error', async () => {
   const history = [{ observedAt: '2026-11-07T10:00:00Z', configRevision: 4, codes: ['NETWORK_UNAVAILABLE'] }, { observedAt: '2026-11-07T11:00:00Z', configRevision: 4, codes: [] }];
@@ -162,4 +163,35 @@ it('keeps the original source choice contract when local connection creation is 
   render(<AgentApproval api={{ recordsRequest: vi.fn(async () => enrollment) } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ enrollmentId: 'enroll-a' })} canManage/>);
   await screen.findByRole('button', { name: 'Approve setup only' });
   expect(screen.queryByRole('option', { name: 'New file connection for this computer' })).not.toBeInTheDocument();
+});
+it('refuses ambiguous approval locators without requesting or displaying a broader review', async () => {
+  const request = vi.fn();
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams('installationId=agent-a&importId=import-a&importId=import-b')} canManage/>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('incomplete or ambiguous');
+  expect(request).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Authorize this batch' })).not.toBeInTheDocument();
+});
+it('removes stale approval controls when current authorization cannot be refreshed and restores them without consent on recovery', async () => {
+  vi.useFakeTimers();
+  let unavailable = false;
+  const request = vi.fn(async () => { if (unavailable) throw new Error('Current authorization is unavailable'); return installation; });
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'agent-a' })} canManage/>);
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.click(screen.getByRole('checkbox', { name: /authorize recurring collection/ }));
+  expect(screen.getByRole('button', { name: 'Approve automatic collection' })).toBeEnabled();
+  unavailable = true;
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(screen.getByRole('alert')).toHaveTextContent('Current authorization is unavailable');
+  expect(screen.queryByRole('button', { name: 'Approve automatic collection' })).not.toBeInTheDocument();
+  unavailable = false;
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: /authorize recurring collection/ })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Approve automatic collection' })).toBeDisabled();
+});
+it('rejects a response that substitutes another receipt for the exact browser locator', async () => {
+  const request = vi.fn(async () => ({ ...installation, testCandidate: { id: 'import-other', state: 'previewed', counts: { valid: 1 } } }));
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: 'agent-a', importId: 'import-a' })} canManage/>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('does not match this exact installation and import');
+  expect(screen.queryByRole('button', { name: 'Authorize this batch' })).not.toBeInTheDocument();
 });

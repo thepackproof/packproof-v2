@@ -1,10 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import {mkdtemp,readdir,copyFile,rm} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
-import { openIsolatedTestDatabase } from './isolated-test-database.js';
+import { openIsolatedTestDatabase,migrateTestDatabaseThrough } from './isolated-test-database.js';
 import { migrate,migrationInventory } from '../src/db/migrate.js';
 import { insertUser } from '../src/domain/users.js';
 import {createServicePrincipal,issuePartnerCredential,createIntegrationAccount,PARTNER_SCOPES} from '../src/platform/organizations.js';
@@ -12,15 +8,15 @@ import {canonicalize} from '../src/canonical.js';
 import {sha256Hex} from '../src/hash.js';
 import { recordsMigrationInventory, planRecordsRuntimePrivileges, verifyRecordsRuntimePrivileges, type RecordsPrivilegeOptions } from '../scripts/records-runtime-privileges.mjs';
 
-describe.each([113,116,117,118,119,120] as const)('reconstruction%s API and worker database separation',profile=>{
- let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,options:RecordsPrivilegeOptions,user:string,historicalDirectory:string|undefined;
+describe.each([113,116,117,118,119,120,121] as const)('reconstruction%s API and worker database separation',profile=>{
+ let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,options:RecordsPrivilegeOptions,user:string;
  const suffix=randomBytes(6).toString('hex'),api=`recon_api_${suffix}`,worker=`recon_worker_${suffix}`,broad=`recon_broad_${suffix}`,source='a'.repeat(40),at='2026-11-14T12:00:00Z';
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
  const asRole=async<T>(role:string,fn:(db:typeof opened.db)=>Promise<T>)=>{try{return await opened.db.transaction(async tx=>{await tx.query(`SET LOCAL SESSION AUTHORIZATION ${role}`);return fn(tx);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);opened=await openIsolatedTestDatabase();
-  if(profile<120){historicalDirectory=await mkdtemp(path.join(tmpdir(),'reconstruction-historical-catalog-'));const directory=fileURLToPath(new URL('../migrations/',import.meta.url)),through=profile<118?117:profile;for(const file of (await readdir(directory)).filter(name=>name.endsWith('.sql')&&Number(name.slice(0,3))<=through))await copyFile(path.join(directory,file),path.join(historicalDirectory,file));}
-  await migrate(opened.db,historicalDirectory);
+  if(profile<121)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
+  else await migrate(opened.db);
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
   for(const role of [api,worker,broad]){await opened.db.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);await opened.db.query(`GRANT USAGE ON SCHEMA ${schema} TO ${role}`);await opened.db.query(`GRANT SELECT(id,checksum) ON schema_migrations TO ${role}`);await opened.db.query(`GRANT SELECT(datname,datdba) ON pg_catalog.pg_database TO ${role}`);}
@@ -34,7 +30,7 @@ describe.each([113,116,117,118,119,120] as const)('reconstruction%s API and work
   await opened.db.query("INSERT INTO record_cases(id,organization_id,environment,location_id,location_key,operator_membership_id,root_namespace,root_type,root_external_id,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$3,$4,'fixture','order','0010482',$5,$5)",['case-'+suffix,'org-'+suffix,'site-'+suffix,'member-'+suffix,at]);
   await asRole(worker,db=>db.query("INSERT INTO record_case_issues(id,case_id,category,rule_version,subject,created_at) VALUES($1,$2,'quantity_disagreement','fixture/v1','{}',$3)",['issue-'+suffix,'case-'+suffix,at]));
  },60000);
- afterAll(async()=>{vi.unstubAllEnvs();if(!opened)return;if(process.env.PACKPROOF_TEST_DATABASE_URL)for(const role of [api,worker,broad]){await opened.db.query(`DROP OWNED BY ${role}`);await opened.db.query(`DROP ROLE ${role}`);}await opened.close();if(historicalDirectory)await rm(historicalDirectory,{recursive:true,force:true});});
+ afterAll(async()=>{vi.unstubAllEnvs();if(!opened)return;if(process.env.PACKPROOF_TEST_DATABASE_URL)for(const role of [api,worker,broad]){await opened.db.query(`DROP OWNED BY ${role}`);await opened.db.query(`DROP ROLE ${role}`);}await opened.close();});
  it('retains frozen108/109/113 defaults and admits each candidate only through explicit review',async()=>{
   expect((await recordsMigrationInventory(108)).migrationSha256).toBe('e0e45a9b2441f77de06ec4f2396ed36bbfeb9c3265008e2e458ea15a74c8cd12');
   expect((await recordsMigrationInventory()).migrationSha256).toBe('5148b9746d855d2b192dbc5ffa35b3c7802dbc2fa490bc82e9ebd82a85077168');
@@ -47,7 +43,22 @@ describe.each([113,116,117,118,119,120] as const)('reconstruction%s API and work
   if(profile<117)expect(plan.policySha256).toBe(profile===113?'685cd9ec9aef2aab15de3316a37518321b5c692f0461cac8f2154ccaa84875f3':'19c8a2cfe8841666de82b92a1478ff0452b54e5eb2d443c9ecc91054fec0dc0c');
   else if(profile===117){expect(plan.policySha256).toBe('ced17ca1a4fadd3b74959b7f0b0b5a21279f24404eb44e747231751c7c18e9e0');expect(Object.keys((await recordsMigrationInventory(117)).migrations)).toHaveLength(22);}
   else if(profile<120){expect(plan.policySha256).toBe('0b8927e8893dcf7cb1da8e176d3a97765eb97014d3d7d565dcfe3572fb2fb300');expect(Object.keys((await recordsMigrationInventory(profile)).migrations)).toHaveLength(profile-95);const prior=(await recordsMigrationInventory(117)).tableColumns.record_typed_batches,current=(await recordsMigrationInventory(118)).tableColumns.record_typed_batches;expect(current).toEqual([...prior,'csv_snapshot_boundary_at']);if(profile===119)expect((await recordsMigrationInventory(119)).tableColumns).toEqual((await recordsMigrationInventory(118)).tableColumns);}
-  else {expect(plan.policySha256).toBe('5f437b9e72480850e1bd1f3cd7b41bd1c1c9df0fb609aa6eb7fd39ee56b6ab4e');expect(Object.keys((await recordsMigrationInventory(120)).migrations)).toHaveLength(25);}
+  else if(profile===120){expect(plan.policySha256).toBe('5f437b9e72480850e1bd1f3cd7b41bd1c1c9df0fb609aa6eb7fd39ee56b6ab4e');expect(Object.keys((await recordsMigrationInventory(120)).migrations)).toHaveLength(25);}
+ });
+ if(profile===121)it('allows one API intake decision, preserves its worker read and denies later edits',async()=>{
+  const prior=await recordsMigrationInventory(120),current=await recordsMigrationInventory(121);
+  expect(Object.keys(current.migrations)).toHaveLength(26);
+  expect(current.migrationSha256).toBe('276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de');
+  expect((await planRecordsRuntimePrivileges(opened.db,options)).policySha256).toBe('6f762665301d1e76ef9d6992df5a2bf32887b99938edbd21f530e03aa2f91884');
+  expect(current.tableColumns).toEqual({...prior.tableColumns,partner_import_jobs:[...prior.tableColumns.partner_import_jobs,'shipment_interpretation']});
+  await expect(planRecordsRuntimePrivileges(opened.db,{...options,throughMigration:120,reviewedMigrationSha256:prior.migrationSha256})).rejects.toThrow('RECORDS_SCHEMA_COLUMNS_MISMATCH');
+  for(const role of [api,worker]){
+   await asRole(role,db=>db.query('SELECT shipment_interpretation FROM partner_import_jobs WHERE false'));
+   await expect(asRole(role,db=>db.query('UPDATE partner_import_jobs SET shipment_interpretation=NULL WHERE false'))).rejects.toMatchObject({code:'42501'});
+  }
+  const append='INSERT INTO partner_import_jobs(shipment_interpretation) SELECT NULL::jsonb WHERE false';
+  await asRole(api,db=>db.query(append));
+  await expect(asRole(worker,db=>db.query(append))).rejects.toMatchObject({code:'42501'});
  });
  it('permits only worker processing columns and preserves immutable original fields',async()=>{
   await asRole(worker,db=>db.query('UPDATE record_typed_batches SET state=state,attempts=attempts,next_attempt_at=next_attempt_at,replay_requested=replay_requested WHERE false'));
@@ -160,7 +171,7 @@ describe.each([113,116,117,118,119,120] as const)('reconstruction%s API and work
   }
   await asRole(worker,db=>verifyRecordsRuntimePrivileges(db,options));await asRole(api,db=>verifyRecordsRuntimePrivileges(db,options));
  });
- if(profile===120)it('keeps durable shipment work worker-derived with immutable original scope and exact revision fences',async()=>{
+ if(profile>=120)it('keeps durable shipment work worker-derived with immutable original scope and exact revision fences',async()=>{
   const batch='backfill-batch-'+suffix,caseId='case-'+suffix,row='shipment-work-row-'+suffix;
   await opened.db.query(`INSERT INTO record_typed_rows(id,batch_id,row_number,source_event_id,source_revision,payload_sha256,source_values,normalized,errors,status,case_id,history_eligibility,received_at) VALUES($1,$2,2,$1,'1',$3,'{}','{}','[]','accepted_linked',$4,'within_bounds',$5)`,[row,batch,'d'.repeat(64),caseId,at]);
   const append=(db:typeof opened.db,scopeCase=caseId,witness=row)=>db.query(`INSERT INTO record_typed_shipment_work(batch_id,case_id,organization_id,environment,connection_id,location_id,operator_membership_id,witness_observation_id,created_at,next_attempt_at,updated_at) SELECT b.id,$2,b.organization_id,b.environment,b.connection_id,b.location_id,b.operator_membership_id,$3,$4,$4,$4 FROM record_typed_batches b WHERE b.id=$1`,[batch,scopeCase,witness,at]);

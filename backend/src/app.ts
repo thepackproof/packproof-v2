@@ -1,3 +1,4 @@
+import { isUtf8 } from 'node:buffer';
 import { getOnboarding, updateOnboarding } from "./domain/onboarding.js";
 import { rateLimit } from "express-rate-limit";
 import { ingressRateLimitOptions, ingressRatePolicies } from "./http/ingress-rate-limit.js";
@@ -402,7 +403,11 @@ export function createApp(deps: AppDependencies): Express {
     if(submissionPath&&(['POST','PUT','PATCH'].includes(req.method)||Number(req.header('content-length')??0)>0||!!req.header('transfer-encoding'))&&!req.is('application/json')){
       next(new DomainError('UNSUPPORTED_INTAKE_CONTENT_TYPE','Order intake accepts JSON text or URL submissions only.',415));return;
     }
-    express.json({limit:submissionPath?'64kb':/^\/(?:me\/records|v1\/partner)\/(?:imports|typed-imports)(?:\/|$)/.test(req.path)?'6mb':'2mb',verify:(request,_response,bytes)=>{if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
+    const importPath=/^\/(?:me\/records|v1\/partner)\/(?:imports|typed-imports)(?:\/|$)/.test(req.path);
+    express.json({limit:submissionPath?'64kb':importPath?'6mb':'2mb',verify:(request,_response,bytes,encoding)=>{
+      if(importPath && (encoding?.toLowerCase()!=='utf-8' || !isUtf8(bytes)))
+        throw new DomainError('CSV_ENCODING_UNSUPPORTED','Send the original as UTF-8 JSON. The source has not been accepted.',400);
+      if(/\/rnd(?:\/|$)/.test(request.url??'')&&bytes.length)parseStrictJson(bytes.toString('utf8'),2*1024*1024);}})(req,res,(error)=>{
       if(submissionPath&&error?.type==='entity.too.large')return next(new DomainError('INPUT_TOO_LARGE','Share at most 20,000 characters and 64 KiB.',413));
       next(error);
     });

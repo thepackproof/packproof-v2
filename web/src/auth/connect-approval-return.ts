@@ -5,7 +5,7 @@ export function connectApprovalReturnPath(href: string): string | null {
   if (!href.startsWith('/') || href.startsWith('//') || href.length > 2048) return null;
   try {
     const url = new URL(href, 'https://packproof.local');
-    if (url.pathname !== '/app/records/connect/approve' || url.hash) return null;
+    if (url.origin !== 'https://packproof.local' || url.pathname !== '/app/records/connect/approve' || url.hash) return null;
     // A return is one exact locator. Reject repeated keys rather than letting
     // different layers choose different occurrences after authentication.
     if ([...url.searchParams.keys()].some(key => url.searchParams.getAll(key).length !== 1)) return null;
@@ -45,7 +45,9 @@ export function connectApprovalReturnPath(href: string): string | null {
     if (initialBatch) kept.set('initialBatchId', initialBatch);
     if (backfill) kept.set('backfillJobId', backfill);
     if (manifest) kept.set('manifestSha256', manifest);
-    if (installation && url.searchParams.get('action') === 'resume') kept.set('action', 'resume');
+    const action = url.searchParams.get('action');
+    if (action !== null && (action !== 'resume' || !installation)) return null;
+    if (action === 'resume') kept.set('action', 'resume');
     return '/app/records/connect/approve?' + kept.toString();
   } catch { return null; }
 }

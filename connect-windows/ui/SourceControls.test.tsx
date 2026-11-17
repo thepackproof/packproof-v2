@@ -16,10 +16,10 @@ it("gates the new source home while preserving legacy setup", async () => {
   await screen.findByRole("heading", { name: "Your sources" });
   expect(screen.getByRole("article", { name: "Order exports" })).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Manage the existing shipment connection" }));
-  expect(screen.getByRole("heading", { name: "Does this shipment look right?" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "We found your shipments." })).toBeVisible();
   app.unmount();
   render(<ConnectApp bridge={bridgeFor({ ...current, capabilities: selected.capabilities })}/>);
-  await screen.findByRole("heading", { name: "Does this shipment look right?" });
+  await screen.findByRole("heading", { name: "We found your shipments." });
   expect(screen.queryByRole("article", { name: "Order exports" })).toBeNull();
 });
 it("inspects locally and requires whole-original consent for the exact selected file", async () => {
@@ -35,7 +35,7 @@ it("inspects locally and requires whole-original consent for the exact selected 
   expect(bridge.previewSubscription).not.toHaveBeenCalled();
   fireEvent.click(card.getByRole("checkbox", { name: /Upload and preserve this entire original/ }));
   fireEvent.click(preview);
-  await waitFor(() => expect(bridge.previewSubscription).toHaveBeenCalledWith({ id: "source_one", fileName: "orders.csv", wholeFileUploadApproved: true }));
+  await waitFor(() => expect(bridge.previewSubscription).toHaveBeenCalledWith({ id: "source_one", configurationRevision: 1, grantRevision: 2, originalSha256: "a".repeat(64), fileName: "orders.csv", wholeFileUploadApproved: true }));
 });
 it("does not equate a queued batch with a verified case or recurring collection", () => {
   const state = { ...current, sourceSubscriptions: [{ ...source, receipt: { id: "batch_one", state: "queued", counts: { processing: 1 } } }] };
@@ -47,13 +47,13 @@ it("does not equate a queued batch with a verified case or recurring collection"
   expect(bridge.verifySubscription).toHaveBeenCalledWith("source_one");
 });
 it("requires separate exact-batch approval and resets consent on source revision", () => {
-  const state = { ...current, sourceSubscriptions: [{ ...source, receipt: { id: "batch_one", state: "previewed", counts: { valid: 1, rejected: 0 } } }] };
+  const state = { ...current, sourceSubscriptions: [{ ...source, receipt: { id: "batch_one", previewVersion: "b".repeat(64), original:{sha256:"a".repeat(64)}, state: "previewed", counts: { valid: 1, rejected: 0 } } }] };
   const bridge = bridgeFor(state);
   const view = render(<SourceControls status={state} bridge={bridge} disabled={false} action={run} external={() => {}}/>);
   expect(screen.getByRole("button", { name: "Import reviewed batch" })).toBeDisabled();
   fireEvent.click(screen.getByRole("checkbox", { name: /Import this exact previewed batch/ }));
   fireEvent.click(screen.getByRole("button", { name: "Import reviewed batch" }));
-  expect(bridge.commitSubscription).toHaveBeenCalledWith({ id: "source_one", wholeBatchApproved: true });
+  expect(bridge.commitSubscription).toHaveBeenCalledWith({ id: "source_one", configurationRevision: 1, grantRevision: 2, receiptId: "batch_one", previewVersion: "b".repeat(64), originalSha256: "a".repeat(64), wholeBatchApproved: true });
   view.rerender(<SourceControls status={{ ...state, sourceSubscriptions: state.sourceSubscriptions.map(s => ({ ...s, configurationRevision: 2 })) }} bridge={bridge} disabled={false} action={run} external={() => {}}/>);
   expect(screen.getByRole("button", { name: "Import reviewed batch" })).toBeDisabled();
 });
@@ -67,6 +67,13 @@ it("retains source-local error and pause states without claiming completeness", 
   fireEvent.click(within(screen.getByRole("article", { name: "Loading exports" })).getByRole("button", { name: "Pause this source" }));
   expect(bridge.pauseSubscription).toHaveBeenCalledWith("source_two");
   expect(screen.getAllByText("Coverage unknown")).toHaveLength(2);
+});
+it("hides cached case links and collection controls after the individual source disappears from discovery", () => {
+  const state = { ...current, sourceSubscriptions: [{ ...source, state: "active", localPaused: true, verifiedCaseId: "previous-case", lastErrorCode: "SOURCE_AUTHORIZATION_REQUIRED" }] };
+  render(<SourceControls status={state} bridge={bridgeFor(state)} disabled={false} action={run} external={() => {}}/>);
+  const card = within(screen.getByRole("article", { name: "Order exports" }));
+  expect(card.getByText("Source permission required")).toBeVisible();
+  expect(card.queryByRole("button")).toBeNull();
 });
 it("starts source setup with a native folder chooser and no raw configuration entry", () => {
   const bridge = bridgeFor(current);
@@ -135,4 +142,44 @@ it("reviews composite source keys and source-as-of versions without JSON or inve
   expect(save).toBeEnabled();fireEvent.click(save);
   expect(bridge.proposeSubscription).toHaveBeenCalledWith(expect.objectContaining({ batchSchema: "packproof.typed-source-batch/v2", identityPolicy: { schema: "packproof.source-identity-policy/v1", eventKey: { kind: "composite", fields: ["orderId", "orderLineId", "property"] }, revision: { kind: "source_as_of" } } }));
   expect(form.queryByRole("textbox", { name: /JSON|API key/i })).toBeNull();
+});
+
+it("groups the same failure by affected source while leaving unrelated sources available", () => {
+  const sources = [
+    {...source, lastErrorCode:"SOURCE_HEADERS_CHANGED", pendingCount: 2},
+    {...source, id:"source_two", displayName:"Loading exports", lastErrorCode:"SOURCE_HEADERS_CHANGED", pendingCount: 1},
+    {...source, id:"source_three", displayName:"Delivery exports", state:"active", localPaused:false}
+  ];
+  const state = {...current, sourceSubscriptions: sources};
+  render(<SourceControls status={state} bridge={bridgeFor(state)} disabled={false} action={run} external={() => {}}/>);
+  const attention = within(screen.getByRole("region", {name:"Sources needing attention"}));
+  expect(attention.getAllByRole("heading", {name:"Report format needs review"})).toHaveLength(1);
+  expect(attention.getByRole("link", {name:"Order exports"})).toHaveAttribute("href", "#source-source_one");
+  expect(attention.getByRole("link", {name:"Loading exports"})).toBeVisible();
+  expect(attention.queryByText("Delivery exports")).toBeNull();
+  expect(within(screen.getByRole("article", {name:"Delivery exports"})).getByRole("button", {name:"Pause this source"})).toBeEnabled();
+});
+
+it("binds batch consent to the receipt even if the reviewed file and source revisions stay the same", () => {
+  const statusWithReceipt = (id: string) => ({...current, sourceSubscriptions: [
+    {...source, receipt: {id, previewVersion:"b".repeat(64), original:{sha256:"a".repeat(64)}, state:"previewed", counts:{valid:1}}}
+  ]});
+  const props = {bridge: bridgeFor(current), disabled:false, action:run, external:()=>{}};
+  const mounted = render(<SourceControls {...props} status={statusWithReceipt("batch_one")}/>);
+  fireEvent.click(screen.getByRole("checkbox", {name:/Import this exact previewed batch/}));
+  expect(screen.getByRole("button", {name:"Import reviewed batch"})).toBeEnabled();
+  mounted.rerender(<SourceControls {...props} status={statusWithReceipt("batch_two")}/>);
+  expect(screen.getByRole("button", {name:"Import reviewed batch"})).toBeDisabled();
+});
+
+it("explains durable exporter retries separately from a changed schema that needs an owner", () => {
+  const locked = {...source, lastErrorCode:"SOURCE_CHANGED", publicationAttempts:2, nextPublicationCheckAt:"2026-11-17T11:05:00Z"};
+  const drifted = {...source, id:"source_two", displayName:"Delivery exports", lastErrorCode:"SOURCE_CHANGED"};
+  const status={...current,sourceSubscriptions:[locked,drifted]};
+  render(<SourceControls status={status} bridge={bridgeFor(status)} disabled={false} action={run} external={()=>{}}/>);
+  const attention=within(screen.getByRole("region",{name:"Sources needing attention"}));
+  expect(attention.getByRole("heading",{name:"Waiting for a finished report"})).toBeVisible();
+  expect(attention.getByText(/2 checks · Next attempt/)).toBeVisible();
+  expect(attention.getByRole("heading",{name:"Report format needs review"})).toBeVisible();
+  expect(sourceStatusText(locked)).toBe("Waiting for the exporter");
 });

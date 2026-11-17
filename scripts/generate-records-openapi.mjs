@@ -338,7 +338,36 @@ endpoint('post','/v1/partner/source-observations',{summary:'Retain a source obse
 endpoint('get','/me/records/source-associations',{human:true,summary:'Review authorized retained source exceptions',description:'Owner, administrator or reviewer. Operators cannot inspect unassigned inbound source items. Location restrictions apply before pagination. before is the exact returned opaque ID; limit is 1–100. Original payload bytes and credentials are excluded.',response:object({items:list(ref('SourceAssociationReceipt')),nextCursor:nullable(text())},['items','nextCursor']),parameters:[...workspace,query('before',text()),query('limit',{type:'integer',minimum:1,maximum:100})]});
 endpoint('post','/me/records/source-crosswalks',{human:true,summary:'Approve a permanent exact source relationship and schedule replay',description:'Current human owner/administrator only. Target must have exactly the source location. Immutable binding is appended before existing event/artifact APIs can use this connection. Mappings cannot silently reassign earlier evidence. Conflicting source event IDs do not replay.',input:object({...workspaceFields,connectionId:text(),locationId:nullable(text()),reference:sourceReferenceSpec,proofId:text(),ruleVersion:text(100),reason},['organizationId','environment','connectionId','locationId','reference','proofId','ruleVersion','reason']),response:object({value:{type:'object',additionalProperties:true},replayed:boolean},['value','replayed']),parameters:[commandHeaders[0]]});
 endpoint('post','/me/records/source-associations/{associationId}/replay',{human:true,summary:'Retry an authorized source receipt after a repair',description:'Current human owner/administrator only; source credential, location, pause and record access are rechecked. Original source attribution remains unchanged. Submitted and conflicting identities cannot replay. Administrator reason is append-only.',input:object({...workspaceFields,reason},['organizationId','environment','reason']),response:object({value:object({id:text(),state:{const:'pending'}},['id','state']),replayed:boolean},['value','replayed']),parameters:[pathId('associationId'),commandHeaders[0]],statuses:[202]});
-api.components.schemas.AgentConfig.properties.sourceContract=object({schema:{const:'packproof.scheduled-csv/v1'},exporterName:text(100),exporterVersion:text(80),expectedHeaders:{type:'array',minItems:1,maxItems:50,uniqueItems:true,items:text()},expectedIntervalSeconds:{type:'integer',minimum:60,maximum:604800},backfillFrom:timestamp},['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom']);
+const scheduledV1=object({schema:{const:'packproof.scheduled-csv/v1'},exporterName:text(100),exporterVersion:text(80),expectedHeaders:{type:'array',minItems:1,maxItems:50,uniqueItems:true,items:text()},expectedIntervalSeconds:{type:'integer',minimum:60,maximum:604800},backfillFrom:timestamp},['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom']);
+const currentRules = JSON.parse(fs.readFileSync(path.join(root,'backend/src/records/connect-csv-rules.json'),'utf8'));
+const sha256 = {type:'string',pattern:'^[a-f0-9]{64}$'};
+const historyPolicy = object({mode:{const:'selected_then_new'}, baselineSha256:sha256, observedAt:timestamp,
+  initialFileName:text(255), initialFileSha256:sha256},['mode','baselineSha256','observedAt','initialFileName','initialFileSha256']);
+const scheduledV2 = object({...scheduledV1.properties,schema:{const:'packproof.scheduled-csv/v2'},
+  exporterName:nullable(text(100)),exporterVersion:nullable(text(80)),expectedIntervalSeconds:nullable(scheduledV1.properties.expectedIntervalSeconds),
+  rulesVersion:{const:currentRules.version},profileVersion:{const:currentRules.profile},analysisRevision:{type:'integer',minimum:1},
+  interpretationVersion:{const:currentRules.interpretation.version},basedOnConfigRevision:{type:'integer',minimum:0},
+  headerPolicy:{const:'same_names_any_order/v1'},confirmedFields:{type:'array',uniqueItems:true,items:{enum:Object.keys(currentRules.aliases)}},historyPolicy},
+  [...scheduledV1.required,'rulesVersion','profileVersion','confirmedFields','analysisRevision','historyPolicy']);
+scheduledV2.dependentRequired={headerPolicy:['interpretationVersion','basedOnConfigRevision'],interpretationVersion:['basedOnConfigRevision'],basedOnConfigRevision:['interpretationVersion']};
+api.components.schemas.AgentConfig.properties.sourceContract={oneOf:[scheduledV1,scheduledV2]};
+// Legacy receipts omit this optional field. Versioned receipts describe only
+// decisions actually admitted against the full original.
+const semanticField = {enum:Object.keys(currentRules.aliases)};
+const fieldDecision = {
+  field:semanticField, sourceColumnId:nullable(text()), state:{enum:['validated','missing_optional']},
+  origin:{enum:['source_column','approved_binding','absent']}, reasonCodes:list(text()), validRowCount:integer, invalidRowCount:integer,
+};
+const shipmentDecision = {
+  schema:{const:'packproof.automation-decision/v1'}, kind:{const:'mapping'}, decisionId:text(),
+  version:{const:currentRules.interpretation.version}, outcome:{const:'automatic'}, grain:{const:'shipment'}, reasonCodes:list(text()),
+  sourceId:text(), configurationRevision:revision, sourceControlRevision:integer, policyRevision:text(),
+  rulesVersion:text(), profileVersion:text(), originalSha256:{type:'string',pattern:'^[a-f0-9]{64}$'}, rowCount:integer,
+  confirmedFields:list(semanticField), headerPolicy:{enum:['exact','same_names_any_order/v1']}, headerDisposition:{enum:['exact','reordered']},
+  expectedHeaders:list(text()), actor:object({kind:{const:'system'},id:{const:'shipment-csv-validator'}},['kind','id']), fields:list(object(fieldDecision,Object.keys(fieldDecision))),
+};
+api.components.schemas.ShipmentInterpretationDecision=object(shipmentDecision,Object.keys(shipmentDecision));
+api.components.schemas.RecordImport.properties.interpretation=ref('ShipmentInterpretationDecision');
 addExistingDataContract(api,root);
 const output = JSON.stringify(api, null, 2) + '\n';
 if (process.argv.includes('--check')) {

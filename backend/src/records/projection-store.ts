@@ -3,6 +3,7 @@ import type {Clock} from '../clock.js';
 import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {DomainError} from '../domain/errors.js';
+import {RECONSTRUCTION_RULE_VERSION} from './reconstruction-rules.js';
 import type {SourceOutcomeCounts} from './coverage.js';
 
 export interface ProjectionSourceCounter {
@@ -36,7 +37,7 @@ export async function reconcileProjectionSourceCounter(db:Database,clock:Clock,s
   return readProjectionSourceCounter(tx,subscriptionId);
  });
 }
-export const sourceProjectionSignature=(sources:unknown)=>sha256Hex(canonicalize(sources));
+export const sourceProjectionSignature=(sources:unknown)=>sha256Hex(canonicalize({ruleVersion:RECONSTRUCTION_RULE_VERSION,sources}));
 
 /** Receipt totals and advancing boundaries are presentation measurements. They
  * do not invalidate an unchanged case comparison. Qualification, source version

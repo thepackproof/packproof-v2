@@ -6,6 +6,7 @@ import {canonicalize} from '../canonical.js';
 import {sha256Hex} from '../hash.js';
 import {requireRecordAccess,type RecordWorkspace} from './access.js';
 import {requireCaseAccess,requireCaseWorkspace,caseScopeSql,currentCaseObservationSql,currentCaseObservationProjectionSql,currentCaseAssertionSql,currentCaseRelationshipSql,currentCaseEntitySql,caseObservationSupersededSql,readCaseIdentityMappingsForProjection} from './cases.js';
+import {shipmentEdgesForLine,resolvedLineAllocations} from './fulfillment-allocations.js';
 import {readSourceSnapshotState} from './source-snapshot-state.js';
 import {readProjectionSourceCounter,projectionSourceDependencies} from './projection-store.js';
 import {referencedRuleSources,type SourceRulePolicies} from './source-rule-policy.js';
@@ -15,7 +16,7 @@ import {caseReceiptAffectsSql} from './case-receipt-dependencies.js';
 import type {TypedSourceReference,TypedSourceObservation,TypedSourceCompleteness} from './source-contracts.js';
 import {deriveSourceCoverage,type SourceCoverage,type SourceCoverageInput} from './coverage.js';
 import {evaluateReconstructionRules,RECONSTRUCTION_RULE_VERSION,type ReconstructionAssertion} from './reconstruction-rules.js';
-import {reconstructionFeatureEnabled,typedCollectorVersionSupported} from './reconstruction-features.js';
+import {reconstructionFeatureEnabled,typedCollectorVersionSupported,supportsSourceBackfills} from './reconstruction-features.js';
 
 export const RECONSTRUCTION_PROFILE='packproof.operational-reconstruction/v1' as const;
 type Section='assertions'|'relationships'|'timeline'|'comparisons'|'caseLinks'|'aliases'|'identityRules'|'proofs';
@@ -68,7 +69,7 @@ export interface AssertionRow {
  id:string;entity_id:string;namespace:string;entity_type:TypedSourceReference['type'];external_id:string;parent_external_id:string;property:string;value:ReconstructionAssertion['value'];unit:string|null;
  observation_id:string;connection_id:string;batch_id:string;row_number:number;source_locator:ReconstructionAssertion['source']['locator'];mapping_version:string;source_revision:string;source_namespace:string;
  occurred_at:Date|string|null;source_as_of:Date|string|null;time_quality:string;origin:{originSystem:string|null;copiedFromSource:string|null};received_at:Date|string;
- normalized:TypedSourceObservation;history_eligibility:'within_bounds'|'unknown'|'out_of_bounds';source_event_id:string;original_sha256:string;subscription_id:string;active:boolean;
+ normalized:TypedSourceObservation;history_eligibility:'within_bounds'|'unknown'|'out_of_bounds';source_event_id:string;original_sha256:string;subscription_id:string;configuration_revision:string|number;grant_revision:string|number;source_profile:string;active:boolean;
 }
 interface EntityRow {id:string;namespace:string;entity_type:TypedSourceReference['type'];external_id:string;parent_external_id:string}
 interface RelationRow {id:string;from_entity_id:string;to_entity_id:string;relation_type:string;quantity:unknown;assertion_row_id:string;row_number:number;active:boolean}
@@ -80,7 +81,7 @@ export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:Re
  await currentWorkspace(db,clock,w);
  const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
  const [assertionResult,entityResult,relationResult,membersResult,observationResult,receiptLimitations]=await Promise.all([
-  db.query<AssertionRow>(`SELECT a.*,e.namespace,e.entity_type,e.external_id,e.parent_external_id,${currentCaseObservationProjectionSql('r','a.case_id')} AS normalized,r.history_eligibility,r.source_event_id,b.original_sha256,b.subscription_id,
+  db.query<AssertionRow>(`SELECT a.*,e.namespace,e.entity_type,e.external_id,e.parent_external_id,${currentCaseObservationProjectionSql('r','a.case_id')} AS normalized,r.history_eligibility,r.source_event_id,b.original_sha256,b.subscription_id,b.configuration_revision,b.grant_revision,b.source_profile,
    NOT ${caseObservationSupersededSql('a.observation_id','a.case_id')} AS active
    FROM record_case_assertions a JOIN record_case_entities e ON e.id=a.entity_id AND e.case_id=a.case_id
    JOIN record_typed_rows r ON r.id=a.observation_id JOIN record_typed_batches b ON b.id=a.batch_id
@@ -106,14 +107,19 @@ export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:Re
   if(from&&to&&from.entity_type===to.entity_type)unite(refKey(reference(from)),refKey(reference(to)));
  }
  const identityMappings=reconstructionFeatureEnabled('crossCase')?await readCaseIdentityMappingsForProjection(db,clock,w,caseId):{aliases:[],rules:[]};
- const assertions=assertionResult.rows.map(row=>hydrateReconstructionAssertion(row,c.id,find,identityMappings));
+ const sourceHealthAvailable=reconstructionFeatureEnabled('sourceHealth'),rulesAvailable=sourceHealthAvailable&&reconstructionFeatureEnabled('rules');
+ const assertions:ReconstructionAssertion[]=[],comparisonInputs:ReconstructionAssertion[]=[];
+ for(const row of assertionResult.rows){
+  const {assertion,splitInputs}=projectReconstructionAssertion(row,c.id,find,identityMappings,rulesAvailable);
+  assertions.push(assertion);
+  if(rulesAvailable&&assertion.active)comparisonInputs.push(...(splitInputs??[assertion]));
+ }
  const relationships=relationResult.rows.map(row=>{const from=entityMap.get(row.from_entity_id)!,to=entityMap.get(row.to_entity_id)!;return {id:row.id,from:{id:from.id,...reference(from)},to:{id:to.id,...reference(to)},type:row.relation_type,quantity:row.quantity==null?null:json(row.quantity),sourceReceiptId:row.assertion_row_id,row:row.row_number,active:row.active,restricted:false};});
  const sourceKeys=await readCaseSourceKeys(db,w,c);
  const sources:SourceCoverage[]=[];
- const sourceHealthAvailable=reconstructionFeatureEnabled('sourceHealth'),rulesAvailable=sourceHealthAvailable&&reconstructionFeatureEnabled('rules');
  if(sourceHealthAvailable)for(const key of sourceKeys){const [subscriptionId,connectionId,namespace]=JSON.parse(key) as string[];sources.push(await readCaseSourceCoverage(db,clock,w,c,subscriptionId,connectionId,namespace));}
  await includePolicySourceCoverage(db,clock,w,c,sources);
- const comparisons=rulesAvailable?evaluateReconstructionRules(assertions,sources,{now:clock.now()}):[];
+ const comparisons=rulesAvailable?evaluateReconstructionRules(comparisonInputs,sources,{now:clock.now()}):[];
  const grouped=new Map<string,ReconstructionAssertion[]>();for(const assertion of assertions){const list=grouped.get(assertion.source.observationId)??[];list.push(assertion);grouped.set(assertion.source.observationId,list);}
  let latestReported=-Infinity;
  const timeline=observationResult.rows.map(row=>{const n=json(row.normalized),values=grouped.get(row.id)??[],reportedAt=iso(n.occurredAt),sourceAsOf=iso(n.sourceAsOf);return {id:row.id,observationKind:n.observationKind,reportedAt,sourceAsOf,originalReportedAt:n.occurredAt,originalSourceAsOf:n.sourceAsOf,receivedAt:iso(row.received_at)!,timeQuality:n.timeQuality,late:false,sourceConnectionId:row.connection_id,sourceNamespace:row.source_namespace,assertionIds:values.map(value=>value.id).sort(),active:row.active,timeBasis:reportedAt?'event_time':sourceAsOf?'snapshot_as_of':'unknown'};}).sort((a,b)=>a.receivedAt.localeCompare(b.receivedAt)||a.id.localeCompare(b.id));
@@ -167,7 +173,7 @@ export async function readCaseSourceCoverage(db:Database,clock:Clock,w:RecordWor
  }
  const caseCounts=(await db.query<{n:number}>(`SELECT COUNT(*)::integer n FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE b.subscription_id=$1 AND r.id IN ${caseObservationCandidatesSql('$2')} AND ${currentCaseObservationSql('r','$2')}`,[subscriptionId,c.id])).rows[0]?.n??0;
  const latestContract=batches[0]?json(batches[0].contract):{},snapshotState=(config.completenessPolicy as {fileBoundary?:unknown}|undefined)?.fileBoundary?await readSourceSnapshotState(db,{subscriptionId,organizationId:w.organizationId,environment:w.environment,locationId:c.location_id,operatorMembershipId:c.operator_membership_id,sourceNamespace:namespace,configurationRevision:Number(subscription.configuration_revision),now:clock.now().toISOString()}):null,complete=snapshotState?.completeness??(latestContract.completeness??{kind:'unknown',asOf:null,marker:null}) as TypedSourceCompleteness;
- const installationError=subscription.installation_id?(!reconstructionFeatureEnabled('multiSourceAgent')||!subscription.installation_authority?'AGENT_AUTHORIZATION_REQUIRED':(!typedCollectorVersionSupported(subscription.collector_version??'',typeof config.batchSchema==='string'?config.batchSchema:'packproof.typed-source-batch/v1')||(config.completenessPolicy as {fileBoundary?:unknown}|undefined)?.fileBoundary&&subscription.collector_version!=='0.4.0')?'SOURCE_COLLECTOR_VERSION_UNSUPPORTED':null):null;
+ const installationError=subscription.installation_id?(!reconstructionFeatureEnabled('multiSourceAgent')||!subscription.installation_authority?'AGENT_AUTHORIZATION_REQUIRED':(!typedCollectorVersionSupported(subscription.collector_version??'',typeof config.batchSchema==='string'?config.batchSchema:'packproof.typed-source-batch/v1')||(config.completenessPolicy as {fileBoundary?:unknown}|undefined)?.fileBoundary&&!supportsSourceBackfills(subscription.collector_version))?'SOURCE_COLLECTOR_VERSION_UNSUPPORTED':null):null;
  const errorCode=installationError??(!subscription?.authority_current?'SOURCE_AUTHORIZATION_REQUIRED':batches[0]&&Number(batches[0].configuration_revision)!==Number(subscription.configuration_revision)?'MAPPING_REVISION_CHANGED':typeof heartbeat.errorCode==='string'?heartbeat.errorCode:null);
  const unknownTimes=counter.unknownTimeCount>0;
  const result=deriveSourceCoverage({connectionId,sourceNamespace:namespace,state:subscription?.state,lastReceivedAt:iso(batches[0]?.received_at),sourceAsOf:snapshotState?complete.asOf:iso(subscription?.source_as_of)??complete.asOf,lastCheckedAt:iso(subscription?.last_check_at),expectedIntervalSeconds:typeof config.expectedIntervalSeconds==='number'?config.expectedIntervalSeconds:null,errorCode,reportedState:typeof heartbeat.state==='string'?heartbeat.state:null,collectorBacklog:typeof heartbeat.backlog==='number'?heartbeat.backlog:null,oldestPendingAt:typeof heartbeat.oldestPendingAt==='string'?heartbeat.oldestPendingAt:null,collectorPendingAgeUnknownCount:typeof heartbeat.pendingAgeUnknownCount==='number'?heartbeat.pendingAgeUnknownCount:null,collectorRetainedBytes:typeof heartbeat.retainedBytes==='number'?heartbeat.retainedBytes:null,completeness:complete,completenessPolicy:unknownTimes||!counter.ready?null:config.completenessPolicy as SourceCoverageInput['completenessPolicy'],counts:counter.counts},clock.now());
@@ -195,13 +201,36 @@ export async function getOperationalCase(db:Database,clock:Clock,w:RecordWorkspa
 }
 
 export function hydrateReconstructionAssertion(row:AssertionRow,caseId:string,find:(key:string)=>string=key=>key,mappings:ProjectionIdentityMappings={aliases:[],rules:[]}):ReconstructionAssertion {
+ return projectReconstructionAssertion(row,caseId,find,mappings,false).assertion;
+}
+
+function projectReconstructionAssertion(row:AssertionRow,caseId:string,find:(key:string)=>string,mappings:ProjectionIdentityMappings,includeSplits:boolean):{assertion:ReconstructionAssertion;splitInputs?:ReconstructionAssertion[]} {
  const n=json(row.normalized),source=json(row.origin),subject=reference(row),resolve=projectionReferenceResolver(mappings,iso(row.occurred_at)??iso(row.source_as_of)),canonicalSubject=resolve(subject);
  const unique=(type:TypedSourceReference['type'])=>{const keys=[...new Set(n.references.filter(ref=>ref.type===type).map(ref=>find(resolve(ref).key)))];return keys.length===1?keys[0]:null;};
- const line=subject.type==='order_line'?find(canonicalSubject.key):null,shipment=unique('shipment');
+ const line=subject.type==='order_line'?find(canonicalSubject.key):null;
+ const edges=line===null?[]:shipmentEdgesForLine(n,subject);
+ const allocated=row.property==='allocatedQuantity'&&typeof row.value==='object'?resolvedLineAllocations(edges,row.value):null;
+ const shipments=allocated===null?edges.map(edge=>edge.from):allocated.map(part=>part.shipment);
+ let shipment:string|null=null;
+ if(line===null)shipment=unique('shipment');
+ else if(shipments.length===1)shipment=find(resolve(shipments[0]).key);
  const hasReturn=n.references.some(ref=>ref.type==='return')||n.relationships.some(rel=>rel.type==='return_of');
- return {id:row.id,subject,property:row.property,value:row.value,unit:row.unit,active:row.active,
-  source:{subscriptionId:row.subscription_id,connectionId:row.connection_id,receiptId:row.batch_id,observationId:row.observation_id,sourceEventId:row.source_event_id,historyEligibility:row.history_eligibility,observationKind:n.observationKind,row:row.row_number,field:json(row.source_locator).field,locator:json(row.source_locator),mappingVersion:row.mapping_version,revision:row.source_revision,reportedAt:iso(row.occurred_at),sourceAsOf:iso(row.source_as_of),receivedAt:iso(row.received_at)!,timeQuality:row.time_quality,originalSha256:row.original_sha256,sourceNamespace:row.source_namespace,...(n.identityDerivation?{identityDerivation:n.identityDerivation}:{}),identityBasis:canonicalSubject.basis,comparisonIdentity:{subject:canonicalSubject.reference,fields:n.references.map(ref=>({reference:ref,canonicalReference:resolve(ref).reference,basis:resolve(ref).basis}))},originSystem:source.originSystem??null,copiedFromSource:source.copiedFromSource??null},
+ const assertion:ReconstructionAssertion={id:row.id,subject,property:row.property,value:row.value,unit:row.unit,active:row.active,
+  source:{subscriptionId:row.subscription_id,configurationRevision:Number(row.configuration_revision),grantRevision:Number(row.grant_revision),sourceProfile:row.source_profile,connectionId:row.connection_id,receiptId:row.batch_id,observationId:row.observation_id,sourceEventId:row.source_event_id,historyEligibility:row.history_eligibility,observationKind:n.observationKind,row:row.row_number,field:json(row.source_locator).field,locator:json(row.source_locator),mappingVersion:row.mapping_version,revision:row.source_revision,reportedAt:iso(row.occurred_at),sourceAsOf:iso(row.source_as_of),receivedAt:iso(row.received_at)!,timeQuality:row.time_quality,originalSha256:row.original_sha256,sourceNamespace:row.source_namespace,...(n.identityDerivation?{identityDerivation:n.identityDerivation}:{}),identityBasis:canonicalSubject.basis,comparisonIdentity:{subject:canonicalSubject.reference,fields:n.references.map(ref=>({reference:ref,canonicalReference:resolve(ref).reference,basis:resolve(ref).basis}))},originSystem:source.originSystem??null,copiedFromSource:source.copiedFromSource??null},
   comparisonScope:{caseId,line,shipment,direction:hasReturn?'return':shipment?'outbound':'unknown',tracking:unique('tracking'),load:unique('load'),stop:unique('stop'),subjectNamespace:canonicalSubject.reference.namespace,handlingUnit:unique('handling_unit'),serializedUnit:unique('serialized_unit')}};
+ if(!includeSplits||!row.active||!allocated||allocated.length<2||typeof row.value!=='object')return {assertion};
+ // The ledger keeps the reported line total. Only the rule receives the exact
+ // per-shipment quantities, with the original assertion ID and source edge.
+ const lineQuantity=row.value;
+ const splitInputs=allocated.map(({shipment:rawShipment,quantity}):ReconstructionAssertion=>({
+  ...assertion,value:quantity,unit:quantity.unit,
+  comparisonScope:{...assertion.comparisonScope,shipment:find(resolve(rawShipment).key),direction:hasReturn?'return':'outbound'},
+  source:{...assertion.source,allocationBasis:{lineQuantity,relationship:{type:'fulfills',from:rawShipment,to:subject,quantity}}},
+ }));
+ // Two source identifiers can resolve to the same shipment through an approved
+ // alias. Such edges cannot prove independent shipment portions.
+ if(new Set(splitInputs.map(input=>input.comparisonScope.shipment)).size!==splitInputs.length)return {assertion};
+ return {assertion,splitInputs};
 }
 export async function readCaseSourceKeys(db:Database,w:RecordWorkspace,c:CaseRow):Promise<string[]> {
  const rows=(await db.query<{subscription_id:string;connection_id:string;source_namespace:string}>(`SELECT DISTINCT b.subscription_id,b.connection_id,b.source_namespace FROM record_typed_rows r JOIN record_typed_batches b ON b.id=r.batch_id WHERE r.id IN ${caseObservationCandidatesSql('$1')} AND ${currentCaseObservationSql('r','$1')} AND b.organization_id=$2 AND b.environment=$3 AND b.location_id=$4 AND b.operator_membership_id=$5 ORDER BY b.subscription_id,b.connection_id,b.source_namespace LIMIT 501`,[c.id,w.organizationId,w.environment,c.location_id,c.operator_membership_id])).rows;

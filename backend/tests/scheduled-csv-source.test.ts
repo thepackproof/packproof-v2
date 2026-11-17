@@ -1,4 +1,6 @@
 import {describe,it,expect} from 'vitest';
+import {CSV_RULES} from "../src/records/csv-semantics.js";
+import {CSV_REORDER_POLICY} from "../src/records/csv-header-policy.js";
 import {validateScheduledCsvSourceContract,validateScheduledCsvRows,type AgentApprovedConfig} from '../src/records/agent-restrictions.js';
 import {validateAgentConfig,type Installation} from '../src/records/agent-enrollments.js';
 import {parseShipmentCsv} from '../src/records/csv.js';
@@ -39,4 +41,19 @@ describe('administrator-approved Scheduled CSV Export Folder v1 contract',()=>{
   expect(validateAgentConfig(legacy,installation)).toEqual(legacy);
   expect(()=>validateScheduledCsvRows(legacy,rows('2026-11-07'))).not.toThrow();
  });
+});
+
+it('keeps exact field bindings and every original column when reordered headers were approved',()=>{
+ const v2={...contract,schema:'packproof.scheduled-csv/v2' as const,rulesVersion:CSV_RULES.version,profileVersion:CSV_RULES.profile,
+  confirmedFields:Object.keys(config.mapping),analysisRevision:1,interpretationVersion:CSV_RULES.interpretation.version,basedOnConfigRevision:0,headerPolicy:CSV_REORDER_POLICY,
+  historyPolicy:{mode:'selected_then_new' as const,baselineSha256:'a'.repeat(64),observedAt:'2026-11-10T00:00:00Z',initialFileName:'first.csv',initialFileSha256:'b'.repeat(64)}};
+ const approved={...config,timeZone:'source-offset',sourceContract:v2};
+ const parsed=parseShipmentCsv('Quantity,Reported at,Description,Reference\n2,2026-11-12T09:00:00Z,Widget,0009',config.mapping,'source-offset');
+ expect(()=>validateScheduledCsvRows(approved,parsed.rows,parsed.headers)).not.toThrow();
+ expect(parsed.rows[0].normalized?.shipmentReference).toBe('0009');
+ for(const headers of [[...parsed.headers,'Employee email'],['Quantity','Description','Reference'],['Quantity','Reported at','Description','OrderNum']]){
+  expect(()=>validateScheduledCsvRows(approved,parsed.rows,headers)).toThrow();
+ }
+ expect(()=>validateScheduledCsvSourceContract({...v2,headerPolicy:'anything'})).toThrow();
+ expect(()=>validateScheduledCsvSourceContract({...contract,headerPolicy:CSV_REORDER_POLICY})).toThrow();
 });

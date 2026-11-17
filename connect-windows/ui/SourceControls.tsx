@@ -20,38 +20,83 @@ const propertyNames: Record<string, string> = {
 const stateNames: Record<string, string> = { proposed: "Awaiting source approval", approved: "Review the first record", active: "Recurring collection approved", paused: "Paused", revoked: "Access revoked", needs_approval: "Approval needed" };
 export function sourceStatusText(source: SourceSubscriptionStatus) {
   if (source.state === "revoked") return "Access revoked";
+  if (source.lastErrorCode === "SOURCE_AUTHORIZATION_REQUIRED") return "Source permission required";
+  if (source.nextPublicationCheckAt && (source.lastErrorCode === "SOURCE_BUSY" || source.lastErrorCode === "SOURCE_CHANGED")) return "Waiting for the exporter";
   if (source.lastErrorCode) return /SCHEMA|MAPPING|HEADER|SOURCE_CHANGED/.test(source.lastErrorCode) ? "Report changed — review needed" : /NETWORK|TIMEOUT|OFFLINE/.test(source.lastErrorCode) ? "Source delayed or offline" : "Action needed";
   if (source.localPaused && source.state === "active") return "Paused on this computer";
   return stateNames[source.state] ?? "Status needs review";
 }
+function sourceAttention(source: SourceSubscriptionStatus) {
+  if (source.state === "revoked") return { reason: "Access revoked", action: "Ask the workspace administrator to review access. Retained inputs stay under their original approval." };
+  if (!source.lastErrorCode) return;
+  if (source.nextPublicationCheckAt && (source.lastErrorCode === "SOURCE_BUSY" || source.lastErrorCode === "SOURCE_CHANGED"))
+    return { reason: "Waiting for a finished report", action: "The file was locked or changed during the check. PackProof will retry after the exporter finishes writing." };
+  if (/SCHEMA|MAPPING|HEADER|REVISION|SOURCE_CHANGED/.test(source.lastErrorCode))
+    return { reason: "Report format needs review", action: "Ask the source owner to compare the changed export with its approved columns before uploading it." };
+  if (/NETWORK|TIMEOUT|OFFLINE/.test(source.lastErrorCode))
+    return { reason: "Connection interrupted", action: "Keep the service running. Check the network if the next scheduled attempt also fails." };
+  if (/DISK|STORAGE|KEY|INTEGRITY/.test(source.lastErrorCode))
+    return { reason: "Protected storage needs attention", action: "Contact the administrator of this computer. Keep the protected queue and keys in place." };
+  if (/APPROVAL|AUTHORIZ|GRANT|PERMISSION/.test(source.lastErrorCode))
+    return { reason: "Source permission needs review", action: "Ask the workspace administrator to open this source's browser review." };
+  return { reason: "Source needs attention", action: "Review the source details with its owner before retrying." };
+}
+
+function SourceAttention({ sources }: { sources: SourceSubscriptionStatus[] }) {
+  const groups = new Map<string, { title: string; action: string; sources: SourceSubscriptionStatus[] }>();
+  for (const source of sources) {
+    const issue = sourceAttention(source);
+    if (!issue) continue;
+    const key = JSON.stringify([issue.reason, source.state === "revoked" ? "revoked" : source.lastErrorCode]);
+    const group = groups.get(key) ?? { title: issue.reason, action: issue.action, sources: [] };
+    group.sources.push(source);
+    groups.set(key, group);
+  }
+  if (!groups.size) return null;
+  return <section aria-label="Sources needing attention" className="attention-summary">
+    <h2>Needs attention</h2>
+    {Array.from(groups, ([key, group]) => <div key={key} className="connect-notice warning">
+      <h3>{group.title}</h3><p>{group.action}</p>
+      <ul>{group.sources.map(source => <li key={source.id}>
+        <a href={`#source-${encodeURIComponent(source.id)}`}>{source.displayName}</a>
+        {source.pendingCount !== undefined && ` · ${source.pendingCount} pending`}
+        {source.nextPublicationCheckAt && <small> {source.publicationAttempts ?? "Unknown number of"} checks · Next attempt {stamp(source.nextPublicationCheckAt)}</small>}
+      </li>)}</ul>
+    </div>)}
+  </section>;
+}
+
 function SourceCard({ source, bridge, disabled, action, external, backfillAvailable }: { source: SourceSubscriptionStatus; bridge: ConnectBridge; disabled: boolean; action: Action; external: (operation: () => Promise<unknown>) => void; backfillAvailable: boolean }) {
   const [originalConsent, setOriginalConsent] = useState(false), [batchConsent, setBatchConsent] = useState(false);
-  const preview = source.receipt, revoked = source.state === "revoked";
-  const previewReady = !!preview && ["previewed", "awaiting_review", "ready"].includes(preview.state);
+  const accessUnavailable = source.state === "revoked" || source.lastErrorCode === "SOURCE_AUTHORIZATION_REQUIRED";
+  const preview = accessUnavailable ? undefined : source.receipt;
+  const review = { id: source.id, configurationRevision: source.configurationRevision, grantRevision: source.grantRevision };
+  const previewReady = preview?.state === "previewed" && !!preview.original?.sha256 && !!preview.previewVersion;
   const pending = source.pendingCount ?? Object.entries(source.queue ?? {}).filter(([name]) => name !== "complete").reduce((total, [, count]) => total + count, 0);
-  return <article className="connect-card source-card" aria-label={source.displayName}>
+  return <article id={`source-${encodeURIComponent(source.id)}`} tabIndex={-1} className="connect-card source-card" aria-label={source.displayName}>
     <div className="source-card-heading"><div><h2>{source.displayName}</h2><p>{profileNames[source.sourceProfile] ?? "Approved source"}</p></div><span className="pill">{sourceStatusText(source)}</span></div>
     <dl className="connect-facts"><div><dt>Last source check</dt><dd>{stamp(source.lastCheckAt)}</dd></div><div><dt>Last collection</dt><dd>{stamp(source.lastCollectedAt)}</dd></div><div><dt>Last reconciled receipt</dt><dd>{stamp(source.lastReceiptAt)}</dd></div><div><dt>Retained pending inputs</dt><dd>{pending}</dd></div><div><dt>Oldest known pending input</dt><dd>{pending === 0 ? "No pending inputs" : stamp(source.oldestPendingAt)}</dd></div><div><dt>Encrypted spool bytes, collector reported</dt><dd>{source.retainedBytes === undefined ? "Not reported" : source.retainedBytes.toLocaleString()}</dd></div><div><dt>Source freshness</dt><dd>{source.freshness === "current" ? "Within the approved cadence" : source.freshness === "delayed" ? "Delayed" : "Coverage unknown"}</dd></div><div><dt>Source as of</dt><dd>{stamp(source.sourceAsOf)}</dd></div></dl>
     {!!source.pendingAgeUnknownCount && <p className="source-caption">{source.pendingAgeUnknownCount.toLocaleString()} retained inputs have no capture timestamp; their age is unknown.</p>}
-    {source.lastErrorCode && <p className="connect-notice warning">{source.lastErrorCode.replaceAll("_", " ").toLowerCase()}. Retained inputs keep their original approval. Other approved sources can continue.</p>}
-    {!revoked && <>
+
+    {!accessUnavailable && <>
       <p className="source-caption">{source.folder ?? "Choose the exact folder reviewed by your administrator."}</p>
       <div className="connect-actions">{["approved", "active"].includes(source.state) && <button className="secondary" disabled={disabled} onClick={() => void action("Checking the approved source folder", () => bridge.chooseSubscriptionFolder(source.id))}>{source.folder ? "Check source folder" : "Choose approved folder"}</button>}<button className="secondary" disabled={disabled} onClick={() => external(() => bridge.openSubscriptionApproval(source.id))}>Review source in browser</button>
       {source.state === "active" && !source.localPaused ? <button className="secondary" disabled={disabled} onClick={() => void action("Pausing this source", () => bridge.pauseSubscription(source.id))}>Pause this source</button> : source.state === "active" ? <button className="secondary" disabled={disabled} onClick={() => void action("Checking current recurring approval", () => bridge.resumeSubscription(source.id))}>Resume approved source</button> : null}</div>
       {source.folder && source.state === "approved" && !preview && <section aria-label="Review the first record">
         <h3>Review a record from this source</h3><p>Select the exact completed report. This local inspection does not upload it.</p>
         <label>Completed report<select value={source.selectedFileName ?? ""} disabled={disabled} onChange={e => e.target.value && void action("Inspecting the exact report locally", () => bridge.inspectSubscriptionFile({ id: source.id, fileName: e.target.value }))}><option value="">Choose a report</option>{source.files?.map(file => <option value={file.name} key={file.name}>{file.name} · {file.byteSize.toLocaleString()} bytes</option>)}</select></label>
-        {source.fileSha256 && source.selectedFileName && <><p>{source.rowCount ?? "All bounded"} rows inspected in {source.selectedFileName}.</p><SourceSample headers={source.headers} samples={source.samples}/><label className="connect-checkbox"><input type="checkbox" checked={originalConsent} disabled={disabled} onChange={e => setOriginalConsent(e.target.checked)}/>Upload and preserve this entire original report, including unmapped columns and any other records it contains.</label><button className="primary" disabled={disabled || !originalConsent} onClick={() => void action("Preserving the approved report and preparing its preview", () => bridge.previewSubscription({ id: source.id, fileName: source.selectedFileName!, wholeFileUploadApproved: true }))}>Preview this exact report</button></>}
+        {source.fileSha256 && source.selectedFileName && <><p>{source.rowCount ?? "All bounded"} rows inspected in {source.selectedFileName}.</p><SourceSample headers={source.headers} samples={source.samples}/><label className="connect-checkbox"><input type="checkbox" checked={originalConsent} disabled={disabled} onChange={e => setOriginalConsent(e.target.checked)}/>Upload and preserve this entire original report, including unmapped columns and any other records it contains.</label><button className="primary" disabled={disabled || !originalConsent} onClick={() => void action("Preserving the approved report and preparing its preview", () => bridge.previewSubscription({ ...review, originalSha256: source.fileSha256!, fileName: source.selectedFileName!, wholeFileUploadApproved: true }))}>Preview this exact report</button></>}
         {!source.files?.length && <p>No completed report is available in this folder. Your exporter must publish finished CSV files automatically for unattended collection.</p>}
       </section>}
       {preview && <section aria-label="Source receipt"><h3>Report receipt</h3><p>{preview.state.replaceAll("_", " ")}. Acceptance and case reconstruction are separate steps.</p><dl className="connect-facts">{Object.entries(preview.counts).map(([name, count]) => <div key={name}><dt>{name.replaceAll("_", " ")}</dt><dd>{count}</dd></div>)}</dl>
-        {previewReady && <><label className="connect-checkbox"><input type="checkbox" checked={batchConsent} disabled={disabled} onChange={e => setBatchConsent(e.target.checked)}/>Import this exact previewed batch under the approved source mapping. Rejected, unresolved and conflicted rows remain visible in its receipt.</label><button className="primary" disabled={disabled || !batchConsent} onClick={() => void action("Importing the exact reviewed batch", () => bridge.commitSubscription({ id: source.id, wholeBatchApproved: true }))}>Import reviewed batch</button></>}
-        {!previewReady && !source.verifiedCaseId && <button className="secondary" disabled={disabled} onClick={() => void action("Reconciling the receipt and first real case", () => bridge.verifySubscription(source.id))}>Check receipt and first case</button>}
+        {previewReady && <><label className="connect-checkbox"><input type="checkbox" checked={batchConsent} disabled={disabled} onChange={e => setBatchConsent(e.target.checked)}/>Import this exact previewed batch under the approved source mapping. Rejected, unresolved and conflicted rows remain visible in its receipt.</label><button className="primary" disabled={disabled || !batchConsent} onClick={() => void action("Importing the exact reviewed batch", () => bridge.commitSubscription({ ...review, originalSha256: preview.original!.sha256, previewVersion: preview.previewVersion!, receiptId: preview.id, wholeBatchApproved: true }))}>Import reviewed batch</button></>}
+        {preview.state === "previewed" && !previewReady && <p className="connect-notice warning">A complete receipt for the reviewed original is required. Use the matching Connect service to refresh this source before approving the batch.</p>}
+        {preview.state !== "previewed" && !source.verifiedCaseId && <button className="secondary" disabled={disabled} onClick={() => void action("Reconciling the receipt and first real case", () => bridge.verifySubscription(source.id))}>Check receipt and first case</button>}
       </section>}
       {source.verifiedCaseId && <div className="connect-notice"><p>The first linked case has been retrieved and checked. Ongoing collection requires its own browser approval.</p><button className="secondary" disabled={disabled} onClick={() => external(() => bridge.openSubscriptionCase(source.id))}>Open first case</button>{source.state !== "active" && <button className="primary" disabled={disabled} onClick={() => external(() => bridge.openSubscriptionApproval(source.id))}>Approve recurring collection</button>}</div>}
     </>}
-    <BackfillControls key={`${source.id}:${source.configurationRevision}:${source.grantRevision}`} source={source} bridge={bridge} available={backfillAvailable && source.backfillAvailable === true} disabled={disabled} action={action} external={external}/>
-    <details className="connect-advanced"><summary>Source approval details</summary><p>Configuration revision {source.configurationRevision} · Grant revision {source.grantRevision}. Changing the path, mapping or history scope needs a new administrator approval.</p>{preview && <p>Receipt: {preview.id}</p>}{source.originalBytesKnown !== undefined && <p>Known original bytes, collector reported: {source.originalBytesKnown.toLocaleString()}. Encrypted spool storage is measured separately.{source.originalBytesUnknownCount ? ` Original byte size is unknown for ${source.originalBytesUnknownCount.toLocaleString()} retained inputs.` : ""}</p>}</details>
+    {!accessUnavailable && <BackfillControls key={`${source.id}:${source.configurationRevision}:${source.grantRevision}`} source={source} bridge={bridge} available={backfillAvailable && source.backfillAvailable === true} disabled={disabled} action={action} external={external}/>}
+    <details className="connect-advanced"><summary>Source approval details</summary>{source.lastErrorCode && <p>Last reported issue: {source.lastErrorCode}</p>}<p>Configuration revision {source.configurationRevision} · Grant revision {source.grantRevision}. Changing the path, mapping or history scope needs a new administrator approval.</p>{preview && <p>Receipt: {preview.id}</p>}{source.originalBytesKnown !== undefined && <p>Known original bytes, collector reported: {source.originalBytesKnown.toLocaleString()}. Encrypted spool storage is measured separately.{source.originalBytesUnknownCount ? ` Original byte size is unknown for ${source.originalBytesUnknownCount.toLocaleString()} retained inputs.` : ""}</p>}</details>
   </article>;
 }
 function SourceSample({ headers, samples }: { headers?: string[]; samples?: Array<Record<string, string>> }) {
@@ -82,7 +127,7 @@ export function SourceControls({ status, bridge, disabled, action, external }: {
   const commonFields = ["sourceEventId", "sourceRevision", ...(versionedIdentity ? ["sourceSequence"] : []), "orderId", "orderLineId", "shipmentId", "amount", "unit", "occurredAt", "sourceAsOf"];
   function fieldSelect(field: string) { return <label key={field}>{fieldNames[field] ?? field}<select value={mapping[field] ?? ""} disabled={disabled} onChange={e => setColumn(field, e.target.value)}><option value="">Not supplied</option>{draft?.headers?.map(h => <option key={h} value={h}>{h}</option>)}</select></label>; }
   return <section aria-label="Operational sources" className="source-home">
-    <p>Each source has its own approval, retained receipts and recovery state. A running collector does not establish complete warehouse coverage.</p>
+    <SourceAttention sources={sources} />
     <div className="connect-actions"><button className="primary" disabled={disabled || !status.installationId} onClick={() => setAdding(v => !v)} aria-expanded={adding}>{adding ? "Close source setup" : "Add an existing export source"}</button><button className="secondary" disabled={disabled} onClick={() => void action("Refreshing source approvals and receipts", () => bridge.refresh())}>Refresh sources</button></div>
     {adding && <section className="connect-card" aria-label="Add source"><h2>Connect an existing report</h2><p>Your source owner must configure the existing system to publish completed exports to a dedicated local folder. PackProof adds no routine warehouse entry step.</p><ol className="source-steps"><li>Connect your source</li><li>Review a record</li><li>Approve collection in your browser</li></ol><button className="secondary" disabled={disabled} onClick={() => { setConsent(false); setMapping({}); void action("Checking the new export folder", () => bridge.chooseNewSubscriptionFolder()); }}>{draft ? "Change new source folder" : "Choose new source folder"}</button>
       {draft?.proposal && <p className="connect-notice">The source review is saved. Use its source card below to reopen browser approval. Choose a new source folder to begin a separate request.</p>}
@@ -91,6 +136,6 @@ export function SourceControls({ status, bridge, disabled, action, external }: {
       <div className="source-form-grid">{["observationKind", "property", "timeQuality"].map(field => <div key={field}>{fieldSelect(field)}<label>Or a meaning confirmed for every row<select value={constants[field] ?? ""} disabled={disabled || !!mapping[field]} onChange={e => setConstant(field, e.target.value)}><option value="">Choose only if confirmed</option>{(field === "observationKind" ? ["event", "snapshot", "correction", "tombstone"] : field === "timeQuality" ? ["event_time", "snapshot_time_only", "unknown"] : selectedProfile.allowedProperties).map(value => <option key={value} value={value}>{propertyNames[value] ?? value.replaceAll("_", " ")}</option>)}</select></label></div>)}</div><details className="connect-advanced"><summary>Additional source fields</summary><div className="source-form-grid">{fields.filter(field => !commonFields.includes(field) && !["observationKind", "property", "timeQuality"].includes(field)).map(fieldSelect)}</div></details><label>Approved history starts at (UTC)<input type="datetime-local" step="1" value={history} disabled={disabled} onChange={e => { setHistory(e.target.value); setConsent(false); }} aria-describedby="source-history-help"/></label><p id="source-history-help" className="source-caption">Choose the source owner's approved history boundary in UTC. Source report timestamps keep their own offsets; this control does not reinterpret them. Completeness stays unknown until separately qualified.</p><label>Records without a source time<select value={unknownTimePolicy} disabled={disabled} onChange={e => { setUnknownTimePolicy(e.target.value as "quarantine" | "retain_unknown"); setConsent(false); }}><option value="quarantine">Keep for administrator review</option><option value="retain_unknown">Retain with time unknown</option></select></label><p className="source-caption">Retaining unknown times does not establish when an event happened or qualify a time-based comparison. The administrator reviews this policy before collection.</p><label className="connect-checkbox"><input type="checkbox" checked={consent} disabled={disabled} onChange={e => setConsent(e.target.checked)}/>I reviewed the exact report and field meanings. Request approval to upload whole originals, including unmapped columns, from this source and history scope.</label><button className="primary" disabled={disabled || !ready} onClick={() => void action("Validating the complete report and saving its source proposal", () => bridge.proposeSubscription({ displayName: name.trim(), ...(versionedIdentity ? { batchSchema: "packproof.typed-source-batch/v2" as const, identityPolicy } : {}), sourceProfile: profile, sourceNamespace: namespace.trim(), mappingVersion: "source-mapping/v1", mapping, constants: Object.fromEntries(Object.entries(constants).filter(([field]) => !mapping[field])), historyFrom: historyStart, unknownTimePolicy, wholeFileUploadApproved: true }))}>Save source for browser approval</button><p>Saving requests a review. Only an administrator's separate browser approval grants upload or recurring collection.</p></>}
     </section>}
     {!sources.length && <p className="connect-notice">No operational source has been approved for this installation. Add an existing report to start an administrator review.</p>}
-    {sources.map(source => <SourceCard key={`${source.id}:${source.configurationRevision}:${source.grantRevision}:${source.fileSha256 ?? ""}`} source={source} bridge={bridge} disabled={disabled} action={action} external={external} backfillAvailable={status.capabilities?.sourceBackfillJobs === true}/>)}
+    {sources.map(source => <SourceCard key={JSON.stringify([source.id, source.configurationRevision, source.grantRevision, source.fileSha256, source.receipt?.id, source.receipt?.original?.sha256, source.receipt?.previewVersion])} source={source} bridge={bridge} disabled={disabled} action={action} external={external} backfillAvailable={status.capabilities?.sourceBackfillJobs === true}/>)}
   </section>;
 }

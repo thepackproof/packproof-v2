@@ -102,7 +102,7 @@ public static partial class TypedSourceSemantics
         var identity=Identity(configuration,mapping,constants,profileId,v2);
         if(!v2)foreach(var key in new[]{"sourceEventId","sourceRevision"})if(!mapping.ContainsKey(key))throw Invalid("Stable source identity and revision columns are required.");
         foreach(var key in new[]{"observationKind","property","timeQuality"})if(!mapping.ContainsKey(key)&&!constants.ContainsKey(key))throw Invalid("Declare observation meaning, property and time quality explicitly.");
-        if(configuration.TryGetProperty("expectedHeaders",out var expected)&&!parsed.Headers.SequenceEqual(Strings(expected),StringComparer.Ordinal))throw Invalid("Source headings changed. The approved mapping must be reviewed.");
+        if(configuration.TryGetProperty("expectedHeaders",out var expected))CsvHeaderPolicy.Require(configuration,Strings(expected),parsed.Headers,"SOURCE_SCHEMA_CHANGED");
         var result=new List<TypedSourceRowPreview>();
         for(var i=0;i<parsed.Rows.Count;i++)
         {

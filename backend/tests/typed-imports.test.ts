@@ -69,17 +69,31 @@ describe('typed source receipts and operational case writes',()=>{
   await expect(opened.db.query("UPDATE record_typed_rows SET source_values='{}' WHERE batch_id=$1",[p.value.id])).rejects.toThrow(/immutable/);
  });
  it('accounts for every valid and malformed row and requires explicit partial approval',async()=>{
-  const input=envelope([order('partial-good','PARTIAL'),{...order('partial-bad','PARTIAL'),assertions:[{...order('x').assertions[0],value:{amount:'unknown',unit:'each'}}]}]);
-  const p=await previewTypedImport(deps,actor,input,'partial');expect(p.value.counts).toMatchObject({processing:1,quarantined:1});
+  const input=envelope([order('partial-good','PARTIAL'),{...order('partial-bad','PARTIAL'),assertions:[{...order('x').assertions[0],value:{amount:'unknown',unit:'each'}}]},null]);
+  const p=await previewTypedImport(deps,actor,input,'partial');expect(p.value.counts).toMatchObject({processing:1,quarantined:2});
+  expect(p.value.rows[2]).toMatchObject({rowNumber:3,raw:null,normalized:null,errorCode:'SOURCE_ROW_INVALID',historyEligibility:'unknown'});
+  const retained=await opened.db.query("SELECT jsonb_typeof(source_values) AS raw_type,jsonb_typeof(normalized) AS normalized_type FROM record_typed_rows WHERE id=$1",[p.value.rows[2].id]);
+  expect(retained.rows[0]).toEqual({raw_type:'null',normalized_type:'null'});
   await expect(commitTypedImport(deps,actor,p.value.id,{previewVersion:p.value.previewVersion,originalSha256:p.value.original.sha256,importValidRows:false},'partial-refuse')).rejects.toMatchObject({code:'TYPED_IMPORT_HAS_ROW_ERRORS'});
   await commitTypedImport(deps,actor,p.value.id,{previewVersion:p.value.previewVersion,originalSha256:p.value.original.sha256,importValidRows:true},'partial-accept');await processPendingTypedImports(deps);
-  const done=await readTypedImport(deps,actor,p.value.id);expect(done).toMatchObject({state:'partially_succeeded',rowCount:2,counts:{acceptedLinked:1,quarantined:1}});expect(Object.values(done.counts).reduce((a,b)=>a+b,0)).toBe(2);
+  const done=await readTypedImport(deps,actor,p.value.id);expect(done).toMatchObject({state:'partially_succeeded',rowCount:3,counts:{acceptedLinked:1,quarantined:2}});expect(Object.values(done.counts).reduce((a,b)=>a+b,0)).toBe(3);
  });
  it('returns exact idempotent receipts and detects changed keys without duplicate assertions',async()=>{
   const input=envelope([order('stable-retry','RETRY')]);const p=await previewTypedImport(deps,actor,input,'stable-preview');const same=await previewTypedImport(deps,actor,input,'stable-preview');expect(same.value.id).toBe(p.value.id);expect(same.replayed).toBe(true);
   await expect(previewTypedImport(deps,actor,envelope([order('different','RETRY')]),'stable-preview')).rejects.toMatchObject({code:'IDEMPOTENCY_CONFLICT'});
   const done=await ingest(input,'stable-import'),duplicate=await ingest(input,'stable-duplicate');expect(duplicate.counts.duplicate).toBe(1);expect((await opened.db.query('SELECT 1 FROM record_case_assertions WHERE observation_id=$1',[done.rows[0].id])).rows).toHaveLength(1);
  });
+ it('preserves every row and ordered assertion locator in a maximum-sized preview',async()=>{
+  const {db,trace}=traceReceiptTransactions();
+  const rows=Array.from({length:1000},(_,index)=>order(`bulk-event-${index}`,`BULK-${index}`));
+  const preview=await previewTypedImport({...deps,db},actor,envelope(rows),'maximum-preview');
+  expect(preview.value).toMatchObject({rowCount:1000,counts:{processing:1000,quarantined:0}});
+  expect(new Set(preview.value.rows.map(row=>row.id)).size).toBe(1000);
+  expect(preview.value.rows.map(row=>[
+   row.rowNumber,row.normalized?.sourceEventId,row.normalized?.assertions[0].sourceLocator.jsonPointer,
+  ])).toEqual(rows.map((row,index)=>[index+1,row.sourceEventId,`/${index}/assertions/0/value`]));
+  expect(trace.statements.filter(s=>s.sql.startsWith('INSERT INTO record_typed_rows('))).toHaveLength(1);
+ },30000);
  it('retains changed immutable identities as conflicts',async()=>{
   const original=order('conflicting','CONFLICT');await ingest(envelope([original]),'conflict-original');original.assertions[0].value={amount:'8',unit:'each'};
   const changed=await ingest(envelope([original]),'conflict-changed');expect(changed).toMatchObject({state:'failed',counts:{conflict:1}});expect(changed.rows[0].errorCode).toBe('SOURCE_EVENT_CONFLICT');

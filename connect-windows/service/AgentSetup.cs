@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime
@@ -30,17 +31,34 @@ public sealed partial class AgentRuntime
         var map=request?.TryGetProperty("mapping",out var m)==true?JsonSerializer.Deserialize<Dictionary<string,string>>(m,Json.Options):null;
         var confirmed=request?.TryGetProperty("confirmedFields",out var f)==true?f.EnumerateArray().Select(x=>x.GetString()!).ToArray():Array.Empty<string>();
         var location=Optional(state.ServerConfig,"locationId") is {ValueKind:JsonValueKind.String} loc?loc.GetString():null;
-        var result=CsvSemantics.Analyze(bytes,map,confirmed,location);
         var parsed=FolderSource.Parse(bytes);
-        var instants=parsed.Rows.Where(r=>result.Mapping.TryGetValue("shippedAt",out var h)&&CsvSemantics.Instant(r[h].Trim(),out _)).Select(r=>DateTimeOffset.Parse(r[result.Mapping["shippedAt"]].Trim(),CultureInfo.InvariantCulture)).ToArray();
+        bool reused = false;
+        if (map is null && ReusableShipmentConfiguration(parsed.Headers) is JsonElement existing)
+        {
+            map = JsonSerializer.Deserialize<Dictionary<string,string>>(existing.GetProperty("mapping"),Json.Options);
+            confirmed = existing.GetProperty("sourceContract").GetProperty("confirmedFields").EnumerateArray().Select(v => v.GetString()!).ToArray();
+            reused = true;
+        }
+        var result=CsvSemantics.Analyze(parsed,map,confirmed,location,interpret:true);
+        var instants=parsed.Rows.Where(r=>result.Mapping.TryGetValue("shippedAt",out var h)&&r.TryGetValue(h,out var value)&&CsvSemantics.Instant(value.Trim(),out _)).Select(r=>DateTimeOffset.Parse(r[result.Mapping["shippedAt"]].Trim(),CultureInfo.InvariantCulture)).ToArray();
         var backfill=instants.Length>0?instants.Min().ToString("yyyy-MM-ddTHH:mm:ss.fffzzz",CultureInfo.InvariantCulture):null;
         if(request?.TryGetProperty("backfillFrom",out var cutoff)==true){if(!CsvSemantics.Instant(cutoff.GetString()!,out var at)||instants.Any(t=>t<at))throw new ConnectException("SOURCE_BACKFILL_BOUNDARY","The chosen history date excludes shipments in this selected report.");backfill=cutoff.GetString();}
-        var config=new {sourceName=Optional(state.ServerConfig,"sourceName")?.GetString(),integrationAccountId=Optional(state.ServerConfig,"integrationAccountId")?.GetString(),operatorMembershipId=Optional(state.ServerConfig,"operatorMembershipId")?.GetString(),locationId=location,folderDigest=state.FolderDigest,mapping=result.Mapping,timeZone="source-offset",importValidRows=false,offlineWindowHours=24,sourceContract=new{schema="packproof.scheduled-csv/v2",exporterName=(string?)null,exporterVersion=(string?)null,expectedHeaders=parsed.Headers,expectedIntervalSeconds=(int?)null,backfillFrom=backfill,rulesVersion=CsvSemantics.Version,profileVersion=CsvSemantics.Profile,confirmedFields=confirmed,analysisRevision=state.DraftRevision,historyPolicy=new{mode="selected_then_new",baselineSha256=state.BaselineSha256,observedAt=state.BaselineObservedAt,initialFileName=state.FileName,initialFileSha256=state.FileDigest}}};
+        var config=new {sourceName=Optional(state.ServerConfig,"sourceName")?.GetString(),integrationAccountId=Optional(state.ServerConfig,"integrationAccountId")?.GetString(),operatorMembershipId=Optional(state.ServerConfig,"operatorMembershipId")?.GetString(),locationId=location,folderDigest=state.FolderDigest,mapping=result.Mapping,timeZone="source-offset",importValidRows=false,offlineWindowHours=24,sourceContract=new{schema="packproof.scheduled-csv/v2",exporterName=(string?)null,exporterVersion=(string?)null,expectedHeaders=parsed.Headers,expectedIntervalSeconds=(int?)null,backfillFrom=backfill,rulesVersion=CsvSemantics.Version,profileVersion=CsvSemantics.Profile,interpretationVersion=CsvSemantics.InterpretationVersion,basedOnConfigRevision=ConfigRevision,confirmedFields=confirmed,analysisRevision=state.DraftRevision,historyPolicy=new{mode="selected_then_new",baselineSha256=state.BaselineSha256,observedAt=state.BaselineObservedAt,initialFileName=state.FileName,initialFileSha256=state.FileDigest}}};
         // Null metadata is an explicit part of the v2 contract, not an invented exporter.
         var configJson=JsonSerializer.SerializeToElement(config,new JsonSerializerOptions(Json.Options){DefaultIgnoreCondition=System.Text.Json.Serialization.JsonIgnoreCondition.Never});
-        state.LocalAnalysis=Json.Element(new{ready=result.Ready,decisions=result.Decisions,shipment=result.Shipment,issues=result.Issues,headers=parsed.Headers,rowCount=result.RowCount,configuration=configJson,binding=new{sourceBindingId=state.InstallationId,folderDigest=state.FolderDigest,fileSha256=state.FileDigest,headerFingerprint=result.HeaderFingerprint,draftRevision=state.DraftRevision,profileVersion=CsvSemantics.Profile,rulesVersion=CsvSemantics.Version}});
+        state.LocalAnalysis=Json.Element(new{ready=result.Ready,interpretation=result.Interpretation,reusedConfigRevision=reused?(int?)ConfigRevision:null,decisions=result.Decisions,shipment=result.Shipment,issues=result.Issues,headers=parsed.Headers,rowCount=result.RowCount,configuration=configJson,binding=new{sourceBindingId=state.InstallationId,folderDigest=state.FolderDigest,fileSha256=state.FileDigest,headerFingerprint=result.HeaderFingerprint,draftRevision=state.DraftRevision,profileVersion=CsvSemantics.Profile,rulesVersion=CsvSemantics.Version}});
         state.GuidedSetup=false;state.VerifiedRecordId=null;state.VerifiedSetupImportId=null;
     }
+    private JsonElement? ReusableShipmentConfiguration(string[] headers)
+    {
+        if (state.Token is null || state.CredentialExpiresAt is null || state.CredentialExpiresAt<=DateTimeOffset.UtcNow ||
+            state.InstallationId is null || state.ServerConfig is not JsonElement server || ServerState is not ("ready" or "active" or "paused") ||
+            Optional(server,"installationId")?.GetString()!=state.InstallationId || ConfigRevision<1 || !ConfigMatches || !MappingSupported ||
+            Approved is not JsonElement config || !config.TryGetProperty("sourceContract",out var contract) || contract.ValueKind!=JsonValueKind.Object ||
+            Optional(contract,"schema")?.GetString()!="packproof.scheduled-csv/v2" || !contract.GetProperty("expectedHeaders").EnumerateArray().Select(v=>v.GetString()).SequenceEqual(headers)) return null;
+        return config;
+    }
+
     private async Task BeginGuidedSetup(JsonElement request,CancellationToken ct)
     {
         RequireCredential();RequireReasonableClock(DateTimeOffset.UtcNow);
@@ -48,10 +66,25 @@ public sealed partial class AgentRuntime
         if(state.LocalAnalysis?.GetProperty("ready").GetBoolean()!=true)throw new ConnectException("MAPPING_NEEDS_REVIEW","Resolve the shipment details before requesting approval.");
         if(request.GetProperty("draftRevision").GetInt32()!=state.DraftRevision)throw new ConnectException("PREVIEW_CHANGED","Review the current report before approving.");
         await Refresh(ct);
-        if(Optional(Optional(state.ServerConfig,"capabilities"),"rulesVersion")?.GetString()!=CsvSemantics.Version)throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server and this installation need matching source-validation support. No original was uploaded.");
+        if(CapabilityState(Optional(state.ServerConfig,"capabilities"))!="compatible")throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server and this installation need matching source-validation support. No original was uploaded.");
         if(!DateTimeOffset.TryParse(state.BaselineObservedAt,out var reviewedAt)||DateTimeOffset.UtcNow-reviewedAt>TimeSpan.FromMinutes(30))throw new ConnectException("APPROVAL_EXPIRED","This local source review expired. Choose the report again to request a fresh approval.");
-        var bytes=CurrentSnapshot();var config=state.LocalAnalysis.Value.GetProperty("configuration");FolderSource.ValidateContract(bytes,config);
-        if(state.GuidedSetup && state.GuidedProposalSha256 is not null && state.GuidedFileSha256==state.FileDigest)return;
+        var config=state.LocalAnalysis.Value.GetProperty("configuration");
+        var contract=config.GetProperty("sourceContract");
+        if(!CsvSemantics.UsesInterpretation(contract))throw new ConnectException("PREVIEW_CHANGED","Check this report again to review its current shipment interpretation.");
+        if(!CsvSemantics.AdmissionSupported(contract,Optional(state.ServerConfig,"capabilities")))
+            throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","Shipment interpretation is unavailable for this workspace and collector. Your local review is saved.");
+        if(contract.GetProperty("basedOnConfigRevision").GetInt32()!=ConfigRevision)
+            throw new ConnectException("CONFIGURATION_CHANGED","The source configuration changed. Check the report again with its current mapping.");
+        config=CsvHeaderPolicy.WithRequestedPolicy(config, request, Optional(state.ServerConfig,"capabilities"));
+        var bytes=CurrentSnapshot();
+        FolderSource.ValidateContract(bytes,config);
+        var previousConfig=state.LocalAnalysis.Value.GetProperty("configuration");
+        if(state.GuidedSetup && state.GuidedProposalSha256 is not null && state.GuidedFileSha256==state.FileDigest &&
+            JsonElement.DeepEquals(previousConfig,config))return;
+        var analysis=JsonNode.Parse(state.LocalAnalysis.Value.GetRawText())!.AsObject();
+        analysis["configuration"]=JsonNode.Parse(config.GetRawText());
+        state.LocalAnalysis=JsonSerializer.SerializeToElement(analysis);
+        state.GuidedProposalSha256=null;
         state.LocalPaused=true;state.GuidedSetup=true;state.GuidedFileSha256=state.FileDigest;state.GuidedPhase="permission_review";Save();
         // A lost proposal response can be retried. It cannot authorize anything;
         // the server's exact proposal digest remains the only approval target.
@@ -79,7 +112,8 @@ public sealed partial class AgentRuntime
         if(Optional(state.ServerConfig,"pendingProposal")?.ValueKind==JsonValueKind.Object)return;
         if(ConfigDigest!=state.GuidedProposalSha256||state.FileDigest!=state.GuidedFileSha256){state.GuidedSetup=false;throw new ConnectException("CONFIGURATION_CHANGED","This approval belongs to a different source revision. Review the selected shipment again.");}
         RequireConfig();
-        if(state.SetupQueueId is null){var bytes=CurrentSnapshot();FolderSource.ValidateContract(bytes,Approved!.Value);var staged=queue.Stage(bytes,state.FileName!,new(Approved.Value),Generation,QueueConfigIdentity,false);state.SetupQueueId=staged.Id;state.GuidedPhase="cloud_preview_pending";Save();}
+        if(state.SetupQueueId is null && !MappingSupported){state.GuidedSetup=false;state.GuidedPhase="needs_review";state.LastErrorCode="SOURCE_ADMISSION_PAUSED";Save();return;}
+        if(state.SetupQueueId is null){RequireOriginalAdmission();var bytes=CurrentSnapshot();FolderSource.ValidateContract(bytes,Approved!.Value);var staged=queue.Stage(bytes,state.FileName!,new(Approved.Value),Generation,QueueConfigIdentity,false);state.SetupQueueId=staged.Id;state.GuidedPhase="cloud_preview_pending";Save();}
         var entry=SetupEntry();if(entry.State is "action_needed" or "partial"){state.GuidedSetup=false;state.GuidedPhase="needs_review";Save();return;}
         if(entry.NextAttemptAt>DateTimeOffset.UtcNow)return;
         if(entry.State is not("complete" or "awaiting_review" or "server_processing")){await Process(entry,ct);entry=SetupEntry();}
@@ -100,17 +134,40 @@ public sealed partial class AgentRuntime
         state.LocalPaused=false;state.PauseAuthorizationTimestamp=null;state.GuidedSetup=false;state.GuidedPhase="active";Save();
     }
     private static string Comparable(JsonElement obj,string property)=>obj.TryGetProperty(property,out var value)&&value.ValueKind!=JsonValueKind.Null?value.ToString():"";
-    internal static void CheckPreviewParity(byte[] bytes,JsonElement receipt,JsonElement config)
+    internal static void CheckPreviewParity(byte[] bytes,JsonElement receipt,JsonElement config,string? configDigest=null,string? installationId=null)
     {
         var map=JsonSerializer.Deserialize<Dictionary<string,string>>(config.GetProperty("mapping"),Json.Options)!;
         var contract=config.GetProperty("sourceContract");var confirmed=contract.GetProperty("confirmedFields").EnumerateArray().Select(x=>x.GetString()!).ToArray();
         var location=config.TryGetProperty("locationId",out var l)&&l.ValueKind==JsonValueKind.String?l.GetString():null;
-        var local=CsvSemantics.Analyze(bytes,map,confirmed,location,true,config.GetProperty("timeZone").GetString()!);
+        var local=CsvSemantics.Analyze(bytes,map,confirmed,location,true,config.GetProperty("timeZone").GetString()!,CsvSemantics.UsesInterpretation(contract));
+        if (local.Interpretation is not null && !DecisionMatches(receipt,local,contract,HashBytes(bytes),configDigest,installationId))
+            throw new ConnectException("INTERPRETATION_MISMATCH","The receipt does not match the original, source revision and locally checked field meanings. No batch will be committed.");
         var remote=receipt.GetProperty("rows").EnumerateArray().ToArray();
         if(!local.Ready||remote.Length!=local.Rows.Length)throw new ConnectException("INTERPRETATION_MISMATCH","Local and server shipment interpretations differ. No batch will be committed.");
         for(var i=0;i<remote.Length;i++){
             if(remote[i].GetProperty("rowNumber").GetInt32()!=i+2||!remote[i].TryGetProperty("normalized",out var n)||n.ValueKind!=JsonValueKind.Object||new[]{"shipmentReference","itemTitle","quantity","trackingNumber","carrier","shippedAt","shipmentDate","locationId"}.Any(f=>Comparable(n,f)!=Comparable(local.Rows[i],f)))throw new ConnectException("INTERPRETATION_MISMATCH","Local and server shipment interpretations differ. Preserve the original for review.");
         }
+    }
+    private static bool DecisionMatches(JsonElement receipt,CsvSemantics.Result local,JsonElement contract,string digest,string? configDigest,string? installationId)
+    {
+        if (configDigest is null || installationId is null || !receipt.TryGetProperty("interpretation",out var decision) ||
+            decision.ValueKind!=JsonValueKind.Object) return false;
+        try {
+            if (Comparable(decision,"schema")!="packproof.automation-decision/v1" || Comparable(decision,"version")!=CsvSemantics.InterpretationVersion ||
+                Comparable(decision,"kind")!="mapping" || Comparable(decision,"rulesVersion")!=CsvSemantics.Version || Comparable(decision,"profileVersion")!=CsvSemantics.Profile ||
+                Comparable(decision,"sourceId")!=installationId || Comparable(decision,"decisionId")!=Comparable(receipt,"id") ||
+                Comparable(decision,"policyRevision")!=configDigest || Comparable(decision,"originalSha256")!=digest ||
+                decision.GetProperty("configurationRevision").GetInt32()!=contract.GetProperty("basedOnConfigRevision").GetInt32()+1 ||
+                Comparable(decision,"outcome")!="automatic" || Comparable(decision,"grain")!="shipment" ||
+                decision.GetProperty("rowCount").GetInt32()!=local.RowCount) return false;
+            var fields=decision.GetProperty("fields").EnumerateArray().ToArray();
+            return fields.Length==local.Decisions.Length && local.Decisions.All(expected=>fields.Any(field=>
+                Comparable(field,"field")==expected.Field && Comparable(field,"sourceColumnId")== (expected.SourceColumnId??"") &&
+                Comparable(field,"state")==expected.State && Comparable(field,"origin")==expected.Origin &&
+                field.GetProperty("validRowCount").GetInt32()==expected.ValidRowCount &&
+                field.GetProperty("invalidRowCount").GetInt32()==expected.InvalidRowCount &&
+                field.GetProperty("reasonCodes").EnumerateArray().Select(code=>code.GetString()).SequenceEqual(expected.ReasonCodes)));
+        } catch(Exception e) when(e is KeyNotFoundException or InvalidOperationException or FormatException) { return false; }
     }
     internal static void CheckCanonicalRecord(JsonElement response,JsonElement expected)
     {

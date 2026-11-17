@@ -33,9 +33,9 @@ describe('bounded durable legacy shipment projection work',()=>{
   const order=ref('order',root,root),item=ref('order_line',line,root),physical=ref('shipment',shipment,root);
   return {sourceEventId:event,sourceRevision:'1',observationKind:'snapshot',occurredAt:null,sourceAsOf:'2026-11-12T10:00:00Z',timeQuality:'snapshot_time_only',references:[order,item,physical],assertions:[{subjectReference:item,property:'allocatedQuantity',value:{amount:'10',unit:'each'},sourceLocator:{row:1,field:'quantity'},assurance:'source_reported'},...(applicable?[{subjectReference:item,property:'description' as const,value:`Synthetic item ${line}`,sourceLocator:{row:1,field:'description'},assurance:'source_reported' as const}]:[])],relationships:[{from:order,to:item,type:'has_line',quantity:null},{from:physical,to:item,type:'fulfills',quantity:null}],supersedes:null,originSystem:'Synthetic shipment fixture',copiedFromSource:null};
  }
- async function source(profile='packproof.order-lines/v1',v2=false,connectionId=account,partitioned=false):Promise<Source> {
+ async function source(profile='packproof.order-lines/v1',v2=false,connectionId=account,partitioned=false,ownerQualified=true):Promise<Source> {
   const key=`shipment-source-${++sequence}`,w=await requireRecordWorkspace(opened.db,owner,org,'sandbox',true),policy=partitioned?columnIdentityPolicy:identityPolicy,mapping:Record<string,string>=v2&&!partitioned?snapshotMapping:{},constants:Record<string,string>=v2&&!partitioned?{observationKind:'snapshot',timeQuality:'snapshot_time_only'}:{};
-  const proposed=await opened.db.transaction(tx=>proposeSourceSubscription(tx,clock,w,{connectionId,principalId:actor.principalId,operatorMembershipId:member,locationId:site,installationId:null,config:{...(v2?{batchSchema:'packproof.typed-source-batch/v2',identityPolicy:policy,...(partitioned?{crossCasePolicy}:{})}:{}),transport:'partner_api',displayName:'Synthetic shipment source',sourceProfile:profile,mappingVersion:'shipment-fixture/1',sourceNamespace:namespace,mapping,constants,wholeFileConsent:true,folderDigest:null,initialFileName:null,initialOriginalSha256:null,expectedHeaders:Object.values(mapping),historyFrom:'2026-11-01T00:00:00Z',historyTo:null,maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:3600,completenessPolicy:{kind:'snapshot',scope:'shipment_line',sourceOwnerQualified:true,qualificationReference:'Synthetic test contract only; no customer qualification'}}},key));
+  const proposed=await opened.db.transaction(tx=>proposeSourceSubscription(tx,clock,w,{connectionId,principalId:actor.principalId,operatorMembershipId:member,locationId:site,installationId:null,config:{...(v2?{batchSchema:'packproof.typed-source-batch/v2',identityPolicy:policy,...(partitioned?{crossCasePolicy}:{})}:{}),transport:'partner_api',displayName:'Synthetic shipment source',sourceProfile:profile,mappingVersion:'shipment-fixture/1',sourceNamespace:namespace,mapping,constants,wholeFileConsent:true,folderDigest:null,initialFileName:null,initialOriginalSha256:null,expectedHeaders:Object.values(mapping),historyFrom:'2026-11-01T00:00:00Z',historyTo:null,maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:3600,completenessPolicy:{kind:'snapshot',scope:'shipment_line',sourceOwnerQualified:ownerQualified,qualificationReference:ownerQualified?'Synthetic test contract only; no customer qualification':null}}},key));
   await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,w,proposed.id,{action:'approve',configurationRevision:1,configurationSha256:proposed.configurationSha256,wholeFileConsent:true},`approve-${key}`));
   return {id:proposed.id,connectionId,profile,v2,policy,mapping,constants};
  }
@@ -112,6 +112,52 @@ describe('bounded durable legacy shipment projection work',()=>{
    await reenqueue(batch,receipt.rows.map(row=>row.id),true);const forced=(await work(batch))[0];expect(forced).toMatchObject({state:'pending',cursor_key:null,case_revision:null,processed_groups:0,linked_groups:0});expect(Number(forced.work_revision)).toBe(Number(final.work_revision)+1);
    await unit(batch);await unit(batch);expect((await work(batch))[0]).toMatchObject({state:'complete',processed_groups:2,linked_groups:2});expect(await revision(caseId)).toBe(initial+2);expect(await proofs(caseId)).toBe(2);
   }finally{await running.finish();}
+ },60000);
+
+ it.each([
+  {name:'explicit',partition:['8','2'],expected:[2,8]},
+  {name:'unpartitioned',partition:[null,null],expected:[]},
+  {name:'contradictory',partition:['8','3'],expected:[]},
+ ])('preserves a split line and creates only supported shipment quantities ($name)',async({name,partition,expected})=>{
+  const order='SPLIT-'+name,row=observation(order,'FIRST-'+name,order);
+  const other=ref('shipment','SECOND-'+name,order),line=row.references[1];
+  row.references.push(other);
+  const quantity=(amount:string|null)=>amount===null?null:{amount,unit:'each'};
+  row.relationships[1].quantity=quantity(partition[0]);
+  row.relationships.push({type:'fulfills',from:other,to:line,quantity:quantity(partition[1])});
+  const batch=await queue(await source(),[row]),running=startReceipt(batch);
+  try{
+   await running.terminal();
+   const caseId=(await readTypedImport(deps,actor,batch)).caseIds[0];
+   await unit(batch);await unit(batch);
+   const shipments=await opened.db.query<{quantity:number}>(`SELECT t.quantity FROM record_case_members m
+    JOIN proofs p ON p.id=m.proof_id JOIN transactions t ON t.id=p.transaction_id
+    WHERE m.case_id=$1 ORDER BY t.quantity`,[caseId]);
+   expect(shipments.rows.map(t=>Number(t.quantity))).toEqual(expected);
+   expect(await facts(batch)).toBe(1);
+  }finally{await running.finish();}
+ },60000);
+
+ it.each(['quantity','description'])('checks the actual source of a shipment %s on a shared connection',async(field)=>{
+  const root='MIXED-SOURCE-'+field,shipment='SHIP-'+root;
+  const unqualified=await source(undefined,false,account,false,false),qualified=await source();
+  const foreign=observation(root,shipment,root+'-unqualified','001',field==='description');
+  if(field==='description')foreign.assertions[0].property='orderedQuantity';
+  const old=await queue(unqualified,[foreign]);
+  await processPendingTypedImports(deps,1);
+  const caseId=(await readTypedImport(deps,actor,old)).caseIds[0];
+  expect(await proofs(caseId)).toBe(0);
+  const trigger=observation(root,shipment,root+'-qualified','001',field==='quantity');
+  if(field==='quantity')trigger.assertions[0].property='orderedQuantity';
+  const independentlyQualified=observation(root,'SEPARATE-'+root,root+'-qualified-other','002');
+  const next=await queue(qualified,[trigger,independentlyQualified]),worker=startReceipt(next);
+  try{
+   await worker.terminal();await unit(next);await unit(next);
+   const references=await opened.db.query<{reference:string}>(`SELECT DISTINCT s.reference FROM record_case_members m
+    JOIN record_state s ON s.proof_id=m.proof_id WHERE m.case_id=$1`,[caseId]);
+   expect(references.rows.map(value=>value.reference)).toEqual(['SEPARATE-'+root]);
+   expect(await facts(old)).toBe(1);expect(await facts(next)).toBe(2);
+  }finally{await worker.finish();}
  },60000);
 
  it('resets a cursor after an external case revision without churning already-linked memberships',async()=>{

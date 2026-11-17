@@ -15,7 +15,7 @@ function health(source:RuleSourceBinding,scope:SourceCompletenessScope,extra:Par
 const labelPolicy:SourceRulePolicies={schema:'packproof.source-rule-policies/v1',version:'fixture/1',sourceOwnerQualified:true,qualificationReference:'Synthetic declared carrier contract',labelAcceptance:{labelSource:label,acceptanceSource:carrier,subjectNamespace:'qualified-package-namespace',carrier:{code:'carrier-fixture',accountReference:'account-004',service:'ground'},windowSeconds:3600,graceSeconds:60,labelCreatedValues:['LABEL_CREATED'],labelVoidedValues:['VOIDED'],acceptedValues:['PACKAGE_ACCEPTED']}};
 const handoffPolicy:SourceRulePolicies={schema:'packproof.source-rule-policies/v1',version:'fixture/1',sourceOwnerQualified:true,qualificationReference:'Synthetic declared unit inventory contract',handlingUnitHandoff:{expectationSource:expected,loadingSource:loading,receiptSource:receipt,subjectNamespace:'qualified-unit-namespace',scope:'case_shipment_stop',dueAtProperty:'expectedHandoffAt',windowSeconds:3600,graceSeconds:60,expectedValues:['EXPECTED'],loadedValues:['UNIT_LOADED'],receivedValues:['UNIT_RECEIVED']}};
 function fact(source:RuleSourceBinding,id:string,property:string,value:string,kind:'tracking'|'handling_unit'='tracking',externalId='000045'):ReconstructionAssertion {
- return {id,subject:{namespace:kind==='tracking'?'qualified-package-namespace':'qualified-unit-namespace',type:kind,externalId},property,value,unit:null,active:true,comparisonScope:{caseId:'case_a',line:null,shipment:'shipment-S-0021',direction:'outbound',...(kind==='handling_unit'?{load:'load-00071',stop:'stop-STOP-9'}:{})},source:{subscriptionId:source.subscriptionId,connectionId:`account_${source.subscriptionId}`,sourceNamespace:source.sourceNamespace,receiptId:`batch-${source.subscriptionId}`,observationId:`row-${id}`,sourceEventId:`event-${id}`,observationKind:'event',row:12,field:property,locator:{row:12,field:property},mappingVersion:'fixture/1',revision:'1',reportedAt:'2026-11-14T16:00:00Z',sourceAsOf:null,receivedAt:'2026-11-14T17:59:00Z',timeQuality:'event_time',originalSha256:'a'.repeat(64),originSystem:null,copiedFromSource:null}};
+ return {id,subject:{namespace:kind==='tracking'?'qualified-package-namespace':'qualified-unit-namespace',type:kind,externalId},property,value,unit:null,active:true,comparisonScope:{caseId:'case_a',line:null,shipment:'shipment-S-0021',direction:'outbound',...(kind==='handling_unit'?{load:'load-00071',stop:'stop-STOP-9'}:{})},source:{configurationRevision:source.configurationRevision,grantRevision:1,sourceProfile:'packproof.operational-observations/v2',subscriptionId:source.subscriptionId,connectionId:`account_${source.subscriptionId}`,sourceNamespace:source.sourceNamespace,receiptId:`batch-${source.subscriptionId}`,observationId:`row-${id}`,sourceEventId:`event-${id}`,observationKind:'event',row:12,field:property,locator:{row:12,field:property},mappingVersion:'fixture/1',revision:'1',reportedAt:'2026-11-14T16:00:00Z',sourceAsOf:null,receivedAt:'2026-11-14T17:59:00Z',timeQuality:'event_time',originalSha256:'a'.repeat(64),originSystem:null,copiedFromSource:null}};
 }
 function carrierContext(source:RuleSourceBinding){return [['carrierCode','carrier-fixture'],['carrierAccountReference','account-004'],['carrierService','ground']].map(([property,value])=>fact(source,`${source.subscriptionId}-${property}`,property,value));}
 const labelFacts=()=>[fact(label,'created','labelStatus','LABEL_CREATED'),...carrierContext(label)];
@@ -74,6 +74,16 @@ describe('qualified label to carrier acceptance observations',()=>{
   expect(run([...labelFacts(),other,...carrierContext(carrier)])[0].outcome).toBe('different');
   const accepted=fact(carrier,'other-shipment','carrierAcceptanceStatus','PACKAGE_ACCEPTED');accepted.comparisonScope.shipment='shipment-S-0022';
   expect(run([...labelFacts(),accepted,...carrierContext(carrier)])[0].outcome).toBe('different');
+ });
+ it.each([['label',label],['acceptance',carrier]] as const)('requires each %s carrier context field to lie within its captured source boundary',(_,source)=>{
+  const facts=source===label?labelFacts():[...labelFacts(),fact(carrier,'accepted','carrierAcceptanceStatus','PACKAGE_ACCEPTED'),...carrierContext(carrier)];
+  for(const invalid of [{configurationRevision:0},{timeQuality:'unknown'},{reportedAt:'2026-11-14T18:01:00Z'}]){
+   const context=facts.find(value=>value.property==='carrierService'&&value.source.subscriptionId===source.subscriptionId)!;
+   const modified=facts.map(value=>value===context?{...value,source:{...value.source,...invalid}}:value);
+   const result=run(modified)[0];
+   expect(result.outcome).toBe('not_comparable');
+   expect(result.inputAssertionIds).toContain(context.id);
+  }
  });
  it('resolves from an actual exact acceptance event, records late timing and retains stable replay identity',()=>{
   const accepted=fact(carrier,'accepted','carrierAcceptanceStatus','PACKAGE_ACCEPTED');accepted.source.reportedAt='2026-11-14T17:30:00Z';

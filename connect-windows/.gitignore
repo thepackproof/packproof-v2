@@ -10,4 +10,6 @@ ui/public/brand/
 ui/public/fonts/
 service-tests/bin/
 service-tests/obj/
+tests/QueueUpgradeFixture/bin/
+tests/QueueUpgradeFixture/obj/
 build/icon.png

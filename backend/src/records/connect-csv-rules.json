@@ -63,5 +63,41 @@
     "trackingid",
     "tracking"
   ],
-  "shippingTextMax": 100
+  "shippingTextMax": 100,
+  "interpretation": {
+    "version": "packproof.shipment-interpretation/v1",
+    "orderIdentifiers": [
+      "orderid",
+      "ordernumber",
+      "orderno",
+      "ordernum",
+      "orderreference",
+      "salesorderid",
+      "salesordernumber",
+      "sonumber",
+      "purchaseorderid",
+      "purchaseordernumber"
+    ],
+    "lineIdentifiers": [
+      "shipmentline",
+      "shipmentlineid",
+      "shipmentlinenumber",
+      "orderline",
+      "orderlineid",
+      "orderlinenumber",
+      "lineid",
+      "linenumber"
+    ],
+    "requiresConfirmation": {
+      "shipmentReference": [
+        "reference"
+      ],
+      "quantity": [
+        "units"
+      ],
+      "shippedAt": [
+        "reportedat"
+      ]
+    }
+  }
 }

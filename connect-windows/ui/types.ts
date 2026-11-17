@@ -26,6 +26,12 @@ export interface SourceContract {
   };
 }
 export interface LocalAnalysis {
+  interpretation?: {
+    version: "packproof.shipment-interpretation/v1";
+    outcome: "automatic" | "needs_review" | "blocked";
+    grain: "shipment" | "order" | "shipment_line" | "unknown";
+    reasonCodes: string[];
+  };
   ready: boolean;
   decisions: Array<{
     field: string;
@@ -40,6 +46,8 @@ export interface LocalAnalysis {
     origin: "source_column" | "approved_binding" | "absent";
     candidates: string[];
     examples?: Record<string, string[]>;
+    validRowCount?: number;
+    invalidRowCount?: number;
   }>;
   shipment?: {
     shipmentReference: string;
@@ -89,6 +97,8 @@ export interface SourceSubscriptionStatus {
   folderDigest?: string;
   lastCheckAt?: string;
   lastCollectedAt?: string;
+  publicationAttempts?: number;
+  nextPublicationCheckAt?: string;
   lastReceiptAt?: string;
   lastErrorCode?: string;
   sourceAsOf?: string;
@@ -119,6 +129,7 @@ export interface SourceSubscriptionStatus {
   backfillJobsTruncated?: boolean;
   receipt?: {
     id: string;
+    previewVersion?: string;
     state: string;
     counts: Record<string, number>;
     caseIds?: string[];
@@ -180,11 +191,27 @@ export interface SubscriptionProposal {
   expectedIntervalSeconds?: number | null;
   wholeFileUploadApproved: true;
 }
+/** A bounded authenticated observation; cached capabilities alone are not readiness. */
+export interface TransportObservation {
+  state: 'unknown' | 'compatible' | 'unsupported' | 'outdated' | 'unauthenticated' | 'forbidden' | 'unreachable';
+  attemptedAt?: string;
+  succeededAt?: string;
+  expiresAt?: string;
+  httpStatus?: number;
+  failureKind?: string;
+  correlationId?: string;
+  expectedRulesVersion: string;
+  observedRulesVersion?: string;
+  sourceContracts?: string[];
+}
 export interface ConnectStatus {
   state: string;
+  error?: { code: string; message: string };
+  transport?: TransportObservation;
+  versions?: { service: string; bridgeProtocol: number; csvRules: string; csvProfile: string; environment: string; apiOrigin: string };
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
-  capabilities?: { sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[]; sourceBackfillJobs?: boolean };
+  capabilities?: { interpretationVersions?: string[]; csvHeaderPolicies?: string[]; sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[]; sourceBackfillJobs?: boolean };
   sourceCapabilities?: { typedCollection: boolean };
   sourceSubscriptions?: SourceSubscriptionStatus[];
   subscriptionDraft?: SubscriptionDraft;
@@ -273,6 +300,12 @@ export interface ConnectStatus {
   };
   approvalPath?: string;
 }
+export interface ReviewedSource {
+  id: string;
+  configurationRevision: number;
+  grantRevision: number;
+  originalSha256: string;
+}
 export interface ConnectBridge {
   chooseBackfillFiles(input: BackfillInspectionRequest): Promise<ConnectStatus>;
   proposeBackfill(input: { id: string; inspectionSha256: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
@@ -284,8 +317,8 @@ export interface ConnectBridge {
   proposeSubscription(input: SubscriptionProposal): Promise<ConnectStatus>;
   chooseSubscriptionFolder(id: string): Promise<ConnectStatus>;
   inspectSubscriptionFile(input: { id: string; fileName: string }): Promise<ConnectStatus>;
-  previewSubscription(input: { id: string; fileName: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
-  commitSubscription(input: { id: string; wholeBatchApproved: true }): Promise<ConnectStatus>;
+  previewSubscription(input: ReviewedSource & { fileName: string; wholeFileUploadApproved: true }): Promise<ConnectStatus>;
+  commitSubscription(input: ReviewedSource & { receiptId: string; previewVersion: string; wholeBatchApproved: true }): Promise<ConnectStatus>;
   verifySubscription(id: string): Promise<ConnectStatus>;
   pauseSubscription(id: string): Promise<ConnectStatus>;
   resumeSubscription(id: string): Promise<ConnectStatus>;
@@ -306,6 +339,7 @@ export interface ConnectBridge {
     backfillFrom?: string;
   }): Promise<ConnectStatus>;
   startSetup(consent: {
+    allowColumnReordering?: true;
     wholeFileUploadApproved: true;
     draftRevision: number;
   }): Promise<ConnectStatus>;

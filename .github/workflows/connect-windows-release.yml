@@ -76,3 +76,4 @@ jobs:
             connect-windows/release/${{ inputs.channel }}/win32-x64/latest*.yml
             connect-windows/release/${{ inputs.channel }}/win32-x64/SHA256SUMS
             connect-windows/release/${{ inputs.channel }}/win32-x64/release-evidence.json
+            connect-windows/release/${{ inputs.channel }}/win32-x64/build-provenance.json

@@ -241,3 +241,44 @@ it('invalidates a ready case projection immediately when its bound installation 
   expect((await opened.db.query('SELECT id FROM record_typed_rows WHERE batch_id=$1',[p.value.id])).rows).toHaveLength(1);
  }finally{await opened.db.query("UPDATE record_agent_installations SET status='ready',version='0.3.0' WHERE id=$1",[installation]);vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED',previousPaged??'false');vi.stubEnv('PACKPROOF_RECONSTRUCTION_RULES_ENABLED',previousRules??'false');}
 },60000);
+
+it('pins a complete reorder policy to a reviewed revision and rejects unapproved disclosure before storage',async()=>{
+ const template=structuredClone(corpus.cases.find((c:{name:string})=>c.name==='csv-leading-zero-identities-and-exact-locator').input);
+ const [heading,record]=template.original.content.trimEnd().split('\r\n') as string[];
+ const headers=heading.split(','),cells=record.split(',');
+ const config=sourceConfig({mapping:template.mapping,constants:template.constants,initialOriginalSha256:null,expectedHeaders:headers});
+ const strict=await approved(config);
+ const original=(lines:string)=>({...template.original,content:lines,sha256:sha256Hex(lines)});
+ const batch=(s:typeof strict,content:string)=>({...template,connectionId:account,locationId:site,original:original(content),subscriptionId:s.id,configurationRevision:s.configurationRevision,grantRevision:s.grantRevision});
+ const permuted=[[...headers].reverse().join(','),[...cells].reverse().join(',')].join('\r\n');
+ await expect(previewTypedImport(deps,actor,batch(strict,permuted),'order-no-consent')).rejects.toMatchObject({code:'SOURCE_SCHEMA_CHANGED'});
+ const variant={...config,headerPolicy:'same_names_any_order/v1' as const};
+ await expect(action(strict,'revise',{config:variant})).rejects.toMatchObject({code:'SOURCE_COLLECTOR_VERSION_UNSUPPORTED'});
+ vi.stubEnv('PACKPROOF_CSV_HEADER_VARIANTS_ENABLED','true');
+ vi.stubEnv('PACKPROOF_CSV_HEADER_WORKER_POLICY','a-different-policy');
+ await expect(action(strict,'revise',{config:variant})).rejects.toMatchObject({code:'SOURCE_COLLECTOR_VERSION_UNSUPPORTED'});
+ vi.stubEnv('PACKPROOF_CSV_HEADER_WORKER_POLICY','same_names_any_order/v1');
+ try{
+  const proposed=await action(strict,'revise',{config:variant});
+  await expect(action(strict,'approve',{wholeFileConsent:true})).rejects.toMatchObject({code:'SOURCE_CONFIGURATION_CHANGED'});
+  await expect(previewTypedImport(deps,actor,batch(strict,permuted),'old-grant')).rejects.toMatchObject({code:'SOURCE_AUTHORIZATION_REQUIRED'});
+  const permitted=await action(proposed,'approve',{wholeFileConsent:true});
+  const write=vi.spyOn(deps.objectStore,'putIfAbsent');
+  try{
+   for(const [i,text] of [[heading+',Private',record+',sensitive'],[heading,record+',sensitive'],[heading.replace('OrderId','Shipment'),record]].entries()){
+    await expect(previewTypedImport(deps,actor,batch(permitted,text.join('\r\n')),'changed-columns-'+i)).rejects.toThrow();
+   }
+   expect(write).not.toHaveBeenCalled();
+   const saved=await previewTypedImport(deps,actor,batch(permitted,permuted),'permitted-reorder');
+   expect(write).toHaveBeenCalledTimes(1);
+   const row=(await opened.db.query<{contract:{headers:string[]};configuration_revision:number}>('SELECT contract, configuration_revision FROM record_typed_batches WHERE id=$1',[saved.value.id])).rows[0];
+   expect(row.contract.headers).toEqual([...headers].reverse());
+   expect(saved.value).toMatchObject({columnReview:{policy:'same_names_any_order/v1',disposition:'reordered',configurationRevision:permitted.configurationRevision,
+    observedHeaderSha256:sha256Hex(canonicalize([...headers].reverse())),mappingFingerprint:expect.stringMatching(/^[a-f0-9]{64}$/)}});
+   const ordered=await previewTypedImport(deps,actor,batch(permitted,heading+'\r\n'+record),'original-order');
+   expect(ordered.value).toMatchObject({columnReview:{disposition:'exact',observedHeaderSha256:sha256Hex(canonicalize(headers)),
+    mappingFingerprint:('columnReview' in saved.value ? saved.value.columnReview : null)?.mappingFingerprint}});
+   expect(Number(row.configuration_revision)).toBe(permitted.configurationRevision);
+  }finally{write.mockRestore();}
+ }finally{vi.stubEnv('PACKPROOF_CSV_HEADER_VARIANTS_ENABLED','false');vi.stubEnv('PACKPROOF_CSV_HEADER_WORKER_POLICY','');}
+});

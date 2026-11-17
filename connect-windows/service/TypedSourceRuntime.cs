@@ -39,11 +39,13 @@ public sealed partial class AgentRuntime
             if(cursor is not null&&(cursor.Length>200||!seen.Add(cursor)))throw new ConnectException("SOURCE_PAGINATION_INVALID","Source discovery did not return complete, advancing pages. Existing source work remains preserved.");
         }while(cursor is not null);
         var present=new HashSet<string>(StringComparer.Ordinal);
+        var discoveredIds=new HashSet<string>(StringComparer.Ordinal);
         foreach(var view in views)
         {
-            var id=view.GetProperty("id").GetString()!; if(!present.Add(id)||id==SourceSubscriptionState.LegacyId)throw new ConnectException("SOURCE_CONFIGURATION_INVALID","Source discovery returned an ambiguous identity.");
+            var id=view.GetProperty("id").GetString()!; if(!discoveredIds.Add(id)||id==SourceSubscriptionState.LegacyId)throw new ConnectException("SOURCE_CONFIGURATION_INVALID","Source discovery returned an ambiguous identity.");
             var config=view.GetProperty("config");if(config.GetProperty("transport").GetString()!="local_ntfs")continue;
             if(view.GetProperty("installationId").GetString()!=state.InstallationId)continue;
+            present.Add(id);
             var source=state.SourceSubscriptions.SingleOrDefault(s=>s.Id==id);
             if(source is null){source=new(){Id=id};state.SourceSubscriptions.Add(source);}
             var revision=view.GetProperty("configurationRevision").GetInt32();var grant=view.GetProperty("grantRevision").GetInt32();var digest=view.GetProperty("configurationSha256").GetString()!;
@@ -54,6 +56,7 @@ public sealed partial class AgentRuntime
             }
             source.SourceProfile=config.GetProperty("sourceProfile").GetString()!;source.ApprovedConfiguration=config.Clone();source.ConfigurationSha256=digest;source.ConfigurationRevision=revision;source.GrantRevision=grant;source.ServerState=view.GetProperty("state").GetString()!;source.ServerView=view.Clone();source.LastPolicyCheckAt=DateTimeOffset.UtcNow;
             var capabilities=view.GetProperty("capabilities");source.CapabilityApproved=(source.ServerState=="active"&&capabilities.GetProperty("typedCollection").GetBoolean())||(source.ServerState=="approved"&&capabilities.GetProperty("preview").GetBoolean());
+            if(source.LastErrorCode=="SOURCE_AUTHORIZATION_REQUIRED" && source.CapabilityApproved)source.LastErrorCode=null;
             if(source.ServerState is "paused" or "revoked" or "proposed")source.LocalPaused=true;
         }
         foreach(var source in state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId&&!present.Contains(s.Id))){source.CapabilityApproved=false;source.LocalPaused=true;source.LastErrorCode="SOURCE_AUTHORIZATION_REQUIRED";}
@@ -121,12 +124,17 @@ public sealed partial class AgentRuntime
         var historyDisplayBytes=64*1024;
         return state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId).Select(source=>
     {
-        var config=source.ApprovedConfiguration;JsonElement? receipt=null;
+        var config=source.ApprovedConfiguration;
+        if (source.ServerState == "revoked" || source.LastErrorCode == "SOURCE_AUTHORIZATION_REQUIRED")
+            return (object)new { source.Id, source.SourceProfile, displayName=Optional(config,"displayName"),
+                state=source.ServerState == "revoked" ? "revoked" : "needs_approval", localPaused=true,
+                source.ConfigurationRevision, source.GrantRevision, source.LastErrorCode, queue=queue.Counts(source.Id) };
+        JsonElement? receipt=null;
         if(source.SetupQueueId is not null&&queue.Find(source.SetupQueueId) is { } setup)receipt=queue.Payload(setup).Receipt;
         object[] files=[];
         if(TypedInstallationMayRead&&source.CapabilityApproved&&(source.ServerState is "approved" or "active")&&source.Folder is not null)try{files=FolderSource.Inventory(source.Folder).Take(100).ToArray();}catch(ConnectException){ }
         var metrics=queue.Metrics(source.Id);var backfillJobs=BackfillViews(source,ref historyDisplayBytes);
-        return (object)new {pendingCount=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes,originalBytesKnown=metrics.OriginalBytesKnown,originalBytesUnknownCount=metrics.OriginalBytesUnknownCount,organizationId=Optional(source.ServerView,"organizationId"),environment=Optional(source.ServerView,"environment"),backfillAvailable=BackfillAvailable(source),backfillSemantics=Optional(Optional(source.ServerView,"capabilities"),"backfillSemantics"),backfillJobTotal=source.BackfillJobs.Count,backfillJobKnownTotal=source.BackfillJobs.Count,backfillJobsShown=backfillJobs.Length,backfillJobsTruncated=source.BackfillJobs.Count>backfillJobs.Length,backfillDraft=source.BackfillDraft,backfillJobs,source.Id,source.SourceProfile,displayName=Optional(config,"displayName"),state=source.ServerState,source.LocalPaused,source.ConfigurationRevision,source.GrantRevision,source.Folder,source.FolderDigest,source.LastCheckAt,source.LastCollectedAt,source.LastReceiptAt,source.LastErrorCode,queue=queue.Counts(source.Id),source.VerifiedCaseId,source.SetupQueueId,files,selectedFileName=source.SelectedFileName,fileSha256=source.SelectedFileSha256,headers=Optional(source.LocalPreview,"headers"),rowCount=Optional(source.LocalPreview,"rowCount"),samples=Optional(source.LocalPreview,"samples"),receipt=receipt is null?null:new {id=Optional(receipt,"id"),state=Optional(receipt,"state"),counts=Optional(receipt,"counts"),caseIds=Optional(receipt,"caseIds"),original=Optional(receipt,"original")},approvalPath=$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(source.Id)}"};
+        return (object)new {pendingCount=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes,originalBytesKnown=metrics.OriginalBytesKnown,originalBytesUnknownCount=metrics.OriginalBytesUnknownCount,organizationId=Optional(source.ServerView,"organizationId"),environment=Optional(source.ServerView,"environment"),backfillAvailable=BackfillAvailable(source),backfillSemantics=Optional(Optional(source.ServerView,"capabilities"),"backfillSemantics"),backfillJobTotal=source.BackfillJobs.Count,backfillJobKnownTotal=source.BackfillJobs.Count,backfillJobsShown=backfillJobs.Length,backfillJobsTruncated=source.BackfillJobs.Count>backfillJobs.Length,backfillDraft=source.BackfillDraft,backfillJobs,source.Id,source.SourceProfile,displayName=Optional(config,"displayName"),state=source.ServerState,source.LocalPaused,source.ConfigurationRevision,source.GrantRevision,source.Folder,source.FolderDigest,source.LastCheckAt,source.LastCollectedAt,source.LastReceiptAt,source.LastErrorCode,source.PublicationAttempts,source.NextPublicationCheckAt,queue=queue.Counts(source.Id),source.VerifiedCaseId,source.SetupQueueId,files,selectedFileName=source.SelectedFileName,fileSha256=source.SelectedFileSha256,headers=Optional(source.LocalPreview,"headers"),rowCount=Optional(source.LocalPreview,"rowCount"),samples=Optional(source.LocalPreview,"samples"),receipt=receipt is null?null:new {id=Optional(receipt,"id"),previewVersion=Optional(receipt,"previewVersion"),state=Optional(receipt,"state"),counts=Optional(receipt,"counts"),caseIds=Optional(receipt,"caseIds"),original=Optional(receipt,"original")},approvalPath=$"/app/records/connect/approve?installationId={Uri.EscapeDataString(state.InstallationId??"")}&subscriptionId={Uri.EscapeDataString(source.Id)}"};
     }).ToArray();
     }
     private void BindSubscriptionSource(SourceSubscriptionState source,string input)
@@ -317,22 +325,38 @@ public sealed partial class AgentRuntime
         var identity=source.QueueConfigurationIdentity(state.InstallationId);var collected=false;
         // Reserve live discovery even when old work is due. One actual live
         // file read plus one due receipt operation bounds this source's turn.
-        if(source.LastCheckAt is null||now-source.LastCheckAt>=TimeSpan.FromSeconds(30))
+        var checkDue = source.NextPublicationCheckAt is { } scheduled
+            ? now >= scheduled : source.LastCheckAt is null || now - source.LastCheckAt >= TimeSpan.FromSeconds(30);
+        if (checkDue)
         {
-            using var adapter=sourceAdapterFactory();var files=adapter.Inspect(source);
-            foreach(var name in files)
+            try
             {
-                if(!SourcePolicyCurrent(source,DateTimeOffset.UtcNow))break;
-                if(source.ExcludedFileNames.Contains(name,StringComparer.OrdinalIgnoreCase)){source.CursorFileName=name;continue;}
-                var file=adapter.Read(source,name);var digest=Convert.ToHexStringLower(SHA256.HashData(file.Bytes));
-                if(source.PublishedFileDigests.TryGetValue(name,out var previousDigest)&&previousDigest==digest){source.CursorFileName=name;break;}
-                QueueEntry staged;
-                try{if(previousDigest is not null)throw new ConnectException("SOURCE_FILE_REPLACED","A published immutable export was replaced; both retained versions require review.");_=ValidateTypedOriginal(source,file.Bytes);staged=queue.StageRequest(file.Bytes,name,TypedRequest(source,name,file.Bytes),Generation,identity,true,new(source.Id,source.SourceProfile,source.GrantRevision));}
-                catch(ConnectException error)when(!SourceScheduler.IsSharedSafetyFailure(error)){staged=queue.Quarantine(file.Bytes,name,Generation,identity,error.Code,new(source.Id,source.SourceProfile,source.GrantRevision));source.LastErrorCode=error.Code;source.LocalPaused=true;}
-                source.PublishedFileDigests[name]=digest;source.CursorFileName=name;source.LastCollectedAt=DateTimeOffset.UtcNow;Save();collected=true;break;
+                using var adapter=sourceAdapterFactory();var files=adapter.Inspect(source);
+                foreach(var name in files)
+                {
+                    if(!SourcePolicyCurrent(source,DateTimeOffset.UtcNow))break;
+                    if(source.ExcludedFileNames.Contains(name,StringComparer.OrdinalIgnoreCase)){source.CursorFileName=name;continue;}
+                    var file=adapter.Read(source,name);var digest=Convert.ToHexStringLower(SHA256.HashData(file.Bytes));
+                    if(source.PublishedFileDigests.TryGetValue(name,out var previousDigest)&&previousDigest==digest){source.CursorFileName=name;break;}
+                    QueueEntry staged;
+                    try{if(previousDigest is not null)throw new ConnectException("SOURCE_FILE_REPLACED","A published immutable export was replaced; both retained versions require review.");_=ValidateTypedOriginal(source,file.Bytes);staged=queue.StageRequest(file.Bytes,name,TypedRequest(source,name,file.Bytes),Generation,identity,true,new(source.Id,source.SourceProfile,source.GrantRevision));}
+                    catch(ConnectException error)when(!SourceScheduler.IsSharedSafetyFailure(error)){staged=queue.Quarantine(file.Bytes,name,Generation,identity,error.Code,new(source.Id,source.SourceProfile,source.GrantRevision));source.LastErrorCode=error.Code;source.LocalPaused=true;}
+                    source.PublishedFileDigests[name]=digest;source.CursorFileName=name;source.LastCollectedAt=DateTimeOffset.UtcNow;Save();collected=true;break;
+                }
+                source.PublicationAttempts = 0;
+                source.NextPublicationCheckAt = null;
+                if (source.LastErrorCode is "SOURCE_BUSY" or "SOURCE_CHANGED") source.LastErrorCode = null;
+            }
+            catch (ConnectException error) when (error.Code is "SOURCE_BUSY" or "SOURCE_CHANGED")
+            {
+                // Nothing was captured. Keep already-queued deliveries eligible while
+                // this source waits for the producer to finish publishing the file.
+                if (source.PublicationAttempts < int.MaxValue) source.PublicationAttempts++;
+                source.NextPublicationCheckAt = DurableQueue.RetryAt(DateTimeOffset.UtcNow, source.PublicationAttempts);
+                source.LastErrorCode = error.Code;
             }
             source.LastCheckAt=DateTimeOffset.UtcNow;Save();
-            if(networkOnline){var metrics=queue.Metrics(source.Id);await api.Request("POST","/v1/partner/source-subscriptions/"+Uri.EscapeDataString(source.Id)+"/heartbeat",new{configurationRevision=source.ConfigurationRevision,grantRevision=source.GrantRevision,state=source.LocalPaused?"mapping_drift":collected?"checked":"quiet",sourceAsOf=(string?)null,checkpoint=source.CursorFileName is null?null:Hash(source.CursorFileName),errorCode=source.LastErrorCode,backlog=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes},state.Token,Guid.NewGuid().ToString("N"),ct);}
+            if(networkOnline){var metrics=queue.Metrics(source.Id);await api.Request("POST","/v1/partner/source-subscriptions/"+Uri.EscapeDataString(source.Id)+"/heartbeat",new{configurationRevision=source.ConfigurationRevision,grantRevision=source.GrantRevision,state=source.LocalPaused?"mapping_drift":source.NextPublicationCheckAt is not null?"delayed":collected?"checked":"quiet",sourceAsOf=(string?)null,checkpoint=source.CursorFileName is null?null:Hash(source.CursorFileName),errorCode=source.LastErrorCode,backlog=metrics.PendingCount,oldestPendingAt=metrics.OldestPendingAt,pendingAgeUnknownCount=metrics.PendingAgeUnknownCount,retainedBytes=metrics.RetainedBytes},state.Token,Guid.NewGuid().ToString("N"),ct);}
         }
         if(!processed&&networkOnline&&SourcePolicyCurrent(source,DateTimeOffset.UtcNow)&&queue.NextDueLane(source.Id,Generation,identity,DateTimeOffset.UtcNow,history:false) is { } next)
         {
@@ -341,6 +365,25 @@ public sealed partial class AgentRuntime
             catch(ConnectException error)when(error.Code.StartsWith("SOURCE_BACKFILL_",StringComparison.Ordinal)){source.LastErrorCode=error.Code;Save();}
         }
     }
+    internal static void RequireReviewedSource(JsonElement request, SourceSubscriptionState source, string? digest)
+    {
+        bool MatchesRevision(string key, int expected) => request.TryGetProperty(key, out var value)
+            && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var actual) && actual == expected;
+        if (digest is null || Optional(request, "originalSha256")?.GetString() != digest
+            || !MatchesRevision("configurationRevision", source.ConfigurationRevision)
+            || !MatchesRevision("grantRevision", source.GrantRevision))
+            throw new ConnectException("SOURCE_REVIEW_CHANGED", "The original or its approval changed. Review the current report before continuing.");
+    }
+
+    internal static void RequireReviewedReceipt(JsonElement request, JsonElement receipt, string receiptId)
+    {
+        var version=Optional(receipt, "previewVersion")?.GetString();
+        if (string.IsNullOrEmpty(version) || Optional(receipt, "state")?.GetString() != "previewed"
+            || Optional(request, "receiptId")?.GetString() != receiptId || Optional(receipt, "id")?.GetString() != receiptId
+            || Optional(request, "previewVersion")?.GetString() != version)
+            throw new ConnectException("SOURCE_REVIEW_CHANGED", "The reviewed batch has changed. Check the current receipt before approving it.");
+    }
+
     private async Task TypedCommand(string operation,JsonElement payload,CancellationToken ct)
     {
         RequireCredential();if(operation!="pauseSubscription")RequireTypedInstallationRead();if(!typedSourceSubscriptions)await RefreshSubscriptions(ct);var source=Subscription(payload.GetProperty("id").GetString()??"");
@@ -358,6 +401,7 @@ public sealed partial class AgentRuntime
             case "previewSubscription":
             {
                 if(!payload.TryGetProperty("wholeFileUploadApproved",out var consent)||consent.ValueKind!=JsonValueKind.True)throw new ConnectException("UPLOAD_CONSENT_REQUIRED","Approve upload of the entire exact source original first.");
+                RequireReviewedSource(payload, source, source.SelectedFileSha256);
                 var name=payload.GetProperty("fileName").GetString()??"";if(name!=source.SelectedFileName||source.SelectedFileSha256 is null)throw new ConnectException("SOURCE_FILE_REVIEW_REQUIRED","Inspect this exact local file before approving upload.");
                 using var adapter=sourceAdapterFactory();var file=adapter.Read(source,name);if(Convert.ToHexStringLower(SHA256.HashData(file.Bytes))!=source.SelectedFileSha256)throw new ConnectException("SOURCE_CHANGED","The selected original changed. Inspect it and approve its exact bytes again.");
                 _=ValidateTypedOriginal(source,file.Bytes);var entry=queue.StageRequest(file.Bytes,name,TypedRequest(source,name,file.Bytes),Generation,source.QueueConfigurationIdentity(state.InstallationId),false,new(source.Id,source.SourceProfile,source.GrantRevision));source.SetupQueueId=entry.Id;Save();await ProcessTyped(source,entry,ct);break;
@@ -365,7 +409,22 @@ public sealed partial class AgentRuntime
             case "commitSubscription":
             {
                 if(!payload.TryGetProperty("wholeBatchApproved",out var consent)||consent.ValueKind!=JsonValueKind.True)throw new ConnectException("BATCH_CONSENT_REQUIRED","Approve every displayed source row before importing.");
-                var entry=source.SetupQueueId is null?null:queue.Find(source.SetupQueueId);if(entry is null)throw new ConnectException("PREVIEW_REQUIRED","Preview the approved source original first.");var data=queue.Payload(entry);data.CommitApproved=true;queue.Save(entry,data,"commit_pending");await ProcessTyped(source,queue.Find(entry.Id)!,ct);break;
+                var entry=source.SetupQueueId is null?null:queue.Find(source.SetupQueueId);if(entry is null)throw new ConnectException("PREVIEW_REQUIRED","Preview the approved source original first.");
+                RequireReviewedSource(payload, source, entry.Digest);
+                if (entry.SourceId != source.Id || entry.GrantRevision != source.GrantRevision || entry.CredentialGeneration != Generation ||
+                    entry.ConfigDigest != source.QueueConfigurationIdentity(state.InstallationId))
+                    throw new ConnectException("SOURCE_REVIEW_CHANGED","The batch belongs to a different source approval. Review its current receipt.");
+                var data=queue.Payload(entry);
+                if(data.Receipt is not { } reviewed || entry.ImportId is null)
+                    throw new ConnectException("PREVIEW_REQUIRED","Review the receipt for this batch before approving it.");
+                RequireTypedReceipt(reviewed, entry, source);
+                RequireReviewedReceipt(payload, reviewed, entry.ImportId);
+                var body=Json.Bytes(new{previewVersion=reviewed.GetProperty("previewVersion").GetString(),originalSha256=entry.Digest,importValidRows=false});
+                if(data.CommitWireBody is not null && !data.CommitWireBody.SequenceEqual(body))
+                    throw new ConnectException("SOURCE_REVIEW_CHANGED","The pending import was approved against a different preview.");
+                data.CommitWireBody=body;
+                data.CommitBodySha256=Convert.ToHexStringLower(SHA256.HashData(body));
+                data.CommitApproved=true;queue.Save(entry,data,"commit_pending");await ProcessTyped(source,queue.Find(entry.Id)!,ct);break;
             }
             case "verifySubscription":
             {

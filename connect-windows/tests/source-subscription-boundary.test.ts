@@ -37,3 +37,12 @@ it("accepts only explicitly paired versioned policies with bounded actual identi
   expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, identityPolicy: undefined }]).success).toBe(false);
   for (const fields of [["orderId", "fileSha256"], ["orderId", "amount"], ["orderId", "sourceAsOf"], ["orderId", "orderId"], ["orderId"]]) expect(argumentsByMethod.proposeSubscription.safeParse([{ ...proposal, identityPolicy: { ...proposal.identityPolicy, eventKey: { kind: "composite", fields } } }]).success).toBe(false);
 });
+
+it("requires the source owner to review exact subscription versions, bytes and receipt before sending authority", () => {
+  const scope = {id:"source_one", configurationRevision:1, grantRevision:2, originalSha256:"a".repeat(64)};
+  expect(argumentsByMethod.previewSubscription.safeParse([{...scope, fileName:"orders.csv", wholeFileUploadApproved:true}]).success).toBe(true);
+  const commit = {...scope, receiptId:"batch_one", previewVersion:"b".repeat(64), wholeBatchApproved:true};
+  expect(argumentsByMethod.commitSubscription.safeParse([commit]).success).toBe(true);
+  for (const key of ["grantRevision","configurationRevision","originalSha256","receiptId","previewVersion"] as const)
+    expect(argumentsByMethod.commitSubscription.safeParse([{...commit, [key]:undefined}]).success).toBe(false);
+});

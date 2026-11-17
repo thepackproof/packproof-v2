@@ -10,7 +10,7 @@ import {reauthorizePartner,strictBody,type PartnerActor} from '../platform/organ
 import {textField} from '../platform/tenants.js';
 import {requireRecordWorkspace,requireRecordLocation,type RecordWorkspace} from './access.js';
 import {requireTypedSourceAuthority,type SourceSubscriptionConfig} from './source-subscriptions.js';
-import {requireReconstructionFeature} from './reconstruction-features.js';
+import {requireReconstructionFeature,supportsSourceBackfills} from './reconstruction-features.js';
 import {explicitInstant} from './csv-semantics.js';
 import type {TypedSourceBatch,TypedSourceObservation,TypedSourceRow} from './source-contracts.js';
 
@@ -54,7 +54,7 @@ async function jobSourceCurrent(deps:BackfillDeps,j:Job,actor=j.actor_context){
  const s=await actorSource(deps,actor,j.subscription_id);
  if(actor.credentialId!==j.credential_id||s.state!=='active'||Number(s.configuration_revision)!==Number(j.configuration_revision)||Number(s.grant_revision)!==Number(j.grant_revision)||s.configuration_sha256!==j.configuration_sha256||s.connection_id!==j.connection_id||s.location_id!==j.location_id||s.operator_membership_id!==j.operator_membership_id||s.installation_id!==j.installation_id)fail('SOURCE_BACKFILL_AUTHORITY_CHANGED','This job retains its original source, credential, configuration and grant; create a separately reviewed job after authority changes',403);
  const i=(await deps.db.query<{version:string;status:string;credential_id:string;renewal_credential_id:string|null;enrollment_acknowledged_at:unknown}>('SELECT version,status,credential_id,renewal_credential_id,enrollment_acknowledged_at FROM record_agent_installations WHERE id=$1',[j.installation_id])).rows[0];
- if(!i||i.version!=='0.4.0'||!['ready','active'].includes(i.status)||i.credential_id!==j.credential_id||i.renewal_credential_id||!i.enrollment_acknowledged_at)fail('SOURCE_BACKFILL_COLLECTOR_UNQUALIFIED','Use the separately qualified matching collector before historical collection',403);
+ if(!i||!supportsSourceBackfills(i.version)||!['ready','active'].includes(i.status)||i.credential_id!==j.credential_id||i.renewal_credential_id||!i.enrollment_acknowledged_at)fail('SOURCE_BACKFILL_COLLECTOR_UNQUALIFIED','Use the separately qualified matching collector before historical collection',403);
  if(new Date(j.history_from).getTime()<Date.parse(s.configuration.historyFrom)||s.configuration.historyTo&&new Date(j.history_to).getTime()>Date.parse(s.configuration.historyTo))fail('SOURCE_BACKFILL_AUTHORITY_CHANGED','The historical job exceeds its retained original source history authority',403);
  if(s.configuration.transport!=='local_ntfs'||qualifiedBackfillSemantics(s.configuration)!==j.semantics)fail('SOURCE_BACKFILL_SEMANTICS_UNQUALIFIED','This source has no qualified matching historical snapshot or event contract',403);
  return s;

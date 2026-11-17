@@ -134,8 +134,30 @@ const shipmentWorkProgress=['work_revision','state','cursor_key','case_revision'
 const policy120={...policy118,
  record_typed_shipment_work:{api:select,worker:{...select,insert:[...shipmentWorkIdentity,...shipmentWorkProgress],update:shipmentWorkProgress}},
 };
+// Freeze the previous receipt INSERT columns and permit the API to record one
+// immutable interpretation during intake. Workers only read the decision.
+const receiptInsert121=[
+ 'id','organization_id','environment','actor','principal_id','credential_id',
+ 'delegation_id','integration_account_id','operator_membership_id','source_name',
+ 'preview_version','mapping_version','mapping','headers','delimiter','time_zone',
+ 'original_object_key','original_version_id','original_sha256','original_byte_size',
+ 'state','import_valid_rows','received_at','updated_at','lease_token','lease_expires_at',
+ 'last_error_code','agent_installation_id','agent_config_revision','source_control_revision',
+ 'shipment_interpretation',
+];
+const policy121={...policy120,
+ partner_import_jobs:{api:{...policy120.partner_import_jobs.api,insert:receiptInsert121},worker:policy120.partner_import_jobs.worker},
+};
 //119 adds only an index: its catalog columns and effective grants remain118.
-const selectPolicy=throughMigration=>throughMigration===120?policy120:throughMigration===108?policy108:throughMigration===113?policy113:throughMigration===116?policy116:throughMigration===117?policy117:throughMigration===118||throughMigration===119?policy118:policy;
+const policiesByMigration=new Map([
+ [108,policy108],[109,policy],[113,policy113],[116,policy116],[117,policy117],
+ [118,policy118],[119,policy118],[120,policy120],[121,policy121],
+]);
+function selectPolicy(throughMigration){
+ const result=policiesByMigration.get(throughMigration);
+ if(!result)fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
+ return result;
+}
 
 const tablePrivileges=['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'];
 const fieldPrivileges=['SELECT','INSERT','UPDATE','REFERENCES'];
@@ -177,7 +199,6 @@ function sourceColumns(sql,existing={}){
 }
 
 export async function recordsMigrationInventory(throughMigration=109){
- if(![108,109,113,116,117,118,119,120].includes(throughMigration))fail('RECORDS_MIGRATION_PROFILE_REQUIRED');
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
  const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[012][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
