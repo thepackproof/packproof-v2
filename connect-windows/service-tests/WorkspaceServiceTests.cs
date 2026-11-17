@@ -54,6 +54,10 @@ public sealed class WorkspaceServiceTests
                 var saved = Data(await app.Command("status",null,default)).GetProperty("workspace");
                 Assert.Equal("picking",saved.GetProperty("step").GetString());
                 Assert.Single(saved.GetProperty("sources").EnumerateArray());
+                api.ServesWorkspace = false;
+                var unavailable = await Assert.ThrowsAsync<ConnectException>(() => app.Command("activateWorkspace",Data(new {}),default));
+                Assert.Equal("WORKSPACE_NOT_AVAILABLE",unavailable.Code);
+                api.ServesWorkspace = true;
                 await app.Command("activateWorkspace",Data(new {}),default);
                 var order = Data(new[] { new { eventId="order-1", version="1", kind="order", entityNamespace="ERP_A", entityType="order",entityId="SO10482" }});
                 await File.WriteAllBytesAsync(Path.Combine(folder,"order.json"),Json.Bytes(order));
@@ -166,10 +170,13 @@ public sealed class WorkspaceServiceTests
     private sealed class WorkspaceServer : HttpMessageHandler
     {
         internal bool Active { get; set; }
+        internal bool ServesWorkspace { get; set; } = true;
         internal List<JsonElement> Uploads { get; } = [];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req,CancellationToken ct)
         {
             var path = req.RequestUri!.AbsolutePath;
+            if (!ServesWorkspace && path.EndsWith("/order-workspace/proposals",StringComparison.Ordinal))
+                return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") };
             var grant = new { state=Active?"active":"pending", scopeDigest=new string('a',64),offlineWindowSeconds=Active?3600:0,
                 expiresAt=DateTimeOffset.UtcNow.AddMinutes(15),approvalPath="/app/records/connect/approve?workspace=test" };
             object response = path switch

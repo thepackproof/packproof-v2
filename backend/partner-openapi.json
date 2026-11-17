@@ -60070,7 +60070,7 @@
           "lines": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ConnectOrderLine"
+              "$ref": "#/components/schemas/ConnectProjectedOrderLine"
             }
           },
           "events": {
@@ -60332,6 +60332,83 @@
         "required": [
           "items",
           "hasMore"
+        ]
+      },
+      "ConnectProjectedOrderLine": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sku": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orderedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "pickedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "packedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "shippedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "returnedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "cancelledQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "orderedMinusShippedQuantity": {
+            "type": "string",
+            "pattern": "^-?[0-9]+(?:\\.[0-9]{1,9})?$",
+            "description": "Exact ordered minus shipped. Present when both source quantities have the same unambiguous unit."
+          },
+          "orderedShippedDiscrepancy": {
+            "type": "string",
+            "description": "Human-readable difference when ordered and shipped quantities differ."
+          }
+        },
+        "required": [
+          "lineId"
         ]
       }
     }

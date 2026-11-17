@@ -249,7 +249,15 @@ public sealed partial class AgentRuntime
                 roles = s.Roles.Order(StringComparer.Ordinal).ToArray(), profileVersion = s.ProfileVersion, displayName = s.Transport == "api" ? s.DisplayName + " (" + s.SourceNamespace + ")" : s.Folder }).ToArray(),
             outputDigest, outputName = output, history = OrderWorkspaceState.History
         };
-        var result = await api.Request("POST", WorkspaceApi + "/proposals", proposal, state.Token, null, ct);
+        JsonElement result;
+        try
+        {
+            result = await api.Request("POST", WorkspaceApi + "/proposals", proposal, state.Token, null, ct);
+        }
+        catch (ApiException error) when (error.Status == 404 || error.Code == "RECONSTRUCTION_CAPABILITY_DISABLED")
+        {
+            throw new ConnectException("WORKSPACE_NOT_AVAILABLE", "This PackProof workspace is not ready for multi-source collection yet. Your setup is saved. Retry after your workspace is enabled.");
+        }
         var digest = result.GetProperty("scopeDigest").GetString();
         if (digest?.Length != 64 || !digest.All(Uri.IsHexDigit))
             throw new ConnectException("WORKSPACE_APPROVAL_INVALID", "PackProof returned an incomplete approval. Retry setup.");

@@ -10,7 +10,15 @@ const responder=(manifest=release,page=html) => async (url, options) => {
   return url.endsWith('/release.json') ? new Response(JSON.stringify(manifest),{headers:{'content-type':'application/json'}}) : new Response(page,{headers:{'content-type':'text/html'}});
 };
 test('accepts only the source-pinned approval application for the configured API',async()=>{
- assert.deepEqual(await verifyHostedApproval(web,api,responder()),{webOrigin:web,apiOrigin:api,webCommit:release.commit,approvalPath:release.approvalPath});
+ assert.deepEqual(await verifyHostedApproval(web,api,responder()),{webOrigin:web,apiOrigin:api,webCommit:release.commit,approvalPath:release.approvalPath,supportsOrderWorkspace:false});
+});
+test('signed channels require exact hosted support for the multi-source approval locator',async()=>{
+ await assert.rejects(verifyHostedApproval(web,api,responder(),{requireOrderWorkspace:true}),/multi-source approval/);
+ const paths=[];
+ const serve=responder({...release,capabilities:{connectApproval:1,orderWorkspaceApproval:1}});
+ const result=await verifyHostedApproval(web,api,async(...args)=>{paths.push(args[0]);return serve(...args);},{requireOrderWorkspace:true});
+ assert.equal(result.supportsOrderWorkspace,true);
+ assert.ok(paths.some(value=>value.includes('workspaceSession=release-check')));
 });
 test('refuses a normal website without the approval release capability',async()=>{
  await assert.rejects(verifyHostedApproval(web,api,responder({...release,capabilities:{}})),/compatible/);

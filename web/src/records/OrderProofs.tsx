@@ -6,7 +6,7 @@ import { workflowError } from './workflow';
 import { RemoveOrderLink } from './OrderReferenceReview';
 
 interface OrderSummary { proofId: string; revision: number; orderReference: string; updatedAt: string }
-interface OrderLine { lineId: string; sku?: string; orderedQuantity?: string; pickedQuantity?: string; packedQuantity?: string; shippedQuantity?: string }
+interface OrderLine { lineId: string; sku?: string; orderedQuantity?: string; pickedQuantity?: string; packedQuantity?: string; shippedQuantity?: string; orderedShippedDiscrepancy?: string }
 interface OrderEvent { eventKey?: string; kind: string; occurredAt?: string; sourceId: string; fileName?: string; locator?: string; entity?: {type:string;id:string}; fields: Record<string, unknown> }
 interface OrderDetail extends OrderSummary {
   lines: OrderLine[];
@@ -76,6 +76,7 @@ function OrderContents({ order, api, scope, canManage, refresh }: { order: Order
           {([['Ordered', line.orderedQuantity], ['Picked', line.pickedQuantity], ['Packed', line.packedQuantity], ['Shipped', line.shippedQuantity]] as const)
             .filter(([, quantity]) => quantity != null).map(([label, quantity]) => <div key={label}><dt>{label}</dt><dd>{quantity}</dd></div>)}
         </dl>
+        {line.orderedShippedDiscrepancy && <p>{line.orderedShippedDiscrepancy}</p>}
       </li>)}</ul>}
     </section>
     <section className="records-panel"><h2>Order timeline</h2>

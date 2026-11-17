@@ -58,7 +58,7 @@ it("keeps denied destinations blocked and requires explicit consent for a tempor
 
 it("resumes a browser approval and opens the committed revision from Overview",async()=>{
   let current=status({step:"activate",phase:"awaiting_approval",approvalPath:"/app/records/connect/approve?installationId=i"});
-  const bridge=bridgeFor(current,{getStatus:async()=>current,workspaceOrderDetail:vi.fn(async()=>({proofId:"p1",orderReference:"SO10482",revision:3,lines:[],events:[],evidence:[]}))});
+  const bridge=bridgeFor(current,{getStatus:async()=>current,workspaceOrderDetail:vi.fn(async()=>({proofId:"p1",orderReference:"SO10482",revision:3,lines:[{lineId:"20",sku:"A100",unit:"each",orderedQuantity:"3",shippedQuantity:"2",orderedShippedDiscrepancy:"1 EA more ordered than shipped"}],events:[],evidence:[]}))});
   render(<WorkspaceApp bridge={bridge}/>);
   await screen.findByRole("button",{name:"Open browser review"});
   current=status({phase:"active",step:"overview",orders:[{proofId:"p1",orderReference:"SO10482",revision:3}]});
@@ -66,6 +66,7 @@ it("resumes a browser approval and opens the committed revision from Overview",a
   await screen.findByRole("heading",{name:"Overview"});
   fireEvent.click(screen.getByRole("button",{name:/SO10482/}));
   expect(await screen.findByRole("heading",{name:"SO10482"})).toBeVisible();
+  expect(screen.getByText("1 EA more ordered than shipped")).toBeVisible();
   expect(bridge.workspaceOrderDetail).toHaveBeenCalledWith("p1",3);
 });
 

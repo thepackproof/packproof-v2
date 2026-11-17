@@ -148,13 +148,22 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     await writeFile(path.join(root,'restart'),'');await poll('protected worker restart',()=>receipt('restarted.json'));
     await publish('order','corrections.json','orders.json');mark('correctionPublished');
     const final=await poll('same proof receives quantity correction',async()=>{const v=await view(first.proofId);return v.lines.find((l:any)=>l.lineId==='20')?.orderedQuantity==='3'?v:undefined;});
-    expect(final.lines.find((l:any)=>l.lineId==='20').shippedQuantity).toBe('2');mark('correctedOnline');
+    const comparison = '1 EA more ordered than shipped';
+    expect(final.lines.find((l:any)=>l.lineId==='20')).toMatchObject({orderedQuantity:'3',shippedQuantity:'2',unit:'each',
+      orderedMinusShippedQuantity:'1',orderedShippedDiscrepancy:comparison});
+    expect(completed.lines.find((l:any)=>l.lineId==='20').orderedMinusShippedQuantity).toBe('0');
+    const previous = await call('GET','/v1/partner/agent/order-proofs/'+first.proofId+'/revisions/'+completed.revision,undefined,credentials);
+    expect(previous).toEqual(completed);
+    mark('correctedOnline');
     const serviceView=await call('GET','/v1/partner/agent/order-proofs/'+first.proofId+'/revisions/'+final.revision,undefined,credentials);
     expect(serviceView).toEqual(final);
     await verifier.verifyOutput(held,completed);
     await rename(held,path.join(root,'output')); mark('destinationRestored');
     const checked=await poll('latest published output bundle',async()=>{try{return await verifier.verifyOutput(path.join(root,'output'),final);}catch{return undefined;}});
     const inventory=JSON.parse(await readFile(path.join(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),'manifest.json'),'utf8'));
+    const summary=await readFile(path.join(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),'summary.html'),'utf8');
+    const correctedRow=summary.match(/<tr><td>20<\/td>.*?<\/tr>/)?.[0];
+    expect(correctedRow).toContain('<td>'+comparison+'</td>');
     const label=inventory.files.find((e:any)=>e.kind==='original' && e.sourceFileName==='label.zpl');
     expect(label?.originalSha256).toBe(final.originalArtifacts.find((a:any)=>a.fileName==='label.zpl').originalSha256);
     expect(await readFile(path.resolve(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),label.file))).toEqual(await readFile(path.join(fixture,'label.zpl')));

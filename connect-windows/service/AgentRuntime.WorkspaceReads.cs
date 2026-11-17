@@ -62,7 +62,7 @@ public sealed partial class AgentRuntime
             }
             output[property]=Json.Element(rows);
         }
-        Read("lines",["lineId","sku","unit","orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity"]);
+        Read("lines",["lineId","sku","unit","orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity","orderedMinusShippedQuantity","orderedShippedDiscrepancy"]);
         Read("events",["kind","sourceId","fileName","occurredAt","observedAt","associationScope"]);
         Read("evidence",["kind","sourceId","fileName","locator","originalStatus","originalSha256"]);
         output["packages"]=Json.Element(packages.Select(id=>new{packageId=id}));

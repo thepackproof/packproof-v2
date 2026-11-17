@@ -122,12 +122,16 @@ internal sealed class ProofOutputBundle : IDisposable
         var lines = ArrayField(doc,"lines").ToArray();
         if (lines.Length > 0)
         {
-            html.Append("<section><h2>Items</h2><table><thead><tr><th>Line</th><th>Item</th><th>Ordered</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Returned</th><th>Unit</th></tr></thead><tbody>");
+            var hasDiscrepancy = lines.Any(line => Field(line,"orderedShippedDiscrepancy") is not null);
+            html.Append("<section><h2>Items</h2><table><thead><tr><th>Line</th><th>Item</th><th>Ordered</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Returned</th><th>Unit</th>");
+            if (hasDiscrepancy) html.Append("<th>Quantity difference</th>");
+            html.Append("</tr></thead><tbody>");
             foreach (var line in lines)
             {
                 html.Append("<tr>");
                 foreach(var field in new[]{"lineId","sku","orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity","unit"})
                     html.Append("<td>").Append(E(Field(line,field))).Append("</td>");
+                if (hasDiscrepancy) html.Append("<td>").Append(WebUtility.HtmlEncode(Field(line,"orderedShippedDiscrepancy"))).Append("</td>");
                 html.Append("</tr>");
             }
             html.Append("</tbody></table></section>");

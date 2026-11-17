@@ -14,6 +14,7 @@ async function files(dir,base=''){
 const assets=await files(root);const index=assets.find(x=>x.path==='index.html');
 const scripts=await Promise.all(assets.filter(x=>x.path.endsWith('.js')).map(x=>readFile(path.join(root,x.path),'utf8')));
 if(!index || !scripts.some(x=>x.includes('packproof.connect.approval-return.v1')) || !scripts.some(x=>x.includes('Review this collection computer')))throw Error('The built application lacks the Connect authorization flow.');
-const release={schema:'packproof.web-release/v1',commit,environment:'production',apiUrl:api.origin,indexSha256:index.sha256,approvalPath:'/app/records/connect/approve',capabilities:{connectApproval:1},assets};
+if(!scripts.some(x=>x.includes('Approve collection') && x.includes('workspaceSession') && x.includes('/order-workspace/')))throw Error('The built portal lacks multi-source approval.');
+const release={schema:'packproof.web-release/v1',commit,environment:'production',apiUrl:api.origin,indexSha256:index.sha256,approvalPath:'/app/records/connect/approve',capabilities:{connectApproval:1,orderWorkspaceApproval:1},assets};
 await writeFile(path.join(root,'release.json'),JSON.stringify(release,null,2)+'\n');
 console.log(JSON.stringify({webReleasePrepared:true,commit,indexSha256:index.sha256,files:assets.length,apiUrl:api.origin}));

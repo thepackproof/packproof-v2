@@ -21,6 +21,10 @@ export function addOrderWorkspaceContract(api) {
   const line = {lineId:string,sku:{type:['string','null']},unit:{type:['string','null']}};
   for(const field of ['orderedQuantity','pickedQuantity','packedQuantity','shippedQuantity','returnedQuantity','cancelledQuantity'])line[field]={type:['string','null'],pattern:'^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$'};
   schemas.ConnectOrderLine=obj(line,['lineId']);
+  schemas.ConnectProjectedOrderLine=obj({...line,
+    orderedMinusShippedQuantity:{type:'string',pattern:'^-?[0-9]+(?:\\.[0-9]{1,9})?$',description:'Exact ordered minus shipped. Present when both source quantities have the same unambiguous unit.'},
+    orderedShippedDiscrepancy:{type:'string',description:'Human-readable difference when ordered and shipped quantities differ.'}
+  },['lineId']);
   schemas.ConnectEntityReference=obj({namespace:string,type:string,id:string});
   schemas.ConnectNormalizedEvent=obj({
     eventId:string,version:string,kind:kinds,facilityId:{type:['string','null'],description:'Optional canonical facility within this authorized operation. External site labels remain source fields.'},entity:ref('ConnectEntityReference'),references:array(ref('ConnectEntityReference'),32),
@@ -41,7 +45,7 @@ export function addOrderWorkspaceContract(api) {
   schemas.ConnectObservationFile=obj(observation,Object.keys(observation).filter(k=>k!=='issues'));
   schemas.ConnectSourceSubmission=obj({...qualified,profileVersion:string,...observation},[...Object.keys(qualified),'profileVersion',...Object.keys(observation).filter(k=>k!=='issues')]);
   const version={proofId:string,revision:num};
-  schemas.ConnectProofRevision={type:'object',required:['proofId','revision','orderReference','updatedAt','events','lines','evidence'],properties:{...version,orderReference:string,updatedAt:{type:'string',format:'date-time'},facilities:array(string),lines:array(ref('ConnectOrderLine')),events:array(open),evidence:array(open),originalArtifacts:array(open),conflicts:array(string),integrity:{const:'source_reported'}}};
+  schemas.ConnectProofRevision={type:'object',required:['proofId','revision','orderReference','updatedAt','events','lines','evidence'],properties:{...version,orderReference:string,updatedAt:{type:'string',format:'date-time'},facilities:array(string),lines:array(ref('ConnectProjectedOrderLine')),events:array(open),evidence:array(open),originalArtifacts:array(open),conflicts:array(string),integrity:{const:'source_reported'}}};
   schemas.ConnectProofPage=obj({orders:array(obj({...version,orderReference:string,updatedAt:{type:'string',format:'date-time'}})),cursor:seq});
   schemas.ConnectProofChanges=obj({changes:array(obj({...version,sequence:seq})),nextCursor:seq,hasMore:{type:'boolean'}});
   schemas.ConnectScopeSession={type:'object',required:['state','scopeDigest','approvalPath'],properties:{id:string,state:enumOf('draft','pending','active','denied','superseded','expired'),scopeDigest:{anyOf:[hash,{type:'null'}]},approvalPath:{type:['string','null']},scope:ref('ConnectOperationScope'),deviceName:string,offlineWindowSeconds:seq}};

@@ -40,8 +40,10 @@ export function OrderView({order,sourceNames={}}: {order: OrderDetail;sourceName
       const unit = cell(line, ["unit","uom"]);
       const results = [["Picked","pickedQuantity"],["Packed","packedQuantity"],["Shipped","shippedQuantity"],["Returned","returnedQuantity"]]
         .map(([label,key])=>({label,value:cell(line,[key])})).filter(x=>x.value!=="");
+      const discrepancy = cell(line, ["orderedShippedDiscrepancy"]);
       return <li key={i}><strong>{item}</strong>{lineId && " · Line " + lineId}{quantity !== "" && " · Ordered " + quantity + (unit ? " " + unit : "")}
-        {results.map(x=><span key={x.label}> · {x.label} {x.value}{unit && " " + unit}</span>)}</li>;
+        {results.map(x=><span key={x.label}> · {x.label} {x.value}{unit && " " + unit}</span>)}
+        {discrepancy && <p>{discrepancy}</p>}</li>;
     })}</ul> : <p>Item details have not arrived.</p>}
     {!!packages.size && <><h3>Packages</h3><p>{[...packages].join(" · ")}</p></>}
     {!!order.conflicts?.length && <p className="ws-warning">Sources disagree on {order.conflicts.length} reported {order.conflicts.length===1 ? "value" : "values"}. Review the source evidence.</p>}

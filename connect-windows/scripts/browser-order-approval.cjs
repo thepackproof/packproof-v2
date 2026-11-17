@@ -69,8 +69,9 @@ async function run() {
         const line = Array.from(document.querySelectorAll('li')).find(el => el.textContent.includes('Line 20') && el.querySelector('dl'));
         if (!heading || !history || !line) return false;
         const values = Object.fromEntries(Array.from(line.querySelectorAll('dt'), el => [el.textContent, el.nextElementSibling?.textContent]));
-        return values.Ordered === '3' && values.Shipped === '2';
-      })()`, 'The order page did not show the verified revision and line quantities');
+        return values.Ordered === '3' && values.Shipped === '2' &&
+          Array.from(line.querySelectorAll('p')).some(el => el.textContent === '1 EA more ordered than shipped');
+      })()`, 'The order page did not show the verified revision, line quantities and discrepancy');
       await writeFile(path.join(shots, 'browser-verified-order.png'), (await browser.capturePage()).toPNG());
       win.destroy();
       return;

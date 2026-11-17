@@ -50,6 +50,7 @@ jobs:
         with:
           dotnet-version: '10.0.403'
       - run: node scripts/release-policy.cjs
+      - run: node scripts/verify-hosted-approval.mjs
       - uses: azure/login@v2
         if: env.PACKPROOF_WINDOWS_SIGNING_PROVIDER == 'azure'
         with:

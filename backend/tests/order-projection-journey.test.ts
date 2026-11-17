@@ -50,6 +50,28 @@ describe('source relationships and exact order allocations',()=>{
   expect(result.lines).toEqual([{lineId:'20',sku:null,unit:'each',orderedQuantity:'3',pickedQuantity:'2'},{lineId:'30',sku:'A100',unit:'each',orderedQuantity:'1'}]);
   expect(result.events).toHaveLength(2);expect(result.evidence).toHaveLength(5);
  });
+ it('compares only matched order and shipment claims in the same known unit, with exact decimal arithmetic',()=>{
+  const line=(id:string,field:string,value:string|null,unit?:string)=>({lineId:id,[field]:value,...(unit===undefined?{}:{unit})});
+  const ordered=(id:string,value:string|null,unit?:string)=>line(id,'orderedQuantity',value,unit);
+  const shipped=(id:string,value:string|null,unit?:string)=>line(id,'shippedQuantity',value,unit);
+  const orders=row('ERP','a','order',A,[],[ordered('large','999999999999999999.123456789','kg'),ordered('over','0','kg'),
+   ordered('equal','2.00','EA'),ordered('clear',null,'EA'),ordered('blank','','EA'),ordered('missing','1','EA'),
+   ordered('units','2','kg'),ordered('unknown','2','EA'),ordered('conflict','3','EA')]);
+  const shipment=row('WH','s','handoff',S1,[A],[shipped('large','999999999999999999.123456788','kg'),shipped('over','1.25','kg'),
+   shipped('equal','2','EA'),shipped('clear','0','EA'),shipped('blank','1','EA'),shipped('units','1','lb'),
+   shipped('unknown','1'),shipped('conflict','1','EA')]);
+  const disputed=row('SECOND','x','handoff',S1,[A],[shipped('conflict','2','EA')]);
+  const view=projectOrders([orders,shipment,disputed],[roots[0]]).projections[0];
+  const lines=Object.fromEntries(view.lines.map(l=>[l.lineId,l]));
+  expect(lines.large).toMatchObject({orderedMinusShippedQuantity:'0.000000001',orderedShippedDiscrepancy:'0.000000001 kg more ordered than shipped'});
+  expect(lines.over).toMatchObject({orderedMinusShippedQuantity:'-1.25',orderedShippedDiscrepancy:'1.25 kg more shipped than ordered'});
+  expect(lines.equal.orderedMinusShippedQuantity).toBe('0');
+  expect(lines.equal.orderedShippedDiscrepancy).toBeUndefined();
+  for(const id of ['clear','blank','missing','units','unknown','conflict']){
+   expect(lines[id].orderedMinusShippedQuantity).toBeUndefined();
+   expect(lines[id].orderedShippedDiscrepancy).toBeUndefined();
+  }
+ });
  it('adds exact fractional allocations only within matching units and reports competing source claims',()=>{
   const events=[...origins,row('WH','x','packing',P1,[A],[{lineId:'20',packedQuantity:'0.1',unit:'kg'}]),row('WH','y','packing',P2,[A],[{lineId:'20',packedQuantity:'0.2',unit:'kg'}])];
   expect(projectOrders(events,roots).projections[0].lines[0].packedQuantity).toBe('0.3');

@@ -175,15 +175,31 @@ function lineage(e: StoredEvent) {
     observedAt: new Date(e.received_at).toISOString()
   };
 }
+// Source quantities allow up to nine decimal places. Keep all arithmetic exact
+// through aggregation and comparison, including amounts above Number.MAX_SAFE_INTEGER.
+function decimalAmount(value: string) {
+  const [integer, fraction = ''] = value.split('.');
+  return BigInt(integer + fraction.padEnd(9, '0'));
+}
+function decimalText(amount: bigint) {
+  const digits = String(amount < 0n ? -amount : amount).padStart(10, '0');
+  const fraction = digits.slice(-9).replace(/0+$/, '');
+  return (amount < 0n ? '-' : '') + digits.slice(0, -9) + (fraction ? '.' + fraction : '');
+}
 function decimalSum(values: string[]) {
-  const places = Math.max(0, ...values.map(v => v.split('.')[1]?.length ?? 0));
-  const amount = values.reduce((sum, v) => {
-    const [a, b = ''] = v.split('.');
-    return sum + BigInt(a + b.padEnd(places, '0'));
-  }, 0n);
-  if (!places) return String(amount);
-  const digits = String(amount).padStart(places + 1, '0');
-  return (digits.slice(0, -places) + '.' + digits.slice(-places)).replace(/0+$/, '').replace(/\.$/, '');
+  return decimalText(values.reduce((sum, value) => sum + decimalAmount(value), 0n));
+}
+function compareOrderedAndShipped(line: Line, orderedUnits?: Set<string | null>, shippedUnits?: Set<string | null>) {
+  const {orderedQuantity, shippedQuantity, unit} = line;
+  if (!orderedQuantity || !shippedQuantity || !unit ||
+      orderedUnits?.size !== 1 || !orderedUnits.has(unit) || shippedUnits?.size !== 1 || !shippedUnits.has(unit)) return;
+  const difference = decimalAmount(orderedQuantity) - decimalAmount(shippedQuantity);
+  line.orderedMinusShippedQuantity = decimalText(difference);
+  if (difference === 0n) return;
+  const amount = decimalText(difference < 0n ? -difference : difference);
+  const displayUnit = unit === 'each' ? 'EA' : unit;
+  const direction = difference > 0n ? 'more ordered than shipped' : 'more shipped than ordered';
+  line.orderedShippedDiscrepancy = [amount, displayUnit, direction].join(' ');
 }
 /** Expand only explicitly identified business relationships. An order is a terminal,
  * so a consolidated shipment cannot turn one sales order into another. */
@@ -294,6 +310,10 @@ export function projectOrders(events: StoredEvent[], roots: Root[]) {
         }
         const v = entries.map(s => [...s][0]);
         if (v.length === 1) line[key] = v[0];else if (v.every((x): x is string => typeof x === 'string' && /^\d+(?:\.\d+)?$/.test(x))) line[key] = decimalSum(v);else if (new Set(v).size === 1) line[key] = v[0];else conflicts.push(`${lineId}: ${key}`);
+      }
+      if ((values.get('sku')?.get('line')?.size ?? 0) <= 1) {
+        compareOrderedAndShipped(line, quantityUnits.get(canonicalize([lineId, 'orderedQuantity'])),
+          quantityUnits.get(canonicalize([lineId, 'shippedQuantity'])));
       }
       lines.push(line);
     }
