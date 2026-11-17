@@ -39,7 +39,7 @@ public sealed partial class AgentRuntime
 
     private static JsonElement[] WorkspaceRecords(WorkspaceSource source, SourceReadResult parsed)
     {
-        if (source.ConfirmedMap != null)
+        if (source.ConfirmedMap != null && source.Roles.Contains("order"))
             return SourceReaders.NormalizeOrderLines(parsed, source.Id, source.ConfirmedMap).EnumerateArray().ToArray();
         if (source.Roles.Count == 0 || source.Roles.Count > 1 && parsed.Rows.Any(r => !r.Fields.ContainsKey("kind"))) return [];
         return source.Roles.SelectMany(role => SourceReaders.Normalize(parsed, role).EnumerateArray())
@@ -157,7 +157,7 @@ public sealed partial class AgentRuntime
                 if (e is ApiException denied && denied.Status is 401 or 403) { w.ActiveGrant = null; w.Invalidate(); w.Attention = "Access changed. Review the connection again."; Save(); return; }
             }
         }
-        var active = w.Sources.Where(s => !s.Paused && w.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation).ToArray();
+        var active = w.Sources.Where(s => s.Transport == "folder" && !s.Paused && w.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation).ToArray();
         foreach (var id in workspaceWatchers.Keys.Where(id => !active.Any(s => s.Id == id)).ToArray()) DropWatcher(id);
         if (active.Length == 0) return;
         var offset = (Array.FindIndex(active, s => s.Id == w.LastScheduled) + 1) % active.Length;
@@ -181,6 +181,7 @@ public sealed partial class AgentRuntime
                 DropWatcher(source.Id);
             }
         }
+        await AdvanceWorkspaceMedia(w,ct);
         Save();
     }
 
@@ -188,6 +189,9 @@ public sealed partial class AgentRuntime
     {
         ValidateCollectingProofSource(s.Folder);
         var folder = FolderSource.ValidateWorkspaceRoot(s.Folder);
+        using var pin = new ProofOutputPaths.DirectoryPin(folder);
+        if (s.PhysicalRoot is { } expected && pin.KeyStrings.FirstOrDefault() != expected)
+            throw new ConnectException("SOURCE_REPLACED", "This folder was replaced. Select it again and approve the new location.");
         MonitorWorkspaceSource(s); // Boundary first, reconciliation second.
         workspaceChanges.TryRemove(s.Id, out var changed);
         if (changed == "!overflow") s.CoverageGap = true;
@@ -233,7 +237,8 @@ public sealed partial class AgentRuntime
             body = Json.Element(new { sourceId = s.Id, generation = s.Generation, scopeDigest = w.ActiveGrant!.ScopeDigest, fileName = name,
                 originalSha256 = digest, originalBase64 = Convert.ToBase64String(bytes), mediaType = WorkspaceMediaType(name),
                 profileVersion = s.ProfileVersion, observationId = obs, records = Array.Empty<object>(), issues = new[]{"Interpretation exceeds the bounded request size. The original needs review."} });
-        queue.StageWorkspace(bytes, name, body, w.ActiveGrant!.InstallationId, obs, s);
+        var staged = queue.StageWorkspace(bytes, name, body, w.ActiveGrant!.InstallationId, obs, s);
+        if (SourceReaders.IsMedia(name) && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
         s.Inventory[key] = new(digest, sequence, s.Generation, name);
         if (records.Length == 0) s.Issue = "IDENTITY_UNRESOLVED";
         else if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_ACCESS_DENIED") s.Issue = null;

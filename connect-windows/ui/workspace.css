@@ -47,3 +47,4 @@
 @media (max-width:740px) { .ws-dash {display:block;} .ws-dash nav {flex-direction:row; flex-wrap:wrap; margin-bottom:12px;} .ws-footer > :last-child {margin-inline-start:0;} }
 @media (forced-colors:active) { .ws-dash nav button[aria-current="page"],.ws-order-link[aria-pressed="true"] {outline:2px solid Highlight;} }
 
+.ws-shell input { min-height:44px; display:block; border:1px solid var(--control-border); border-radius:8px; background:var(--surface); color:var(--ink); max-width:100%; padding:6px 10px; }

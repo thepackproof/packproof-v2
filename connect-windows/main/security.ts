@@ -18,6 +18,10 @@ const reviewedSource = {id, configurationRevision:z.number().int().nonnegative()
 const role = z.enum(sourceRoles);
 export const argumentsByMethod={
  confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
+ workspaceSearchOrders: z.tuple([z.string().min(1).max(200)]),
+ workspaceAttention: z.tuple([]),
+ openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.tuple([id,z.number().int().positive().safe()]),
+ addWorkspaceDirectSource:z.tuple([]),copyWorkspaceDirectProfile:z.tuple([id]),
  workspaceDraftPreview: z.tuple([]),
  workspaceOrderDetail: z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceFolder: z.tuple([role]),

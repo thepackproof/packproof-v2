@@ -1,3 +1,4 @@
+import { WorkspaceAttention } from './WorkspaceAttention';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectApp } from "./ConnectApp";
 import { getBridge, type ConnectBridge, type ConnectStatus } from "./types";
@@ -36,10 +37,10 @@ function Clarify({source,bridge,run,busy}:{source:WorkspaceSource;bridge:Connect
 }
 function SourceCard({source,children}:{source:WorkspaceSource;children?:React.ReactNode}) {
   return <article className="ws-source">
-    <h3>{shortPath(source.folder)}</h3>
+    <h3>{source.displayName || shortPath(source.folder)}</h3>
     <p className={needsHelp(source) ? "ws-warning" : "ws-caption"}>{source.recognition.message}</p>
     {source.recognition.state === "recognized" && <ExampleFields sample={source.recognition.sample}/>}
-    <details><summary>Location details</summary><p className="ws-path">{source.folder}</p>
+    <details><summary>Source details</summary>{source.folder && <p className="ws-path">{source.folder}</p>}
       <p>{source.roles.map(role=>categories[role]?.name).filter(Boolean).join(" · ")}</p></details>
     {children}
   </article>;
@@ -47,7 +48,7 @@ function SourceCard({source,children}:{source:WorkspaceSource;children?:React.Re
 function Brand(){return <div className="ws-brand"><img src="./brand/packproof-symbol.svg" alt="" width="34" height="34"/><span>PackProof <b>Connect</b></span></div>;}
 function Picker({role,sources,bridge,run,busy}:{role:SourceRole;sources:WorkspaceSource[];bridge:ConnectBridge;run:Run;busy:boolean}) {
   const selected = sources.filter(item=>item.roles.includes(role));
-  const reusable = sources.filter(item=>!item.roles.includes(role));
+  const reusable = sources.filter(item=>item.transport!=="api" && !item.roles.includes(role));
   const [reuse,setReuse] = useState("");
   return <>
     {selected.map(source=><SourceCard key={source.id} source={source}>
@@ -62,12 +63,14 @@ function Picker({role,sources,bridge,run,busy}:{role:SourceRole;sources:Workspac
           {reusable.map(item=><option key={item.id} value={item.id}>{item.folder}</option>)}</select></label>
         <button className="secondary" disabled={!reuse || busy} onClick={()=>run("Saving location",()=>bridge.reuseWorkspaceFolder(reuse,role))}>Use this location</button></details>}
     </div>
-    <details><summary>Connect a system instead</summary><p>Review the direct connections available for your PackProof account.</p>
+    <details><summary>Connect a system instead</summary>
+      {role==="order" && !selected.some(item=>item.transport==="api") && <><p>Receive orders directly from the system connected to your PackProof partner account.</p>
+        <button className="secondary" disabled={busy} onClick={()=>run("Adding the order connection",()=>bridge.addWorkspaceDirectSource())}>Connect PackProof Partner API</button></>}
       <button className="secondary" disabled={busy} onClick={()=>run("Opening connections",()=>bridge.openPortal())}>Open system connections</button></details>
   </>;
 }
 
-function Setup({status,bridge,run,busy}:{status:ConnectStatus;bridge:ConnectBridge;run:Run;busy:boolean}) {
+function Setup({status,bridge,run,busy,legacy}:{status:ConnectStatus;bridge:ConnectBridge;run:Run;busy:boolean;legacy:()=>void}) {
   const ws = status.workspace!;
   const step = ws.step || "order";
   const [sample,setSample] = useState(false);
@@ -110,9 +113,9 @@ function Setup({status,bridge,run,busy}:{status:ConnectStatus;bridge:ConnectBrid
       {step==="activate" && <>
         <p className="ws-intro">Review the sources and destination for this computer.</p>
         <h2>Records to collect</h2>
-        {sources.length ? <ul>{sources.map(source=><li key={source.id}><strong>{shortPath(source.folder)}</strong> · {source.roles.map(role=>categories[role].name).join(", ")}
+        {sources.length ? <ul>{sources.map(source=><li key={source.id}><strong>{source.displayName || shortPath(source.folder)}</strong> · {source.roles.map(role=>categories[role].name).join(", ")}
           {!eligible(source) && " · Needs attention"}</li>)}</ul> : <p>Choose at least one records source to begin.</p>}
-        <p>PackProof will read existing files in the selected folders and check for new or changed files there. Subfolders can be added separately. Approved originals are uploaded and retained with the order proofs available to your team online.</p>
+        <p>{sources.some(s=>s.transport!=="api") && "PackProof will read existing files in the selected folders and check there for new or changed files. Subfolders can be added separately. "}{sources.some(s=>s.transport==="api") && "The partner connection will accept new orders sent within its approved scope. "}Approved originals are retained with order proofs available to your team online.</p>
         <p><strong>Local copies</strong><br/><span className="ws-path">{output || "Choose a proof folder."}</span></p>
         {!!pending.length && <p className="ws-warning">{pending.length} {pending.length===1 ? "source needs" : "sources need"} a review before collection can start there.</p>}
         {status.authorizationNotice && <p role="status">{status.authorizationNotice}</p>}
@@ -122,6 +125,7 @@ function Setup({status,bridge,run,busy}:{status:ConnectStatus;bridge:ConnectBrid
           <button className="primary" disabled={busy} onClick={()=>run("Opening browser review",()=>enrolling ? bridge.openApproval() : bridge.openWorkspaceApproval())}>Open browser review</button></div>
           : <button className="primary" disabled={busy || !ready.length || !output || !outputReady && !temporaryOutput || permissions(status.state)} onClick={start}>{temporaryOutput ? "Start with local copies pending" : "Start collecting"}</button>}
       </>}
+      {(status.config || status.sourceSubscriptions?.length || status.recoveryAvailable) ? <details><summary>Existing connection</summary><button className="secondary" onClick={legacy}>Manage earlier connections</button></details> : null}
       <footer className="ws-actions ws-footer">
         {step!=="order" && <button className="secondary" disabled={busy} onClick={()=>move(previous)}>Back</button>}
         {role && <button className={sources.some(item=>item.roles.includes(role)) ? "primary" : "quiet"} disabled={busy} onClick={()=>move(next)}>{sources.some(item=>item.roles.includes(role)) ? "Next" : "Skip for now"}</button>}
@@ -156,12 +160,13 @@ function Dashboard({status,bridge,run,busy,legacy}:{status:ConnectStatus;bridge:
         <div><strong>{issues.length}</strong><span>Sources needing attention</span></div>
         {output && <div><strong>{output.pending}</strong><span>Pending local copies</span></div>}
         </div><h2>Recent orders</h2><Orders sources={sources} list={(workspace.orders || []).slice(0,5)} bridge={bridge}/><h2>Saved proofs</h2>{pendingCopy && <p>Saved online · Local copies pending</p>}{folderButton}</>}
-      {page==="Orders" && <Orders sources={sources} list={workspace.orders || []} bridge={bridge}/>}
+      {page==="Orders" && <Orders searchable sources={sources} list={workspace.orders || []} bridge={bridge}/>}
       {page==="Sources" && <>{sources.length ? sources.map(source=><SourceCard source={source} key={source.id}><p>Collection · {source.state.replaceAll("_"," ")}</p>
+        {source.transport==="api" && source.state==="active" && <button className="secondary" disabled={busy} onClick={()=>run("Copying connection details",()=>bridge.copyWorkspaceDirectProfile(source.id))}>Copy connection details for IT</button>}
         {["active","paused"].includes(source.state) && <button className="secondary" disabled={busy} onClick={()=>run("Updating collection",()=>source.state==="paused" ? bridge.resumeWorkspaceSource(source.id) : bridge.pauseWorkspaceSource(source.id))}>{source.state==="paused" ? "Resume collection" : "Pause collection"}</button>}</SourceCard>) : <p>Choose the first records source for this operation.</p>}
         <button className="primary" disabled={busy} aria-expanded={adding} onClick={()=>setAdding(!adding)}>Add a source</button>
         {adding && <div className="ws-actions">{sourceRoles.map(role=><button key={role} className="secondary" onClick={()=>change(role)}>{categories[role].name}</button>)}</div>}</>}
-      {page==="Needs attention" && <>{!issues.length && !pendingCopy && !offline && <p>No source or output issues reported.</p>}
+      {page==="Needs attention" && <><WorkspaceAttention bridge={bridge} sources={sources}/>{!issues.length && !pendingCopy && !offline && <p>No source or output issues reported.</p>}
         {issues.map(source=><SourceCard key={source.id} source={source}><Clarify source={source} bridge={bridge} run={run} busy={busy}/><button className="secondary" disabled={busy} onClick={()=>run("Checking records",()=>bridge.inspectWorkspaceSource(source.id))}>Check again</button></SourceCard>)}
         {pendingCopy && <><h2>Local copies pending</h2><p>Reconnect the proof folder. The background service will retry.</p>{folderButton}</>}</>}
       {page==="Settings" && <><h2>Proof folder</h2><p className="ws-path">{destination || "Choose a destination for local proofs."}</p>
@@ -231,7 +236,7 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
     schedule();window.addEventListener("focus",focus);document.addEventListener("visibilitychange",focus);
     return ()=>{stopped=true;mounted.current=false;epoch.current++;clearTimeout(timer);window.removeEventListener("focus",focus);document.removeEventListener("visibilitychange",focus);};
   },[bridge,legacy,accept]);
-  if (bridge && (legacy || status && !status.workspace)) return <>
+  if (bridge && (legacy || status && (!status.workspace || status.installationId && status.capabilities?.orderWorkspace===false))) return <>
     {legacy && <button className="secondary" onClick={()=>setLegacy(false)}>Return to workspace</button>}<ConnectApp bridge={bridge}/></>;
   const workspace=status?.workspace;
   return <div className="ws-shell"><header><Brand/>{status?.binding?.organizationName && <span>{status.binding.organizationName}</span>}</header>
@@ -242,7 +247,7 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
     {!bridge ? <main className="ws-work"><h1>Open PackProof Connect on Windows</h1><p>Use the installed application to connect your sources.</p></main> :
     !status || !workspace ? <main className="ws-work"><h1>Opening your workspace</h1><p role="status">Connecting to the background service…</p></main> :
     workspace.step==="overview" && workspace.phase==="active" ? <Dashboard key={[status.environment,status.installationId,status.binding?.organizationId].join("/")} status={status} bridge={bridge} run={run} busy={!!busy} legacy={()=>setLegacy(true)}/> :
-    <Setup status={status} bridge={bridge} run={run} busy={!!busy}/>}
+    <Setup status={status} bridge={bridge} run={run} busy={!!busy} legacy={()=>setLegacy(true)}/>}
   </div>;
 }
 

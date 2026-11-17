@@ -6,3 +6,9 @@
 *.sql text eol=lf
 /backend/tests/fixtures/records-bridge-forward-compatible.js.txt text eol=lf
 /backend/tests/fixtures/records-bridge-m2-inactive.js.txt text eol=lf
+
+# These synthetic originals are read byte-for-byte by the Windows and server journey.
+/examples/multisource-journey/fixtures/*.zpl text eol=lf
+/examples/multisource-journey/fixtures/*.jpg binary
+/examples/multisource-journey/fixtures/*.pdf binary
+/examples/multisource-journey/fixtures/*.xlsx binary

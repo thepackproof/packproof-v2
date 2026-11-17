@@ -118,7 +118,7 @@ export async function commitOrderGroup(db:Database,clock:Clock,operation:string,
 export async function ingestOrderFile(deps:Deps,db:Database,a:PartnerActor,i:Installation,input:unknown){
  const x=capture(input),session=await activeScope(db,i,x.scopeDigest),o=originFor(i);
  const source=session.scope.sources.find(s=>s.id===x.sourceId&&s.generation===x.generation&&s.profileVersion===x.profileVersion);
- if(!source)throw new DomainError('AUTH_REQUIRED','Approve this source generation and profile before sending records.',403);
+ if(!source||source.transport==='api')throw new DomainError('AUTH_REQUIRED','Approve this source generation and profile before sending records.',403);
  const role:Record<string,string>={order:'order',picking:'picking',packing:'packing',label:'shipping',handoff:'handoff',delivery:'delivery',return:'returns'};
  if(x.records.some(r=>role[r.kind]&&!source.roles.includes(role[r.kind])))throw new DomainError('AUTH_REQUIRED','This source role is outside the approved scope.',403);
  await lockOperation(db,o.operation);

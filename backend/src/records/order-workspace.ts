@@ -18,9 +18,11 @@ export function digest(v:unknown){const s=boundedText(v,'hash',64);if(!/^[0-9a-f
 export function positive(v:unknown){if(typeof v!=='number'||!Number.isSafeInteger(v)||v<1||v>2147483647)throw new DomainError('INVALID_REQUEST','A positive source generation is required.',400);return v;}
 const roles=['order','picking','packing','evidence','shipping','handoff','delivery','returns'];
 function parseSource(v:unknown){
- const s=strictBody(v,['id','generation','folderDigest','roles','profileVersion','displayName']);
+ const s=strictBody(v,['id','generation','folderDigest','roles','profileVersion','displayName','transport','sourceNamespace']);
  if(!Array.isArray(s.roles)||!s.roles.length||s.roles.length>roles.length||s.roles.some(r=>!roles.includes(r)))throw new DomainError('INVALID_REQUEST','Choose the records supplied by each source.',400);
- return {id:boundedText(s.id,'source'),generation:positive(s.generation),folderDigest:digest(s.folderDigest),roles:[...new Set<string>(s.roles)].sort(),profileVersion:boundedText(s.profileVersion,'profile'),...(s.displayName?{displayName:boundedText(s.displayName,'source name',1024)}:{})};
+ if(s.transport!==undefined&&!['folder','api'].includes(String(s.transport)))throw new DomainError('INVALID_SCOPE','Choose a supported source transport.',400);
+ const direct=s.transport==='api';if(direct&&!s.roles.includes('order'))throw new DomainError('INVALID_SCOPE','Direct order intake requires the order role.',400);
+ return {...(direct?{transport:'api',sourceNamespace:boundedText(s.sourceNamespace,'system namespace')}:{transport:'folder'}),id:boundedText(s.id,'source'),generation:positive(s.generation),folderDigest:digest(s.folderDigest),roles:[...new Set<string>(s.roles)].sort(),profileVersion:boundedText(s.profileVersion,'profile'),...(s.displayName?{displayName:boundedText(s.displayName,'source name',1024)}:{})};
 }
 function parseScope(v:unknown){
  const s=strictBody(v,['sources','outputDigest','outputName','history']);

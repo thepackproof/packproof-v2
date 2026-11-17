@@ -119,7 +119,7 @@ public static partial class SourceReaders
                             Require(++imageNo<=8,"The page exceeds the image limit.");
                             Dimensions(img.WidthInSamples,img.HeightInSamples);
                             byte[]? decoded=null;
-                            if(img.RawBytes.Span.StartsWith(new byte[]{0xff,0xd8,0xff}))decoded=img.RawBytes.ToArray();
+                            if(img.RawBytes.StartsWith(new byte[]{0xff,0xd8,0xff}))decoded=img.RawBytes.ToArray();
                             else if(img.TryGetPng(out var png))decoded=png;
                             if(decoded!=null)ReadImage(decoded,$"{path}/image {imageNo}",rows,issues);
                             else issues.Add($"The embedded image on {path} uses an unsupported encoding.");

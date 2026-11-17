@@ -214,7 +214,7 @@ export interface ConnectStatus {
   versions?: { service: string; bridgeProtocol: number; csvRules: string; csvProfile: string; environment: string; apiOrigin: string };
   analysis?: LocalAnalysis;
   setup?: { running: boolean; phase?: string };
-  capabilities?: { interpretationVersions?: string[]; csvHeaderPolicies?: string[]; sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[]; sourceBackfillJobs?: boolean };
+  capabilities?: { orderWorkspace?: boolean; interpretationVersions?: string[]; csvHeaderPolicies?: string[]; sourceContracts: string[]; rulesVersion: string; typedSourceSubscriptions?: boolean; typedSourceBatchSchemas?: string[]; sourceBackfillJobs?: boolean };
   sourceCapabilities?: { typedCollection: boolean };
   sourceSubscriptions?: SourceSubscriptionStatus[];
   subscriptionDraft?: SubscriptionDraft;

@@ -14,3 +14,8 @@ tests/QueueUpgradeFixture/bin/
 tests/QueueUpgradeFixture/obj/
 build/icon.png
 build/renderer-layout.json
+build/workspace-layout.json
+build/workspace-screens/
+build/order-journey-receipts.json
+build/order-journey-projection.json
+build/order-journey-output/

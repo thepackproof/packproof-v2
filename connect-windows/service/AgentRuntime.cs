@@ -28,7 +28,7 @@ public sealed partial class AgentRuntime : IDisposable
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
-    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store); api = transport; var previousStateVersion=state.StateVersion;SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state); MigrateExistingWorkspace(); localInitialized=true; }
+    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null, int queueFileLimit = DurableQueue.MaxFiles) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store, queueFileLimit); api = transport; var previousStateVersion=state.StateVersion;SourceStateMigration.SynchronizeLegacy(state);if(previousStateVersion<SourceStateMigration.Version)store.Write("state.bin",state); MigrateExistingWorkspace(); localInitialized=true; }
     private void Save() { SourceStateMigration.SynchronizeLegacy(state); store.Write("state.bin", state); }
     // Constructor-owned local admission only. Installer attestation must never
     // wait for the command gate held by authenticated cloud work or enumerate
@@ -126,11 +126,12 @@ public sealed partial class AgentRuntime : IDisposable
                 case "inspectBackfill":case "proposeBackfill":case "pauseBackfill":case "resumeBackfill":case "refreshBackfills":await BackfillCommand(command,p,ct);break;
                 case "beginSubscriptionSource": case "inspectSubscriptionDraft": case "proposeSubscription": await TypedDraftCommand(command,p,ct); break;
                 case "selectSubscriptionSource": case "inspectSubscriptionFile": case "previewSubscription": case "commitSubscription": case "verifySubscription": case "pauseSubscription": case "resumeSubscription": await TypedCommand(command,p,ct); break;
+                case "workspaceDirectConnection": return WorkspaceDirectConnection(p);
                 case "workspaceAttention": return await WorkspaceAttention(ct);
                 case "workspaceSearchOrders": return await WorkspaceSearchOrders(p,ct);
                 case "workspaceDraftPreview": return WorkspaceDraftPreview(ct);
                 case "workspaceOrderDetail": return await WorkspaceOrderDetail(p,ct);
-                case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
+                case "addWorkspaceDirectSource": case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
                 case "setWorkspaceOutput": case "activateWorkspace": case "pauseWorkspaceSource": case "resumeWorkspaceSource":
                     await WorkspaceCommand(command,p,ct); break;
                 case "status": return Status();
@@ -260,7 +261,20 @@ public sealed partial class AgentRuntime : IDisposable
         if (before != "none" && (before != ConfigDigest || beforeRevision != ConfigRevision)) { state.SetupQueueId = null; state.VerifiedRecordId = null; state.VerifiedSetupImportId = null; state.LocalPaused = true; }
         if (ServerState == "revoked") state.LocalPaused = true;
         else if (state.LastErrorCode=="SOURCE_ADMISSION_PAUSED" && MappingSupported) state.LastErrorCode=null;
-        await RefreshSubscriptions(ct); Save();
+        try { await RefreshSubscriptions(ct); }
+        catch (ApiException scoped) when (scoped.Status == 403 && state.Workspace is not null)
+        {
+            // The installation heartbeat succeeded. Older typed-subscription grants
+            // can be narrower than its independent order-workspace authorization.
+            typedSourceSubscriptions = false;
+            foreach (var source in state.SourceSubscriptions.Where(s => s.Id != SourceSubscriptionState.LegacyId))
+            {
+                source.CapabilityApproved = false;
+                source.LocalPaused = true;
+                source.LastErrorCode = scoped.Code;
+            }
+        }
+        Save();
     }
     private async Task Process(QueueEntry entry, CancellationToken ct)
     {
@@ -417,6 +431,6 @@ public sealed partial class AgentRuntime : IDisposable
     public void Dispose()
     {
         try { if (startupError is null) queue?.Checkpoint(); }
-        finally { StopWorkspaceWatchers(); queue?.Dispose(); api.Dispose(); gate.Dispose(); }
+        finally { mediaLifetime.Cancel(); StopWorkspaceWatchers(); queue?.Dispose(); api.Dispose(); gate.Dispose(); mediaLifetime.Dispose(); }
     }
 }

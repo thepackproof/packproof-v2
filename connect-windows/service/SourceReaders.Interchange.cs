@@ -10,10 +10,11 @@ public static partial class SourceReaders
     private static readonly IReadOnlyDictionary<string,(string title,string segment,int field)> X12Documents =
         new Dictionary<string,(string,string,int)> {
             ["850"]=("purchase_order","BEG",3), ["856"]=("shipment_notice","BSN",2),
+            ["940"]=("warehouse_shipping_order","W05",2), ["214"]=("transport_status","B10",2),
             ["997"]=("functional_acknowledgment","AK1",2)
         };
     private static readonly IReadOnlyDictionary<string,string> EdifactDocuments = new Dictionary<string,string> {
-        ["ORDERS"]="purchase_order", ["DESADV"]="despatch_advice", ["CONTRL"]="syntax_acknowledgment"
+        ["ORDERS"]="purchase_order", ["DESADV"]="despatch_advice", ["IFTMIN"]="transport_instruction", ["CONTRL"]="syntax_acknowledgment"
     };
     private static void ReadEdi(string input,List<SourceReaderRow> rows,List<string> issues,ref string state)
     {

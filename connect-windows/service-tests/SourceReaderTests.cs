@@ -67,6 +67,8 @@ public sealed class SourceReaderTests
     [Theory]
     [InlineData("850","BEG*00*NE*PO-007**20261117","purchase_order","PO-007")]
     [InlineData("856","BSN*00*ASN-007*20261117*0900","shipment_notice","ASN-007")]
+    [InlineData("940","W05*N*WO-007","warehouse_shipping_order","WO-007")]
+    [InlineData("214","B10*PRO007*SHP007*SCAC","transport_status","SHP007")]
     [InlineData("997","AK1*PO*700","functional_acknowledgment","700")]
     public void X12_4010_documents_keep_envelope_and_document_role(string id,string header,string kind,string reference)
     {
@@ -79,6 +81,7 @@ public sealed class SourceReaderTests
     [Theory]
     [InlineData("ORDERS","BGM+220+PO?+007+9","purchase_order","PO+007")]
     [InlineData("DESADV","BGM+351+ASN-007+9","despatch_advice","ASN-007")]
+    [InlineData("IFTMIN","BGM+610+INSTR007+9","transport_instruction","INSTR007")]
     [InlineData("CONTRL","UCI+0007+S+R+7","syntax_acknowledgment","0007")]
     public void Edifact_D02B_documents_keep_release_and_escaped_values(string id,string header,string kind,string reference)
     {
@@ -96,6 +99,9 @@ public sealed class SourceReaderTests
         Assert.Equal("unsupported",SourceReaders.Read("unknown.prn",Bytes("unknown")).State);
         var events=SourceReaders.Read("epcis.jsonld",Bytes("{\"type\":\"EPCISDocument\",\"schemaVersion\":\"2.0\",\"epcisBody\":{\"eventList\":[{\"type\":\"AggregationEvent\",\"parentID\":\"P\",\"childEPCs\":[\"A\",\"B\"]}]}}"));
         Assert.Equal(2,Assert.Single(events.Rows).Fields["childEPCs"].GetArrayLength());
+        Assert.Equal("P",events.Rows[0].Fields["epcisRelationships"][1].GetProperty("parent").GetString());
+        var xml=SourceReaders.Read("epcis.xml",Bytes("<e:EPCISDocument xmlns:e='urn:epcglobal:epcis:xsd:2' schemaVersion='2.0'><EPCISBody><EventList><AggregationEvent><action>DELETE</action><parentID>P</parentID><childEPCs><epc>B</epc></childEPCs></AggregationEvent></EventList></EPCISBody></e:EPCISDocument>"));
+        Assert.Equal("DELETE",Assert.Single(xml.Rows).Fields["epcisRelationships"][0].GetProperty("action").GetString());
         Assert.Equal(0,SourceReaders.Normalize(events,"packing").GetArrayLength());
     }
     [Fact]

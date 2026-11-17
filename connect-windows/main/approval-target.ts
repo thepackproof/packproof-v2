@@ -2,7 +2,7 @@ import type {ConnectStatus} from '../ui/types';
 import {approvalUrl} from './security';
 const validId=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
 const route='/app/records/connect/approve';
-function workspaceParams(status: ConnectStatus): URLSearchParams {
+export function workspaceParams(status: ConnectStatus): URLSearchParams {
  const params = new URLSearchParams();
  if (!status.binding?.organizationId) return params;
  if (!validId(status.binding.organizationId)) throw Error('Refresh the current workspace before opening this review.');

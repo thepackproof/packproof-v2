@@ -71,12 +71,14 @@ public static partial class SourceReaders
                 else if(!string.IsNullOrEmpty(Get("lineId")))matches.Add(MapLine(fields));
                 var record=new Dictionary<string,object?> {["eventId"]=eventId,["version"]=version,["kind"]=kind,["entity"]=entity,
                     ["references"]=refs,["fields"]=WireFields(fields),["lines"]=matches,["locator"]=row.Location,["fieldLineage"]=row.Lineage };
-                var occurredAt=Get("occurredAt");
-                if(!string.IsNullOrEmpty(occurredAt))
+                Require(row.Location.Length<=1600 && row.Lineage.Values.All(path=>path.Length<=1600),"A field location exceeds the record limit.");
+                foreach(var key in new[]{"occurredAt","sourceModifiedAt"})
                 {
-                    Require(Regex.IsMatch(occurredAt,@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|[+-]\d{2}:\d{2})$")&&
-                        DateTimeOffset.TryParse(occurredAt,CultureInfo.InvariantCulture,DateTimeStyles.None,out _),"The event time needs an explicit UTC offset.");
-                    record["occurredAt"]=occurredAt;
+                    var time=Get(key);
+                    if(string.IsNullOrEmpty(time))continue;
+                    Require(Regex.IsMatch(time,@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|[+-]\d{2}:\d{2})$")&&
+                        DateTimeOffset.TryParse(time,CultureInfo.InvariantCulture,DateTimeStyles.None,out _),"The source time needs an explicit UTC offset.");
+                    record[key]=time;
                 }
                 records.Add(record);
             }

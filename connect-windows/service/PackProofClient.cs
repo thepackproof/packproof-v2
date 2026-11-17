@@ -27,7 +27,7 @@ public sealed class PackProofClient : IDisposable
     }
     public async Task<JsonElement> Request(string method, string path, object? body, string? token, string? key, CancellationToken ct)
     {
-        if (!path.StartsWith('/') || path.StartsWith("//") || path.Contains('\\') || path.Contains('#') || (path.Contains('?') && !System.Text.RegularExpressions.Regex.IsMatch(path, @"^/v1/partner/source-subscriptions(?:/[A-Za-z0-9_-]+/backfills)?\?cursor=[A-Za-z0-9_%.-]{1,600}$"))) throw new ConnectException("API_OPERATION_INVALID", "This API operation is not permitted.");
+        if (!path.StartsWith('/') || path.StartsWith("//") || path.Contains('\\') || path.Contains('#') || (path.Contains('?') && !System.Text.RegularExpressions.Regex.IsMatch(path, @"^/v1/partner/(?:source-subscriptions(?:/[A-Za-z0-9_-]+/backfills)?\?cursor=[A-Za-z0-9_%.-]{1,600}|agent/order-proofs\?q=(?:[A-Za-z0-9._~-]|%[0-9A-F]{2}){1,1800})$"))) throw new ConnectException("API_OPERATION_INVALID", "This API operation is not permitted.");
         // ResponseHeadersRead ends HttpClient's own timeout at the headers. Keep
         // the same bounded deadline over error and success body streaming too.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);

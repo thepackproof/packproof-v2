@@ -3,6 +3,11 @@ import type {ConnectBridge} from '../ui/types';
 const call=(method:string,...args:unknown[])=>ipcRenderer.invoke(`connect:${method}`,...args).then(result=>{if(!result?.ok)throw Error(result?.error||'The background service needs attention.');return result.value;});
 const bridge:ConnectBridge={
  confirmWorkspaceOrderMap:(id,generation,profile)=>call('confirmWorkspaceOrderMap',id,generation,profile),
+ workspaceSearchOrders:query=>call('workspaceSearchOrders',query),
+ workspaceAttention:()=>call('workspaceAttention'),
+ openWorkspaceReview:()=>call('openWorkspaceReview'),
+ openWorkspaceOrder:(id,revision)=>call('openWorkspaceOrder',id,revision),
+ addWorkspaceDirectSource:()=>call('addWorkspaceDirectSource'),copyWorkspaceDirectProfile:id=>call('copyWorkspaceDirectProfile',id),
  workspaceDraftPreview:()=>call('workspaceDraftPreview'),
  workspaceOrderDetail:(id,revision)=>call('workspaceOrderDetail',id,revision),
  chooseWorkspaceFolder:role=>call('chooseWorkspaceFolder',role),

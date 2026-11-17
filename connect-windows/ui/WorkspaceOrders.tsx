@@ -59,12 +59,28 @@ export function OrderView({order,sourceNames={}}: {order: OrderDetail;sourceName
   </article>;
 }
 
-export function Orders({list, bridge,sources=[]}: {list: OrderSummary[]; bridge: ConnectBridge;sources?:WorkspaceSource[]}) {
+export function Orders({list, bridge,sources=[],searchable=false}: {list: OrderSummary[]; bridge: ConnectBridge;sources?:WorkspaceSource[];searchable?:boolean}) {
+  const [input,setInput]=useState("");
+  const [search,setSearch]=useState("");
+  const [results,setResults]=useState<OrderSummary[]|null>(null);
+  const [searchError,setSearchError]=useState("");
+  useEffect(()=>{
+    let live=true;
+    setSearchError("");setResults(null);
+    if(search)void bridge.workspaceSearchOrders(search).then(rows=>{if(live)setResults(rows);}).catch(e=>{
+      if(live)setSearchError(e instanceof Error?e.message:"Reconnect to search your orders.");
+    });
+    return ()=>{live=false;};
+  },[bridge,search]);
+  const visible=search ? (results || []).map(row=>{
+    const newer=list.find(recent=>recent.proofId===row.proofId && recent.revision>row.revision);
+    return newer || row;
+  }) : list;
   const [selected,setSelected] = useState("");
   const [detail,setDetail] = useState<OrderDetail|null>(null);
   const [message,setMessage] = useState("");
   const [attempt,setAttempt] = useState(0);
-  const current = list.find(item => item.proofId === selected);
+  const current = visible.find(item => item.proofId === selected);
   useEffect(() => {
     let live = true;
     setMessage("");
@@ -79,14 +95,24 @@ export function Orders({list, bridge,sources=[]}: {list: OrderSummary[]; bridge:
     }
     return () => {live = false;};
   }, [bridge,current?.proofId,current?.revision,attempt]);
-  if (!list.length) return <p>Waiting for the first order.</p>;
+
   return <div>
-    <ul className="ws-orders">{list.map(item => <li key={item.proofId}>
+    {searchable && <form className="ws-actions" onSubmit={e=>{e.preventDefault();setSelected("");setSearch(input.trim());}}>
+      <label>Order reference<input maxLength={200} value={input} onChange={e=>setInput(e.target.value)}/></label>
+      <button className="secondary" disabled={!input.trim()}>Find order</button>
+      {search && <button type="button" className="quiet" onClick={()=>{setInput("");setSearch("");setSelected("");}}>Show recent orders</button>}
+    </form>}
+    {searchError && <p role="alert">{searchError}</p>}
+    {!visible.length && !searchError && <p role="status">{search ? results===null ? "Finding your order…" : "No order with that reference was found." : "Waiting for the first order."}</p>}
+    <ul className="ws-orders">{visible.map(item => <li key={item.proofId}>
       <button className="ws-order-link" aria-pressed={selected === item.proofId} onClick={()=>setSelected(item.proofId)}>
         <strong>{item.orderReference}</strong><span>Revision {item.revision}</span></button>
     </li>)}</ul>
     {current && (message ? <div role="alert">{message} <button className="quiet" onClick={()=>setAttempt(attempt+1)}>Retry</button></div> :
-      detail && detail.revision === current.revision && detail.proofId === current.proofId ? <OrderView order={detail} sourceNames={Object.fromEntries(sources.map(s=>[s.id,s.folder.split(/[\\/]/).filter(Boolean).at(-1) || s.folder]))}/> : <p role="status">Loading order…</p>)}
+      detail && detail.revision === current.revision && detail.proofId === current.proofId ? <><OrderView order={detail} sourceNames={Object.fromEntries(sources.map(s=>[s.id,s.folder.split(/[\\/]/).filter(Boolean).at(-1) || s.folder]))}/>
+        {detail.totals && (detail.totals.events>detail.events.length || detail.totals.lines>detail.lines.length || detail.totals.evidence>detail.evidence.length) &&
+          <p>The desktop preview shows a selection from this revision. Open the online order for the complete record.</p>}
+        <button className="secondary" onClick={()=>void bridge.openWorkspaceOrder(detail.proofId,detail.revision).catch(e=>setMessage(e instanceof Error?e.message:"Could not open the online order."))}>Open online order</button></> : <p role="status">Loading order…</p>)}
   </div>;
 }
 

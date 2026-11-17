@@ -1,11 +1,11 @@
-import {app,BrowserWindow,protocol,net,ipcMain,dialog,shell,session} from 'electron';
+import {app,BrowserWindow,clipboard,protocol,net,ipcMain,dialog,shell,session} from 'electron';
 import {readFile,writeFile,stat} from 'node:fs/promises';
 import {join,resolve,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
-import {currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
+import {workspaceParams,currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
 import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {ConnectStatus} from '../ui/types';
@@ -26,6 +26,28 @@ async function openWorkspaceApproval(current:ConnectStatus) {
 }
 function setup(){
  bind('confirmWorkspaceOrderMap',(sourceId,expectedGeneration,profileVersion)=>mutate('confirmWorkspaceOrderMap',{sourceId,expectedGeneration,profileVersion}));
+ bind('openWorkspaceReview',async()=>{
+  const current=await status();
+  if(!current.installationId || current.state==='revoked') throw Error('Connect this computer before opening online review.');
+  const params=workspaceParams(current);
+  await open(new URL('/app/needs-attention?'+params,config.webBaseUrl).href);
+ });
+ bind('openWorkspaceOrder', async (proofId,revision)=>{
+  const allowed=await bridge.request('workspaceOrderDetail',{proofId,revision}) as {proofId?:string;revision?:number};
+  if(allowed?.proofId!==proofId || allowed.revision!==revision) throw Error('Select this order again to open it online.');
+  const params=workspaceParams(await status());
+  await open(new URL('/app/order-proofs/'+encodeURIComponent(proofId)+'?'+params,config.webBaseUrl).href);
+ });
+ bind('workspaceSearchOrders',async query=>rendererSafe(await bridge.request('workspaceSearchOrders',{query})));
+ bind('workspaceAttention',async()=>rendererSafe(await bridge.request('workspaceAttention')));
+ bind('addWorkspaceDirectSource',()=>mutate('addWorkspaceDirectSource',{role:'order'}));
+ bind('copyWorkspaceDirectProfile',async sourceId=>{
+  const profile=rendererSafe(await bridge.request('workspaceDirectConnection',{sourceId}));
+  if(!profile || typeof profile!=='object')throw Error('Approve this source before copying its connection details.');
+  const encoded=JSON.stringify(profile,null,2);
+  if(encoded.length>8192)throw Error('The connection details are unavailable. Check the source in Settings.');
+  clipboard.writeText(encoded);
+ });
  bind('workspaceDraftPreview',async()=>rendererSafe(await bridge.request('workspaceDraftPreview')));
  bind('workspaceOrderDetail', async (proofId,revision) => rendererSafe(await bridge.request('workspaceOrderDetail', {proofId,revision})));
  bind('chooseWorkspaceFolder', async role => {

@@ -18,7 +18,7 @@ public sealed partial class AgentRuntime
         var sampled = false;
         long totalBytes = 0;
         var clock = Stopwatch.StartNew();
-        foreach (var source in Draft().Sources.Where(s => !s.Paused && s.Roles.Count > 0))
+        foreach (var source in Draft().Sources.Where(s => !s.Paused && s.Roles.Count > 0 && !string.IsNullOrWhiteSpace(s.Folder)))
         {
             ct.ThrowIfCancellationRequested();
             if (clock.Elapsed > TimeSpan.FromSeconds(10) || totalBytes >= 16L * 1024 * 1024) { sampled = true; break; }

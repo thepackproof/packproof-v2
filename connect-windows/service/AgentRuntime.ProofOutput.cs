@@ -169,6 +169,26 @@ public sealed partial class AgentRuntime
         }
     }
 
+    private async Task PublishOutputRevision(ProofOutputBundle writer,ProofOutputJob job,CancellationToken ct)
+    {
+        var revision=await api.Request("GET",$"/v1/partner/agent/order-proofs/{job.ProofId}/revisions/{job.Revision}",null,state.Token,null,ct);
+        ct.ThrowIfCancellationRequested();
+        var originals=new List<ProofOutputBundle.ManifestEntry>();
+        if(revision.TryGetProperty("originalArtifacts",out var artifacts))
+        {
+            if(artifacts.ValueKind!=JsonValueKind.Array || artifacts.GetArrayLength()>512)throw InvalidFeed();
+            foreach(var binding in artifacts.EnumerateArray())
+            {
+                var receipt=binding.GetProperty("receiptId").GetString();
+                if(!IsProofId(receipt))throw InvalidFeed();
+                var path=$"/v1/partner/agent/order-proofs/{job.ProofId}/revisions/{job.Revision}/artifacts/{receipt}";
+                var artifact=await api.Request("GET",path,null,state.Token,null,ct);
+                originals.Add(writer.StoreLinkedOriginal(revision,job.ProofId,binding,artifact));
+            }
+        }
+        writer.Publish(revision,job.ProofId,job.Revision,originals);
+    }
+
     internal async Task TickProofOutput(CancellationToken ct)
     {
         var target = state.ProofOutput;
@@ -183,7 +203,8 @@ public sealed partial class AgentRuntime
         try
         {
             await FetchOutputJobs(target,ct);
-            job=target.Jobs.FirstOrDefault(j=>j.NextAttemptAt==null || j.NextAttemptAt<=now);
+            var due = target.Jobs.Where(j=>j.NextAttemptAt==null || j.NextAttemptAt<=now).ToArray();
+            job=due.FirstOrDefault();
             if (job==null)
             {
                 if (target.Jobs.Count==0 && target.State=="pending") { target.State="ready";target.ErrorCode=null;Save(); }
@@ -194,24 +215,18 @@ public sealed partial class AgentRuntime
                 throw new ConnectException("OUTPUT_LOCATION_CHANGED","The destination now points to a different folder. Verify and choose the intended folder again.");
             target.PhysicalPath=root.KeyStrings;
             using var writer=new ProofOutputBundle(target.Folder,target.Writer);
-            var revision=await api.Request("GET",$"/v1/partner/agent/order-proofs/{job.ProofId}/revisions/{job.Revision}",null,state.Token,null,ct);
-            ct.ThrowIfCancellationRequested();
-            var originals=new List<ProofOutputBundle.ManifestEntry>();
-            if(revision.TryGetProperty("originalArtifacts",out var artifacts))
+            // Publish the newest visible tip promptly while retaining older audit jobs.
+            // A bounded turn gives intake and the next source a chance to run.
+            var turn=System.Diagnostics.Stopwatch.StartNew();
+            var newest=due.GroupBy(j=>j.ProofId).Select(g=>g.MaxBy(j=>j.Sequence)!).ToArray();
+            foreach(var next in newest.Concat(due).DistinctBy(j=>j.Sequence).Take(4))
             {
-                if(artifacts.ValueKind!=JsonValueKind.Array || artifacts.GetArrayLength()>512)throw InvalidFeed();
-                foreach(var binding in artifacts.EnumerateArray())
-                {
-                    var receipt=binding.GetProperty("receiptId").GetString();
-                    if(!IsProofId(receipt))throw InvalidFeed();
-                    var path=$"/v1/partner/agent/order-proofs/{job.ProofId}/revisions/{job.Revision}/artifacts/{receipt}";
-                    var artifact=await api.Request("GET",path,null,state.Token,null,ct);
-                    originals.Add(writer.StoreLinkedOriginal(revision,job.ProofId,binding,artifact));
-                }
+                job=next;
+                await PublishOutputRevision(writer,job,ct);
+                target.Jobs.Remove(job);
+                if(job.Sequence>=target.LastPublishedSequence) { target.LastPublishedSequence=job.Sequence;target.CompletedRevision=job.Revision; }
+                if(turn.Elapsed>TimeSpan.FromSeconds(1))break;
             }
-            writer.Publish(revision,job.ProofId,job.Revision,originals);
-            target.Jobs.Remove(job);
-            if(job.Sequence>=target.LastPublishedSequence) { target.LastPublishedSequence=job.Sequence;target.CompletedRevision=job.Revision; }
             target.State=target.Jobs.Count==0 && !target.HasMore ? "current" : "pending";
             target.ErrorCode=target.Jobs.FirstOrDefault(j=>j.ErrorCode!=null)?.ErrorCode;
         }

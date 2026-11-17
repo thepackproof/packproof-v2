@@ -83,6 +83,80 @@ public sealed class WorkspaceServiceTests
         }
     }
 
+    [Fact]
+    public async Task Capacity_failure_preserves_checkpoint_and_cold_restore_resumes_exact_work()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = Directory.CreateTempSubdirectory("pp-workspace-recovery-").FullName;
+        var folder = Directory.CreateDirectory(Path.Combine(root, "input")).FullName;
+        var output = Directory.CreateDirectory(Path.Combine(root, "output")).FullName;
+        var snapshot = Path.Combine(root, "backup");
+        var store = new ProtectedStore(Path.Combine(root,"original"),new TestProtector());
+        store.Initialize();
+        var host = new HostConfiguration("development","https://api.example","https://portal.example","S-1-5-32-545");
+        var api = new WorkspaceServer { Active = true };
+        var original = new LocalState { InstallationId = "recovery-fixture", Token = "fixture", CredentialExpiresAt = DateTimeOffset.UtcNow.AddDays(40) };
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            using (var app = new AgentRuntime(host, store, new(host,api),original,queueFileLimit:1))
+            {
+                await app.Command("addWorkspaceSource",Json.Element(new {folder,role="order"}),default);
+                await app.Command("setWorkspaceOutput",Json.Element(new { folder = output }), default);
+                await app.Command("activateWorkspace",Json.Element(new{}),default);
+                foreach (var id in new[] { "A", "B" })
+                    await File.WriteAllBytesAsync(Path.Combine(folder,id+".json"), Json.Bytes(new { eventId=id,version="1",kind="order",entityNamespace="erp",entityType="order",entityId=id }));
+                await app.Tick(default);
+                var retained = store.Read<LocalState>("state.bin")!;
+                Assert.Equal("SPOOL_CAPACITY_REACHED",retained.Workspace!.Sources.Single().Issue);
+                Assert.Equal(1,retained.Workspace.Sources.Single().Inventory.Count);
+                Assert.Empty(api.Uploads);
+                await app.Command("checkpoint",null,default);
+            }
+            // Copy a closed, checkpointed store including protected state, SQLite, spool key and payloads.
+            // A running service must never share a writable data root with its restored copy.
+            CopyTree(store.Root,snapshot);
+            var restoreTime = System.Diagnostics.Stopwatch.StartNew();
+            var restored = new ProtectedStore(Path.Combine(root,"restored"),new TestProtector());
+            CopyTree(snapshot,restored.Root);
+            var reloaded = restored.Read<LocalState>("state.bin")!;
+            var retainedJob = reloaded.Workspace!.Sources.Single().Inventory.Single().Value;
+            Assert.Equal(1L,retainedJob.Sequence);
+            Assert.Equal(store.Read<LocalState>("state.bin")!.ProofOutput!.Writer,reloaded.ProofOutput!.Writer);
+            Assert.Equal(store.Read<LocalState>("state.bin")!.ProofOutput!.Cursor,reloaded.ProofOutput.Cursor);
+            using (var verified = new DurableQueue(restored))
+            {
+                var entry = verified.Entries().Single();
+                Assert.Equal(retainedJob.Digest,entry.Digest);
+                Assert.Equal("A.json",verified.Payload(entry).FileName);
+            }
+            var recoveryMillis = restoreTime.ElapsedMilliseconds;
+            // Simulate the next scheduled retry without waiting ten seconds.
+            reloaded.Workspace.Sources.Single().RetryAt = DateTimeOffset.MinValue;
+            using (var app = new AgentRuntime(host,restored,new(host,api),reloaded))
+            {
+                await app.Tick(default);
+                await app.Tick(default);
+                Assert.Equal(2,api.Uploads.Count);
+                Assert.Equal(2,api.Uploads.Select(p=>p.GetProperty("observationId").GetString()).Distinct().Count());
+                Assert.Equal(2,restored.Read<LocalState>("state.bin")!.Workspace!.Sources.Single().Inventory.Count);
+            }
+            Console.WriteLine($"Windows cold restore of one captured observation + one replayable file: {recoveryMillis} ms to verified state, {started.ElapsedMilliseconds} ms total, 0 lost captured observations.");
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(root,recursive:true);
+        }
+    }
+
+    private static void CopyTree(string source,string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach(var path in Directory.EnumerateFiles(source)) File.Copy(path,Path.Combine(destination,Path.GetFileName(path)));
+        foreach(var child in Directory.EnumerateDirectories(source)) CopyTree(child,Path.Combine(destination,Path.GetFileName(child)));
+    }
+
     private sealed class TestProtector : ISecretProtector
     {
         public byte[] Protect(byte[] value) => value.ToArray();

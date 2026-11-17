@@ -6,6 +6,8 @@ import {organizationAdmin} from '../platform/organizations.js';
 import {agentWorkspace,type Installation} from './agent-enrollments.js';
 import {requireRecordWorkspace} from './access.js';
 import {checkedInstallation,workspaceState,proposeScope,readSession,decideSession} from './order-workspace.js';
+import {decideAssociation,humanAttentionFilter,deviceAttentionFilter,attention} from './order-review.js';
+import {storeDerivation} from './order-derivatives.js';
 import {readOrderArtifact} from './order-artifact.js';
 import {ingestOrderFile} from './order-ledger.js';
 import {agentOrderFilter,humanOrderFilter,listOrders,orderChanges,readOrder} from './order-feed.js';
@@ -31,6 +33,16 @@ export function orderHumanRouter(deps:AppDependencies){
    return fn(tx,await humanOrderFilter(tx,w,r.query.locationId),r);
   });s.set('Cache-Control','private, no-store').json(result);
  });
+ router.get('/order-attention',route(async(r,s)=>{
+  const a=await deps.auth.authenticate(r.headers);
+  const value=await deps.db.transaction(async tx=>{const w=await requireRecordWorkspace(tx,a.userId,r.query.organizationId,r.query.environment);return attention(tx,await humanAttentionFilter(tx,w,r.query.locationId));});
+  s.set('Cache-Control','private, no-store').json(value);
+ }));
+ router.post('/order-proofs/:proofId/associations',route(async(r,s)=>{
+  const a=await deps.auth.authenticate(r.headers);
+  const value=await deps.db.transaction(async tx=>{const w=await requireRecordWorkspace(tx,a.userId,r.body?.organizationId,r.body?.environment,true);return decideAssociation(tx,deps.clock,w,r.params.proofId,r.body,r.header('Idempotency-Key'));});
+  s.set('Cache-Control','private, no-store').json(value);
+ }));
  router.get('/order-proofs',read((tx,f,r)=>listOrders(tx,f,r.query.q,r.query.limit)));
  router.get('/order-changes',read((tx,f,r)=>orderChanges(tx,f,r.query.after,r.query.limit)));
  router.get('/order-proofs/:proofId',read((tx,f,r)=>readOrder(tx,f,r.params.proofId)));
@@ -46,7 +58,9 @@ export function orderAgentRouter(deps:AppDependencies){
  });
  router.get('/agent/order-workspace',call((tx,i)=>workspaceState(tx,deps.clock,i)));
  router.post('/agent/order-workspace/proposals',call((tx,i,_a,r)=>proposeScope(tx,deps.clock,i,r.body),true));
+ router.post('/agent/order-workspace/derivatives',call((tx,i,_a,r)=>storeDerivation(tx,i,r.body),true));
  router.post('/agent/order-workspace/observations',call((tx,i,a,r)=>ingestOrderFile(deps,tx,a,i,r.body),true));
+ router.get('/agent/order-attention',call(async(tx,i)=>attention(tx,await deviceAttentionFilter(tx,i))));
  router.get('/agent/order-proofs',call(async(tx,i,_a,r)=>listOrders(tx,await agentOrderFilter(tx,i),r.query.q,r.query.limit)));
  router.post('/agent/order-changes',call(async(tx,i,_a,r)=>orderChanges(tx,await agentOrderFilter(tx,i),r.body?.after,r.body?.limit)));
  router.get('/agent/order-proofs/:proofId/revisions/:revision/artifacts/:receiptId',call((tx,i,_a,r)=>readOrderArtifact(deps,tx,i,r.params.proofId,r.params.revision,r.params.receiptId)));

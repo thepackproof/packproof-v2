@@ -10,7 +10,7 @@ public sealed partial class AgentRuntime
     private JsonElement[] workspaceOrders = [];
     private string? ordersScope;
     private bool ordersCurrent;
-    private IEnumerable<string> WorkspaceSourceFolders => state.Workspace?.Sources.Where(s => s.Roles.Count > 0).Select(s => s.Folder) ?? [];
+    private IEnumerable<string> WorkspaceSourceFolders => state.Workspace?.Sources.Where(s => s.Transport == "folder" && s.Roles.Count > 0).Select(s => s.Folder) ?? [];
     private bool CurrentInstallation => !checkpointed && state.Token is not null && ServerState is not ("revoked" or "paused")
         && state.CredentialRecoveryConfirmedAt is null && state.CredentialExpiresAt > DateTimeOffset.UtcNow
         && state.Transport?.State is not ("unauthenticated" or "forbidden");
@@ -76,11 +76,11 @@ public sealed partial class AgentRuntime
             syncState = WorkspaceGrantCurrent && networkOnline && ordersCurrent ? "current" : "pending",
             sources = (w?.Sources ?? []).Where(s => s.Roles.Count > 0).Select(s => new
             {
-                s.Id, s.Folder, s.Roles, s.Generation, recognition = s.Recognition ?? Json.Element(new { state = "incomplete", message = "Check this folder to preview its records.", fields = Array.Empty<string>() }),
+                s.Id, s.Folder, s.DisplayName, s.Transport, s.SourceNamespace, s.Roles, s.Generation, recognition = s.Recognition ?? Json.Element(new { state = "incomplete", message = "Check this folder to preview its records.", fields = Array.Empty<string>() }),
                 state = s.Paused ? "paused" : s.Issue is not null ? "needs_attention"
                     : s.PreviousCollectorId is { } priorId && !s.ReplacesPreviousCollector ? state.SourceSubscriptions.FirstOrDefault(p => p.Id == priorId)?.ServerState ?? "needs_approval"
                     : WorkspaceGrantCurrent && w!.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation ? "active" : "pending",
-                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt,
+                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, pendingMedia = s.MediaJobs.Count,
                 queued = queue.Counts(DurableQueue.WorkspaceLane(s.Id)).Where(p => p.Key != "complete").Sum(p => p.Value)
             }).ToArray()
         };
@@ -101,11 +101,26 @@ public sealed partial class AgentRuntime
                 if (!OrderWorkspaceState.IsStep(step)) throw new ConnectException("STEP_INVALID", "Choose a setup step.");
                 w.Step = step;
                 break;
+            case "addWorkspaceDirectSource":
+                if (p.GetProperty("role").GetString() != "order") throw new ConnectException("SOURCE_ROLE_INVALID", "Partner API connections supply order records.");
+                w.ConnectPartner(Optional(p,"sourceNamespace")?.GetString() ?? "partner-api");
+                break;
             case "addWorkspaceSource":
+            {
                 var raw = p.GetProperty("folder").GetString() ?? "";
                 ValidateProofSourceFolder(raw);
                 var folder = FolderSource.ValidateWorkspaceRoot(raw);
-                var picked = w.Assign(folder, p.GetProperty("role").GetString() ?? "");
+                using var pin = new ProofOutputPaths.DirectoryPin(folder);
+                var physical = pin.KeyStrings.FirstOrDefault();
+                var equivalent = physical == null ? null : w.Sources.FirstOrDefault(s => s.PhysicalRoot == physical && s.Roles.Count > 0);
+                var picked = w.Assign(equivalent?.Folder ?? folder, p.GetProperty("role").GetString() ?? "");
+                if (picked.PhysicalRoot is { } oldRoot && oldRoot != physical)
+                {
+                    picked.Generation = checked(picked.Generation + 1);
+                    picked.ConfirmedMap = null;
+                    w.Invalidate();
+                }
+                picked.PhysicalRoot = physical;
                 if (picked.PreviousCollectorId is not null && picked.Roles.Count > 1)
                 {
                     // Transition only after a new exact scope is approved. Existing queued
@@ -114,6 +129,7 @@ public sealed partial class AgentRuntime
                 }
                 InspectWorkspaceSource(picked);
                 break;
+            }
             case "confirmWorkspaceOrderMap":
                 var toMap = Source(w,p);
                 if (toMap.Generation != p.GetProperty("expectedGeneration").GetInt32() || toMap.ProposedMap == null
@@ -127,7 +143,7 @@ public sealed partial class AgentRuntime
                 break;
             case "inspectWorkspaceSource":
                 var inspected = Source(w,p);
-                InspectWorkspaceSource(inspected);
+                if (inspected.Transport == "folder") InspectWorkspaceSource(inspected);
                 break;
             case "removeWorkspaceRole":
                 var changed = Source(w, p);
@@ -137,7 +153,7 @@ public sealed partial class AgentRuntime
                     changed.Paused = changed.Roles.Count == 0;
                     changed.Recognition = null;
                     w.Invalidate();
-                    if (changed.Roles.Count > 0) InspectWorkspaceSource(changed);
+                    if (changed.Roles.Count > 0 && changed.Transport == "folder") InspectWorkspaceSource(changed);
                 }
                 break;
             case "setWorkspaceOutput":
@@ -183,8 +199,9 @@ public sealed partial class AgentRuntime
         var outputDigest = SourceFolderDigest(output);
         var proposal = new
         {
-            sources = sources.Select(s => new { id = s.Id, generation = s.Generation, folderDigest = SourceFolderDigest(s.Folder),
-                roles = s.Roles.Order(StringComparer.Ordinal).ToArray(), profileVersion = s.ProfileVersion, displayName = s.Folder }).ToArray(),
+            sources = sources.Select(s => new { id = s.Id, generation = s.Generation, folderDigest = s.Transport == "api" ? Hash(JsonSerializer.Serialize(new { provider = "partner-api", account = Optional(state.ServerConfig,"integrationAccountId"), s.SourceNamespace })) : SourceFolderDigest(s.Folder),
+                transport = s.Transport, sourceNamespace = s.SourceNamespace,
+                roles = s.Roles.Order(StringComparer.Ordinal).ToArray(), profileVersion = s.ProfileVersion, displayName = s.Transport == "api" ? s.DisplayName + " (" + s.SourceNamespace + ")" : s.Folder }).ToArray(),
             outputDigest, outputName = output, history = OrderWorkspaceState.History
         };
         var result = await api.Request("POST", WorkspaceApi + "/proposals", proposal, state.Token, null, ct);
@@ -237,6 +254,20 @@ public sealed partial class AgentRuntime
         var result = await api.Request("GET", WorkspaceApi, null, state.Token, null, ct);
         ApplyWorkspaceResponse(w, result);
         Save();
+    }
+
+    private object WorkspaceDirectConnection(JsonElement p)
+    {
+        var w = state.Workspace;
+        if (!WorkspaceGrantCurrent || w?.ActiveGrant is not { } grant)
+            throw new ConnectException("AUTH_REQUIRED", "Approve the API order source before copying its connection settings.");
+        var source = Source(w,p);
+        if (source.Transport != "api" || source.Paused || grant.Generations.GetValueOrDefault(source.Id) != source.Generation)
+            throw new ConnectException("SOURCE_SCOPE_CHANGED", "Review this API source and its current access.");
+        return new { name = source.DisplayName, endpoint = host.ApiOrigin.TrimEnd('/') + "/v1/partner/proofs", method = "POST",
+            sourceNamespace = source.SourceNamespace, integrationAccountId = Optional(state.ServerConfig,"integrationAccountId"),
+            operatorMembershipId = Optional(state.ServerConfig,"operatorMembershipId"),
+            connectOperation = new { installationId = grant.InstallationId, scopeDigest = grant.ScopeDigest, sourceId=source.Id, generation=source.Generation } };
     }
 
     private async Task<object> WorkspaceOrderDetail(JsonElement p, CancellationToken ct)

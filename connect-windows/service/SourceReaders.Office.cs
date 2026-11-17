@@ -37,7 +37,7 @@ public static partial class SourceReaders
                         bool formula=cell.CellType==CellType.Formula;var type=formula?cell.CachedFormulaResultType:cell.CellType;
                         object? value=type switch{
                             CellType.Blank=>null,CellType.Boolean=>cell.BooleanCellValue,CellType.String=>cell.StringCellValue,
-                            CellType.Numeric when DateUtil.IsCellDateFormatted(cell)=>cell.DateCellValue?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff",CultureInfo.InvariantCulture),
+                            CellType.Numeric when DateUtil.IsCellDateFormatted(cell)=>((DateTime?)cell.DateCellValue)?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff",CultureInfo.InvariantCulture),
                             CellType.Numeric=>cell.NumericCellValue.ToString("R",CultureInfo.InvariantCulture),
                             CellType.Error=>new{error=cell.ErrorCellValue},_=>null};
                         if(value is string s)Require(s.Length<=MaxCell,"A workbook cell exceeds the size limit.");

@@ -207,9 +207,13 @@ public static partial class SourceReaders
         using var document=JsonDocument.Parse(text,new(){MaxDepth=48});
         var root=document.RootElement;
         ValidateJson(root);
-        string? collection=profile.JsonCollection;
+        int initial=rows.Count;bool epcis=false;string? collection=profile.JsonCollection;
         if(root.ValueKind==JsonValueKind.Object && root.TryGetProperty("epcisBody",out var body) && body.ValueKind==JsonValueKind.Object && body.TryGetProperty("eventList",out var list))
-        {root=list;location+=".epcisBody.eventList";}
+        {
+            epcis=root.TryGetProperty("type",out var t)&&t.ValueKind==JsonValueKind.String&&t.GetString()=="EPCISDocument" &&
+                root.TryGetProperty("schemaVersion",out var v)&&v.ValueKind==JsonValueKind.String&&v.GetString()=="2.0";
+            root=list;location+=".epcisBody.eventList";
+        }
         else if(collection is not null || root.ValueKind==JsonValueKind.Object && root.TryGetProperty("records",out _))
         {
             collection??="records";Require(root.ValueKind==JsonValueKind.Object&&root.TryGetProperty(collection,out _),"The approved JSON collection is missing.");
@@ -223,6 +227,7 @@ public static partial class SourceReaders
         }
         if(root.ValueKind==JsonValueKind.Array){int n=0;foreach(var e in root.EnumerateArray())Emit(e,$"{location}[{n++}]");}
         else Emit(root,location);
+        if(epcis)EpcisJson(rows,initial);
     }
     private static void ValidateJson(JsonElement value)
     {
@@ -272,7 +277,10 @@ public static partial class SourceReaders
                 Require(rows.Count>=initial,"The embedded record is incomplete.");continue;
             }
             var obj=XmlFields(e);
-            Add(rows,Row(location,obj,k=>location+"/"+k));
+            var row=Row(location,obj,k=>location+"/"+k);
+            if(root.Name.LocalName=="EPCISDocument"&&root.Name.NamespaceName=="urn:epcglobal:epcis:xsd:2"&&
+                (string?)root.Attribute("schemaVersion")=="2.0"&& EpcisTypes.Contains(e.Name.LocalName))EpcisXml(e,row);
+            Add(rows,row);
         }
     }
     private static Dictionary<string,JsonElement> XmlFields(XElement element)

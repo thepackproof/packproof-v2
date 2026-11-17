@@ -50,6 +50,23 @@ public sealed class OrderWorkspaceState
         return source;
     }
 
+    public WorkspaceSource ConnectPartner(string sourceNamespace)
+    {
+        if (sourceNamespace.Length is < 1 or > 100 || sourceNamespace.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')))
+            throw new ConnectException("SOURCE_NAMESPACE_INVALID", "Choose a system reference of up to 100 letters, digits, dots, dashes or underscores.");
+        var existing = Sources.FirstOrDefault(s => s.Transport == "api" && s.SourceNamespace == sourceNamespace);
+        if (existing is { Roles.Count: >0 }) return existing;
+        if (existing is null && Sources.Count >= 24) throw new ConnectException("SOURCE_LIMIT", "This operation has reached its limit of 24 sources.");
+        var source = existing ?? new WorkspaceSource { Id = Guid.NewGuid().ToString("N"), Folder = "", Transport = "api", SourceNamespace = sourceNamespace };
+        if (existing is null) Sources.Add(source);
+        else source.Generation = checked(source.Generation + 1);
+        source.Roles = ["order"];
+        source.Paused = false;
+        source.Recognition = Json.Element(new { state = "empty", message = "Waiting for the first order from the PackProof Partner API.", fields = Array.Empty<string>() });
+        Invalidate();
+        return source;
+    }
+
     public void Invalidate()
     {
         ContinueAfterEnrollment = false;
@@ -69,12 +86,16 @@ public sealed class WorkspaceSource
 {
     public required string Id { get; set; }
     public required string Folder { get; set; }
+    public string Transport { get; set; } = "folder";
+    public string? SourceNamespace { get; set; }
+    public string DisplayName => Transport == "api" ? "PackProof Partner API" : Folder;
     public int Generation { get; set; } = 1;
+    public string? PhysicalRoot { get; set; }
     public List<string> Roles { get; set; } = [];
     public JsonElement? Recognition { get; set; }
     public OrderColumnMap? ProposedMap { get; set; }
     public OrderColumnMap? ConfirmedMap { get; set; }
-    public string ProfileVersion => ConfirmedMap is null ? SourceReaders.ProfileId : SourceReaders.OrderProfileVersion(ConfirmedMap);
+    public string ProfileVersion => Transport == "api" ? "packproof.partner-order/v1" : ConfirmedMap is null ? SourceReaders.ProfileId : SourceReaders.OrderProfileVersion(ConfirmedMap);
     public bool Paused { get; set; }
     public string? Cursor { get; set; }
     public DateTimeOffset? LastScanAt { get; set; }

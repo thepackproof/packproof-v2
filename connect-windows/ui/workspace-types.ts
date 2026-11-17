@@ -10,6 +10,8 @@ export interface WorkspaceSource {
   folder: string;
   roles: SourceRole[];
   generation: number;
+  transport?: "file" | "folder" | "api";
+  displayName?: string;
   state: string;
   recognition: {
     state: string;
@@ -33,6 +35,7 @@ export interface OrderDetail extends OrderSummary {
   evidence: Record<string,unknown>[];
   packages?: Record<string,unknown>[];
   conflicts?: string[];
+  totals?: {events:number;evidence:number;lines:number};
 }
 export interface WorkspaceStatus {
   orders?: OrderSummary[];
@@ -64,8 +67,18 @@ export interface DraftPreview {
   }[];
   scannedFiles: number; unreadFiles: number; unresolved: number; limited: boolean;
 }
+export interface AttentionReport {
+  items:{sourceId?:string;fileName?:string;locator?:string;kind?:string;reason?:string}[];
+  hasMore:boolean;
+}
 export interface WorkspaceBridge {
+  workspaceAttention():Promise<AttentionReport>;
+  workspaceSearchOrders(query:string):Promise<OrderSummary[]>;
   confirmWorkspaceOrderMap(sourceId:string, expectedGeneration:number, profileVersion:string):Promise<ConnectStatus>;
+  openWorkspaceReview():Promise<void>;
+  openWorkspaceOrder(proofId:string,revision:number):Promise<void>;
+  addWorkspaceDirectSource():Promise<ConnectStatus>;
+  copyWorkspaceDirectProfile(sourceId:string):Promise<void>;
   workspaceDraftPreview(): Promise<DraftPreview>;
   workspaceOrderDetail(proofId: string, revision: number): Promise<OrderDetail>;
   chooseWorkspaceFolder(role: SourceRole): Promise<ConnectStatus>;

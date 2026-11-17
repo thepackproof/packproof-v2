@@ -30,6 +30,7 @@ function parseLine(v:unknown):Line{
 }
 export function parseRecord(input:unknown){
  const b=strictBody(input,['eventId','version','kind','entity','references','fields','lines','occurredAt','locator','sourceModifiedAt','fieldLineage']);
+ if(typeof b.eventId==='string'&&b.eventId.startsWith('@derivation:'))throw new DomainError('INVALID_REQUEST','Use an external event identifier.',400);
  const kind=b.kind==='returns'?'return':String(b.kind);
  if(!kinds.includes(kind)||!Array.isArray(b.references)||b.references.length>32||b.lines!=null&&(!Array.isArray(b.lines)||b.lines.length>256))throw new DomainError('PROFILE_AMBIGUOUS','The source record has unsupported relationships or line allocations.',422);
  const entity=reference(b.entity),references=b.references.map(reference);
