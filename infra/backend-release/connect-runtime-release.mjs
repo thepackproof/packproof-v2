@@ -1,5 +1,6 @@
 /** Source-bound, image-only release requests. No AWS calls, DDL, grants or feature activation. */
-import {shipmentRelease,shipmentRuntimeInventory,verifyShipmentDeploymentReview,verifyShipmentProbeReports,configureShipmentProbe} from './shipment-deployment-review.mjs';
+import {shipmentRelease,shipmentRuntimeInventory,shipmentReleaseInventory,verifyShipmentDeploymentReview,verifyShipmentProbeReports,configureShipmentProbe} from './shipment-deployment-review.mjs';
+import {backfillMigrationInventorySha256} from './reconstruction-v8-release-review.mjs';
 import {buildRequest} from './backend-release-requests.mjs';
 import {makePlan,TARGET,hash} from './backend-deployment-plan.mjs';
 
@@ -52,7 +53,7 @@ function validate(snapshot,r,now){
  check([r.apiRole,r.workerRole].every(v=>/^[a-z][a-z0-9_]{0,62}$/.test(v??''))&&r.apiRole!==r.workerRole,'CONNECT_RUNTIME_SEPARATE_LOGINS_REQUIRED');
  check(r.database?.host&&r.database.name&&['production','staging'].includes(r.environment)&&env(snapshot.api.express.activeConfigurations[0].primaryContainer).PACKPROOF_ENVIRONMENT===r.environment&&env(main(w.taskDefinition,'worker')).PACKPROOF_ENVIRONMENT===r.environment,'CONNECT_RUNTIME_DATABASE_REVIEW_REQUIRED');
  check(env(snapshot.api.express.activeConfigurations[0].primaryContainer).PACKPROOF_PROCESS_ROLE==='api'&&env(main(w.taskDefinition,'worker')).PACKPROOF_PROCESS_ROLE==='worker','CONNECT_RUNTIME_PROCESS_ROLES_REQUIRED');
- check(r.ciPassed===true&&r.sourceArchiveVerified===true&&digest.test(r.sourceArchiveSha256??'')&&r.inventorySha256===(shipmentRelease(r)?shipmentRuntimeInventory:CONNECT_RUNTIME_INVENTORY).sha256,'CONNECT_RUNTIME_SOURCE_GATES_REQUIRED');
+ check(r.ciPassed===true&&r.sourceArchiveVerified===true&&digest.test(r.sourceArchiveSha256??'')&&r.inventorySha256===(shipmentRelease(r)?shipmentReleaseInventory(r):CONNECT_RUNTIME_INVENTORY.sha256),'CONNECT_RUNTIME_SOURCE_GATES_REQUIRED');
  cloneTask(snapshot.api.taskDefinition);cloneTask(w.taskDefinition);
  if(shipmentRelease(r))verifyShipmentDeploymentReview(snapshot,r,now);
 }
@@ -78,9 +79,9 @@ export function connectRuntimePlan(snapshot,r,probes,now=Date.now(),script){
  const api=makePlan({...snapshot.api,account:snapshot.account,region:snapshot.region},{sourceSha:r.sourceSha,image:r.image,version:r.version,expectedPreviousImage:r.expectedApi.image,expectedPreviousTaskDefinition:r.expectedApi.taskDefinition,ciPassed:true,databasePreflightPassed:true,sourceArchiveVerified:true});
  const worker=cloneTask(snapshot.worker.taskDefinition);for(const c of worker.containerDefinitions){c.image=r.image;if(c===main(worker,'worker')||releaseNames.some(k=>Object.hasOwn(env(c),k)))replaceRelease(c,r);}
  check(hash(workerFixed({service:snapshot.worker.service,taskDefinition:{...worker,taskDefinitionArn:snapshot.worker.taskDefinition.taskDefinitionArn}}))===hash(workerFixed(snapshot.worker)),'CONNECT_RUNTIME_WORKER_PRESERVATION_FAILED');
- return {schema:shipmentPair?'packproof.connect-runtime-plan/v7':'packproof.connect-runtime-plan/v1',...(shipmentPair?{shipmentPair}:{}),sourceSha:r.sourceSha,image:r.image,reviewSha256:hash(r),configurationLeaseSha256:r.configurationLeaseSha256,preparedAt:new Date(now).toISOString(),expiresAt:r.expiresAt,apiConfigurationSha256:hash(snapshot.api.express.activeConfigurations),topologySha256:r.topologySha256,workerPredecessorSha256:hash(workerFixed(snapshot.worker)),workerPredecessorTaskDefinition:r.expectedWorker.taskDefinition,workerRegister:worker,apiUpdate:api.update,...(shipmentPair?{recovery:'Requalify the recovery images and reconcile admitted work before any reversal.'}:{rollbackApi:api.rollback,rollbackWorkerTaskDefinition:r.expectedWorker.taskDefinition}),workerServiceArn:r.expectedWorker.serviceArn,workerClusterArn:r.expectedWorker.clusterArn,order:['qualify_api_and_worker','promote_worker','verify_all_worker_tasks','promote_api','verify_public_identity_and_worker_health'],permittedChanges:['image','PACKPROOF_RELEASE_SHA','PACKPROOF_RELEASE_IMAGE','PACKPROOF_RELEASE_VERSION']};
+ return {schema:shipmentPair?r.schema.replace('runtime-review','runtime-plan'):'packproof.connect-runtime-plan/v1',...(shipmentPair?{shipmentPair}:{}),sourceSha:r.sourceSha,image:r.image,reviewSha256:hash(r),configurationLeaseSha256:r.configurationLeaseSha256,preparedAt:new Date(now).toISOString(),expiresAt:r.expiresAt,apiConfigurationSha256:hash(snapshot.api.express.activeConfigurations),topologySha256:r.topologySha256,workerPredecessorSha256:hash(workerFixed(snapshot.worker)),workerPredecessorTaskDefinition:r.expectedWorker.taskDefinition,workerRegister:worker,apiUpdate:api.update,...(shipmentPair?{recovery:'Requalify the recovery images and reconcile admitted work before any reversal.'}:{rollbackApi:api.rollback,rollbackWorkerTaskDefinition:r.expectedWorker.taskDefinition}),workerServiceArn:r.expectedWorker.serviceArn,workerClusterArn:r.expectedWorker.clusterArn,order:['qualify_api_and_worker','promote_worker','verify_all_worker_tasks','promote_api','verify_public_identity_and_worker_health'],permittedChanges:['image','PACKPROOF_RELEASE_SHA','PACKPROOF_RELEASE_IMAGE','PACKPROOF_RELEASE_VERSION']};
 }
-function planFresh(plan,now){check(['packproof.connect-runtime-plan/v1','packproof.connect-runtime-plan/v7'].includes(plan?.schema)&&fresh(plan.preparedAt,now)&&Date.parse(plan.expiresAt)>now,'CONNECT_RUNTIME_PLAN_EXPIRED');}
+function planFresh(plan,now){check(['packproof.connect-runtime-plan/v1','packproof.connect-runtime-plan/v7','packproof.connect-runtime-plan/v8'].includes(plan?.schema)&&fresh(plan.preparedAt,now)&&Date.parse(plan.expiresAt)>now,'CONNECT_RUNTIME_PLAN_EXPIRED');}
 export function connectWorkerRegistration(plan,now=Date.now()){planFresh(plan,now);return structuredClone(plan.workerRegister);}
 export function connectWorkerUpdate(plan,registered,observation,now=Date.now()){
  planFresh(plan,now);
@@ -132,13 +133,17 @@ export function connectProbeRunRequest(snapshot,r,kind,registered,script,now=Dat
 }
 /** Root Docker layout; source is re-fetched and checksummed even for an unversioned bucket. */
 export function connectRuntimeBuildRequest({sourceSha,archiveSha256,sourceVersion,predecessorImages,profile='zero-touch-v1'}){
- check(['zero-touch-v1','reconstruction-v7'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
- const v7=profile==='reconstruction-v7',inventory=v7?shipmentRuntimeInventory:CONNECT_RUNTIME_INVENTORY;
+ check(['zero-touch-v1','reconstruction-v7','reconstruction-v8'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
+ const reviewedProfile=profile!=='zero-touch-v1';
+ const inventories={'zero-touch-v1':CONNECT_RUNTIME_INVENTORY,'reconstruction-v7':shipmentRuntimeInventory,
+  'reconstruction-v8':{count:121,sha256:backfillMigrationInventorySha256}};
+ const inventory=inventories[profile];
  check(sha.test(sourceSha)&&digest.test(archiveSha256),'CONNECT_RUNTIME_BUILD_SOURCE_REQUIRED');
  check(Array.isArray(predecessorImages)&&predecessorImages.length>=1&&predecessorImages.length<=2&&predecessorImages.every(image),'CONNECT_RUNTIME_ROLLBACK_IMAGES_REQUIRED');
  const repository=TARGET.repository,key=`security-release/${sourceSha}/${archiveSha256}/backend.zip`;
- const verify=`docker run --rm -i --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module <<'JS'\nimport {createHash} from 'node:crypto';\nimport {readFile} from 'node:fs/promises';\nimport {migrationInventory} from './dist/db/migrate.js';\nconst rows=(await migrationInventory()).map(({id,checksum})=>({id,checksum}));\nif(process.getuid()===0||rows.length!==${inventory.count}||createHash('sha256').update(JSON.stringify(rows)).digest('hex')!=='${inventory.sha256}')throw Error('CONNECT_RUNTIME_BUILD_INVENTORY_MISMATCH');\nfor(const file of ['dist/records/csv-semantics.js','dist/records/connect-csv-rules.json','/app/packages/evidence-contracts/package.json'])await readFile(file);\nif(!(await readFile('dist/records/agent-restrictions.js','utf8')).includes('packproof.scheduled-csv/v2'))throw Error('CONNECT_RUNTIME_BUILD_V2_GUARDS_REQUIRED');\n${v7?`const {inspectReconstructionInventory}=await import('/release/reconstruction-v7-release-review.mjs');
-await import('/release/reconstruction-v7-runtime-preflight.mjs');
+ const verify=`docker run --rm -i --entrypoint node "$ECR:$IMAGE_TAG" --input-type=module <<'JS'\nimport {createHash} from 'node:crypto';\nimport {readFile} from 'node:fs/promises';\nimport {migrationInventory} from './dist/db/migrate.js';\nconst rows=(await migrationInventory()).map(({id,checksum})=>({id,checksum}));\nif(process.getuid()===0||rows.length!==${inventory.count}||createHash('sha256').update(JSON.stringify(rows)).digest('hex')!=='${inventory.sha256}')throw Error('CONNECT_RUNTIME_BUILD_INVENTORY_MISMATCH');\nfor(const file of ['dist/records/csv-semantics.js','dist/records/connect-csv-rules.json','/app/packages/evidence-contracts/package.json'])await readFile(file);\nif(!(await readFile('dist/records/agent-restrictions.js','utf8')).includes('packproof.scheduled-csv/v2'))throw Error('CONNECT_RUNTIME_BUILD_V2_GUARDS_REQUIRED');\n${reviewedProfile?`const {inspectReconstructionInventory}=await import('/release/${profile}-release-review.mjs');
+await import('/release/${profile}-runtime-preflight.mjs');
+${profile==='reconstruction-v8'?"await import('/release/backfill-automation-pair.mjs');":''}
 const full=await migrationInventory();
 inspectReconstructionInventory(full,rows,{inventorySha256:'${inventory.sha256}'});
 const {readShipmentAutomationPolicy}=await import('/release/shipment-automation-pair.mjs');

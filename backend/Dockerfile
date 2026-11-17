@@ -63,6 +63,9 @@ COPY infra/backend-release/reconstruction-v6-release-review.mjs /release/reconst
 COPY infra/backend-release/reconstruction-v6-runtime-preflight.mjs /release/reconstruction-v6-runtime-preflight.mjs
 COPY infra/backend-release/reconstruction-v7-release-review.mjs /release/reconstruction-v7-release-review.mjs
 COPY infra/backend-release/reconstruction-v7-runtime-preflight.mjs /release/reconstruction-v7-runtime-preflight.mjs
+COPY infra/backend-release/reconstruction-v8-release-review.mjs /release/reconstruction-v8-release-review.mjs
+COPY infra/backend-release/reconstruction-v8-runtime-preflight.mjs /release/reconstruction-v8-runtime-preflight.mjs
+COPY infra/backend-release/backfill-automation-pair.mjs /release/backfill-automation-pair.mjs
 COPY infra/backend-release/shipment-automation-pair.mjs /release/shipment-automation-pair.mjs
 COPY infra/backend-release/record-agent-previous-image-probe.mjs /release/record-agent-previous-image-probe.mjs
 COPY backend/scripts/isolated-runtime-entrypoint.mjs ./scripts/isolated-runtime-entrypoint.mjs

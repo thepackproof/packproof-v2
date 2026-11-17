@@ -3,8 +3,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {openIsolatedTestDatabase} from './isolated-test-database.js';
-import {migrate} from '../src/db/migrate.js';
+import {openIsolatedTestDatabase,migrateTestDatabaseThrough} from './isolated-test-database.js';
 import {insertUser} from '../src/domain/users.js';
 import {createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,PARTNER_SCOPES,type PartnerActor} from '../src/platform/organizations.js';
 import {importPartnerOrder} from '../src/platform/partner-proofs.js';
@@ -33,7 +32,7 @@ describe('actual typed intake and unlinked replay under migration 121 API and wo
  }
  beforeAll(async()=>{
   for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED','PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SUBSCRIPTIONS_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CROSS_CASE_ENABLED','PACKPROOF_PAGED_PROJECTIONS_ENABLED','PACKPROOF_SOURCE_HEALTH_ENABLED','PACKPROOF_RECONSTRUCTION_RULES_ENABLED','PACKPROOF_SOURCE_DISPOSITION_ENABLED','PACKPROOF_MULTI_SOURCE_AGENT_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_RELEASE_SHA',source);vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));
-  opened=await openIsolatedTestDatabase();await migrate(opened.db);ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
+  opened=await openIsolatedTestDatabase();await migrateTestDatabaseThrough(opened.db,121);ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name,owner=await insertUser(opened.db,clock),at=clock.now().toISOString();
   await opened.db.query("INSERT INTO api_tenants(id,owner_user_id,name,environment,created_at) VALUES($1,$2,'Worker role fixture','sandbox',$3)",['tenant_'+suffix,owner,at]);
   await opened.db.query("INSERT INTO platform_organizations(id,kind,name,owner_user_id,environment,tenant_id,enabled,created_at) VALUES($1,'MERCHANT','Worker role fixture',$2,'sandbox',$3,true,$4)",[org,owner,'tenant_'+suffix,at]);

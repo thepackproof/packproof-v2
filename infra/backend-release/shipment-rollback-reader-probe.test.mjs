@@ -13,7 +13,7 @@ const env={PACKPROOF_RELEASE_SHA:review.sourceSha,PACKPROOF_RELEASE_IMAGE:review
 const container={Image:review.image,ImageID:review.image.split('@')[1]};
 const task={Cluster:'test',TaskARN:review.clusterArn.replace(':cluster/',':task/')+'/'+'7'.repeat(32)};
 const root=new URL('../../backend/migrations/',import.meta.url);
-const names=(await readdir(root)).filter(name=>name.endsWith('.sql')).sort();
+const names=(await readdir(root)).filter(name=>name.endsWith('.sql')&&Number(name.slice(0,3))<=121).sort();
 const applied=await Promise.all(names.map(async name=>({id:name.slice(0,-4),checksum:createHash('sha256').update(await readFile(new URL(name,root))).digest('hex')})));
 const ddl=await readFile(new URL('121_shipment_interpretation_decisions.sql',root),'utf8');
 const prosrc=ddl.match(/LANGUAGE plpgsql AS \$\$([\s\S]*?)\$\$;/)[1];

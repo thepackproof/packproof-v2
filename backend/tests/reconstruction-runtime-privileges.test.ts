@@ -8,14 +8,14 @@ import {canonicalize} from '../src/canonical.js';
 import {sha256Hex} from '../src/hash.js';
 import { recordsMigrationInventory, planRecordsRuntimePrivileges, verifyRecordsRuntimePrivileges, type RecordsPrivilegeOptions } from '../scripts/records-runtime-privileges.mjs';
 
-describe.each([113,116,117,118,119,120,121] as const)('reconstruction%s API and worker database separation',profile=>{
+describe.each([113,116,117,118,119,120,121,122] as const)('reconstruction%s API and worker database separation',profile=>{
  let opened:Awaited<ReturnType<typeof openIsolatedTestDatabase>>,ownerRole:string,options:RecordsPrivilegeOptions,user:string;
  const suffix=randomBytes(6).toString('hex'),api=`recon_api_${suffix}`,worker=`recon_worker_${suffix}`,broad=`recon_broad_${suffix}`,source='a'.repeat(40),at='2026-11-14T12:00:00Z';
  const reset=()=>opened.db.query(`SET SESSION AUTHORIZATION "${ownerRole.replace(/"/g,'""')}"`);
  const asRole=async<T>(role:string,fn:(db:typeof opened.db)=>Promise<T>)=>{try{return await opened.db.transaction(async tx=>{await tx.query(`SET LOCAL SESSION AUTHORIZATION ${role}`);return fn(tx);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);opened=await openIsolatedTestDatabase();
-  if(profile<121)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
+  if(profile<122)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
   else await migrate(opened.db);
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
@@ -44,6 +44,16 @@ describe.each([113,116,117,118,119,120,121] as const)('reconstruction%s API and 
   else if(profile===117){expect(plan.policySha256).toBe('ced17ca1a4fadd3b74959b7f0b0b5a21279f24404eb44e747231751c7c18e9e0');expect(Object.keys((await recordsMigrationInventory(117)).migrations)).toHaveLength(22);}
   else if(profile<120){expect(plan.policySha256).toBe('0b8927e8893dcf7cb1da8e176d3a97765eb97014d3d7d565dcfe3572fb2fb300');expect(Object.keys((await recordsMigrationInventory(profile)).migrations)).toHaveLength(profile-95);const prior=(await recordsMigrationInventory(117)).tableColumns.record_typed_batches,current=(await recordsMigrationInventory(118)).tableColumns.record_typed_batches;expect(current).toEqual([...prior,'csv_snapshot_boundary_at']);if(profile===119)expect((await recordsMigrationInventory(119)).tableColumns).toEqual((await recordsMigrationInventory(118)).tableColumns);}
   else if(profile===120){expect(plan.policySha256).toBe('5f437b9e72480850e1bd1f3cd7b41bd1c1c9df0fb609aa6eb7fd39ee56b6ab4e');expect(Object.keys((await recordsMigrationInventory(120)).migrations)).toHaveLength(25);}
+ });
+ if(profile===122)it('verifies the replaced backfill scope guard and identical 121 grant policy under both restricted roles',async()=>{
+  const {verifyBackfillScopeGuard}=await import('../../infra/backend-release/reconstruction-v8-release-review.mjs');
+  const inventory=await migrationInventory(),ddl=inventory.find(row=>row.id==='122_backfill_collector_041')!.sql;
+  const prior=await recordsMigrationInventory(121);
+  expect((await recordsMigrationInventory(122)).tableColumns).toEqual(prior.tableColumns);
+  for(const role of [api,worker])await asRole(role,async db=>{
+   await verifyBackfillScopeGuard(db,ddl);
+   await expect(verifyBackfillScopeGuard(db,ddl.replace("i.version IN ('0.4.0','0.4.1')","i.version='0.4.0'"))).rejects.toThrow('BACKFILL_SCOPE_GUARD_MISMATCH');
+  });
  });
  if(profile===121)it('allows one API intake decision, preserves its worker read and denies later edits',async()=>{
   const prior=await recordsMigrationInventory(120),current=await recordsMigrationInventory(121);
@@ -131,7 +141,7 @@ describe.each([113,116,117,118,119,120,121] as const)('reconstruction%s API and 
  if(profile>=117)it('appends an exact117 job, human approval and original receipt under the API role while the worker remains read-only',async()=>{
   const org='org-'+suffix,member='member-'+suffix,site='site-'+suffix,clock={now:()=>new Date(at)},principal=await createServicePrincipal(opened.db,clock,user,org,{name:'Synthetic backfill role source'},'backfill-principal'),credential=await issuePartnerCredential(opened.db,clock,user,org,principal.id,{scopes:[...PARTNER_SCOPES],expiresAt:'2026-11-15T12:00:00Z'},'backfill-credential'),account=await createIntegrationAccount(opened.db,clock,user,org,{provider:'synthetic-backfill-role-test',externalAccountId:'backfill-'+suffix},'backfill-account');
   const installation='backfill-install-'+suffix,subscription='backfill-source-'+suffix,job='backfill-job-'+suffix,batch='backfill-batch-'+suffix,item='backfill-item-'+suffix,decision='backfill-decision-'+suffix,configurationSha256=sha256Hex('{}'),content='Synthetic bounded original',originalSha256=sha256Hex(content),manifest=[{id:item,name:'synthetic-backfill.csv',mediaType:'text/csv',sha256:originalSha256,byteSize:Buffer.byteLength(content)}],manifestSha256=sha256Hex(canonicalize(manifest)),context={principalId:principal.id,credentialId:credential.id,merchantId:org,environment:'sandbox'};
-  await opened.db.query(`INSERT INTO record_agent_installations(id,organization_id,environment,principal_id,credential_id,integration_account_id,operator_membership_id,location_id,source_name,device_name,version,status,approval_user_id,enrollment_expires_at,enrollment_acknowledged_at,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$4,$5,$6,$7,'Synthetic backfill','Synthetic device','0.4.0','active',$8,'2026-11-15T00:00:00Z',$9,$9,$9)`,[installation,org,principal.id,credential.id,account.id,member,site,user,at]);
+  await opened.db.query(`INSERT INTO record_agent_installations(id,organization_id,environment,principal_id,credential_id,integration_account_id,operator_membership_id,location_id,source_name,device_name,version,status,approval_user_id,enrollment_expires_at,enrollment_acknowledged_at,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$4,$5,$6,$7,'Synthetic backfill','Synthetic device','${profile===122?'0.4.1':'0.4.0'}','active',$8,'2026-11-15T00:00:00Z',$9,$9,$9)`,[installation,org,principal.id,credential.id,account.id,member,site,user,at]);
   await opened.db.query(`INSERT INTO record_source_subscriptions(id,organization_id,environment,connection_id,principal_id,installation_id,operator_membership_id,location_id,state,configuration_revision,grant_revision,approved_by,recurring_approved_by,created_at,updated_at) VALUES($1,$2,'sandbox',$3,$4,$5,$6,$7,'active',1,3,$8,$8,$9,$9)`,[subscription,org,account.id,principal.id,installation,member,site,user,at]);
   await opened.db.query(`INSERT INTO record_source_subscription_revisions(subscription_id,revision,configuration,configuration_sha256,created_by,created_at) VALUES($1,1,'{}',$2,$3,$4)`,[subscription,configurationSha256,user,at]);
   // Baseline platform reads belong to the established API authentication

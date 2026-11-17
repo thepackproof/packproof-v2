@@ -3,6 +3,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
 const [phase,inputPath,outputPath]=process.argv.slice(2);
 async function probeCode(review){
+ if(review?.schema==='packproof.connect-runtime-review/v8')return {reader:await readFile(new URL('./backfill-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  if(review?.schema==='packproof.connect-runtime-review/v7')return {reader:await readFile(new URL('./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  return readFile(new URL('./connect-runtime-probe.mjs',import.meta.url),'utf8');
 }

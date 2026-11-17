@@ -1,4 +1,6 @@
 import {readFileSync} from 'node:fs';
+import {backfillMigrationInventorySha256,backfillRecordsInventorySha256,validateReconstructionReview as validateBackfillReview} from './reconstruction-v8-release-review.mjs';
+import {inspectBackfillAutomationPair} from './backfill-automation-pair.mjs';
 import {gzipSync} from 'node:zlib';
 import {inspectShipmentAutomationPair} from './shipment-automation-pair.mjs';
 import {reconstructionDigest,shipmentMigrationInventorySha256,validateReconstructionReview} from './reconstruction-v7-release-review.mjs';
@@ -13,17 +15,28 @@ const offSwitches=new Set(['PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SU
  'PACKPROOF_SOURCE_RULE_POLICIES_ENABLED','PACKPROOF_PAGED_PROJECTIONS_ENABLED','PACKPROOF_SIGNED_CASE_EXPORTS_ENABLED','PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED',
  'PACKPROOF_CSV_HEADER_VARIANTS_ENABLED']);
 const shadow='PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES';
-const reviewJson='PACKPROOF_RECONSTRUCTION_V7_REVIEW_JSON',reviewHash='PACKPROOF_RECONSTRUCTION_V7_REVIEW_SHA256';
-export const shipmentRelease=r=>r?.schema==='packproof.connect-runtime-review/v7';
+const profiles={
+ 'packproof.connect-runtime-review/v7':{version:'v7',inventory:shipmentMigrationInventorySha256,records:shipmentRecordsInventorySha256,
+  validate:validateReconstructionReview,pair:inspectShipmentAutomationPair,reader:'shipment-rollback-reader-probe.mjs',readerSchema:'packproof.shipment-rollback-reader/v1'},
+ 'packproof.connect-runtime-review/v8':{version:'v8',inventory:backfillMigrationInventorySha256,records:backfillRecordsInventorySha256,
+  validate:validateBackfillReview,pair:inspectBackfillAutomationPair,reader:'backfill-rollback-reader-probe.mjs',readerSchema:'packproof.backfill-rollback-reader/v1'},
+};
+export const shipmentRelease=r=>Object.hasOwn(profiles,r?.schema);
+export const shipmentReleaseInventory=r=>profiles[r.schema].inventory;
+function reviewEnv(version){
+ const base='PACKPROOF_RECONSTRUCTION_'+version.toUpperCase()+'_REVIEW';
+ return {reviewJson:base+'_JSON',reviewHash:base+'_SHA256'};
+}
 export function verifyShipmentDeploymentReview(snapshot,r,now){
- const v=r.preflightReview;
- validateReconstructionReview(v,reconstructionDigest(v),r.sourceSha,new Date(now));
- check(v.inventorySha256===r.inventorySha256&&v.recordsMigrationSha256===shipmentRecordsInventorySha256&&
+ const v=r.preflightReview,profile=profiles[r.schema];
+ const {reviewJson,reviewHash}=reviewEnv(profile.version);
+ profile.validate(v,reconstructionDigest(v),r.sourceSha,new Date(now));
+ check(v.inventorySha256===r.inventorySha256&&v.recordsMigrationSha256===profile.records&&
   v.candidateImage===r.image&&v.clusterArn===r.probeClusterArn&&v.apiRole===r.apiRole&&v.workerRole===r.workerRole&&
   v.target.host===r.database.host&&v.target.database===r.database.name&&Date.parse(v.expiresAt)>=Date.parse(r.expiresAt),
   'SHIPMENT_DEPLOYMENT_REVIEW_BINDING_MISMATCH');
  const policy=v.automationPolicy;
- check(!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
+ check((profile.version!=='v8'||v.backfillJobsEnabled===false)&&!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
   'SHIPMENT_DEFAULT_OFF_REVIEW_REQUIRED');
  const containers=[snapshot.api.express.activeConfigurations[0].primaryContainer,
   ...snapshot.api.taskDefinition.containerDefinitions,...snapshot.worker.taskDefinition.containerDefinitions];
@@ -38,13 +51,14 @@ export function verifyShipmentDeploymentReview(snapshot,r,now){
  }
 }
 export function configureShipmentProbe(c,r,kind,reader,script){
+ const profile=profiles[r.schema],{reviewJson,reviewHash}=reviewEnv(profile.version);
  if(!reader){
   c.environment.push({name:reviewJson,value:JSON.stringify(r.preflightReview)},
    {name:reviewHash,value:reconstructionDigest(r.preflightReview)});
-  c.command=['node','/release/reconstruction-v7-runtime-preflight.mjs',kind];
+  c.command=['node',`/release/reconstruction-${profile.version}-runtime-preflight.mjs`,kind];
   return;
  }
- const readerSource=readFileSync(new URL('./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8');
+ const readerSource=readFileSync(new URL(profile.reader,import.meta.url),'utf8');
  check(script?.reader===readerSource,'SHIPMENT_READER_PROBE_CODE_REQUIRED');
  const previous=kind==='api'?r.expectedApi:r.expectedWorker;
  const details={kind,sourceSha:previous.sourceSha,image:previous.image,apiRole:r.apiRole,workerRole:r.workerRole,
@@ -59,7 +73,8 @@ await probe.runRollbackReaderProbe();`;
  c.command=['node','--input-type=module','-e',bootstrap];
 }
 export function verifyShipmentProbeReports(r,probes,now){
- const paired=inspectShipmentAutomationPair(r.preflightReview,probes.api.report,probes.worker.report,new Date(now));
+ const profile=profiles[r.schema];
+ const paired=profile.pair(r.preflightReview,probes.api.report,probes.worker.report,new Date(now));
  const taskArns=new Set();
  for(const kind of ['api','worker']){
   const candidate=probes[kind].report,reader=probes['previous-'+kind].report,prev=kind==='api'?r.expectedApi:r.expectedWorker;
@@ -67,7 +82,7 @@ export function verifyShipmentProbeReports(r,probes,now){
    candidate.automationPolicy.shadowSourceCount===0&&candidate.automationPolicy.shadowSourcesSha256===reconstructionDigest([]),
    'SHIPMENT_DEFAULT_OFF_RECEIPTS_REQUIRED');
   const elapsed=now-Date.parse(reader?.completedAt);
-  check(reader?.schema==='packproof.shipment-rollback-reader/v1'&&reader.kind===kind&&reader.sourceSha===prev.sourceSha&&
+  check(reader?.schema===profile.readerSchema&&reader.kind===kind&&reader.sourceSha===prev.sourceSha&&
    reader.image===prev.image&&reader.environment===r.environment&&reader.inventorySha256===r.inventorySha256&&
    reader.readOnly===true&&reader.compatibleReader===true&&reader.reviewSha256===paired.reviewSha256&&
    reader.role===(kind==='api'?r.apiRole:r.workerRole)&&reader.databaseHost===r.database.host&&reader.databaseName===r.database.name&&

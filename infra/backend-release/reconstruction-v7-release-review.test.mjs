@@ -7,7 +7,7 @@ import {runReconstructionPreflight} from './reconstruction-v7-runtime-preflight.
 
 test('the exact v7 source inventory matches all applied bytes and preserves the previous 120 gate',async()=>{
   const root=new URL('../../backend/migrations/',import.meta.url);
-  const names=(await readdir(root)).filter(name=>name.endsWith('.sql')).sort();
+  const names=(await readdir(root)).filter(name=>name.endsWith('.sql')&&Number(name.slice(0,3))<=121).sort();
   const source=await Promise.all(names.map(async name=>{
     const sql=await readFile(new URL(name,root),'utf8');
     return {id:name.slice(0,-4),sql,checksum:reconstructionDigest(sql)};

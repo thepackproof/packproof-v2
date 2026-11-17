@@ -1,4 +1,6 @@
 import test from 'node:test';
+import {inspectBackfillAutomationPair} from './backfill-automation-pair.mjs';
+import {backfillMigrationInventorySha256,backfillRecordsInventorySha256} from './reconstruction-v8-release-review.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, writeFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -65,4 +67,21 @@ test('role measurement changes on compiled worker byte differences and redacts s
     await assert.rejects(readShipmentAutomationPolicy('api',{...env,PACKPROOF_CSV_HEADER_VARIANTS_ENABLED:'1'},dir),/SWITCH_INVALID/);
     await assert.rejects(readShipmentAutomationPolicy('api',{PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES:'sensitive-source:*'},dir),/SCOPE_INVALID/);
   }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('v8 requires two current 122 role receipts, matching feature settings and verified backfill guards',()=>{
+ const r={...review,schema:'packproof.reconstruction-release-review/v8',inventorySha256:backfillMigrationInventorySha256,
+  recordsMigrationSha256:backfillRecordsInventorySha256,backfillJobsEnabled:false};
+ const receipts=['api','worker'].map(kind=>{
+  const base=role(kind,r);
+  return {...base,schema:'packproof.reconstruction-runtime-preflight/v8',backfillScopeVerified:true,backfillJobsEnabled:false,
+   sourceInventory:{...base.sourceInventory,sourceCount:121,appliedCount:121}};
+ });
+ const [api,worker]=receipts;
+ assert.equal(inspectBackfillAutomationPair(r,api,worker,now).apiReceiptSha256,reconstructionDigest(api));
+ for(const wrong of [role('worker'),{...worker,backfillScopeVerified:false},{...worker,backfillJobsEnabled:true},
+   {...worker,sourceInventory:{...worker.sourceInventory,appliedCount:120}}]){
+  assert.throws(()=>inspectBackfillAutomationPair(r,api,wrong,now),/MISMATCH/);
+ }
+ assert.throws(()=>inspectShipmentAutomationPair(r,api,worker,now),/REVIEW_REQUIRED/);
 });

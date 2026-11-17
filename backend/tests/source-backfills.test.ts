@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import request from './in-process-http.js';
-import {openIsolatedTestDatabase} from './isolated-test-database.js';
+import {openIsolatedTestDatabase,migrateTestDatabaseThrough} from './isolated-test-database.js';
 import {migrate} from '../src/db/migrate.js';
 import {insertUser} from '../src/domain/users.js';
 import {BearerUserAdapter} from '../src/auth/adapter.js';
@@ -37,7 +37,15 @@ describe('finite historical backfill authority and receipt accounting',()=>{
  const mapping={orderId:'Order',orderLineId:'Line',property:'Property',amount:'Amount',unit:'Unit',sourceAsOf:'AsOf'},constants={observationKind:'snapshot',timeQuality:'snapshot_time_only'},identityPolicy={schema:'packproof.source-identity-policy/v1',eventKey:{kind:'composite',fields:['orderId','orderLineId','property']},revision:{kind:'source_as_of'}};
  const sourceConfig=()=>({batchSchema:'packproof.typed-source-batch/v2',identityPolicy,transport:'local_ntfs',displayName:'First existing order export',sourceProfile:'packproof.order-lines/v1',mappingVersion:'fresh-order-lines/1',sourceNamespace:'fresh-order-erp',mapping,constants,wholeFileConsent:true,folderDigest:'a'.repeat(64),initialFileName:'orders-first.csv',initialOriginalSha256:sha256Hex(csv),expectedHeaders:['Order','Line','Property','Amount','Unit','AsOf'],historyFrom:'2026-11-01T00:00:00Z',historyTo:null,unknownTimePolicy:'quarantine',maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:60,completenessPolicy:{kind:'unknown',scope:'shipment_line',sourceOwnerQualified:false,qualificationReference:null}});
  const batch=(w:Workspace,account:string,subscriptionId='no-source-approved',grantRevision=1)=>({schema:'packproof.typed-source-batch/v2',identityPolicy,connectionId:account,locationId:w.site,sourceProfile:'packproof.order-lines/v1',mappingVersion:'fresh-order-lines/1',sourceNamespace:'fresh-order-erp',subscriptionId,configurationRevision:1,grantRevision,wholeFileConsent:true,original:{name:'orders-first.csv',mediaType:'text/csv',content:csv,sha256:sha256Hex(csv)},mapping,constants,completeness:{kind:'unknown',asOf:null,marker:null}});
- beforeAll(async()=>{for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED',...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED','PACKPROOF_SOURCE_HEALTH_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));opened=await openIsolatedTestDatabase();await migrate(opened.db);dir=await mkdtemp(path.join(os.tmpdir(),'fresh-typed-setup-'));admin=await insertUser(opened.db,clock);await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','fresh-fixture-secret'),auth:new BearerUserAdapter(opened.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']}};app=createServerApp({...deps,emailDelivery:new DisabledEmailDelivery()});},60000);
+ beforeAll(async()=>{for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED',...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED','PACKPROOF_SOURCE_HEALTH_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));opened=await openIsolatedTestDatabase();await migrateTestDatabaseThrough(opened.db,121);dir=await mkdtemp(path.join(os.tmpdir(),'fresh-typed-setup-'));admin=await insertUser(opened.db,clock);await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','fresh-fixture-secret'),auth:new BearerUserAdapter(opened.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']}};app=createServerApp({...deps,emailDelivery:new DisabledEmailDelivery()});
+  prior=await activeSource();
+  const proposed=await propose(prior,[historical],'before-122');
+  expect(proposed.status,proposed.text).toBe(202);
+  const approved=await action(prior,proposed.body,'approve','approve-before-122');
+  expect(approved.status,approved.text).toBe(200);
+  priorJob=approved.body;
+  await migrate(opened.db);
+ },60000);
  afterAll(async()=>{await opened?.close();if(dir)await rm(dir,{recursive:true,force:true});vi.unstubAllEnvs();});
  const code=(r:{body:any})=>r.body.error?.code??r.body.code;
  function file(name:string,hour=18,amount='8'){const content=`Order,Line,Property,Amount,Unit,AsOf\n0010482,004,orderedQuantity,${amount},each,2026-11-12T${hour}:00:00Z\n`;return {name,mediaType:'text/csv',sha256:sha256Hex(content),byteSize:Buffer.byteLength(content),content};}
@@ -55,6 +63,39 @@ describe('finite historical backfill authority and receipt accounting',()=>{
  async function action(f:Fixture,j:any,kind:'approve'|'pause'|'resume',key:string,extra:Record<string,unknown>={}){return request(app).post(`/me/records/source-backfills/${j.id}/actions`).query(f.w.scope).set(human(f.w.user)).set('Idempotency-Key',key).send({action:kind,expectedDecisionId:j.latestDecisionId,manifestSha256:j.manifestSha256,configurationRevision:j.configurationRevision,grantRevision:j.grantRevision,reason:'Synthetic explicit historical review',...(kind!=='pause'?{wholeFileConsent:true,expiresAt:new Date(now+7200000).toISOString()}:{}),...extra});}
  const read=(f:Fixture,id:string)=>request(app).get(`/v1/partner/source-backfills/${id}`).set(f.service);
  const bind=(f:Fixture,j:any,item:any,batchId:string,key:string)=>request(app).post(`/v1/partner/source-backfills/${j.id}/items/${item.id}/bind`).set(f.service).set('Idempotency-Key',key).send({batchId,manifestSha256:j.manifestSha256,configurationRevision:j.configurationRevision,grantRevision:j.grantRevision});
+ let prior:Fixture;
+ let priorJob:{id:string;latestDecisionId:string;originals:{id:string}[];grantRevision:number;manifestSha256:string};
+ const historical=file('retained-040.csv',17,'5');
+ it('preserves a pre-122 approved job and its grant across the 0.4.1 heartbeat and admits both exact collector builds',async()=>{
+  const currentGrant=()=>opened.db.query<{grant_revision:number}>('SELECT grant_revision FROM record_source_subscriptions WHERE id=$1',[prior.subId]);
+  const grant=(await currentGrant()).rows[0].grant_revision;
+  expect(Number(grant)).toBe(priorJob.grantRevision);
+  const heartbeat=(version:string)=>request(app).post('/v1/partner/agent/heartbeat').set(prior.service).send({version,queueCount:1});
+  expect((await heartbeat('0.4.1')).status).toBe(200);
+  const retained=await read(prior,priorJob.id);
+  expect(retained.status,retained.text).toBe(200);
+  expect(retained.body).toMatchObject({state:'approved',manifestSha256:priorJob.manifestSha256,latestDecisionId:priorJob.latestDecisionId});
+  const captured=await preview(prior,historical,'capture-before-122-job',{kind:'historical_backfill',jobId:priorJob.id,itemId:priorJob.originals[0].id});
+  expect(captured.status,captured.text).toBe(201);
+  await commit(prior.service,captured.body,'retained-122');
+  await processPendingTypedImports(deps,10);
+  expect((await read(prior,priorJob.id)).body.state).toBe('completed');
+  for(const version of ['0.4.1','0.4.0']){
+   expect((await heartbeat(version)).status).toBe(200);
+   const original=file('after-'+version+'.csv',16,'4');
+   const result=await propose(prior,[original],'after-'+version);
+   expect(result.status,result.text).toBe(202);
+   const replay=await propose(prior,[original],'after-'+version);
+   expect(replay.body).toMatchObject({id:result.body.id,replayed:true,grantRevision:Number(grant)});
+  }
+  expect((await heartbeat('0.4.2')).status).toBe(200);
+  expect((await propose(prior,[file('forbidden.csv',15,'3')],'unknown-collector')).status).toBe(403);
+  // Exercise the database boundary even if an unsupported client bypasses the route.
+  await expect(opened.db.query(`INSERT INTO record_source_backfill_jobs
+   SELECT (jsonb_populate_record(NULL::record_source_backfill_jobs,to_jsonb(j)||jsonb_build_object('id','bad-collector-insert'))).*
+   FROM record_source_backfill_jobs j WHERE j.id=$1`,[priorJob.id])).rejects.toThrow(/does not match its original current source authority/);
+  expect((await currentGrant()).rows[0].grant_revision).toBe(grant);
+ });
  it.each(['pause','expiry'] as const)('rechecks historical %s after a committed two-row prefix without rewriting captured rows',async boundary=>{
   const savedNow=now;
   try{

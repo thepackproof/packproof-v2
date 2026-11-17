@@ -89,28 +89,29 @@ test('accepts only the observed empty ECS systemControls default without changin
  assert.throws(()=>connectWorkerUpdate(plan,registered,{...f.snapshot.worker,observedAt:at},now),/REGISTERED_WORKER/);assert.throws(()=>connectApiUpdate(plan,observation,api,now),/WORKER_DIGEST/);
 });
 
-function shipmentFixture(){
+function shipmentFixture(version='v7'){
+ const v8=version==='v8';
  const {snapshot,review:r}=fixture(),empty=hash([]),bundle='c'.repeat(64);
- const inventory='3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
- const records='276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
- const v={schema:'packproof.reconstruction-release-review/v7',source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
+ const inventory=v8?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
+ const records=v8?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
+ const v={schema:`packproof.reconstruction-release-review/${version}`,...(v8?{backfillJobsEnabled:false}:{}),source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
   ownerRole:'reviewed_owner',clusterArn:cluster,target:{host:r.database.host,database:r.database.name},featureActivation:false,
   customerReleaseQualified:false,inventorySha256:inventory,recordsMigrationSha256:records,expiresAt:r.expiresAt,
   automationPolicy:{bundleSha256:bundle,interpretationVersion:'packproof.shipment-interpretation/v1',headerPolicyVersion:'same_names_any_order/v1',
    interpretationEnabled:false,headerVariantsEnabled:false,shadowSourcesSha256:empty}};
- const review={...r,schema:'packproof.connect-runtime-review/v7',inventorySha256:inventory,preflightReview:v};
- const code={reader:readFileSync(new URL('./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
+ const review={...r,schema:`packproof.connect-runtime-review/${version}`,inventorySha256:inventory,preflightReview:v};
+ const code={reader:readFileSync(new URL(v8?'./backfill-rollback-reader-probe.mjs':'./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  const definitions=connectProbeRegistrations(snapshot,review,code,now),probes={};
  for(const [index,[name,definition]] of Object.entries(definitions).entries()){
   const reader=name.startsWith('previous-'),kind=reader?name.slice(9):name,dbRole=kind==='api'?r.apiRole:r.workerRole;
   const taskArn=cluster.replace(':cluster/',':task/')+'/'+String(index+1).repeat(32),i=reader?previous:image;
   const registered={...definition,taskDefinitionArn:arn(definition.family,3)};
   const shared={kind,completedAt:at,readOnly:true,reviewSha256:reconstructionDigest(v)};
-  const report=reader?{...shared,schema:'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:old,
+  const report=reader?{...shared,schema:v8?'packproof.backfill-rollback-reader/v1':'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:old,
    environment:r.environment,databaseHost:r.database.host,databaseName:r.database.name,clusterArn:cluster,taskArn,
-   inventorySha256:inventory,compatibleReader:true}:{...shared,schema:'packproof.reconstruction-runtime-preflight/v7',
+   inventorySha256:inventory,compatibleReader:true}:{...shared,schema:`packproof.reconstruction-runtime-preflight/${version}`,...(v8?{backfillJobsEnabled:false,backfillScopeVerified:true}:{}),
    source,customerReleaseQualified:false,identity:{role:dbRole,login:dbRole,read_only:'on',schema:'public',database:r.database.name},
-   taskIdentity:{taskArn,image:i,imageDigest:i.split('@')[1]},sourceInventory:{sourceCount:120,appliedCount:120,
+   taskIdentity:{taskArn,image:i,imageDigest:i.split('@')[1]},sourceInventory:{sourceCount:v8?121:120,appliedCount:v8?121:120,
     inventorySha256:inventory,migrationsApplied:false,rolesChanged:false,featureActivation:false},
    durabilityPolicyMatches:true,tls:{ssl:true},immutableTriggerVerified:true,m2PrivilegesSha256:'f'.repeat(64),
    recordsPrivileges:{migrationSha256:records,sourceCommit:source,caller:dbRole},
@@ -128,6 +129,12 @@ test('v7 build pins the full reviewed inventory and opens the compiled policy be
  assert.ok(phases.post_build.commands.includes('test "$CODEBUILD_BUILD_SUCCEEDING" = 1'));
  assert.throws(()=>connectRuntimeBuildRequest({profile:'unknown'}),/PROFILE_REQUIRED/);
 });
+test('v8 build verifies the separate 122 inventory and both runtime and pair entry points',()=>{
+ const built=connectRuntimeBuildRequest({sourceSha:source,archiveSha256:'c'.repeat(64),predecessorImages:[previous],profile:'reconstruction-v8'});
+ const checks=JSON.parse(built.buildspecOverride).phases.build.commands.join('\n');
+ for(const expected of ['rows.length!==121','ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804',
+  'reconstruction-v8-runtime-preflight.mjs','backfill-automation-pair.mjs'])assert.ok(checks.includes(expected));
+});
 test('v7 binds both actual logins and both exact recovery readers to their commands and images',()=>{
  const {snapshot,review,code,definitions,probes}=shipmentFixture();
  for(const [name,t] of Object.entries(definitions)){
@@ -141,6 +148,20 @@ test('v7 binds both actual logins and both exact recovery readers to their comma
  assert.equal(plan.schema,'packproof.connect-runtime-plan/v7');assert.equal(plan.shipmentPair.featureActivation,false);
  assert.equal(plan.rollbackApi,undefined);assert.throws(()=>connectRollbackWorker(plan,{},{}),/ROLLBACK_NEEDS_NEW_PAIRED_REVIEW/);
  assert.throws(()=>connectProbeRegistrations(snapshot,review,{reader:'stub'},now),/SHIPMENT_READER_PROBE_CODE_REQUIRED/);
+});
+test('v8 default-off deployment planning binds both 122 roles and both exact recovery readers',()=>{
+ const f=shipmentFixture('v8');
+ for(const [name,t] of Object.entries(f.definitions)){
+  const prior=name.startsWith('previous-'),kind=prior?name.slice(9):name,main=t.containerDefinitions[0];
+  assert.ok(JSON.stringify(main.command).length<7800);
+  if(!prior)assert.deepEqual(main.command,['node','/release/reconstruction-v8-runtime-preflight.mjs',kind]);
+  assert.equal(connectProbeRunRequest(f.snapshot,f.review,name,f.probes[name].registered,f.code,now).taskDefinition,f.probes[name].registered.taskDefinitionArn);
+ }
+ const prepare=()=>connectRuntimePlan(f.snapshot,f.review,f.probes,now,f.code);
+ assert.equal(prepare().schema,'packproof.connect-runtime-plan/v8');
+ f.probes['previous-api'].report.schema='packproof.shipment-rollback-reader/v1';
+ assert.throws(prepare,/COMPATIBLE_PREDECESSOR/);
+ assert.throws(()=>connectProbeRegistrations(f.snapshot,f.review,shipmentFixture().code,now),/READER_PROBE_CODE/);
 });
 test('v7 rejects incompatible readers, hidden activation, substitutions, drift and partial or stale evidence',()=>{
  for(const mutate of [

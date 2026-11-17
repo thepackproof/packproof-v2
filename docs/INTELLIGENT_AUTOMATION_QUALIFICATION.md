@@ -4,7 +4,13 @@ November 17, 2026 · Internal Connect 0.4.1 candidate · Development branch `cod
 
 The first release gate remains open until a Windows 11 installation creates and verifies the first shipment, collects the next export with the UI closed, and repeats after a reboot under the approved source. The following record links engineering evidence to the November 16 plan. The warehouse pilot needs an authorized environment, named source owners, real qualified exports, and independently observed results.
 
-## Baseline and deployment identity
+## Hosted release update
+
+On November 17, 2026, the Windows candidate built the unsigned Connect 0.4.1 development installer for PR #166. Native service installation, protected storage, historical queue upgrade and repair passed on the Windows runner. The built renderer passed all 14 keyboard and layout checks. The Windows 11 first-shipment, next-export and reboot checks and signed public distribution remain open. [Windows run 44054752393](https://github.com/thepackproof/packproof-v2/actions/runs/44054752393)
+
+The apex site deployed version 81, and CloudFront deployed the web build from `fb9f80a`. The hosted backend still runs the preceding release. The reviewed immutable backend image is staged.
+
+## Historical lab baseline and deployment identity
 
 | Component | Evidence available | Consequence |
 | --- | --- | --- |
@@ -60,6 +66,7 @@ All changes below target the same internal candidate. Source commits identify th
 | Capacity after batching | `e92f3d8` bulk-inserts bounded preview rows under the same locks and reads only required row-state predicates at commit. Backend type checking and 60 PostgreSQL tests passed, including ordered 1,000-row and mixed/quarantined-row cases. The full isolated rerun with the same limits and workload met all **11 of 11** enforced targets. Across ten 100-row batches, admission median was 161.23 ms and p95 was 976.48 ms, with no misses. Ordinary/hot page p95 were 102.58/438.70 ms, and projection/issue lags were each about 82.38 s. All 1,000 burst observations were accepted. Process exit was 1 during postmeasurement schema cleanup (SQLSTATE 53200), after the completed workload report was persisted. A teardown-only lock-budget increase allowed cleanup to finish with exit 0. The synthetic schema and originals directory were confirmed absent and the database was stopped. |
 | Paired deployment and rollback | `be84bb9` and `3c113a5` add an explicit v7 image build and a deployment check that binds API and worker to a reviewed image and separately checks both predecessor readers. All 22 focused operator checks passed. A TLS PostgreSQL 16.15 check exercised the restricted rollback logins. Live predecessor `debf53231` rejects the new ledger at startup. Rehearse schema and privileges on a production-layout restore with compatible rollback or separately qualified cutover before changing the production database. |
 | Release preflight | The v7 archive contains the exact 120 SQL files through migration 121. PostgreSQL qualification covered API insert/read, worker read and immutable decisions. The archived preflight entry point loaded with its packaged dependencies. Building and executing the actual container image and exercising the Windows installer remain outstanding. |
+| Optional 0.4.1 historical backfill | Migration 122 admits 0.4.1 job creation and preserves the existing source grant, prior 0.4.0 jobs and queued receipts. PostgreSQL checks covered both collector versions, grant retention, replay, restricted roles and an unsupported collector. | The independent v8 archive and preflight bind the full 121-row catalog. Actual image, role and predecessor receipts are required for release. See [the v8 backfill preflight](../infra/backend-release/BACKFILL_041_PREFLIGHT.md). |
 
 The loopback trace identified the following synthetic records. They are local test identifiers and cannot be opened in the hosted portal.
 

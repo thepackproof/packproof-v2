@@ -160,21 +160,26 @@ test('exact committed120 Git archive supplies all v6 Docker inputs while frozen1
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
 
-test('the 121 archive pins the full inventory, supplies every Docker input and refuses a 120 source', () => {
+const shipmentHead='fb9f80ab2c6c4f013e794ad654f7ca55d168ac19';
+for(const [profile,previousProfile,head,previousHead,count,inventory,pair] of [
+ ['reconstruction-v7','reconstruction-v6',shipmentHead,'66a258e9eaeaea7695fff18f76ce0de3212c0573',120,
+  '3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5','shipment-automation-pair.mjs'],
+ ['reconstruction-v8','reconstruction-v7',execFileSync('git',['rev-parse','HEAD'],{cwd:backfillRoot,encoding:'utf8'}).trim(),shipmentHead,121,
+  'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804','backfill-automation-pair.mjs'],
+])test(profile+' archive verifies every Docker input and rejects adjacent catalogs', () => {
  const directory = mkdtempSync(path.join(tmpdir(), 'reconstruction-v7-source-'));
  const script = path.join(backfillRoot, 'infra/backend-release/backend-source-archive.py');
- const head = execFileSync('git', ['rev-parse', 'HEAD'], {cwd:backfillRoot, encoding:'utf8'}).trim();
  const run = (source, profile, name, ...options) => execFileSync('python',
   [script, source, path.join(directory, name), profile, ...options],
   {cwd:backfillRoot, encoding:'utf8', stdio:'pipe'});
  try {
-  const created = JSON.parse(run(head, 'reconstruction-v7', 'source.zip'));
-  assert.deepEqual(JSON.parse(run(head, 'reconstruction-v7', 'source.zip', '--verify')), created);
-  assert.equal(created.migrationCount, 120);
-  assert.equal(created.migrationInventorySha256, '3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5');
+  const created = JSON.parse(run(head, profile, 'source.zip'));
+  assert.deepEqual(JSON.parse(run(head, profile, 'source.zip', '--verify')), created);
+  assert.equal(created.migrationCount, count);
+  assert.equal(created.migrationInventorySha256, inventory);
   assert.equal(created.allGitBlobBytesVerified, true);
-  assert.throws(() => run(head, 'reconstruction-v6', 'wrong-profile.zip'), /EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
-  assert.throws(() => run('66a258e9eaeaea7695fff18f76ce0de3212c0573', 'reconstruction-v7', 'wrong-source.zip'),
+  assert.throws(() => run(head, previousProfile, 'wrong-profile.zip'), /EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
+  assert.throws(() => run(previousHead, profile, 'wrong-source.zip'),
    /CONNECT_PROBES_REQUIRED|EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH/);
   const archive = path.join(directory, 'source.zip');
   const inspection = JSON.parse(execFileSync('python', ['-c',
@@ -186,7 +191,7 @@ test('the 121 archive pins the full inventory, supplies every Docker input and r
     assert.ok(names.some(name => name === input || name.startsWith(input + '/')), 'missing Docker COPY input ' + input);
    }
   }
-  for (const probe of ['reconstruction-v7-runtime-preflight.mjs', 'reconstruction-v7-release-review.mjs', 'shipment-automation-pair.mjs']) {
+  for (const probe of [profile+'-runtime-preflight.mjs',profile+'-release-review.mjs',pair]) {
    assert.ok(dockerfile.includes('COPY infra/backend-release/' + probe + ' /release/' + probe));
   }
   // Load only the modules installed into /release by this archived Dockerfile.
@@ -196,7 +201,7 @@ test('the 121 archive pins the full inventory, supplies every Docker input and r
     'import sys,zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))', archive, source]);
    writeFileSync(path.join(directory, name), raw);
   }
-  assert.throws(() => execFileSync(process.execPath, [path.join(directory, 'reconstruction-v7-runtime-preflight.mjs'), 'api'],
+  assert.throws(() => execFileSync(process.execPath, [path.join(directory,profile+'-runtime-preflight.mjs'), 'api'],
    {cwd:directory, env:{}, stdio:'pipe'}), /RECONSTRUCTION_REVIEW_BINDING_REQUIRED/);
  } finally {
   rmSync(directory, {recursive:true, force:true});
