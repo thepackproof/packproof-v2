@@ -1,7 +1,6 @@
 import {beforeAll,afterAll,describe,it,expect,vi} from 'vitest';
 import {randomBytes} from 'node:crypto';
-import {openIsolatedTestDatabase} from './isolated-test-database.js';
-import {migrate} from '../src/db/migrate.js';
+import {openIsolatedTestDatabase,migrateTestDatabaseThrough} from './isolated-test-database.js';
 import {insertUser} from '../src/domain/users.js';
 import {createTransaction} from '../src/domain/transactions.js';
 import {createOrGetProof} from '../src/domain/create-proof.js';
@@ -21,7 +20,7 @@ describe('records source-bound API and worker privileges',()=>{
  const apply=async()=>{try{return await opened.db.transaction(async tx=>{const plan=await planRecordsRuntimePrivileges(tx,options);for(const sql of plan.statements)await tx.query(sql);await tx.query(`SET LOCAL SESSION AUTHORIZATION ${runtimeRole}`);return verifyRecordsRuntimePrivileges(tx,options);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);
-  opened=await openIsolatedTestDatabase();await migrate(opened.db);
+  opened=await openIsolatedTestDatabase();await migrateTestDatabaseThrough(opened.db,109);
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const clock={now:()=>new Date(fixture.at)},human=await insertUser(opened.db,clock),service=await insertUser(opened.db,clock);
   fixture.proof=(await createOrGetProof(opened.db,clock,human,(await createTransaction(opened.db,clock,human,{itemTitle:'Privilege source receipt fixture'})).transactionId)).proofId;

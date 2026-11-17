@@ -7,7 +7,18 @@ public static class Json
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public static byte[] Bytes<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value, Options);
-    public static T Read<T>(ReadOnlySpan<byte> value) => JsonSerializer.Deserialize<T>(value, Options) ?? throw new ConnectException("LOCAL_STATE_INVALID", "Protected local state is unavailable. Preserve the queue and contact support.");
+    public static T Read<T>(ReadOnlySpan<byte> value)
+    {
+        if (typeof(T) == typeof(LocalState))
+        {
+            // Check protected authority names before the case-insensitive binder
+            // could collapse two different JSON properties into one value.
+            var reader = new Utf8JsonReader(value);
+            using var document = JsonDocument.ParseValue(ref reader);
+            SourceStateMigration.ValidatePropertyNames(document.RootElement);
+        }
+        return JsonSerializer.Deserialize<T>(value, Options) ?? throw new ConnectException("LOCAL_STATE_INVALID", "Protected local state is unavailable. Preserve the queue and contact support.");
+    }
     public static JsonElement Element<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
 }
 public sealed record HostConfiguration(string Environment, string ApiOrigin, string WebOrigin, string OperatorsSid)
@@ -28,8 +39,38 @@ public sealed record HostConfiguration(string Environment, string ApiOrigin, str
         if (OperatingSystem.IsWindows()) _ = new System.Security.Principal.SecurityIdentifier(OperatorsSid);
     }
 }
+/** Only bounded, renderer-safe facts about an authenticated read-only probe or heartbeat.
+ * This observation never grants authority or clears a local pause. */
+public sealed record TransportObservation(
+    string State,
+    DateTimeOffset AttemptedAt,
+    DateTimeOffset? SucceededAt,
+    DateTimeOffset ExpiresAt,
+    int? HttpStatus,
+    string? FailureKind,
+    string? CorrelationId,
+    string ExpectedRulesVersion,
+    string? ObservedRulesVersion,
+    string[]? SourceContracts);
 public sealed class LocalState
 {
+    public int StateVersion { get; set; } = 1;
+    public List<SourceSubscriptionState> SourceSubscriptions { get; set; } = [];
+    public string? LastScheduledSourceId { get; set; }
+    public string? LastScheduledBackfillSourceId { get; set; }
+    public SubscriptionDraftState? SubscriptionDraft { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
+    public TransportObservation? Transport { get; set; }
+    public JsonElement? LocalAnalysis { get; set; }
+    public int DraftRevision { get; set; }
+    public string[]? ExcludedFileNames { get; set; }
+    public string? BaselineSha256 { get; set; }
+    public string? BaselineObservedAt { get; set; }
+    public bool GuidedSetup { get; set; }
+    public string? GuidedProposalSha256 { get; set; }
+    public string? GuidedFileSha256 { get; set; }
+    public string? GuidedPhase { get; set; }
+    public string? VerifiedSetupImportId { get; set; }
     public string? Token { get; set; }
     public string? InstallationId { get; set; }
     public DateTimeOffset? CredentialExpiresAt { get; set; }
@@ -64,9 +105,12 @@ public sealed class LocalState
     public DateTimeOffset? CredentialRecoveryConfirmedAt { get; set; }
     public bool RecoveryPrepared { get; set; }
 }
-public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath);
+public sealed record QueueEntry(string Id, string Digest, string State, string PreviewKey, string CommitKey, string CredentialGeneration, string ConfigDigest, string? ImportId, int Attempts, DateTimeOffset NextAttemptAt, string? ErrorCode, string PayloadPath, string SourceId = SourceSubscriptionState.LegacyId, string SourceProfile = SourceSubscriptionState.LegacyProfile, int GrantRevision = 0);
+public sealed record QueueRetry(int Attempt, DateTimeOffset AttemptedAt, DateTimeOffset NextAttemptAt, string Phase, string Reason);
 public sealed class QueuePayload
 {
+    [JsonExtensionData] public Dictionary<string, JsonElement>? PreservedFields { get; set; }
+    public List<QueueRetry>? RecentRetries { get; set; }
     public required string FileName { get; set; }
     public required string Csv { get; set; }
     public required JsonElement PreviewBody { get; set; }
@@ -78,6 +122,10 @@ public sealed class QueuePayload
     public bool CommitApproved { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public bool OriginalCompacted { get; set; }
+    public string? CompactionCommandId { get; set; }
+    public string? CompactionCommandSha256 { get; set; }
+    public string? CompactionPermitId { get; set; }
+    public DateTimeOffset? CompactedAt { get; set; }
     public byte[]? QuarantinedOriginalBytes { get; set; }
 }
 public sealed record PipeRequest(int Version, string Id, string Operation, JsonElement? Payload);

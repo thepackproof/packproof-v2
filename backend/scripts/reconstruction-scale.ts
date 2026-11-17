@@ -1,0 +1,303 @@
+/** Opt-in SQL/runtime workload. Never uses application credentials or schemas.
+ * PostgreSQL: PACKPROOF_TEST_DATABASE_URL=... npx tsx scripts/reconstruction-scale.ts
+ * Local correctness smoke: PACKPROOF_SCALE_ROWS=1000 PACKPROOF_SCALE_SHIPMENTS=10
+ *   PACKPROOF_SCALE_BURST_SECONDS=1 PACKPROOF_SCALE_BURST_RATE=10 npx tsx ...
+ */
+import {writeFileSync,renameSync} from 'node:fs';
+import {mkdtemp,readFile,writeFile,rename,rm,mkdir} from 'node:fs/promises';
+import {tmpdir,cpus,totalmem,platform,release} from 'node:os';
+import path from 'node:path';
+import {randomBytes} from 'node:crypto';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {execFileSync} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+import {openIsolatedTestDatabase} from '../tests/isolated-test-database.js';
+import {createPgDatabase} from '../src/db/postgres.js';
+import {migrate} from '../src/db/migrate.js';
+import {insertUser} from '../src/domain/users.js';
+import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential,createIntegrationAccount,authenticatePartner,PARTNER_SCOPES} from '../src/platform/organizations.js';
+import {LocalObjectStore} from '../src/s3/local-object-store.js';
+import {requireRecordWorkspace} from '../src/records/access.js';
+import {proposeSourceSubscription,actOnSourceSubscription,heartbeatSourceSubscription} from '../src/records/source-subscriptions.js';
+import {previewTypedImport,commitTypedImport,processPendingTypedImports,readTypedImport,type TypedImportDeps} from '../src/records/typed-imports.js';
+import {getOperationalCase} from '../src/records/reconstruction.js';
+import {synchronizeOperationalCaseProjection,processPendingCaseProjections} from '../src/records/projection-worker.js';
+import {synchronizeOperationalCaseIssues,processPendingReconstructionIssues} from '../src/records/reconstruction-issues.js';
+import {startScheduledJobs} from '../src/operations/scheduler.js';
+import {sha256Hex} from '../src/hash.js';
+import {canonicalize} from '../src/canonical.js';
+import type {Database} from '../src/db/database.js';
+import {parseTypedSourceBatch,type TypedSourceObservation} from '../src/records/source-contracts.js';
+
+const positive=(name:string,fallback:number,max=2_000_000)=>{const value=Number(process.env[name]??fallback);if(!Number.isSafeInteger(value)||value<1||value>max)throw new Error(`${name} must be 1..${max}`);return value;};
+const defaultSeedConcurrency=1;
+const hotCaseRows=positive('PACKPROOF_SCALE_HOT_CASE_ROWS',10_000),retainedRows=positive('PACKPROOF_SCALE_ROWS',1_000_000),shipments=positive('PACKPROOF_SCALE_SHIPMENTS',10_000),burstSeconds=positive('PACKPROOF_SCALE_BURST_SECONDS',10,120),burstRate=positive('PACKPROOF_SCALE_BURST_RATE',100,1000),samples=positive('PACKPROOF_SCALE_SAMPLES',30,1000),bootstrapConcurrency=positive('PACKPROOF_SCALE_BOOTSTRAP_CONCURRENCY',4,8),seedConcurrency=positive('PACKPROOF_SCALE_SEED_CONCURRENCY',defaultSeedConcurrency,4),slowQueryMs=positive('PACKPROOF_SCALE_SLOW_QUERY_MS',1000,60000);
+if(retainedRows%shipments!==0||(retainedRows/shipments)%2!==0||retainedRows/shipments<2)throw new Error('Retained rows must provide an even number of at least two stage observations per shipment case');
+const output=path.resolve(process.argv[2]??'../artifacts/reconstruction-scale.json');await mkdir(path.dirname(output),{recursive:true});
+const report:any={schema:'packproof.operational-projection-scale/v1',startedAt:new Date().toISOString(),sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),worktreeDirty:execFileSync('git',['status','--porcelain'],{encoding:'utf8'}).trim().length>0,environment:{platform:platform(),release:release(),node:process.version,cpuModel:cpus()[0]?.model,logicalCpus:cpus().length,hostMemoryBytes:totalmem(),cgroupMemoryMax:await readFile('/sys/fs/cgroup/memory.max','utf8').then(v=>v.trim()).catch(()=>null),cgroupCpuMax:await readFile('/sys/fs/cgroup/cpu.max','utf8').then(v=>v.trim()).catch(()=>null),database:process.env.PACKPROOF_TEST_DATABASE_URL?'PostgreSQL, isolated random schema':'PGlite, isolated in-memory database'},workload:{retainedRows,hotCaseExtraHistoryRows:hotCaseRows,shipmentCases:shipments,historyDays:10,observationsPerDay:retainedRows/10,burstRate,burstSeconds,samples},scope:['Full current migrations and real scoped SQL page/worker functions.','Historical receipts use bounded real originals, actual source parsing, exact hashes/locators and complete accounting; historical materialization uses bulk SQL and only the burst measures application admission.','The burst executes approved source preview, commit, typed ingestion, projection and durable issue workers at the production configured cadences.'],limitations:['Synthetic local/CI workload; customer meanings, source extraction, source file upload, HTTP/network latency, production IAM and production PostgreSQL capacity are not qualified.','PGlite results, when used, are correctness/development evidence only.','Database shares runner resources; CPU, memory and storage are not production deployment reservations.'],metrics:{},completed:false,productionQualified:false};
+const percentile=(values:number[],p:number)=>{const ordered=[...values].sort((a,b)=>a-b);return ordered[Math.min(ordered.length-1,Math.max(0,Math.ceil(p*ordered.length)-1))]??null;};
+const distribution=(values:number[])=>({samples:values.length,minMs:values.length?Math.min(...values):null,p50Ms:percentile(values,.5),p95Ms:percentile(values,.95),p99Ms:percentile(values,.99),maxMs:values.length?Math.max(...values):null});
+const began=performance.now();
+report.bootstrapConfiguration={concurrency:bootstrapConcurrency,mode:'bounded_parallel_actual_domain_synchronizers',primeSourceCounterBaselineOnce:true,measuredSchedulerUnchanged:true,bootstrapDurationIncludesDiagnosticPlans:true};
+report.seedConfiguration={configuredConcurrency:seedConcurrency,defaultConcurrency:defaultSeedConcurrency,maximumConcurrency:4,configuredViaEnvironment:process.env.PACKPROOF_SCALE_SEED_CONCURRENCY!==undefined,mode:'disjoint_case_receipts_with_stage_revision_barriers',maximumRowsPerReceipt:1000,receiptsPerPhase:Math.ceil(shipments/1000),actualMaxConcurrentReceipts:0,completedPhases:0,completedRetainedReceipts:0,hotCaseConcurrency:1};
+report.burstAuthentication={mode:'same_issued_token_before_each_boundary',boundaries:['preview','commit','explicit_receipt_read'],authenticatePartnerIncluded:true,credentialLastUsedAtIncluded:true,httpNetworkIncluded:false};
+report.limitations.push('The measured burst includes real partner authentication and credential last_used_at writes before preview, commit and explicit receipt read. HTTP routing, request parsing, response serialization and network latency are excluded.');
+let stopping=false,checkpointTail=Promise.resolve(),querySequence=0;
+const queryTotals=new Map<string,{calls:number;totalMs:number;maxMs:number;slowCalls:number}>(),slowShapes=new Map<string,Record<string,unknown>>(),runningQueries=new Map<number,{phase:string;sqlHash:string;sql?:string;started:number}>();
+type MeasurementKind='ordinary_page'|'hot_page'|'measured_burst';
+type MeasurementContext={kind:MeasurementKind;component:string;sample?:number};
+type QueryTiming={sqlHash:string;statementKind:string;lockKind:string|null;calls:number;failedCalls:number;totalMs:number;maxMs:number;slowCalls:number;returnedRows:number;lastRowCount:number|null;errors:Record<string,number>};
+type TransactionTrace={sequence:number;started:number;callbackStarted:number|null;callbackEnded:number|null;firstLockAt:number|null;firstLockSqlHash:string|null;lockQueries:number;lockQueryMs:number;queryCount:number;failedQueries:number};
+type TransactionSample={sequence:number;wholeTransactionMs:number;callbackMs:number|null;completionAfterCallbackMs:number|null;clientObservedLockWindowMs:number|null;firstLockSqlHash:string|null;lockQueries:number;lockQueryMs:number;queryCount:number;failedQueries:number;failed:boolean;errorClass:string|null};
+type MeasuredContext={kind:MeasurementKind;component:string;queries:Map<string,QueryTiming>;droppedShapeCalls:number;transactions:{calls:number;failedCalls:number;totalMs:number;maxMs:number;lockWindowCalls:number;lockWindowTotalMs:number;lockWindowMaxMs:number;slowest:TransactionSample[]}};
+type PlanCandidate={context:string;kind:MeasurementKind;sqlHash:string;sql:string;params:unknown[]|undefined;maxMs:number;failedCalls:number;maxFailedMs:number};
+const measurementContext=new AsyncLocalStorage<MeasurementContext>(),measuredContexts=new Map<string,MeasuredContext>();
+// SQL and parameters stay in these bounded private maps, never in report objects.
+const privatePlanCandidates=new Map<string,PlanCandidate>(),privateSqlHashes=new Map<string,string>();
+const diagnosticCaps={contexts:12,shapesPerContext:96,privatePlanCandidates:96,sqlHashCache:256,slowTransactionsPerContext:12,pagePlans:6,burstPlans:6,totalPlans:12,planTimeoutMs:5000};
+const estimatedPlans:Record<string,unknown>[]=[],plannedContexts=new Set<MeasurementKind>();
+let transactionSequence=0;
+const errorClass=(error:unknown)=>{const value=error as {name?:unknown;code?:unknown}|null;return [typeof value?.name==='string'?value.name:'Error',typeof value?.code==='string'?value.code:null].filter(Boolean).join(':');};
+function measuredContext(context:MeasurementContext){
+ const key=`${context.kind}:${context.component}`;let value=measuredContexts.get(key);
+ if(!value&&measuredContexts.size<diagnosticCaps.contexts){value={kind:context.kind,component:context.component,queries:new Map(),droppedShapeCalls:0,transactions:{calls:0,failedCalls:0,totalMs:0,maxMs:0,lockWindowCalls:0,lockWindowTotalMs:0,lockWindowMaxMs:0,slowest:[]}};measuredContexts.set(key,value);}return {key,value};
+}
+function sqlHash(sql:string){let hash=privateSqlHashes.get(sql);if(!hash){hash=sha256Hex(sql);if(privateSqlHashes.size<diagnosticCaps.sqlHashCache)privateSqlHashes.set(sql,hash);}return hash;}
+const safePlanSql=(sql:string)=>/^\s*(?:SELECT|WITH)\b/i.test(sql)&&/\brecord_(?:case|typed|source)[a-z_]*\b/.test(sql)&&!/(?:;|\b(?:INSERT|UPDATE|DELETE|MERGE|CALL|DO|COPY|TRUNCATE|CREATE|ALTER|DROP|GRANT|REVOKE|VACUUM|ANALYZE|EXPLAIN)\b|\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b|pg_advisory|credential|token|password|\b(?:set_config|pg_sleep|nextval|setval)\s*\()/i.test(sql);
+const prioritizedPlanSql=(sql:string)=>/^\s*WITH\s+scoped_old\s+AS\s+MATERIALIZED\b/i.test(sql);
+const comparePlanCandidates=(a:PlanCandidate,b:PlanCandidate)=>Number(prioritizedPlanSql(a.sql))-Number(prioritizedPlanSql(b.sql))||Number(a.failedCalls>0)-Number(b.failedCalls>0)||a.maxMs-b.maxMs;
+function recordMeasuredQuery(context:MeasurementContext,sql:string,params:unknown[]|undefined,elapsed:number,rowCount:number|null,returnedRows:number,failure:unknown,failed:boolean,trace?:TransactionTrace){
+ const {key,value}=measuredContext(context),hash=sqlHash(sql),lockKind=/\bpg_advisory_xact_lock\s*\(/i.test(sql)?'advisory_transaction':/\bFOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)\b/i.test(sql)?'row':null;
+ if(trace){trace.queryCount++;if(failed)trace.failedQueries++;if(lockKind&&!failed&&(lockKind==='advisory_transaction'||returnedRows>0)){trace.firstLockAt??=performance.now();trace.firstLockSqlHash??=hash;trace.lockQueries++;trace.lockQueryMs+=elapsed;}}
+ if(!value)return;
+ let timing=value.queries.get(hash);
+ if(!timing&&failed&&value.queries.size>=diagnosticCaps.shapesPerContext){const evicted=[...value.queries.values()].sort((a,b)=>Number(a.failedCalls>0)-Number(b.failedCalls>0)||a.maxMs-b.maxMs)[0];if(evicted){value.queries.delete(evicted.sqlHash);value.droppedShapeCalls+=evicted.calls;}}
+ if(!timing&&value.queries.size<diagnosticCaps.shapesPerContext){timing={sqlHash:hash,statementKind:sql.trimStart().match(/^\w+/)?.[0]?.toUpperCase()??'UNKNOWN',lockKind,calls:0,failedCalls:0,totalMs:0,maxMs:0,slowCalls:0,returnedRows:0,lastRowCount:null,errors:{}};value.queries.set(hash,timing);}
+ if(!timing){value.droppedShapeCalls++;return;}
+ timing.calls++;timing.totalMs+=elapsed;timing.maxMs=Math.max(timing.maxMs,elapsed);timing.lastRowCount=rowCount;timing.returnedRows+=returnedRows;if(elapsed>=slowQueryMs)timing.slowCalls++;
+ if(failed){timing.failedCalls++;const name=errorClass(failure);if(name in timing.errors||Object.keys(timing.errors).length<8)timing.errors[name]=(timing.errors[name]??0)+1;}
+ if(!safePlanSql(sql))return;
+ const candidateKey=`${key}:${hash}`,candidate=privatePlanCandidates.get(candidateKey);
+ if(candidate){if(failed&&elapsed>=candidate.maxFailedMs||!failed&&!candidate.failedCalls&&elapsed>candidate.maxMs)candidate.params=params?.slice();candidate.failedCalls+=Number(failed);if(failed)candidate.maxFailedMs=Math.max(candidate.maxFailedMs,elapsed);candidate.maxMs=Math.max(candidate.maxMs,elapsed);return;}
+ const candidateValue:PlanCandidate={context:key,kind:context.kind,sqlHash:hash,sql,params:params?.slice(),maxMs:elapsed,failedCalls:Number(failed),maxFailedMs:failed?elapsed:0};
+ if(privatePlanCandidates.size<diagnosticCaps.privatePlanCandidates){privatePlanCandidates.set(candidateKey,candidateValue);return;}
+ const lowest=[...privatePlanCandidates.entries()].sort((a,b)=>comparePlanCandidates(a[1],b[1]))[0];if(lowest&&comparePlanCandidates(candidateValue,lowest[1])>0){privatePlanCandidates.delete(lowest[0]);privatePlanCandidates.set(candidateKey,candidateValue);}
+}
+function recordMeasuredTransaction(context:MeasurementContext,trace:TransactionTrace,failure:unknown,failed:boolean){
+ const value=measuredContext(context).value;if(!value)return;const ended=performance.now(),elapsed=ended-trace.started,lockWindow=trace.firstLockAt===null?null:ended-trace.firstLockAt,totals=value.transactions;
+ totals.calls++;totals.failedCalls+=Number(failed);totals.totalMs+=elapsed;totals.maxMs=Math.max(totals.maxMs,elapsed);if(lockWindow!==null){totals.lockWindowCalls++;totals.lockWindowTotalMs+=lockWindow;totals.lockWindowMaxMs=Math.max(totals.lockWindowMaxMs,lockWindow);}
+ const sample:TransactionSample={sequence:trace.sequence,wholeTransactionMs:elapsed,callbackMs:trace.callbackStarted===null||trace.callbackEnded===null?null:trace.callbackEnded-trace.callbackStarted,completionAfterCallbackMs:trace.callbackEnded===null?null:ended-trace.callbackEnded,clientObservedLockWindowMs:lockWindow,firstLockSqlHash:trace.firstLockSqlHash,lockQueries:trace.lockQueries,lockQueryMs:trace.lockQueryMs,queryCount:trace.queryCount,failedQueries:trace.failedQueries,failed,errorClass:failed?errorClass(failure):null};
+ totals.slowest.push(sample);totals.slowest.sort((a,b)=>b.wholeTransactionMs-a.wholeTransactionMs);totals.slowest.length=Math.min(totals.slowest.length,diagnosticCaps.slowTransactionsPerContext);
+}
+function refreshDiagnostics(){
+ report.metrics.processMemory=process.memoryUsage();report.metrics.totalElapsedMs=performance.now()-began;report.bootstrapDiagnostics={slowThresholdMs:slowQueryMs,timings:Object.fromEntries(queryTotals),slowQueries:[...slowShapes.values()],inFlight:[...runningQueries.values()].map(({started,...value})=>({...value,elapsedMs:performance.now()-started})),plans:'Estimated read-only EXPLAIN plans. Client query elapsed times include pool and lock waits. Bound parameter values are omitted.'};
+ report.measuredDiagnostics={slowThresholdMs:slowQueryMs,caps:diagnosticCaps,contexts:Object.fromEntries([...measuredContexts].map(([key,value])=>[key,{kind:value.kind,component:value.component,queries:[...value.queries.values()],droppedShapeCalls:value.droppedShapeCalls,transactions:value.transactions}])),estimatedPlans,semantics:['Timed callbacks collect bounded in-memory client timings only; no diagnostic SQL, logging or file writes.','Ordinary and hot page contexts follow actual case identity; the unchanged casePage sample schedule includes the hot case once.','Query elapsed time includes pool and lock waits; parallel query times overlap.','Whole transaction time covers the real transaction call through commit or rollback. Callback time excludes pool acquisition and transaction completion.','Client-observed lock windows run from the first successful lock-query response to transaction completion; they are estimates, not exact server lock-hold measurements.','SQL text and bound parameters are private. Estimated EXPLAIN plan expression literals are redacted; numeric planner costs and row estimates are retained.','Measured page and burst distributions exclude deferred plan capture; totalElapsedMs includes post-measurement diagnostics.']};
+}
+async function checkpoint(name:string,progress:Record<string,unknown>={}){
+ if(stopping)return;if(report.phase?.name!==name)report.phase={name,startedAt:new Date().toISOString(),startedElapsedMs:performance.now()-began};report.phase.progress=progress;report.checkpointAt=new Date().toISOString();refreshDiagnostics();const snapshot=JSON.stringify(report,null,2)+'\n';
+ checkpointTail=checkpointTail.then(async()=>{if(stopping)return;await writeFile(output+'.partial',snapshot);if(!stopping)await rename(output+'.partial',output);});await checkpointTail;process.stdout.write(JSON.stringify({event:'scale_checkpoint',phase:name,progress,elapsedMs:performance.now()-began})+'\n');
+}
+function interrupt(signal:'SIGINT'|'SIGTERM'){stopping=true;report.completed=false;report.interrupted={signal,at:new Date().toISOString(),phase:report.phase?.name??'opening_database'};refreshDiagnostics();try{writeFileSync(output+'.signal.partial',JSON.stringify(report,null,2)+'\n');renameSync(output+'.signal.partial',output);}catch(error){process.stderr.write(`Partial scale report could not be written: ${String(error)}\n`);}process.exit(signal==='SIGINT'?130:143);}
+const onInterrupt=()=>interrupt('SIGINT'),onTerminate=()=>interrupt('SIGTERM');process.once('SIGINT',onInterrupt);process.once('SIGTERM',onTerminate);
+const heartbeat=setInterval(()=>{if(String(report.phase?.name??'').startsWith('measured_'))return;void checkpoint(report.phase?.name??'opening_database',report.phase?.progress??{}).catch(error=>process.stderr.write(`Scale checkpoint failed: ${String(error)}\n`));},60000);heartbeat.unref();
+function instrumentDatabase(source:Database,trace?:TransactionTrace):Database {
+ return {async query<T>(sql:string,params?:unknown[]){
+  const context=measurementContext.getStore();if(context){const started=performance.now();let failed=false,failure:unknown,rowCount:number|null=null,returnedRows=0;try{const result=await source.query<T>(sql,params);rowCount=result.rowCount;returnedRows=result.rows.length;return result;}catch(error){failed=true;failure=error;throw error;}finally{recordMeasuredQuery(context,sql,params,performance.now()-started,rowCount,returnedRows,failure,failed,trace);}}
+  const phase=String(report.phase?.name??'setup'),diagnostic=phase.startsWith('bootstrap_');if(!diagnostic)return source.query<T>(sql,params);
+  const started=performance.now(),key=sha256Hex(sql),sequence=++querySequence,explainable=/^\s*SELECT\b/i.test(sql)&&/\brecord_(?:case|typed|source)[a-z_]*\b/.test(sql)&&!/(?:FOR\s+(?:UPDATE|SHARE)|pg_advisory|credential|token|password)/i.test(sql);
+  if(diagnostic)runningQueries.set(sequence,{phase,sqlHash:key,...(explainable?{sql}:{}),started});
+  try{const result=await source.query<T>(sql,params),elapsed=performance.now()-started;
+   if(diagnostic){const total=queryTotals.get(phase)??{calls:0,totalMs:0,maxMs:0,slowCalls:0};total.calls++;total.totalMs+=elapsed;total.maxMs=Math.max(total.maxMs,elapsed);if(elapsed>=slowQueryMs)total.slowCalls++;queryTotals.set(phase,total);
+    if(elapsed>=slowQueryMs){let sample=slowShapes.get(key);if(!sample&&slowShapes.size<12){sample={phase,sqlHash:key,elapsedMs:elapsed,rowCount:result.rowCount,...(explainable?{sql}:{}),count:0,maxMs:elapsed};slowShapes.set(key,sample);process.stdout.write(JSON.stringify({event:'scale_slow_bootstrap_query',phase,sqlHash:key,elapsedMs:elapsed,rowCount:result.rowCount})+'\n');if(explainable){try{sample.estimatedPlan=(await source.query('EXPLAIN (FORMAT JSON) '+sql,params)).rows;}catch(error){sample.planError=String(error);}}}if(sample){sample.count=Number(sample.count)+1;sample.maxMs=Math.max(Number(sample.maxMs),elapsed);}}
+   }return result;
+  }finally{runningQueries.delete(sequence);}
+ },async transaction<T>(fn:(tx:Database)=>Promise<T>){
+  const context=measurementContext.getStore();if(!context)return source.transaction(tx=>fn(instrumentDatabase(tx)));
+  const transaction:TransactionTrace={sequence:++transactionSequence,started:performance.now(),callbackStarted:null,callbackEnded:null,firstLockAt:null,firstLockSqlHash:null,lockQueries:0,lockQueryMs:0,queryCount:0,failedQueries:0};let failed=false,failure:unknown;
+  try{return await source.transaction(async tx=>{transaction.callbackStarted=performance.now();try{return await fn(instrumentDatabase(tx,transaction));}finally{transaction.callbackEnded=performance.now();}});}catch(error){failed=true;failure=error;throw error;}finally{recordMeasuredTransaction(context,transaction,failure,failed);}
+ }};
+}
+await checkpoint('opening_database');
+const opened=await openIsolatedTestDatabase(),dir=await mkdtemp(path.join(tmpdir(),'packproof-projection-scale-'));
+const previous=new Map<string,string|undefined>();for(const name of ['PACKPROOF_ORGANIZATIONS_ENABLED','PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SUBSCRIPTIONS_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_SOURCE_HEALTH_ENABLED','PACKPROOF_RECONSTRUCTION_RULES_ENABLED','PACKPROOF_PAGED_PROJECTIONS_ENABLED']){previous.set(name,process.env[name]);process.env[name]='true';}previous.set('PACKPROOF_EVENT_CURSOR_KEY',process.env.PACKPROOF_EVENT_CURSOR_KEY);process.env.PACKPROOF_EVENT_CURSOR_KEY=randomBytes(32).toString('base64');
+const baseTime=Date.parse('2026-11-14T12:00:00Z');let liveClockStart:number|null=null;const clock={now:()=>new Date(baseTime+(liveClockStart===null?0:performance.now()-liveClockStart))};
+const uninstrumentedDb=opened.db;
+opened.db=instrumentDatabase(opened.db);
+function redactPlan(value:unknown,expression=false):unknown{
+ if(typeof value==='string'){const redacted=value.replace(/'(?:''|\\.|[^'])*'/g,"'[redacted]'");return expression?redacted.replace(/(?<![\w$])(?:[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?|true|false)\b/gi,'[redacted]'):redacted;}
+ if(Array.isArray(value))return value.map(item=>redactPlan(item,expression));
+ if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,redactPlan(item,/(?:Cond|Filter|Key|Output|Function Call|Table Function Call|Sampling Parameters|Repeatable Seed)$/.test(key))]));return value;
+}
+async function captureEstimatedPlans(kinds:MeasurementKind[],reason:string,limit:number,prioritizedOnly=false){
+ const eligible=new Set(kinds.filter(kind=>!plannedContexts.has(kind)));if(!eligible.size)return;for(const kind of eligible)plannedContexts.add(kind);
+ const candidates=[...privatePlanCandidates.values()].filter(candidate=>eligible.has(candidate.kind)&&(!prioritizedOnly||prioritizedPlanSql(candidate.sql))).sort((a,b)=>comparePlanCandidates(b,a)),seen=new Set<string>();let attempted=0;
+ for(const candidate of candidates){const key=`${candidate.kind}:${candidate.sqlHash}`;if(seen.has(key))continue;seen.add(key);if(attempted>=limit||estimatedPlans.length>=diagnosticCaps.totalPlans)break;attempted++;
+  const timing=measuredContexts.get(candidate.context)?.queries.get(candidate.sqlHash);
+  const entry:Record<string,unknown>={context:candidate.context,sqlHash:candidate.sqlHash,reason,prioritizedScopedSourceQuery:prioritizedPlanSql(candidate.sql),observedMaxMs:candidate.maxMs,observedFailedCalls:candidate.failedCalls,observedCalls:timing?.calls??null,observedReturnedRows:timing?.returnedRows??null,observedLastRowCount:timing?.lastRowCount??null,parametersFromFailedCall:candidate.failedCalls>0,method:'EXPLAIN (FORMAT JSON), read-only transaction, no ANALYZE',literalValuesRedacted:true};estimatedPlans.push(entry);
+  try{entry.estimatedPlan=redactPlan(await uninstrumentedDb.transaction(async tx=>{await tx.query('SET TRANSACTION READ ONLY');await tx.query(`SET LOCAL statement_timeout = '${diagnosticCaps.planTimeoutMs}ms'`);return (await tx.query('EXPLAIN (FORMAT JSON) '+candidate.sql,candidate.params)).rows;}));}catch(error){entry.planErrorClass=errorClass(error);}
+ }
+}
+const schedulerStops=new Set<()=>Promise<void>>();
+async function stopAllSchedulers(){const stops=[...schedulerStops];schedulerStops.clear();if(!stops.length)return;const started=performance.now(),results=await Promise.allSettled(stops.map(stop=>stop()));report.schedulerTeardown={stopped:true,schedulers:stops.length,jobs:3,elapsedMs:performance.now()-started,errors:results.flatMap(result=>result.status==='rejected'?[errorClass(result.reason)]:[])};const failure=results.find(result=>result.status==='rejected');if(failure?.status==='rejected')throw failure.reason;}
+try{
+ await checkpoint('migrations');
+ const testDatabaseUrl=process.env.PACKPROOF_TEST_DATABASE_URL;
+ if(testDatabaseUrl){
+  const schema=(await opened.db.query<{schema:string}>('SELECT current_schema() schema')).rows[0].schema;
+  if(!/^partner_services_[a-f0-9]{16}$/.test(schema))throw new Error('Benchmark requires its own isolated random test schema');
+  report.isolatedSchema=schema;
+  // Run the exact historical DDL on its own connection as in a release.
+  // Migration-local session settings must never become runtime-pool settings.
+  const migrationUrl=new URL(testDatabaseUrl);
+  migrationUrl.searchParams.set('options',`-c search_path=${schema}`);
+  const migrator=createPgDatabase(migrationUrl.toString());
+  try{await migrate(migrator.db);}
+  finally{await migrator.close();}
+  report.runtimeLockTimeout=(await opened.db.query<{lock_timeout:string}>('SHOW lock_timeout')).rows[0].lock_timeout;
+ }else{
+  await migrate(opened.db);
+ }
+ report.databaseVersion=(await opened.db.query<{version:string}>('SELECT version()')).rows[0].version;await checkpoint('source_setup');
+ const admin=await insertUser(opened.db,clock),owner=await insertUser(opened.db,clock);
+ await opened.db.query("INSERT INTO user_system_roles(user_id,role,granted_at) VALUES($1,'SYSTEM_ADMIN',$2)",[admin,clock.now().toISOString()]);
+ await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);
+ const org=(await createOrganization(opened.db,clock,admin,{kind:'MERCHANT',name:'Isolated synthetic scale',ownerUserId:owner},'scale')).id;
+ await setOrganizationEntitlement(opened.db,clock,admin,org,{enabled:true},'scale');
+ const member=(await opened.db.query<{id:string}>('SELECT id FROM platform_memberships WHERE organization_id=$1 AND user_id=$2',[org,owner])).rows[0].id;
+ const principal=await createServicePrincipal(opened.db,clock,owner,org,{name:'Synthetic scale source'},'scale');
+ const credential=await issuePartnerCredential(opened.db,clock,owner,org,principal.id,{scopes:[...PARTNER_SCOPES],expiresAt:'2026-12-01T12:00:00Z'},'scale');
+ const actor=await authenticatePartner(opened.db,clock,`Bearer ${credential.token}`,org,undefined,'scale');
+ const account=(await createIntegrationAccount(opened.db,clock,owner,org,{provider:'synthetic-scale',externalAccountId:'isolated-only'},'scale')).id,site='scale-site';
+ await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[site,org,'Synthetic scale site',clock.now().toISOString()]);
+ const workspace=await requireRecordWorkspace(opened.db,owner,org,'sandbox');
+ const deps:TypedImportDeps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','scale-only'),devAuth:true};
+ type Stage='allocated'|'loaded';const stages:Stage[]=['allocated','loaded'],profiles={allocated:'packproof.order-lines/v1',loaded:'packproof.operational-observations/v1'} as const;
+ const sources=new Map<Stage,{id:string;grantRevision:number;template:Record<string,unknown>}>(),heads=new Map<string,{rowId:string;revision:number}>();
+ const streamKey=(stage:Stage,index:number)=>`${stage}:${index}`;
+ const observation=(stage:Stage,index:number,revision:number,asOf=clock.now().toISOString()):TypedSourceObservation=>{
+  const order={namespace:'scale',type:'order' as const,externalId:`BENCH-${index}`},line={namespace:'scale',type:'order_line' as const,externalId:'1',parentExternalId:`BENCH-${index}`},shipment={namespace:'scale',type:'shipment' as const,externalId:`SHIP-${index}`},property=stage==='allocated'?'allocatedQuantity':'reportedLoadedQuantity',event=`scale-history-${index}-${stage}`;
+  return {sourceEventId:event,sourceRevision:String(revision),observationKind:revision===1?'snapshot':'correction',occurredAt:null,sourceAsOf:asOf,timeQuality:'snapshot_time_only',references:[order,line,shipment],assertions:[{subjectReference:line,property,value:{amount:stage==='allocated'?'10':'8',unit:'each'},assurance:'source_reported',sourceLocator:{row:1,field:property}}],relationships:[{from:order,to:line,type:'has_line',quantity:null},{from:shipment,to:line,type:'fulfills',quantity:null}],supersedes:revision===1?null:{sourceEventId:event,sourceRevision:String(revision-1)},originSystem:`synthetic-${stage}`,copiedFromSource:null};
+ };
+ const envelope=(stage:Stage,rows:TypedSourceObservation[],key:string)=>{const source=sources.get(stage)!,content=JSON.stringify(rows);return {schema:'packproof.typed-source-batch/v1',connectionId:account,locationId:site,sourceProfile:profiles[stage],mappingVersion:'scale/1',sourceNamespace:'scale',subscriptionId:source.id,configurationRevision:1,grantRevision:source.grantRevision,wholeFileConsent:true,original:{name:`${key}.json`,mediaType:'application/json',content,sha256:sha256Hex(content)},mapping:{},constants:{},completeness:{kind:'snapshot',asOf:clock.now().toISOString(),marker:key}};};
+ async function ingest(stage:Stage,rows:TypedSourceObservation[],key:string,processNow=true){
+  const boundaryActor=(boundary:'preview'|'commit'|'read')=>measurementContext.getStore()?.kind==='measured_burst'?authenticatePartner(opened.db,clock,`Bearer ${credential.token}`,org,undefined,`${key}-${boundary}`):Promise.resolve(actor);
+  const p=await previewTypedImport(deps,await boundaryActor('preview'),envelope(stage,rows,key),`preview-${key}`);if(p.value.rows.some(row=>row.errors.length))throw new Error(`Source preview failed: ${JSON.stringify(p.value.rows.map(row=>row.errors))}`);
+  await commitTypedImport(deps,await boundaryActor('commit'),p.value.id,{previewVersion:p.value.previewVersion,originalSha256:p.value.original.sha256,importValidRows:false},`commit-${key}`);if(processNow)await processPendingTypedImports(deps,2);
+  return readTypedImport(deps,await boundaryActor('read'),p.value.id);
+ }
+ for(const stage of stages){
+  const proposal=await opened.db.transaction(tx=>proposeSourceSubscription(tx,clock,workspace,{connectionId:account,principalId:actor.principalId,operatorMembershipId:member,locationId:site,installationId:null,config:{transport:'partner_api',displayName:`Scale ${stage} feed`,sourceProfile:profiles[stage],mappingVersion:'scale/1',sourceNamespace:'scale',mapping:{},constants:{},wholeFileConsent:true,folderDigest:null,initialFileName:null,initialOriginalSha256:null,expectedHeaders:[],historyFrom:'2026-11-01T00:00:00Z',historyTo:null,maxBytes:2097152,maxRows:1000,offlineWindowHours:24,expectedIntervalSeconds:86400,completenessPolicy:{kind:'snapshot',scope:'shipment_line',sourceOwnerQualified:true,qualificationReference:`synthetic-${stage}-scale-only`}}},`scale-proposal-${stage}`));
+  const approved=await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,workspace,proposal.id,{action:'approve',configurationRevision:1,configurationSha256:proposal.configurationSha256,wholeFileConsent:true},`scale-approve-${stage}`));sources.set(stage,{id:proposal.id,grantRevision:approved.grantRevision,template:{}});
+  const initial=await ingest(stage,[observation(stage,0,1)],`seed-${stage}`);if(initial.state!=='succeeded'||initial.counts.acceptedLinked!==1)throw new Error(`Source ${stage} first receipt did not establish one linked case`);
+  const active=await opened.db.transaction(tx=>actOnSourceSubscription(tx,clock,workspace,proposal.id,{action:'activate',configurationRevision:1,recurringConsent:true,initialBatchId:initial.id},`scale-activate-${stage}`));sources.set(stage,{id:proposal.id,grantRevision:active.grantRevision,template:(await opened.db.query<Record<string,unknown>>('SELECT * FROM record_typed_batches WHERE id=$1',[initial.id])).rows[0]});
+  await heartbeatSourceSubscription(opened.db,clock,actor,proposal.id,{configurationRevision:1,grantRevision:active.grantRevision,state:'checked',sourceAsOf:clock.now().toISOString(),checkpoint:`synthetic-scale-${stage}`,errorCode:null,backlog:0,oldestPendingAt:null},`scale-check-${stage}`);
+ }
+ const seedStarted=performance.now(),versions=retainedRows/shipments,stageVersions=versions/2;
+ await opened.db.query(`INSERT INTO record_cases(id,organization_id,environment,location_id,location_key,operator_membership_id,root_namespace,root_type,root_external_id,revision,created_at,updated_at) SELECT 'scale-case-'||g,$1,'sandbox',$2,$2,$3,'scale','order','BENCH-'||g,$4,$5,$5 FROM generate_series(1,$6::integer) g`,[org,site,member,versions,clock.now().toISOString(),shipments]);
+ let batchSequence=0,fixtureOriginalBytes=0,verifiedFixtureReceipts=0;
+ const referenceId=(index:number,type:string)=>`scale-entity-${index}-${type}`;
+ async function insertRecords(tx:typeof opened.db,table:string,records:Record<string,unknown>[]){if(records.length)await tx.query(`INSERT INTO ${table} SELECT * FROM jsonb_populate_recordset(NULL::${table},$1::jsonb)`,[JSON.stringify(records)]);}
+ async function seedReceipt(stage:Stage,indices:number[],revision:number|number[],asOf:string,hot=false){
+  const source=sources.get(stage)!,key=`history-${String(++batchSequence).padStart(8,'0')}`,batchId=`scale-batch-${key}`,parsed=parseTypedSourceBatch(envelope(stage,indices.map((index,i)=>observation(stage,index,Array.isArray(revision)?revision[i]:revision,asOf)),key));
+  if(parsed.rows.length!==indices.length||parsed.rows.some(row=>!row.normalized||row.errors.length))throw new Error(`Historical source contract failed for ${key}: ${JSON.stringify(parsed.rows.flatMap(r=>r.errors))}`);
+  const bytes=Buffer.from(parsed.original.content),objectKey=`evidence/${org}/${batchId}/committed/sha256-${parsed.original.sha256}`;await deps.objectStore.putIfAbsent!(objectKey,bytes,parsed.original.mediaType);const stored=await deps.objectStore.digest(objectKey);if(!stored||stored.sha256!==parsed.original.sha256||stored.byteSize!==bytes.length||!stored.versionId)throw new Error('Historical exact original verification failed');fixtureOriginalBytes+=bytes.length;verifiedFixtureReceipts++;
+  const {rows:_,...contractWithBytes}=parsed,contract={...contractWithBytes,original:{...parsed.original,content:''}},receivedAt=clock.now().toISOString();
+  const batch={...source.template,id:batchId,grant_revision:source.grantRevision,state:'succeeded',row_count:parsed.rows.length,original_name:parsed.original.name,original_media_type:parsed.original.mediaType,original_object_key:objectKey,original_version_id:stored.versionId,original_sha256:stored.sha256,original_byte_size:stored.byteSize,contract,preview_version:sha256Hex(canonicalize({fixture:key,sha256:stored.sha256,source:source.id})),received_at:receivedAt,updated_at:receivedAt,next_attempt_at:receivedAt,lease_token:null,lease_expires_at:null,attempts:0,error_code:null};
+  const rows:Record<string,unknown>[]=[],identities:Record<string,unknown>[]=[],entities:Record<string,unknown>[]=[],assertions:Record<string,unknown>[]=[],relationships:Record<string,unknown>[]=[],decisions:Record<string,unknown>[]=[];
+  for(let i=0;i<parsed.rows.length;i++){
+   const raw=parsed.rows[i],n=raw.normalized!,index=indices[i],caseId=`scale-case-${index}`,rowId=`scale-row-${key}-${i}`,head=heads.get(streamKey(stage,index)),version=Number(n.sourceRevision);if(version>1&&head?.revision!==version-1)throw new Error('Historical same-stage revision chain is incomplete');
+   rows.push({id:rowId,batch_id:batchId,row_number:raw.rowNumber,source_event_id:n.sourceEventId,source_revision:n.sourceRevision,payload_sha256:raw.payloadSha256,source_values:raw.raw,normalized:n,errors:raw.errors,status:'accepted_linked',case_id:caseId,duplicate_of:null,supersedes_id:head?.rowId??null,error_code:null,history_eligibility:'within_bounds',resolution_attempts:0,received_at:receivedAt});identities.push({organization_id:org,environment:'sandbox',connection_id:account,location_id:site,source_event_id:n.sourceEventId,source_revision:n.sourceRevision,row_id:rowId,payload_sha256:raw.payloadSha256});
+   if(stage==='allocated'&&version===1)for(const ref of n.references)entities.push({id:referenceId(index,ref.type),case_id:caseId,organization_id:org,environment:'sandbox',namespace:ref.namespace,entity_type:ref.type,external_id:ref.externalId,parent_external_id:ref.parentExternalId??'',receipt_id:rowId,row_number:raw.rowNumber,created_at:receivedAt});
+   for(const [position,a]of n.assertions.entries())assertions.push({id:`assertion_${sha256Hex(canonicalize([rowId,caseId,position]))}`,case_id:caseId,entity_id:referenceId(index,a.subjectReference.type),batch_id:batchId,row_number:raw.rowNumber,observation_id:rowId,connection_id:account,source_namespace:'scale',property:a.property,value:a.value,unit:typeof a.value==='object'?a.value.unit:null,source_locator:a.sourceLocator,mapping_version:parsed.mappingVersion,source_revision:n.sourceRevision,occurred_at:n.occurredAt,source_as_of:n.sourceAsOf,time_quality:n.timeQuality,origin:{originSystem:n.originSystem,copiedFromSource:n.copiedFromSource},received_at:receivedAt});
+   for(const [position,r]of n.relationships.entries())relationships.push({id:`relation_${sha256Hex(canonicalize([rowId,caseId,position]))}`,case_id:caseId,from_entity_id:referenceId(index,r.from.type),to_entity_id:referenceId(index,r.to.type),relation_type:r.type,quantity:r.quantity,assertion_row_id:rowId,created_at:receivedAt});
+   decisions.push({id:`scale-decision-${key}-${i}`,observation_id:rowId,case_id:caseId,supersedes_id:null,basis:{ruleVersion:'packproof.case-identity/v1',kind:'exact_scoped_reference',fixtureMaterialization:'bulk_sql_after_real_parser'},actor_user_id:owner,created_at:receivedAt});heads.set(streamKey(stage,index),{rowId,revision:version});
+  }
+  await opened.db.transaction(async tx=>{await insertRecords(tx,'record_typed_batches',[batch]);await insertRecords(tx,'record_typed_rows',rows);await insertRecords(tx,'record_typed_identities',identities);await insertRecords(tx,'record_case_entities',entities);await insertRecords(tx,'record_case_assertions',assertions);await insertRecords(tx,'record_case_relations',relationships);await insertRecords(tx,'record_case_association_decisions',decisions);if(hot)await tx.query("UPDATE record_cases SET revision=revision+$1 WHERE id='scale-case-1'",[rows.length]);});
+ }
+ async function seedRetainedPhase(stage:Stage,revision:number,asOf:string){
+  const progress={stage,revision,stageVersions,configuredConcurrency:seedConcurrency,workers:Math.min(seedConcurrency,Math.ceil(shipments/1000)),totalReceipts:Math.ceil(shipments/1000),startedReceipts:0,completedReceipts:0,failedReceipts:0,activeReceipts:0,maxActiveReceipts:0,allActiveSettled:false};report.seedProgress=progress;
+  if(report.phase?.name!=='retained_sources')report.phase={name:'retained_sources',startedAt:new Date().toISOString(),startedElapsedMs:performance.now()-began};report.phase.progress=progress;
+  let nextCase=1,failed=false,failure:unknown;
+  const rememberFailure=(error:unknown,start:number|null)=>{if(!failed){failed=true;failure=error;report.seedFailure={stage,revision,firstCase:start,errorClass:errorClass(error)};}};
+  // Reservation has no await: chunks are disjoint within this stage/revision.
+  // A failure stops dispatch, but every already active receipt must settle before
+  // another phase or cleanup can observe the pre-commit in-memory source heads.
+  const outcomes=await Promise.allSettled(Array.from({length:progress.workers},async()=>{
+   while(!failed&&nextCase<=shipments){const start=nextCase;nextCase+=1000;progress.startedReceipts++;progress.activeReceipts++;progress.maxActiveReceipts=Math.max(progress.maxActiveReceipts,progress.activeReceipts);report.seedConfiguration.actualMaxConcurrentReceipts=Math.max(report.seedConfiguration.actualMaxConcurrentReceipts,progress.activeReceipts);
+    try{await seedReceipt(stage,Array.from({length:Math.min(1000,shipments-start+1)},(_,i)=>start+i),revision,asOf);progress.completedReceipts++;report.seedConfiguration.completedRetainedReceipts++;}catch(error){progress.failedReceipts++;rememberFailure(error,start);}finally{progress.activeReceipts--;}
+   }
+  }));
+  for(const outcome of outcomes)if(outcome.status==='rejected')rememberFailure(outcome.reason,null);
+  progress.allActiveSettled=true;if(failed)throw failure;report.seedConfiguration.completedPhases++;
+ }
+ for(let revision=1;revision<=stageVersions;revision++)for(const stage of stages){const asOf=new Date(baseTime-(stageVersions-revision)/Math.max(1,stageVersions-1)*10*86400000).toISOString();await seedRetainedPhase(stage,revision,asOf);if(revision===1||revision===stageVersions||revision%5===0)await checkpoint('retained_sources',{...report.seedProgress,verifiedFixtureReceipts,fixtureOriginalBytes});}
+ await checkpoint('hot_case_sources',{retainedRows,hotCaseRows});
+ for(const [stageIndex,stage]of stages.entries()){const count=Math.max(0,Math.ceil((hotCaseRows-stageIndex)/2));for(let start=0;start<count;start+=1000){const length=Math.min(1000,count-start),first=heads.get(streamKey(stage,1))!.revision+1;await seedReceipt(stage,Array(length).fill(1),Array.from({length},(_,i)=>first+i),clock.now().toISOString(),true);}}
+ report.fixtureProvenance={approvedSources:2,verifiedFixtureReceipts,fixtureOriginalBytes,maximumRowsPerReceipt:1000,exactSourcePayloadHashes:true,explicitSameStageRevisionChains:true,allocatedQuantity:'10 each',reportedLoadedQuantity:'8 each'};
+ await checkpoint('receipt_accounting',{verifiedFixtureReceipts,fixtureOriginalBytes});
+ const mismatches=(await opened.db.query<{n:string}>(`SELECT COUNT(*)::text n FROM record_typed_batches b WHERE b.row_count<>(SELECT COUNT(*) FROM record_typed_rows r WHERE r.batch_id=b.id) OR b.row_count>1000 OR EXISTS(SELECT 1 FROM record_typed_rows r WHERE r.batch_id=b.id AND (r.row_number<1 OR r.row_number>b.row_count OR r.payload_sha256 IS NULL))`)).rows[0];if(Number(mismatches.n))throw new Error('Historical receipt row accounting is inconsistent');
+ await checkpoint('analyze');await opened.db.query('ANALYZE');report.metrics.fixtureSeedMs=performance.now()-seedStarted;report.fixtureCounts=(await opened.db.query('SELECT (SELECT COUNT(*) FROM record_typed_rows) observations,(SELECT COUNT(*) FROM record_case_assertions) assertions,(SELECT COUNT(*) FROM record_cases) cases')).rows[0];if(Number(report.fixtureCounts.observations)!==retainedRows+hotCaseRows+2||Number(report.fixtureCounts.assertions)!==retainedRows+hotCaseRows+2||Number(report.fixtureCounts.cases)!==shipments+1)throw new Error('Historical fixture volume does not match complete receipt accounting');
+ const bootstrapCases=(await opened.db.query<{id:string}>('SELECT id FROM record_cases WHERE organization_id=$1 AND environment=$2 ORDER BY id',[org,'sandbox'])).rows.map(row=>row.id);if(bootstrapCases.length!==shipments+1)throw new Error('Bootstrap case inventory is incomplete');
+ const primeStarted=performance.now();await checkpoint('bootstrap_prime',{caseId:bootstrapCases[0],total:bootstrapCases.length});await synchronizeOperationalCaseProjection(opened.db,clock,workspace,bootstrapCases[0]);
+ report.metrics.bootstrapPrime={elapsedMs:performance.now()-primeStarted,caseId:bootstrapCases[0],readySources:Number((await opened.db.query<{n:string}>('SELECT COUNT(*)::text n FROM record_source_projection_counters WHERE ready=true')).rows[0].n)};if(report.metrics.bootstrapPrime.readySources!==2)throw new Error('Actual source counter baseline was not primed before parallel bootstrap');
+ async function bootstrap(name:string,ids:string[],synchronize:typeof synchronizeOperationalCaseProjection|typeof synchronizeOperationalCaseIssues){
+  const started=performance.now(),durations:number[]=[],progress={completed:0,total:ids.length,concurrency:bootstrapConcurrency,inFlightCases:0,caseElapsedTotalMs:0,caseElapsedMaxMs:0};await checkpoint(name,progress);let next=0,failed:unknown;
+  await Promise.all(Array.from({length:Math.min(bootstrapConcurrency,ids.length)},async()=>{while(next<ids.length&&!failed){const id=ids[next++],caseStarted=performance.now();progress.inFlightCases++;try{await synchronize(opened.db,clock,workspace,id);const elapsed=performance.now()-caseStarted;durations.push(elapsed);progress.caseElapsedTotalMs+=elapsed;progress.caseElapsedMaxMs=Math.max(progress.caseElapsedMaxMs,elapsed);progress.completed++;if(progress.completed%100===0||progress.completed===ids.length)await checkpoint(name,progress);}catch(error){failed=error;report.bootstrapFailureCase=id;}finally{progress.inFlightCases--;}}}));if(failed)throw failed;return {elapsedMs:performance.now()-started,cases:ids.length,concurrency:bootstrapConcurrency,caseDuration:distribution(durations)};
+ }
+ report.metrics.initialProjectionDrain=await bootstrap('bootstrap_projections',bootstrapCases.slice(1),synchronizeOperationalCaseProjection);
+ report.metrics.initialDurableIssueDrain=await bootstrap('bootstrap_durable_issues',bootstrapCases,synchronizeOperationalCaseIssues);
+ const initialIssueCount=Number((await opened.db.query<{n:string}>("SELECT COUNT(*)::text n FROM record_case_issues WHERE category='quantity_disagreement'")).rows[0].n);if(initialIssueCount!==shipments+1)throw new Error(`Durable issue list is incomplete: ${initialIssueCount}/${shipments+1}`);
+
+ await checkpoint('measured_pages');
+ const pageTimes:number[]=[],workerTimes:number[]=[];
+ for(let i=0;i<samples;i++){const id=`scale-case-${1+(i%shipments)}`;let at=performance.now();await synchronizeOperationalCaseProjection(opened.db,clock,workspace,id);workerTimes.push(performance.now()-at);at=performance.now();const page=await measurementContext.run({kind:id==='scale-case-1'?'hot_page':'ordinary_page',component:'casePage',sample:i},()=>getOperationalCase(opened.db,clock,workspace,id,{limit:50}));pageTimes.push(performance.now()-at);if(page.case.issueCount!==1||page.comparisons.filter(c=>c.category==='quantity_disagreement'&&c.outcome==='different').length!==1||page.assertions.length>50||page.timeline.length>50||!('projectionStatus' in page)||page.projectionStatus.state!=='ready')throw new Error('Bounded ready page invariant failed');}
+ report.metrics.casePage=distribution(pageTimes);report.metrics.completeActiveWorker=distribution(workerTimes);
+ const largeCaseTimes:number[]=[];for(let i=0;i<samples;i++){const at=performance.now();const page=await measurementContext.run({kind:'hot_page',component:'largeCasePage',sample:i},()=>getOperationalCase(opened.db,clock,workspace,'scale-case-1',{limit:50}));largeCaseTimes.push(performance.now()-at);if(Number(page.totals.timeline)<hotCaseRows||page.timeline.length>50)throw new Error('Large retained-case page invariant failed');}report.metrics.largeCasePage=distribution(largeCaseTimes);
+ if(report.metrics.casePage.p95Ms>2000||report.metrics.largeCasePage.p95Ms>2000){await checkpoint('post_page_diagnostics',{reason:'measured_page_p95_over_two_seconds'});await captureEstimatedPlans(['ordinary_page','hot_page'],'measured_page_p95_over_two_seconds',diagnosticCaps.pagePlans);}
+ await checkpoint('measured_burst');
+ liveClockStart=performance.now();
+ const burstStarted=performance.now(),burstTimings:number[]=[],failedBurstTimings:number[]=[],typedTimings:number[]=[],projectionTimings:number[]=[],issueTimings:number[]=[],burstBatchIds:string[]=[];
+ let received=0,accepted=0,pending=1,producerElapsed=0,elapsed=0,producerCompleted=false,drainCompleted=false,burstFailed=false,projectionCaughtUpAt:number|null=null,issuesCaughtUpAt:number|null=null;
+ const burstProgress:{stage:string;attemptedBatches:number;completedBatches:number;attemptedObservations:number;received:number;accepted:number;acceptedCountObserved:boolean;pending:number|null;lastDrainState:Record<string,string>|null}={stage:'producer',attemptedBatches:0,completedBatches:0,attemptedObservations:0,received:0,accepted:0,acceptedCountObserved:false,pending:null,lastDrainState:null};report.burstProgress=burstProgress;
+ report.workerDefaults={typedBatchesPerPass:2,typedIntervalMs:5000,maxCasesPerPass:100,projectionIntervalMs:250,issueCasesPerPass:100,issueIntervalMs:250};
+ async function timedBurstWorker<T>(component:string,timings:number[],work:()=>Promise<T>){return measurementContext.run({kind:'measured_burst',component},async()=>{const at=performance.now();try{return await work();}finally{timings.push(performance.now()-at);}});}
+ try{
+  schedulerStops.add(startScheduledJobs(opened.db,clock,[{name:'scale-typed-source-imports',intervalMs:5000,run:()=>timedBurstWorker('typed_worker',typedTimings,()=>processPendingTypedImports(deps,2))},{name:'scale-case-projections',intervalMs:250,run:()=>timedBurstWorker('projection_worker',projectionTimings,()=>processPendingCaseProjections(opened.db,clock,100))},{name:'scale-durable-issues',intervalMs:250,run:()=>timedBurstWorker('issue_worker',issueTimings,()=>processPendingReconstructionIssues(opened.db,clock,100))}]));
+  for(let second=0;second<burstSeconds;second++){
+   const at=performance.now(),rows=Array.from({length:burstRate},(_,index)=>{const caseNumber=1+((second*burstRate+index)%shipments),head=heads.get(streamKey('loaded',caseNumber))!,row=observation('loaded',caseNumber,head.revision+1);heads.set(streamKey('loaded',caseNumber),{...head,revision:head.revision+1});return row;});burstProgress.attemptedBatches++;burstProgress.attemptedObservations+=rows.length;
+   try{const result=await measurementContext.run({kind:'measured_burst',component:'producer',sample:second},()=>ingest('loaded',rows,`burst-${second}`,false));received+=rows.length;burstBatchIds.push(result.id);burstTimings.push(performance.now()-at);burstProgress.completedBatches++;burstProgress.received=received;}catch(error){failedBurstTimings.push(performance.now()-at);throw error;}
+   const remaining=burstStarted+(second+1)*1000-performance.now();if(remaining>0)await delay(remaining);
+  }
+  producerElapsed=performance.now()-burstStarted;producerCompleted=true;burstProgress.stage='drain';
+  await measurementContext.run({kind:'measured_burst',component:'drain'},async()=>{while(pending>0){
+   accepted=Number((await opened.db.query<{n:string}>("SELECT COUNT(*)::text n FROM record_typed_rows WHERE batch_id=ANY($1::text[]) AND status='accepted_linked'",[burstBatchIds])).rows[0].n);burstProgress.accepted=accepted;burstProgress.acceptedCountObserved=true;
+   const state=(await opened.db.query<{batches:string;projections:string;issues:string;findings:string}>(`SELECT (SELECT COUNT(*) FROM record_typed_batches WHERE id=ANY($1::text[]) AND state NOT IN ('succeeded','partially_succeeded')) batches,(SELECT COUNT(*) FROM record_cases c LEFT JOIN record_case_projection_state s ON s.case_id=c.id WHERE s.case_id IS NULL OR s.case_revision<c.revision OR (s.summary->>'issueCount')::integer IS DISTINCT FROM 1) projections,(SELECT COUNT(*) FROM record_cases c LEFT JOIN record_case_rule_state s ON s.case_id=c.id WHERE s.case_id IS NULL OR s.case_revision<c.revision) issues,(SELECT COUNT(*) FROM record_case_issues issue WHERE issue.category='quantity_disagreement' AND COALESCE((SELECT e.outcome FROM record_case_issue_evaluations e WHERE e.issue_id=issue.id ORDER BY e.sequence DESC LIMIT 1),'not_comparable')<>'different') findings`,[burstBatchIds])).rows[0];burstProgress.lastDrainState=state;
+   if(Number(state.batches)===0&&Number(state.projections)===0)projectionCaughtUpAt??=performance.now();
+   if(Number(state.batches)===0&&Number(state.issues)===0&&Number(state.findings)===0)issuesCaughtUpAt??=performance.now();
+   pending=Number(state.batches)+Number(state.projections)+Number(state.issues)+Number(state.findings);burstProgress.pending=pending;
+   if(performance.now()-burstStarted>producerElapsed+120000)throw new Error(`Burst pipeline exceeded two-minute lag budget: ${JSON.stringify(state)}`);if(pending)await delay(250);
+  }});drainCompleted=true;burstProgress.stage='complete';
+ }catch(error){burstFailed=true;report.failedPhase??='measured_burst';report.burstFailure={stage:burstProgress.stage,errorClass:errorClass(error)};if(!producerCompleted)producerElapsed=performance.now()-burstStarted;throw error;}
+ finally{
+  try{await stopAllSchedulers();}catch(error){report.schedulerStopErrorClass=errorClass(error);if(!burstFailed)throw error;}
+  finally{elapsed=performance.now()-burstStarted;report.metrics.burst={received,accepted:burstProgress.acceptedCountObserved?accepted:null,expected:burstSeconds*burstRate,completed:producerCompleted&&drainCompleted,producerCompleted,drainCompleted,acceptedCountObserved:burstProgress.acceptedCountObserved,elapsedMs:elapsed,producerElapsedMs:producerElapsed,actualArrivalObservationsPerSecond:producerElapsed?received/(producerElapsed/1000):0,actualCompletionObservationsPerSecond:burstProgress.acceptedCountObserved&&elapsed?accepted/(elapsed/1000):null,projectionLagAfterFinalArrivalMs:projectionCaughtUpAt===null?null:Math.max(0,projectionCaughtUpAt-burstStarted-producerElapsed),durableIssueLagAfterFinalArrivalMs:issuesCaughtUpAt===null?null:Math.max(0,issuesCaughtUpAt-burstStarted-producerElapsed),pipelineLagAfterFinalArrivalMs:producerCompleted?Math.max(0,elapsed-producerElapsed):null,typedWorkerBatchPasses:distribution(typedTimings),admissionBatch:distribution(burstTimings),failedAdmissionBatch:distribution(failedBurstTimings),boundedProjectionPasses:distribution(projectionTimings),durableIssuePasses:distribution(issueTimings),oneSecondAdmissionBudgetMisses:[...burstTimings,...failedBurstTimings].filter(ms=>ms>1000).length};}
+ }
+ await checkpoint('post_burst_diagnostics',{reason:'scoped_source_predecessor_plan_after_scheduler_shutdown',measuredBurstElapsedMs:elapsed});
+ await captureEstimatedPlans(['measured_burst'],'scoped_source_predecessor_plan_after_scheduler_shutdown',1,true);
+ report.metrics.pendingCases=(await opened.db.query<{n:string}>(`SELECT COUNT(*)::text n FROM record_cases c LEFT JOIN record_case_projection_state s ON s.case_id=c.id WHERE s.case_id IS NULL OR s.case_revision<c.revision`)).rows[0].n;
+ report.metrics.pendingIssueCases=(await opened.db.query<{n:string}>(`SELECT COUNT(*)::text n FROM record_cases c LEFT JOIN record_case_rule_state s ON s.case_id=c.id WHERE s.case_id IS NULL OR s.case_revision<c.revision`)).rows[0].n;
+ report.metrics.durableQuantityIssues=Number((await opened.db.query<{n:string}>("SELECT COUNT(*)::text n FROM record_case_issues WHERE category='quantity_disagreement'")).rows[0].n);
+ report.metrics.currentDurableQuantityIssues=Number((await opened.db.query<{n:string}>("SELECT COUNT(*)::text n FROM record_case_issues i WHERE i.category='quantity_disagreement' AND (SELECT e.outcome FROM record_case_issue_evaluations e WHERE e.issue_id=i.id ORDER BY e.sequence DESC LIMIT 1)='different'")).rows[0].n);
+ report.targetResults={retainedVolumeMet:retainedRows>=1_000_000,hotCaseVolumeMet:hotCaseRows>=10_000,shipmentVolumeMet:shipments>=10_000,casePageP95UnderTwoSeconds:report.metrics.casePage.p95Ms<=2000,largeCasePageP95UnderTwoSeconds:report.metrics.largeCasePage.p95Ms<=2000,burstRateMet:report.metrics.burst.actualArrivalObservationsPerSecond>=burstRate*.99,admissionBatchP95UnderOneSecond:report.metrics.burst.admissionBatch.p95Ms<=1000,allCaseRevisionsProjected:Number(report.metrics.pendingCases)===0,allCaseIssueRevisionsCurrent:Number(report.metrics.pendingIssueCases)===0,durableQuantityIssueInventoryComplete:report.metrics.durableQuantityIssues===shipments+1&&report.metrics.currentDurableQuantityIssues===shipments+1,burstPipelineWithinTwoMinuteLag:elapsed<=burstSeconds*1000+120000};
+ await checkpoint('target_review');
+ report.enforceTargets=process.env.PACKPROOF_SCALE_ENFORCE_TARGETS==='true';if(report.enforceTargets&&Object.values(report.targetResults).some(value=>value!==true))throw new Error(`Scale qualification target failed: ${JSON.stringify(report.targetResults)}`);
+ report.metrics.processMemory=process.memoryUsage();report.metrics.totalElapsedMs=performance.now()-began;report.completed=true;
+ if(accepted!==burstSeconds*burstRate)throw new Error('Burst observations were not fully admitted');
+ process.stdout.write(JSON.stringify({casePage:report.metrics.casePage,completeActiveWorker:report.metrics.completeActiveWorker,burst:report.metrics.burst,pendingCases:report.metrics.pendingCases})+'\n');
+}catch(error){
+ report.completed=false;report.failedPhase??=String(report.phase?.name??'opening_database');report.error=error instanceof Error?{name:error.name,message:error.message,stack:error.stack}:String(error);process.exitCode=1;
+ // The burst's finally has already waited for producer/worker rollback and all
+ // three jobs. Keep the original failure even if optional diagnostics fail.
+ try{await stopAllSchedulers();if(report.failedPhase==='measured_burst'){await checkpoint('post_failure_diagnostics',{failedPhase:report.failedPhase});await captureEstimatedPlans(['measured_burst'],'measured_burst_failure_after_scheduler_shutdown',diagnosticCaps.burstPlans);}}catch(diagnosticError){report.failureDiagnosticErrorClass=errorClass(diagnosticError);}
+}
+finally{clearInterval(heartbeat);try{await stopAllSchedulers();}catch(error){report.schedulerStopErrorClass=errorClass(error);}await checkpointTail.catch(()=>{});await checkpoint('cleanup',{measurementsCompleted:report.completed,failedPhase:report.failedPhase??null}).catch(()=>{});report.finishedAt=new Date().toISOString();await writeFile(output,JSON.stringify(report,null,2)+'\n');await opened.close();await rm(dir,{recursive:true,force:true});process.off('SIGINT',onInterrupt);process.off('SIGTERM',onTerminate);for(const [name,value]of previous){if(value===undefined)delete process.env[name];else process.env[name]=value;}process.stdout.write(`Scale report: ${output}\n`);}

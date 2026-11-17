@@ -2,40 +2,70 @@ import type { Database } from '../db/database.js';
 import type { Clock } from '../clock.js';
 import type { PartnerActor, PartnerScope } from '../platform/organizations.js';
 import type { CsvMapping, ShipmentCsvRow } from './csv.js';
+import {approvedCsvHeaders, csvHeaderChange, csvHeaderPolicyAvailable, CSV_REORDER_POLICY} from './csv-header-policy.js';
 import { DomainError } from '../domain/errors.js';
 import { canonicalize } from '../canonical.js';
 import { strictBody } from '../platform/organizations.js';
 import { textField } from '../platform/tenants.js';
+import { CSV_RULES, analyzeColumns, shipmentInterpretation, headerKey, explicitInstant, eligibleHeader, type SemanticField } from './csv-semantics.js';
+import {reconstructionFeatureEnabled,supportsSourceBackfills} from './reconstruction-features.js';
 
 export interface ScheduledCsvSourceContract {
-  schema: 'packproof.scheduled-csv/v1';
-  exporterName: string;
-  exporterVersion: string;
+  schema: 'packproof.scheduled-csv/v1'|'packproof.scheduled-csv/v2';
+  exporterName: string|null;
+  exporterVersion: string|null;
   expectedHeaders: string[];
-  expectedIntervalSeconds: number;
+  headerPolicy?: typeof CSV_REORDER_POLICY;
+  expectedIntervalSeconds: number|null;
+  rulesVersion?: string;
+  profileVersion?: string;
+  interpretationVersion?: string;
+  basedOnConfigRevision?: number;
+  confirmedFields?: string[];
+  analysisRevision?: number;
+  historyPolicy?: { mode:'selected_then_new'; baselineSha256:string; observedAt:string; initialFileName:string; initialFileSha256:string };
+
   backfillFrom: string;
 }
-function explicitTimestamp(value:string):number|null {
-  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value))return null;
-  const parsed=Date.parse(value),day=Date.parse(`${value.slice(0,10)}T00:00:00Z`);
-  return Number.isFinite(parsed)&&Number.isFinite(day)&&new Date(day).toISOString().slice(0,10)===value.slice(0,10)&&Number(value.slice(11,13))<24?parsed:null;
+export function interpretationAvailable(version?: string) {
+  return (version === undefined || version === '0.4.1') &&
+    process.env.PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED === 'true' &&
+    process.env.PACKPROOF_SHIPMENT_WORKER_INTERPRETATION === CSV_RULES.interpretation.version;
 }
+const explicitTimestamp = explicitInstant;
 export function validateScheduledCsvSourceContract(input:unknown):ScheduledCsvSourceContract {
-  const b=strictBody(input,['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom']);
-  if(b.schema!=='packproof.scheduled-csv/v1')throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose the scheduled CSV v1 source contract',400);
-  const exporterName=textField(b.exporterName,'exporterName',100),exporterVersion=textField(b.exporterVersion,'exporterVersion',80);
-  if(!Array.isArray(b.expectedHeaders)||!b.expectedHeaders.length||b.expectedHeaders.length>50||b.expectedHeaders.some(h=>typeof h!=='string'||!h.trim()||h!==h.trim()||h.length>200)||new Set(b.expectedHeaders).size!==b.expectedHeaders.length)throw new DomainError('INVALID_SOURCE_HEADERS','Confirm at most 50 exact, unique CSV headers',400);
-  if(!Number.isInteger(b.expectedIntervalSeconds)||Number(b.expectedIntervalSeconds)<60||Number(b.expectedIntervalSeconds)>604800)throw new DomainError('INVALID_SOURCE_CADENCE','Choose a source cadence from one minute to seven days',400);
+  const v2=!!input && typeof input==='object' && 'schema' in input && input.schema==='packproof.scheduled-csv/v2';
+  const b=strictBody(input,['schema','exporterName','exporterVersion','expectedHeaders','expectedIntervalSeconds','backfillFrom',...(v2?['rulesVersion','profileVersion','confirmedFields','historyPolicy','analysisRevision','interpretationVersion','basedOnConfigRevision','headerPolicy']:[])]);
+  if(b.schema!=='packproof.scheduled-csv/v1'&&!v2)throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose the scheduled CSV v1 source contract',400);
+  const exporterName=v2&&b.exporterName===null?null:textField(b.exporterName,'exporterName',100),exporterVersion=v2&&b.exporterVersion===null?null:textField(b.exporterVersion,'exporterVersion',80);
+  if(!Array.isArray(b.expectedHeaders)||!b.expectedHeaders.length||b.expectedHeaders.length>50||b.expectedHeaders.some(h=>typeof h!=='string'||!h.trim()||!v2&&h!==h.trim()||h.length>200)||new Set(b.expectedHeaders.map(h=>headerKey(String(h)))).size!==b.expectedHeaders.length)throw new DomainError('INVALID_SOURCE_HEADERS','Confirm at most 50 exact, unique CSV headers',400);
+  if(!(v2&&b.expectedIntervalSeconds===null)&&(!Number.isInteger(b.expectedIntervalSeconds)||Number(b.expectedIntervalSeconds)<60||Number(b.expectedIntervalSeconds)>604800))throw new DomainError('INVALID_SOURCE_CADENCE','Choose a source cadence from one minute to seven days',400);
   const backfillFrom=textField(b.backfillFrom,'backfillFrom',64);
   if(explicitTimestamp(backfillFrom)===null)throw new DomainError('INVALID_BACKFILL_BOUNDARY','Set a valid backfill cutoff with an explicit UTC offset',400);
+  if(v2){
+    if(b.headerPolicy!==undefined && (b.headerPolicy!==CSV_REORDER_POLICY || b.interpretationVersion!==CSV_RULES.interpretation.version))throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Choose a supported CSV column order policy',409);
+    if (b.interpretationVersion !== undefined && b.interpretationVersion !== CSV_RULES.interpretation.version) throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Install matching shipment interpretation support before approving this source',409);
+    if(b.rulesVersion!==CSV_RULES.version||b.profileVersion!==CSV_RULES.profile||!Number.isSafeInteger(b.analysisRevision)||Number(b.analysisRevision)<1)throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Install matching Connect validation rules before approving this source',409);
+    if (b.interpretationVersion !== undefined ? !Number.isSafeInteger(b.basedOnConfigRevision) || Number(b.basedOnConfigRevision) < 0 : b.basedOnConfigRevision !== undefined) throw new DomainError('INVALID_SOURCE_REVISION','Pin the interpretation to the current source configuration revision',409);
+    if(!Array.isArray(b.confirmedFields)||new Set(b.confirmedFields).size!==b.confirmedFields.length||b.confirmedFields.some(f=>typeof f!=='string'||!Object.hasOwn(CSV_RULES.aliases,f)))throw new DomainError('INVALID_MAPPING','Confirm only documented field meanings',400);
+    const history=strictBody(b.historyPolicy,['mode','baselineSha256','observedAt','initialFileName','initialFileSha256']);
+    if(history.mode!=='selected_then_new'||![history.baselineSha256,history.initialFileSha256].every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/.test(h))||typeof history.initialFileName!=='string'||history.initialFileName.length>255||!/\.csv$/i.test(history.initialFileName)||/[\\/:]/.test(history.initialFileName)||typeof history.observedAt!=='string'||explicitInstant(history.observedAt)===null)throw new DomainError('INVALID_SOURCE_HISTORY','Review the exact initial file and local folder baseline',400);
+    return {...b,exporterName,exporterVersion,backfillFrom} as unknown as ScheduledCsvSourceContract;
+  }
   return {schema:'packproof.scheduled-csv/v1',exporterName,exporterVersion,expectedHeaders:b.expectedHeaders as string[],expectedIntervalSeconds:Number(b.expectedIntervalSeconds),backfillFrom};
 }
 export function validateScheduledCsvRows(config:AgentApprovedConfig,rows:readonly Pick<ShipmentCsvRow,'values'|'normalized'>[],headers:readonly string[]=Object.keys(rows[0]?.values??{})) {
   const contract=config.sourceContract;
-  if(!contract)return;
+  const columns=headers as string[];
+  for(const [field,header] of Object.entries(config.mapping))if(!columns.includes(header!)||!eligibleHeader(field as SemanticField,header!))throw new DomainError('MAPPING_NEEDS_REVIEW','A mapped column has an incompatible business meaning',409);
+  if(!contract){
+    const decisions=analyzeColumns(columns,rows.map(r=>r.values),config.mapping,Object.keys(config.mapping),config.locationId,false);
+    if(decisions.some(d=>['incompatible','missing_required'].includes(d.state)))throw new DomainError('MAPPING_NEEDS_REVIEW','Revalidate this legacy mapping before new ingestion; existing receipts are preserved',409);
+    return;
+  }
   const approved=validateScheduledCsvSourceContract(contract);
   if(!config.mapping.shippedAt)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires its reported shipment timestamp column',409);
-  if(canonicalize(headers)!==canonicalize(approved.expectedHeaders))throw new DomainError('MAPPING_NEEDS_REVIEW','The CSV headers differ from the administrator-approved source version',409);
+  if(!approvedCsvHeaders(approved.expectedHeaders,headers,approved.headerPolicy))throw new DomainError('MAPPING_NEEDS_REVIEW','The CSV headers differ from the administrator-approved source version',409);
   for(const row of rows){
     // JSONB objects reorder keys. The original header array above carries the
     // ordered schema; persisted row values must carry the same complete set.
@@ -45,6 +75,12 @@ export function validateScheduledCsvRows(config:AgentApprovedConfig,rows:readonl
     if(at===null)throw new DomainError('MAPPING_NEEDS_REVIEW','The scheduled source requires valid explicit-offset shipment timestamps',409);
     if(at<Date.parse(approved.backfillFrom))throw new DomainError('SOURCE_BACKFILL_BOUNDARY','This export includes rows before the administrator-approved backfill cutoff',409);
   }
+  const values = rows.map(row => row.values);
+  const interpret = approved.interpretationVersion === CSV_RULES.interpretation.version;
+  const decisions=analyzeColumns(columns,values,config.mapping,approved.schema.endsWith('/v2')?approved.confirmedFields: Object.keys(config.mapping),config.locationId,true,interpret);
+  if (interpret && (rows.some(row => !row.normalized) || shipmentInterpretation(columns, values, decisions).outcome !== 'automatic')) throw new DomainError('MAPPING_NEEDS_REVIEW','The approved shipment interpretation does not support the roles, values or grain of these rows',409);
+  if(decisions.some(d=>['incompatible','needs_confirmation','missing_required'].includes(d.state)))throw new DomainError('MAPPING_NEEDS_REVIEW','The full export must pass semantic and value checks before importing',409);
+
 }
 
 /** A restriction belongs to the principal, so issuing another credential cannot
@@ -62,6 +98,7 @@ export interface AgentApprovedConfig {
   sourceContract?: ScheduledCsvSourceContract;
 }
 export interface AgentRestriction {
+  version?: string;
   id: string;
   organization_id: string;
   environment: 'sandbox' | 'live';
@@ -73,6 +110,7 @@ export interface AgentRestriction {
   source_name: string;
   status: 'setup' | 'ready' | 'active' | 'paused' | 'revoked';
   config_revision: number;
+  config_sha256: string | null;
   approved_config: AgentApprovedConfig | null;
   test_import_id: string | null;
   verified_import_id: string | null;
@@ -135,6 +173,26 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
     if (actor.credentialId === row.credential_id ? !(config || renewal) : !(config || heartbeat)) throw unavailable();
     return;
   }
+  // A separately approved versioned source grant is necessary for typed routes.
+  // Scope strings and issuing a replacement credential cannot confer it.
+  const sourceCapabilities=method==='GET'&&path==='/source-profiles';
+  if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
+  const backfillRoute=(method==='GET'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+$/.test(path)))||(method==='POST'&&(/^\/source-subscriptions\/[A-Za-z0-9_-]+\/backfills\/proposals$/.test(path)||/^\/source-backfills\/[A-Za-z0-9_-]+\/items\/[A-Za-z0-9_-]+\/bind$/.test(path)));
+  if(backfillRoute){if(row.status==='ready'||row.status==='active'){const version=(await db.query<{version:string}>('SELECT version FROM record_agent_installations WHERE id=$1',[row.id])).rows[0]?.version;if(supportsSourceBackfills(version)&&reconstructionFeatureEnabled('sourceBackfillJobs')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('typedIntake'))return;}throw unavailable();}
+  const compaction=(method==='GET'&&path==='/agent/source-dispositions/compaction-commands')||(method==='POST'&&/^\/agent\/source-dispositions\/compaction-commands\/[A-Za-z0-9_-]+\/(?:ack|permit)$/.test(path));
+  const typedRoute=(compaction&&reconstructionFeatureEnabled('sourceDisposition'))||(method==='GET'&&path==='/source-subscriptions')||
+    (method==='POST'&&path==='/source-subscriptions/proposals')||
+    (method==='POST'&&/^\/source-subscriptions\/[A-Za-z0-9_-]+\/heartbeat$/.test(path))||
+    (method==='POST'&&path==='/typed-imports/preview')||
+    (method==='GET'&&/^\/typed-imports\/[A-Za-z0-9_-]+$/.test(path))||
+    (method==='GET'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/record$/.test(path))||
+    (method==='POST'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/reconcile$/.test(path))||
+    (method==='POST'&&/^\/typed-imports\/[A-Za-z0-9_-]+\/commit$/.test(path));
+  if(typedRoute&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('sourceSubscriptions')){
+    if(method==='POST'&&path==='/source-subscriptions/proposals')return;
+    const grant=(await db.query('SELECT 1 FROM record_source_subscriptions WHERE installation_id=$1 AND principal_id=$2 AND organization_id=$3 AND environment=$4 LIMIT 1',[row.id,actor.principalId,actor.merchantId,actor.environment])).rows[0];
+    if(grant)return; // Domain intake rechecks the exact current source revision.
+  }
   const allowed = config || heartbeat || renewal ||
     (method === 'POST' && path === '/agent/config-proposals') ||
     (method === 'POST' && path === '/imports/preview') ||
@@ -151,6 +209,7 @@ interface ImportIdentity {
   mapping: CsvMapping;
   timeZone: string;
   headers?: readonly string[];
+  originalSha256?: string;
 }
 function exactConfig(row: AgentRestriction, input: ImportIdentity) {
   const c = row.approved_config;
@@ -162,7 +221,7 @@ function rowLocations(row: AgentRestriction, mapping: CsvMapping, rows: readonly
   for (const source of rows) {
     // Check even invalid business rows. A malformed quantity must not hide a
     // request to upload another location's data in the retained original.
-    const location = mapping.locationId ? (source.values[mapping.locationId] ?? '').trim() || null : null;
+    const location = mapping.locationId ? (source.values[mapping.locationId] ?? '').trim() || null : row.location_id;
     if (location !== row.location_id || (source.normalized && source.normalized.locationId !== row.location_id)) throw new DomainError('AGENT_LOCATION_DENIED', 'Every source row must identify the approved location.', 403);
   }
 }
@@ -174,6 +233,11 @@ export async function authorizeAgentPreview(db: Database, clock: Clock, actor: P
   if (!row) return null;
   await binding(db, row, actor, clock); dataCredential(row, actor);
   if (!['ready', 'active'].includes(row.status) || !exactConfig(row, input)) throw unavailable();
+  const contract=row.approved_config!.sourceContract;
+  if(contract?.schema==='packproof.scheduled-csv/v2' && row.status!=='active' && input.originalSha256!==contract.historyPolicy!.initialFileSha256)throw new DomainError('SOURCE_CHANGED','The initial upload must be the exact file approved for this source',409);
+  if(contract?.interpretationVersion && rows.length===0)throw new DomainError('INVALID_CSV','Include at least one shipment row.',400);
+  if(contract?.interpretationVersion && !interpretationAvailable(row.version??''))throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','New shipment originals are paused until matching interpretation is enabled',409);
+  if(contract?.headerPolicy && input.headers && csvHeaderChange(contract.expectedHeaders,input.headers)==='reordered' && !csvHeaderPolicyAvailable(row.version??''))throw new DomainError('SOURCE_CONTRACT_UNSUPPORTED','Reordered exports are awaiting matching API and worker activation',409);
   rowLocations(row, input.mapping, rows);
   validateScheduledCsvRows(row.approved_config!, rows, input.headers);
   return row;

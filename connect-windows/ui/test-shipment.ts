@@ -1,0 +1,128 @@
+import type { Configuration, ConnectStatus, LocalAnalysis } from "./types";
+import { CSV_RULES } from "../../backend/src/records/csv-semantics";
+export const configuration: Configuration = {
+  sourceName: "Synthetic dispatch",
+  folderDigest: "f".repeat(64),
+  integrationAccountId: "source-fixture",
+  operatorMembershipId: "operator-fixture",
+  locationId: null,
+  mapping: {
+    shipmentReference: "Shipment reference",
+    itemTitle: "Description",
+    quantity: "Quantity",
+    shippedAt: "Shipment date",
+  },
+  timeZone: "source-offset",
+  importValidRows: false,
+  offlineWindowHours: 24,
+  sourceContract: {
+    schema: "packproof.scheduled-csv/v2",
+    exporterName: null,
+    exporterVersion: null,
+    expectedHeaders: [
+      "Shipment reference",
+      "Description",
+      "Quantity",
+      "Shipment date",
+    ],
+    expectedIntervalSeconds: null,
+    backfillFrom: "2026-11-13T09:00:00-05:00",
+    rulesVersion: CSV_RULES.version,
+    profileVersion: CSV_RULES.profile,
+    analysisRevision: 1,
+    confirmedFields: [],
+    historyPolicy: {
+      mode: "selected_then_new",
+      baselineSha256: "a".repeat(64),
+      observedAt: "2026-11-13T14:10:00Z",
+      initialFileName: "synthetic.csv",
+      initialFileSha256: "b".repeat(64),
+    },
+  },
+};
+export const analysis: LocalAnalysis = {
+  ready: true,
+  configuration,
+  headers: configuration.sourceContract!.expectedHeaders,
+  rowCount: 1,
+  issues: [],
+  decisions: [
+    "shipmentReference",
+    "itemTitle",
+    "quantity",
+    "shippedAt",
+    "trackingNumber",
+    "carrier",
+    "locationId",
+  ].map((field) => ({
+    field,
+    sourceColumnId: configuration.mapping[field] ?? null,
+    state: configuration.mapping[field] ? "validated" : "missing_optional",
+    reasonCodes: [],
+    origin: configuration.mapping[field] ? "source_column" : "absent",
+    candidates: configuration.mapping[field]
+      ? [configuration.mapping[field]]
+      : [],
+  })),
+  shipment: {
+    shipmentReference: "PP-TEST-20261113-001",
+    itemTitle: "<script>alert(1)</script> =SUM(1)",
+    quantity: 12,
+    shippedAt: "2026-11-13T09:00:00-05:00",
+    shipmentDate: "2026-11-13",
+  },
+  binding: {
+    sourceBindingId: "installation-fixture",
+    folderDigest: configuration.folderDigest,
+    fileSha256: "b".repeat(64),
+    headerFingerprint: "c".repeat(64),
+    draftRevision: 1,
+    rulesVersion: CSV_RULES.version,
+    profileVersion: CSV_RULES.profile,
+  },
+};
+export const selected: ConnectStatus = {
+  state: "source_selected",
+  environment: "sandbox",
+  installationId: "installation-fixture",
+  configRevision: 0,
+  binding: {
+    sourceName: configuration.sourceName,
+    organizationId: "workspace-fixture",
+    integrationAccountId: configuration.integrationAccountId!,
+    operatorMembershipId: configuration.operatorMembershipId!,
+    locationId: null,
+  },
+  source: {
+    folder: "Synthetic prepared export folder",
+    folderDigest: configuration.folderDigest,
+    accessible: true,
+    selectedFileName: "synthetic.csv",
+    fileSha256: "b".repeat(64),
+    headers: analysis.headers,
+    files: [{ name: "synthetic.csv", byteSize: 200 }],
+  },
+  analysis,
+  transport: {
+    state: "compatible",
+    attemptedAt: new Date(Date.now() - 1000).toISOString(),
+    succeededAt: new Date(Date.now() - 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+    expectedRulesVersion: CSV_RULES.version,
+    observedRulesVersion: CSV_RULES.version,
+    sourceContracts: ["packproof.scheduled-csv/v2"],
+  },
+  capabilities: {
+    sourceContracts: ["packproof.scheduled-csv/v2"],
+    rulesVersion: CSV_RULES.version,
+  },
+  checks: [
+    {
+      id: "service",
+      label: "Service",
+      state: "passed",
+      detail: "Synthetic component check",
+    },
+  ],
+  health: { serviceOnline: true, queueCount: 0 },
+};

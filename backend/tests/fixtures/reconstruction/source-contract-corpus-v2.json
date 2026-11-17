@@ -1,0 +1,2199 @@
+{
+  "schema": "packproof.source-contract-corpus/v2",
+  "synthetic": true,
+  "cases": [
+    {
+      "name": "composite-order-no-dedicated-ids",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-no-dedicated-ids.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,004,10,each,2026-11-12T14:00:00-05:00\n0010482,005,4,each,2026-11-12T14:00:00-05:00\n",
+          "sha256": "18e1a6cb08317bcd1633417d195f4783571b8b57d65d2a9bd3e4ced1b3c938d9"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 2,
+        "validRows": 2,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T14:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "aa7104965433bc64fa2820c9e7d46ad3bbf65740a00e55a670eeae77a7162d2e",
+            "errors": []
+          },
+          {
+            "rowNumber": 3,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0058:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "005",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "005",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "4",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "005",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "005",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T14:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "8706e38d7e390ed815620b8fb4a1752ba0aa4b4871bd443ebe5c8a2b4ac3b783",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-reordered",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-reordered.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,005,4,each,2026-11-12T14:00:00-05:00\n0010482,004,10,each,2026-11-12T14:00:00-05:00\n",
+          "sha256": "68617b6d4d4f5d6a9701c47798517fe1e02e7ab48a34c65a640a99fafb4b68ba"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 2,
+        "validRows": 2,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0058:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "005",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "005",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "4",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "005",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "005",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T14:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "8706e38d7e390ed815620b8fb4a1752ba0aa4b4871bd443ebe5c8a2b4ac3b783",
+            "errors": []
+          },
+          {
+            "rowNumber": 3,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T14:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "aa7104965433bc64fa2820c9e7d46ad3bbf65740a00e55a670eeae77a7162d2e",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-next-snapshot",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-next-snapshot.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,004,9,each,2026-11-13T14:00:00-05:00\n",
+          "sha256": "16f93d96dcec14da3d7503f980b55d538e2849e0a7fe639e931fe861c58bd228"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-13T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-13T14:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "9",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-13T14:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "4abacf5e0f2b02851544a0c9d8014a3078fd64a3dda193e90739c18c731c04cf",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-offset-alias",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-offset-alias.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,004,10,each,2026-11-12T19:00:00Z\n",
+          "sha256": "10faad9a792dda96e118bc69506674d63c0f7f81890e10ac76ea11e29f8270fd"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T19:00:00Z",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T19:00:00Z",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "aa7104965433bc64fa2820c9e7d46ad3bbf65740a00e55a670eeae77a7162d2e",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-same-boundary-content-conflict",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-same-boundary-content-conflict.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,004,9,each,2026-11-12T19:00:00Z\n",
+          "sha256": "d139675cd7785f3cf3deb56f72c91d3c8a30bf944b7203cb1d56f6e243e6da47"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T19:00:00Z",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "9",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T19:00:00Z",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "4f22ad6bc5e03bcbd058d6628a134f38725797b071f1e91a01fdc19de12fb32d",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-missing-component",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-missing-component.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n0010482,,10,each,2026-11-12T14:00:00-05:00\n",
+          "sha256": "7ef4b99df41f0493eacef4e7e7a7c1cd5b50714cd072879989354de7eaac661b"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "The source row is missing a bounded orderLineId identity component."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-order-explicit-correction",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf",
+          "supersedesRevision": "Replaces"
+        },
+        "constants": {
+          "observationKind": "correction",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-order-explicit-correction.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf,Replaces\n0010482,004,8,each,2026-11-14T19:00:00Z,2026-11-13T14:00:00-05:00\n",
+          "sha256": "d3e5239984fc186531124dd5b7e0836f8325335d0be3a6619a02ed922c8097fa"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-14T19:00:00.000Z",
+              "observationKind": "correction",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-14T19:00:00Z",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "0010482"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "004",
+                  "parentExternalId": "0010482"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "8",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "0010482"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "004",
+                    "parentExternalId": "0010482"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": {
+                "sourceEventId": "composite:v1:7:orderId7:001048211:orderLineId3:0048:property15:orderedQuantity",
+                "sourceRevision": "snapshot:2026-11-13T19:00:00.000Z"
+              },
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "0010482",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-14T19:00:00Z",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "fcdc77c448f895d27ac4c2223cf781659ce6ed078838a79378d968de1b1ebbcb",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-delimiter-and-unicode-parts",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-delimiter-and-unicode-parts.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf\n00:α,0|4,10,each,2026-11-12T19:00:00Z\n00,α:0|4,10,each,2026-11-12T19:00:00Z\n",
+          "sha256": "29323856b9b9f37f64dccc632cecf51a8b4f67f4b4a4e4bf71ad0fff3d54664e"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 2,
+        "validRows": 2,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId5:00:α11:orderLineId3:0|48:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T19:00:00Z",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "00:α"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "0|4",
+                  "parentExternalId": "00:α"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "0|4",
+                    "parentExternalId": "00:α"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "00:α"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "0|4",
+                    "parentExternalId": "00:α"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "00:α",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "0|4",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T19:00:00Z",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "c521ff28a562d35f12a77439cadabb8959f1afb90ff6abfbde95103526e278ff",
+            "errors": []
+          },
+          {
+            "rowNumber": 3,
+            "normalized": {
+              "sourceEventId": "composite:v1:7:orderId2:0011:orderLineId6:α:0|48:property15:orderedQuantity",
+              "sourceRevision": "snapshot:2026-11-12T19:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T19:00:00Z",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "order",
+                  "externalId": "00"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "order_line",
+                  "externalId": "α:0|4",
+                  "parentExternalId": "00"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "α:0|4",
+                    "parentExternalId": "00"
+                  },
+                  "property": "orderedQuantity",
+                  "value": {
+                    "amount": "10",
+                    "unit": "each"
+                  },
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "Qty"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "order",
+                    "externalId": "00"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "order_line",
+                    "externalId": "α:0|4",
+                    "parentExternalId": "00"
+                  },
+                  "type": "has_line",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "orderId",
+                      "value": "00",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Order"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "orderLineId",
+                      "value": "α:0|4",
+                      "sourceLocator": {
+                        "row": 3,
+                        "field": "Line"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "orderedQuantity",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T19:00:00Z",
+                  "sourceLocator": {
+                    "row": 3,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "a1ab84de9b96be41d916d5fef9707762b4085c1c386f873659a43572fc9dc598",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-label-immutable-event",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v2",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "shipmentId": "Shipment",
+          "trackingId": "Tracking",
+          "sourceSequence": "Sequence",
+          "value": "State",
+          "occurredAt": "At"
+        },
+        "constants": {
+          "observationKind": "event",
+          "property": "labelStatus",
+          "timeQuality": "event_time"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "shipmentId",
+              "trackingId",
+              "sourceSequence",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "immutable_event"
+          }
+        },
+        "original": {
+          "name": "composite-label-immutable-event.csv",
+          "mediaType": "text/csv",
+          "content": "Shipment,Tracking,Sequence,State,At\n00023,001231,000008,created,2026-11-12T18:00:00Z\n",
+          "sha256": "aca38b253938915c2c8ddd62da351274777acdc7e034961eca5dc62a573cb7c3"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:10:shipmentId5:0002310:trackingId6:00123114:sourceSequence6:0000088:property11:labelStatus",
+              "sourceRevision": "immutable-event/v1",
+              "observationKind": "event",
+              "occurredAt": "2026-11-12T18:00:00Z",
+              "sourceAsOf": null,
+              "timeQuality": "event_time",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "shipment",
+                  "externalId": "00023"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "tracking",
+                  "externalId": "001231"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "tracking",
+                    "externalId": "001231"
+                  },
+                  "property": "labelStatus",
+                  "value": "created",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "State"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "tracking",
+                    "externalId": "001231"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "shipment",
+                    "externalId": "00023"
+                  },
+                  "type": "tracks",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "shipmentId",
+                      "value": "00023",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Shipment"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "trackingId",
+                      "value": "001231",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Tracking"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "sourceSequence",
+                      "value": "000008",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Sequence"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "labelStatus",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "immutable_event",
+                  "sourceValue": null,
+                  "sourceLocator": null
+                }
+              }
+            },
+            "payloadSha256": "c487569a651953eacbe0770756c9eec5e634cff99c06a97ec4b4e8357ceaed7f",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-label-same-event-content-conflict",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v2",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "shipmentId": "Shipment",
+          "trackingId": "Tracking",
+          "sourceSequence": "Sequence",
+          "value": "State",
+          "occurredAt": "At"
+        },
+        "constants": {
+          "observationKind": "event",
+          "property": "labelStatus",
+          "timeQuality": "event_time"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "shipmentId",
+              "trackingId",
+              "sourceSequence",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "immutable_event"
+          }
+        },
+        "original": {
+          "name": "composite-label-same-event-content-conflict.csv",
+          "mediaType": "text/csv",
+          "content": "Shipment,Tracking,Sequence,State,At\n00023,001231,000008,voided,2026-11-12T18:00:00Z\n",
+          "sha256": "7b4e492fd0e54e0849c36c9a95eb67972b340e9fb04dcc152e4b96615e7d4322"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:10:shipmentId5:0002310:trackingId6:00123114:sourceSequence6:0000088:property11:labelStatus",
+              "sourceRevision": "immutable-event/v1",
+              "observationKind": "event",
+              "occurredAt": "2026-11-12T18:00:00Z",
+              "sourceAsOf": null,
+              "timeQuality": "event_time",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "shipment",
+                  "externalId": "00023"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "tracking",
+                  "externalId": "001231"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "tracking",
+                    "externalId": "001231"
+                  },
+                  "property": "labelStatus",
+                  "value": "voided",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "State"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "tracking",
+                    "externalId": "001231"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "shipment",
+                    "externalId": "00023"
+                  },
+                  "type": "tracks",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "shipmentId",
+                      "value": "00023",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Shipment"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "trackingId",
+                      "value": "001231",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Tracking"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "sourceSequence",
+                      "value": "000008",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Sequence"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "labelStatus",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "immutable_event",
+                  "sourceValue": null,
+                  "sourceLocator": null
+                }
+              }
+            },
+            "payloadSha256": "fc496f3d77a9cf0d4734c4f4f23923650d440994d053410c3573cd17c8dff195",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-handoff-explicit-deadline",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v2",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "shipmentId": "Shipment",
+          "handlingUnitId": "Unit",
+          "loadId": "Load",
+          "stopId": "Stop",
+          "value": "Deadline",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "expectedHandoffAt",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "shipmentId",
+              "handlingUnitId",
+              "loadId",
+              "stopId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-handoff-explicit-deadline.csv",
+          "mediaType": "text/csv",
+          "content": "Shipment,Unit,Load,Stop,Deadline,AsOf\n00023,0004,L09,S02,2026-11-12T20:00:00-05:00,2026-11-12T19:00:00-05:00\n",
+          "sha256": "0375d9b896fa7c08a80adab8b4e23602196389f300d5bd9202d36b99b4821d79"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 1,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": {
+              "sourceEventId": "composite:v1:10:shipmentId5:0002314:handlingUnitId4:00046:loadId3:L096:stopId3:S028:property17:expectedHandoffAt",
+              "sourceRevision": "snapshot:2026-11-13T00:00:00.000Z",
+              "observationKind": "snapshot",
+              "occurredAt": null,
+              "sourceAsOf": "2026-11-12T19:00:00-05:00",
+              "timeQuality": "snapshot_time_only",
+              "references": [
+                {
+                  "namespace": "qualified-source",
+                  "type": "shipment",
+                  "externalId": "00023"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "handling_unit",
+                  "externalId": "0004"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "load",
+                  "externalId": "L09"
+                },
+                {
+                  "namespace": "qualified-source",
+                  "type": "stop",
+                  "externalId": "S02"
+                }
+              ],
+              "assertions": [
+                {
+                  "subjectReference": {
+                    "namespace": "qualified-source",
+                    "type": "handling_unit",
+                    "externalId": "0004"
+                  },
+                  "property": "expectedHandoffAt",
+                  "value": "2026-11-12T20:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "Deadline"
+                  },
+                  "assurance": "source_reported"
+                }
+              ],
+              "relationships": [
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "handling_unit",
+                    "externalId": "0004"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "load",
+                    "externalId": "L09"
+                  },
+                  "type": "loaded_on",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "shipment",
+                    "externalId": "00023"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "stop",
+                    "externalId": "S02"
+                  },
+                  "type": "delivered_at",
+                  "quantity": null
+                },
+                {
+                  "from": {
+                    "namespace": "qualified-source",
+                    "type": "shipment",
+                    "externalId": "00023"
+                  },
+                  "to": {
+                    "namespace": "qualified-source",
+                    "type": "handling_unit",
+                    "externalId": "0004"
+                  },
+                  "type": "contains",
+                  "quantity": null
+                }
+              ],
+              "supersedes": null,
+              "originSystem": null,
+              "copiedFromSource": null,
+              "identityDerivation": {
+                "schema": "packproof.source-identity-derivation/v1",
+                "eventKey": {
+                  "kind": "composite",
+                  "components": [
+                    {
+                      "field": "shipmentId",
+                      "value": "00023",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Shipment"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "handlingUnitId",
+                      "value": "0004",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Unit"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "loadId",
+                      "value": "L09",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Load"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "stopId",
+                      "value": "S02",
+                      "sourceLocator": {
+                        "row": 2,
+                        "field": "Stop"
+                      },
+                      "approvedConstant": false
+                    },
+                    {
+                      "field": "property",
+                      "value": "expectedHandoffAt",
+                      "sourceLocator": null,
+                      "approvedConstant": true
+                    }
+                  ]
+                },
+                "revision": {
+                  "kind": "source_as_of",
+                  "sourceValue": "2026-11-12T19:00:00-05:00",
+                  "sourceLocator": {
+                    "row": 2,
+                    "field": "AsOf"
+                  }
+                }
+              }
+            },
+            "payloadSha256": "dd08bff002c544d3e31dacd035681f1df82bafad24ff5823679d8fc518dc3a72",
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-handoff-missing-stop",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.operational-observations/v2",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "shipmentId": "Shipment",
+          "handlingUnitId": "Unit",
+          "loadId": "Load",
+          "stopId": "Stop",
+          "value": "Deadline",
+          "sourceAsOf": "AsOf"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "expectedHandoffAt",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "shipmentId",
+              "handlingUnitId",
+              "loadId",
+              "stopId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "source_as_of"
+          }
+        },
+        "original": {
+          "name": "composite-handoff-missing-stop.csv",
+          "mediaType": "text/csv",
+          "content": "Shipment,Unit,Load,Stop,Deadline,AsOf\n00023,0004,L09,,2026-11-12T20:00:00-05:00,2026-11-12T19:00:00-05:00\n",
+          "sha256": "81459b69d137e3ee10859bd976c0bc978e022ed3a6ca96321d986be44b16ab0e"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "The source row is missing a bounded stopId identity component."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "composite-source-revision-utf8-overflow",
+      "input": {
+        "schema": "packproof.typed-source-batch/v2",
+        "connectionId": "connection-a",
+        "locationId": "site-a",
+        "sourceProfile": "packproof.order-lines/v1",
+        "mappingVersion": "source-mapping/v2",
+        "sourceNamespace": "qualified-source",
+        "subscriptionId": "subscription-a",
+        "configurationRevision": 2,
+        "grantRevision": 4,
+        "wholeFileConsent": true,
+        "mapping": {
+          "orderId": "Order",
+          "orderLineId": "Line",
+          "amount": "Qty",
+          "unit": "Unit",
+          "sourceAsOf": "AsOf",
+          "sourceRevision": "Revision"
+        },
+        "constants": {
+          "observationKind": "snapshot",
+          "property": "orderedQuantity",
+          "timeQuality": "snapshot_time_only"
+        },
+        "identityPolicy": {
+          "schema": "packproof.source-identity-policy/v1",
+          "eventKey": {
+            "kind": "composite",
+            "fields": [
+              "orderId",
+              "orderLineId",
+              "property"
+            ]
+          },
+          "revision": {
+            "kind": "column"
+          }
+        },
+        "original": {
+          "name": "composite-source-revision-utf8-overflow.csv",
+          "mediaType": "text/csv",
+          "content": "Order,Line,Qty,Unit,AsOf,Revision\n0010482,004,10,each,2026-11-12T19:00:00Z,€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€\n",
+          "sha256": "f6cef54b9587a674caec20e2836b0677188b586690d04200d2cb5c4c2b10a0cb"
+        },
+        "completeness": {
+          "kind": "unknown"
+        }
+      },
+      "expected": {
+        "rowCount": 1,
+        "validRows": 0,
+        "rows": [
+          {
+            "rowNumber": 2,
+            "normalized": null,
+            "payloadSha256": null,
+            "errors": [
+              "The source revision exceeds 200 UTF-8 bytes."
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

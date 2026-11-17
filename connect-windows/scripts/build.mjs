@@ -1,7 +1,9 @@
 import {build as bundle} from 'esbuild';
 import {build as vite} from 'vite';
-import {mkdir,writeFile,copyFile,cp} from 'node:fs/promises';
+import {mkdir,writeFile,copyFile,cp,readFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
+import {writeBuildProvenance} from './build-provenance.mjs';
 const require=createRequire(import.meta.url),{context,validate,sourceCommit}=require('./release-policy.cjs');
 const c=validate();
 await mkdir('dist/main',{recursive:true});await mkdir('build',{recursive:true});
@@ -12,3 +14,8 @@ const runtime={channel:c.channel,apiBaseUrl:process.env.PACKPROOF_API_BASE_URL||
 await writeFile('dist/main/runtime-config.json',JSON.stringify(runtime,null,2));
 for(const name of ['index','preload'])await bundle({entryPoints:[`main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',external:['electron','electron-updater'],sourcemap:false});
 await vite({configFile:'vite.config.ts'});
+const appPackage=JSON.parse(await readFile('package.json','utf8'));
+const rules=JSON.parse(await readFile('../backend/src/records/connect-csv-rules.json','utf8'));
+const serviceProject=await readFile('service/PackProof.Connect.Service.csproj','utf8');
+const sourceDirty=!!execFileSync('git',['status','--porcelain','--untracked-files=all'],{encoding:'utf8'}).trim();
+await writeBuildProvenance(process.cwd(),{sourceCommit:runtime.sourceCommit,sourceDirty,channel:c.channel,appVersion:appPackage.version,serviceVersion:serviceProject.match(/<Version>([^<]+)<\/Version>/)?.[1]||'not declared',bridgeProtocol:1,csvRules:rules.version,csvProfile:rules.profile});

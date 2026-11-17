@@ -1,0 +1,462 @@
+[
+  {
+    "name": "screenshot-supported",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "ready": true
+  },
+  {
+    "name": "screenshot-wrong-seven",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Description",
+      "itemTitle": "Shipment reference",
+      "quantity": "Shipment date",
+      "trackingNumber": "Shipment date",
+      "carrier": "Quantity",
+      "shippedAt": "Shipment date",
+      "locationId": "Description"
+    },
+    "ready": false
+  },
+  {
+    "name": "leading-zero-long-id",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\n0000000000000000000000000000000000000000000000000000000000000000000000,A title longer than forty characters that must survive unchanged,2,2026-11-13T09:00:00Z\n",
+    "ready": true
+  },
+  {
+    "name": "date-as-quantity",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,2026-11-13,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "bad-row-after-display-cap",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nSHIP-0,Elbow,1,2026-11-13T09:00:00Z\nSHIP-1,Elbow,1,2026-11-13T09:00:00Z\nSHIP-2,Elbow,1,2026-11-13T09:00:00Z\nSHIP-3,Elbow,1,2026-11-13T09:00:00Z\nSHIP-4,Elbow,1,2026-11-13T09:00:00Z\nSHIP-5,Elbow,1,2026-11-13T09:00:00Z\nSHIP-6,Elbow,1,2026-11-13T09:00:00Z\nSHIP-7,Elbow,1,2026-11-13T09:00:00Z\nSHIP-8,Elbow,1,2026-11-13T09:00:00Z\nSHIP-9,Elbow,1,2026-11-13T09:00:00Z\nSHIP-11,Elbow,1unit,2026-11-13T09:00:00Z\n",
+    "ready": false
+  },
+  {
+    "name": "no-order-id-equivalence",
+    "csv": "Order ID,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "ambiguous-reference",
+    "csv": "Shipment ID,Shipment number,Description,Quantity,Shipment date\nA,B,Elbow,1,2026-11-13T09:00:00Z\n",
+    "ready": false
+  },
+  {
+    "name": "unconfirmed-unknown-column",
+    "csv": "Dispatch key,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Dispatch key",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "ready": false
+  },
+  {
+    "name": "confirmed-unknown-column",
+    "csv": "Dispatch key,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "mapping": {
+      "shipmentReference": "Dispatch key",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ],
+    "ready": true
+  },
+  {
+    "name": "normalization-collision",
+    "csv": "Shipment-ID,Shipment_ID,Description,Quantity,Shipment date\nA,B,Elbow,1,2026-11-13T09:00:00Z\n",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "calendar-rollover",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-02-30T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "missing-offset",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00\n",
+    "ready": false
+  },
+  {
+    "name": "fractional-quantity",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,1.5,2026-11-13T09:00:00-05:00\n",
+    "ready": false
+  },
+  {
+    "name": "numeric-carrier",
+    "csv": "Shipment reference,Description,Quantity,Shipment date,Carrier\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00,12\n",
+    "ready": false
+  },
+  {
+    "name": "html-and-formulas-are-text",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nSAFE-1,\"<script>alert(1)</script> =SUM(1)\",1,2026-11-13T09:00:00Z\n",
+    "ready": true
+  },
+  {
+    "name": "mixed-grain-line-items",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\nPP-TEST-20261113-001,TEST ONLY - Different line item,12,2026-11-13T09:00:00-05:00\n",
+    "ready": false,
+    "mixedGrain": true
+  },
+  {
+    "name": "source-location-conflict",
+    "csv": "Shipment reference,Description,Quantity,Shipment date,Location ID\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00,other-location\n",
+    "locationId": "approved-location",
+    "ready": false
+  },
+  {
+    "name": "bound-location-provenance",
+    "csv": "Shipment reference,Description,Quantity,Shipment date\nPP-TEST-20261113-001,TEST ONLY - PVC elbow 1 inch,12,2026-11-13T09:00:00-05:00\n",
+    "locationId": "approved-location",
+    "ready": true
+  },
+  {
+    "name": "order-only-OrderNum",
+    "csv": "OrderNum,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "REQUIRED_COLUMN_MISSING",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    }
+  },
+  {
+    "name": "confirmed-order-is-not-shipment-OrderNum",
+    "csv": "OrderNum,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "COLUMN_ROLE_CONFLICT",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    },
+    "mapping": {
+      "shipmentReference": "OrderNum",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ]
+  },
+  {
+    "name": "order-only-SalesOrderID",
+    "csv": "SalesOrderID,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "REQUIRED_COLUMN_MISSING",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    }
+  },
+  {
+    "name": "confirmed-order-is-not-shipment-SalesOrderID",
+    "csv": "SalesOrderID,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "COLUMN_ROLE_CONFLICT",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    },
+    "mapping": {
+      "shipmentReference": "SalesOrderID",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ]
+  },
+  {
+    "name": "order-only-SO_Number",
+    "csv": "SO_Number,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "REQUIRED_COLUMN_MISSING",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    }
+  },
+  {
+    "name": "confirmed-order-is-not-shipment-SO_Number",
+    "csv": "SO_Number,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "order",
+      "reasonCodes": [
+        "COLUMN_ROLE_CONFLICT",
+        "ORDER_SOURCE_REQUIRES_PROFILE"
+      ]
+    },
+    "mapping": {
+      "shipmentReference": "SO_Number",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ]
+  },
+  {
+    "name": "generic-reference-needs-meaning",
+    "csv": "Reference,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "needs_review",
+      "grain": "unknown",
+      "reasonCodes": [
+        "COLUMN_MEANING_REQUIRED"
+      ]
+    }
+  },
+  {
+    "name": "confirmed-generic-reference",
+    "csv": "Reference,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": true,
+    "interpretation": {
+      "outcome": "automatic",
+      "grain": "shipment",
+      "reasonCodes": [
+        "SHIPMENT_ROWS_VALIDATED"
+      ]
+    },
+    "mapping": {
+      "shipmentReference": "Reference",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ]
+  },
+  {
+    "name": "shipment-line-even-unique-reference",
+    "csv": "Shipment ID,Description,Quantity,Shipment date,Shipment line ID\n000123,Valve,10,2026-11-14T10:00:00Z,L1\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "shipment_line",
+      "reasonCodes": [
+        "LINE_GRAIN_REQUIRES_PROFILE"
+      ]
+    }
+  },
+  {
+    "name": "repeated-shipment-held-without-inferring-line-grain",
+    "csv": "Shipment ID,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "unknown",
+      "reasonCodes": [
+        "REPEATED_SHIPMENT_REFERENCE"
+      ]
+    }
+  },
+  {
+    "name": "explicit-shipment-with-order-and-leading-zeros",
+    "csv": "Shipment ID,Description,Quantity,Shipment date,OrderNum\n000123,Valve,10,2026-11-14T10:00:00Z,00234\n123,Valve,10,2026-11-14T10:00:00Z,00234\n",
+    "ready": true,
+    "interpretation": {
+      "outcome": "automatic",
+      "grain": "shipment",
+      "reasonCodes": [
+        "SHIPMENT_ROWS_VALIDATED"
+      ]
+    }
+  },
+  {
+    "name": "two-shipment-columns",
+    "csv": "Shipment ID,Description,Quantity,Shipment date,Shipment number\n000123,Valve,10,2026-11-14T10:00:00Z,A1\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "needs_review",
+      "grain": "unknown",
+      "reasonCodes": [
+        "MULTIPLE_CANDIDATES"
+      ]
+    }
+  },
+  {
+    "name": "invalid-value-count-in-full-file",
+    "csv": "Shipment ID,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n124,Valve,a,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "blocked",
+      "grain": "shipment",
+      "reasonCodes": [
+        "VALUE_TYPE_OR_RANGE"
+      ]
+    },
+    "fieldCounts": {
+      "quantity": {
+        "valid": 1,
+        "invalid": 1
+      }
+    }
+  },
+  {
+    "name": "numeric-units-column-needs-meaning",
+    "csv": "Shipment ID,Description,Units,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "needs_review",
+      "grain": "shipment",
+      "reasonCodes": [
+        "COLUMN_MEANING_REQUIRED"
+      ]
+    }
+  },
+  {
+    "name": "two-optional-carrier-fields",
+    "csv": "Shipment ID,Description,Quantity,Shipment date,Carrier,Shipping carrier\n000123,Valve,10,2026-11-14T10:00:00Z,C1,C2\n",
+    "ready": false,
+    "interpretation": {
+      "outcome": "needs_review",
+      "grain": "shipment",
+      "reasonCodes": [
+        "MULTIPLE_CANDIDATES"
+      ]
+    }
+  },
+  {
+    "name": "semicolon-bom-quoted-multiline",
+    "csv": "﻿Shipment ID;Description;Quantity;Shipment date\r\n000123;\"Pipe; 1\"\"\r\nblue\";3;2026-11-14T10:00:00Z\r\n",
+    "ready": true,
+    "interpretation": {
+      "outcome": "automatic",
+      "grain": "shipment",
+      "reasonCodes": [
+        "SHIPMENT_ROWS_VALIDATED"
+      ]
+    }
+  },
+  {
+    "name": "tab-separated-bounded-source",
+    "csv": "Shipment ID\tDescription\tQuantity\tShipment date\n000123\tValve\t10\t2026-11-14T10:00:00Z\n",
+    "ready": true,
+    "interpretation": {
+      "outcome": "automatic",
+      "grain": "shipment",
+      "reasonCodes": [
+        "SHIPMENT_ROWS_VALIDATED"
+      ]
+    }
+  },
+  {
+    "name": "unsupported-order-reference-in-legacy-mapping",
+    "csv": "OrderNum,Description,Quantity,Shipment date\n000123,Valve,10,2026-11-14T10:00:00Z\n",
+    "ready": false,
+    "mapping": {
+      "shipmentReference": "OrderNum",
+      "itemTitle": "Description",
+      "quantity": "Quantity",
+      "shippedAt": "Shipment date"
+    },
+    "confirmedFields": [
+      "shipmentReference"
+    ]
+  },
+  {
+    "name": "boundary-1000-rows",
+    "csv": "Shipment ID,Description,Quantity,Shipment date\n",
+    "repeat": {
+      "unit": "{i},Valve,1,2026-11-14T10:00:00Z\n",
+      "count": 1000,
+      "suffix": ""
+    },
+    "byteSha256": "fc589c86bce681a8842d267674c519bed671f7dbccbe0034dfd9441bd27de667",
+    "ready": true,
+    "interpretation": {
+      "grain": "shipment",
+      "outcome": "automatic",
+      "reasonCodes": [
+        "SHIPMENT_ROWS_VALIDATED"
+      ]
+    }
+  },
+  {
+    "name": "boundary-1001-rows",
+    "csv": "Shipment ID,Description,Quantity,Shipment date\n",
+    "repeat": {
+      "unit": "{i},Valve,1,2026-11-14T10:00:00Z\n",
+      "count": 1001,
+      "suffix": ""
+    },
+    "byteSha256": "6716fa7f531b85ffce13dc0e75b5c5d95ed7e59801897876ccd98f12d3f9f21d",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "limit-2MiB-plus-1",
+    "csv": "",
+    "repeat": {
+      "unit": "x",
+      "count": 2097153,
+      "suffix": ""
+    },
+    "byteSha256": "71ac24a75f6bc57bc51b43b3d13c3009aa243986b77a92102a3097c9e53123e9",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "limit-10001-cell",
+    "csv": "Shipment ID,Description,Quantity,Shipment date\n0001,",
+    "repeat": {
+      "unit": "x",
+      "count": 10001,
+      "suffix": ",1,2026-11-14T10:00:00Z\n"
+    },
+    "byteSha256": "979ec80213801ac6f837cdf8278c8417cedbe8aa2e5e1bc6c2f3dc8381b71472",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "empty-original",
+    "csv": "",
+    "byteSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "fifty-one-columns",
+    "csv": "Col0,Col1,Col2,Col3,Col4,Col5,Col6,Col7,Col8,Col9,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44,Col45,Col46,Col47,Col48,Col49,Col50\nvalue,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value,value\n",
+    "byteSha256": "26162db116e721daf30fe87587625d9317e2622bb3c178b1c83cebb19e864d1a",
+    "ready": false,
+    "parseError": true
+  },
+  {
+    "name": "invalid-utf8-original",
+    "csv": "",
+    "base64": "U2hpcG1lbnQgSUQsRGVzY3JpcHRpb24sUXVhbnRpdHksU2hpcG1lbnQgZGF0ZQpQUC0wMDEsUGlwZf8sMiwyMDI2LTExLTE0VDEwOjAwOjAwWgo=",
+    "byteSha256": "619eb8e0543b6c736281955a20b9da9f97943b77fa73d2cfb2076e9faed5c68d",
+    "ready": false,
+    "encodingError": true
+  }
+]

@@ -41,7 +41,7 @@ it('invalidates first-record verification after the approved exporter or backfil
 });
 
 it('groups native resume checkpoints into exactly three operator-facing stages',()=>{
- expect(GUIDED_STAGES).toEqual(['Find records','Get ready','Start collecting']);
+ expect(GUIDED_STAGES).toEqual(['Connect your source','Review a shipment','Start collecting']);
  expect([0,1,2,3,4,5,6].map(guidedStage)).toEqual([0,0,0,0,1,2,2]);
 });
 it('recognizes common shipment headers without inventing a shipment number',()=>{

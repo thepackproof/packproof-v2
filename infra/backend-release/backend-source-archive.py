@@ -3,11 +3,23 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8'):
         raise ValueError('INVALID_SOURCE_PROFILE')
+    if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
+        raise ValueError('INVALID_SOURCE_COMMIT')
     paths=['backend'] if profile=='bridge' else ['backend','packages/evidence-contracts','config/rnd/research-build.json','.dockerignore']
     probes=['infra/backend-release/record-agent-database-preflight.mjs','infra/backend-release/record-agent-previous-image-probe.mjs']
-    if profile in ('connect-v1','zero-touch-v1'):paths+=probes
+    if profile=='reconstruction-v1':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs']
+    if profile=='reconstruction-v2':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs']
+    if profile=='reconstruction-v3':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs']
+    if profile=='reconstruction-v4':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs']
+    if profile=='reconstruction-v5':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs']
+    if profile in ('reconstruction-v6','reconstruction-v7','reconstruction-v8'):probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs','infra/backend-release/reconstruction-v6-release-review.mjs','infra/backend-release/reconstruction-v6-runtime-preflight.mjs']
+    if profile in ('reconstruction-v7','reconstruction-v8'):
+        probes+=['infra/backend-release/reconstruction-v7-release-review.mjs','infra/backend-release/reconstruction-v7-runtime-preflight.mjs','infra/backend-release/shipment-automation-pair.mjs']
+    if profile=='reconstruction-v8':
+        probes+=['infra/backend-release/reconstruction-v8-release-review.mjs','infra/backend-release/reconstruction-v8-runtime-preflight.mjs','infra/backend-release/backfill-automation-pair.mjs']
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -15,7 +27,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile in ('connect-v1','zero-touch-v1') and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -42,6 +54,57 @@ def archive(source,destination,profile,verify=False):
         manifest=json.loads(subprocess.check_output(['git','show',source+':backend/scripts/'+filename]))
         digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
         if len(inventory)!=manifest['sourceCount'] or digest!=manifest['inventorySha256']:
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v1':
+        # This is a separate candidate profile. The historical108/109 guards
+        # above remain frozen and must reject a reconstruction113 source.
+        additions={'110_existing_data_reconstruction','111_source_subscriptions','112_reconstruction_exports','113_reconstruction_issue_history'}
+        manifest=json.loads(subprocess.check_output(['git','show',source+':backend/scripts/source-association-migration-manifest.json']))
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=manifest['sourceCount']+4 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!=manifest['inventorySha256']:
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v2':
+        # Explicit116 review binds the entire frozen113 predecessor. The old
+        #108/109/113 profiles above remain unchanged and reject this source.
+        additions={'114_operational_case_allocations','115_operational_projection_indexes','116_case_export_retention'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=115 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='eac1cf8a3e505fdee80d3888a4d504efc6266f610897997b46fef8bca62cfd8c':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v3':
+        # Explicit117 admission preserves every qualified116 predecessor byte.
+        additions={'117_source_backfill_jobs'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=116 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='343ff540ec79d5fe2446e3358e93cc7deac06f0bbc854fee834c2a65858cfa0f':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v4':
+        additions={'118_source_projection_rechecks'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=117 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='57d54b44d9f6d3e43db003da2159c4e1cf191cfc5d8acbe5e2c361939d91cf8b':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v5':
+        additions={'119_accepted_source_event_lookup'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=118 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='df3c15bb9e45f49f9a47a6889dbb8b8f730d9e52da495fdd35fa7201044e6abd':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v6':
+        additions={'120_typed_shipment_projection_work'}
+        predecessor=[row for row in inventory if row['id'] not in additions]
+        digest=hashlib.sha256(json.dumps(predecessor,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=119 or {row['id'] for row in inventory if row['id'] in additions}!=additions or digest!='884ffae0bbbe510796908602d1893b9c7b9c48564ae12190166c9157d09cca87':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v7':
+        # This inventory binds every predecessor byte and the exact reviewed 121 SQL.
+        digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=120 or digest!='3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v8':
+        digest=hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()
+        if len(inventory)!=121 or digest!='ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':

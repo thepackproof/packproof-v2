@@ -19,7 +19,30 @@ export interface SourceUploadSession {sessionId:string;artifactId:string;proofId
 export interface SourceArtifactOperation {operationId:string;artifactId:string;state:OpenEnum<'queued'|'running'|'succeeded'|'failed'>;[key:string]:unknown}
 export interface UploadArtifactOptions extends MutationOptions {resumeSessionId?:string;onProgress?:(progress:{sessionId:string;artifactId:string;acceptedBytes:number;totalBytes:number})=>void}
 export interface PartnerCsvInput {integrationAccountId:string;operatorMembershipId:string;sourceName?:string;csv:string;timeZone:string;mapping?:Record<string,string>}
-export interface ImportJob {id:string;state:string;previewVersion:string;rows:unknown[];[key:string]:unknown}
+export interface ShipmentInterpretationDecision {
+  schema: 'packproof.automation-decision/v1';
+  kind: 'mapping';
+  decisionId: string;
+  sourceId: string;
+  version: string;
+  rulesVersion: string;
+  profileVersion: string;
+  configurationRevision: number;
+  sourceControlRevision: number;
+  policyRevision: string;
+  originalSha256: string;
+  outcome: 'automatic';
+  grain: 'shipment';
+  reasonCodes: string[];
+  rowCount: number;
+  confirmedFields: string[];
+  expectedHeaders: string[];
+  headerPolicy: 'exact' | 'same_names_any_order/v1';
+  headerDisposition: 'exact' | 'reordered';
+  actor: {kind:'system'; id:'shipment-csv-validator'};
+  fields: Array<{field:string; sourceColumnId:string|null; state:'validated'|'missing_optional'; origin:'source_column'|'approved_binding'|'absent'; reasonCodes:string[]; validRowCount:number; invalidRowCount:number}>;
+}
+export interface ImportJob {id:string;state:string;previewVersion:string;rows:unknown[];interpretation?:ShipmentInterpretationDecision;[key:string]:unknown}
 export interface ExportInput {proofId:string;kind:'CORE'|'LIFECYCLE'|'ENVELOPE';snapshotId:string;expiresAt?:string}
 export interface ExportJob {id:string;operationId:string;state:OpenEnum<'queued'|'running'|'ready'|'action_needed'|'expired'>;[key:string]:unknown}
 export interface ShareInput {proofId:string;target:{kind:'CANONICAL_EXPORT';id:string};expiresAt:string;recipientHint?:string;downloadedCopiesAcknowledged:true}

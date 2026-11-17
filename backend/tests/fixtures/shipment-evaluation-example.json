@@ -1,0 +1,83 @@
+{
+  "schema": "packproof.shipment-evaluation/v1",
+  "population": "synthetic",
+  "benchmarkId": "automation-example-v1",
+  "labelingReference": "synthetic-product-expectations-v1",
+  "developmentFamilies": [
+    "connect-golden-corpus"
+  ],
+  "samples": [
+    {
+      "id": "dispatch-standard",
+      "family": "fixture-dispatch",
+      "csv": "Shipment ID,Description,Quantity,Ship date\r\n000079,Coupler,11,2026-11-05T09:43:00-05:00\r\n",
+      "expected": {
+        "outcome": "automatic",
+        "fields": {
+          "shipmentReference": "Shipment ID",
+          "itemTitle": "Description",
+          "quantity": "Quantity",
+          "shippedAt": "Ship date"
+        }
+      }
+    },
+    {
+      "id": "dispatch-semicolon",
+      "family": "fixture-dispatch",
+      "csv": "Shipment ID;Description;Quantity;Ship date\nD-922;\"Tray; blue\";7;2026-11-06T10:20:00+02:00\n",
+      "expected": {
+        "outcome": "automatic",
+        "fields": {
+          "shipmentReference": "Shipment ID",
+          "itemTitle": "Description",
+          "quantity": "Quantity",
+          "shippedAt": "Ship date"
+        }
+      }
+    },
+    {
+      "id": "unqualified-reference",
+      "family": "fixture-ambiguous",
+      "csv": "Reference,Description,Quantity,Ship date\n0049,Valve,3,2026-11-06T10:20:00Z\n",
+      "expected": {
+        "outcome": "needs_review",
+        "fields": {
+          "itemTitle": "Description",
+          "quantity": "Quantity",
+          "shippedAt": "Ship date"
+        }
+      }
+    },
+    {
+      "id": "order-index",
+      "family": "fixture-order",
+      "csv": "SalesOrderID,Description,Quantity,Ship date\n00083,Tray,2,2026-11-06T10:20:00Z\n",
+      "expected": {
+        "outcome": "blocked",
+        "fields": {}
+      }
+    },
+    {
+      "id": "timestamp-offset-missing",
+      "family": "fixture-noclock",
+      "csv": "Shipment ID,Description,Quantity,Ship date\nS-081,Panel,2,2026-11-05T11:00:00\n",
+      "expected": {
+        "outcome": "blocked",
+        "fields": {
+          "shipmentReference": "Shipment ID",
+          "quantity": "Quantity",
+          "itemTitle": "Description"
+        }
+      }
+    },
+    {
+      "id": "incomplete-file",
+      "family": "fixture-broken",
+      "csv": "Shipment ID,Description\nSX-7,\"unfinished\n",
+      "expected": {
+        "outcome": "unsupported",
+        "fields": {}
+      }
+    }
+  ]
+}

@@ -9,17 +9,35 @@ if (@($installer).Count -ne 1) {throw 'Exactly one immutable Connect installer i
 $unpacked=Join-Path $output 'win-unpacked'
 $ui=@(Get-ChildItem -LiteralPath $unpacked -File -Filter 'PackProof Connect*.exe')
 if ($ui.Count -ne 1) { throw 'Exactly one Connect setup UI executable must be shipped.' }
-$required=@((Join-Path $unpacked 'resources\service\PackProof.Connect.Service.exe'),(Join-Path $unpacked 'resources\bridge\PackProof.Connect.Bridge.exe'))
-foreach ($path in $required) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'A required PackProof service or verified bridge executable is missing.' } }
-# Self-contained single-file publishes may bundle the owned managed DLL. Verify it when shipped, without inventing a required duplicate.
 $owned=@($installer)+$ui+@(Get-ChildItem -LiteralPath (Join-Path $unpacked 'resources') -Recurse -File | Where-Object {$_.Name -match '^PackProof\.Connect\.(Service|Bridge)\.(exe|dll)$'})
 foreach ($file in $owned) {if ($signed) {& (Join-Path $root '..\desktop\scripts\verify-windows-signature.ps1') -Artifact $file.FullName -Publisher $env:WINDOWS_PUBLISHER_NAME}}
 $inventory=@(Get-ChildItem -LiteralPath (Join-Path $output 'win-unpacked') -Recurse -File | Where-Object {$_.Extension -in @('.exe','.dll')} | Sort-Object FullName | ForEach-Object {$signature=Get-AuthenticodeSignature -LiteralPath $_.FullName;@{file=[IO.Path]::GetRelativePath($output,$_.FullName).Replace('\','/');bytes=$_.Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant();signatureStatus=$signature.Status.ToString();publisher=if($signature.SignerCertificate){$signature.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName,$false)}else{$null}}})
 $sha=(& git -C $root rev-parse HEAD).Trim()
 if ($env:GITHUB_SHA -and $sha -ne $env:GITHUB_SHA) {throw 'Artifact source differs from the requested source commit.'}
 $artifacts=@($installer | ForEach-Object {@{file=$_.Name;bytes=$_.Length;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()}})
-$runtime=Get-Content -LiteralPath (Join-Path $root 'dist\main\runtime-config.json') -Raw | ConvertFrom-Json
+$runtimePath=Join-Path $root 'dist/main/runtime-config.json'
+$runtime=Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
 if ($runtime.sourceCommit -ne $sha -or $runtime.channel -ne $channel) {throw 'Runtime provenance differs from this artifact.'}
-@{schemaVersion=1;product='PackProof Connect';version=(Get-Content (Join-Path $root 'package.json') -Raw|ConvertFrom-Json).version;sourceCommit=$sha;channel=$channel;signed=$signed;publicDistributionAllowed=$false;artifacts=$artifacts;executables=$inventory;gate='internal-build-only';nativeAcceptance='not_run';customerAcceptance='not_run'} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'release-evidence.json') -Encoding utf8NoBOM
+$version=(Get-Content (Join-Path $root 'package.json') -Raw|ConvertFrom-Json).version
+if ($installer.Name -cne ('PackProof-Connect-'+$channel+'-Setup-'+$version+'.exe')) { throw 'Installer filename differs from the candidate channel or version.' }
+$resources=Join-Path $unpacked 'resources'
+$layoutJson=& node (Join-Path $root 'scripts/verify-native-layout.mjs') $resources $version $runtimePath
+if ($LASTEXITCODE -ne 0) { throw 'Packaged native dependencies or configuration differ from the candidate.' }
+$nativeLayout=$layoutJson | ConvertFrom-Json
+$installerScripts=@(foreach ($entry in @('installer/lifecycle.ps1','installer/storage-health.ps1','scripts/diagnose-installation.ps1')) {
+  $name='installer/'+[IO.Path]::GetFileName($entry)
+  $hash=(Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $resources $name)).Hash
+  if ($hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $root $entry)).Hash) { throw ('Packaged installer script differs from this source: '+$name) }
+  @{file=$name;sha256=$hash.ToLowerInvariant()}
+})
+foreach ($name in @('service/PackProof.Connect.Service.exe','bridge/PackProof.Connect.Bridge.exe','bridge/PackProof.Connect.Bridge.dll')) {
+  $info=[Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $resources $name))
+  if ($info.ProductVersion -cne ($version+'+'+$sha)) { throw ('Packaged component has a different version or source commit: '+$name) }
+}
+& node (Join-Path $root 'scripts/build-provenance.mjs') verify $root $sha $channel (Join-Path $unpacked 'resources/app.asar')
+if ($LASTEXITCODE -ne 0) {throw 'Application asset provenance verification failed.'}
+$application=Get-Content -LiteralPath (Join-Path $root 'dist/main/build-provenance.json') -Raw | ConvertFrom-Json
+Copy-Item -LiteralPath (Join-Path $root 'dist/main/build-provenance.json') -Destination (Join-Path $output 'build-provenance.json')
+@{schemaVersion=2;product='PackProof Connect';version=$version;sourceCommit=$sha;sourceDirty=$application.sourceDirty;channel=$channel;signed=$signed;application=$application;publicDistributionAllowed=$false;artifacts=$artifacts;executables=$inventory;nativeLayout=$nativeLayout;installerScripts=$installerScripts;gate='internal-build-only';nativeAcceptance='not_run';customerAcceptance='not_run'} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'release-evidence.json') -Encoding utf8NoBOM
 $artifacts | ForEach-Object {$_.sha256+'  '+$_.file} | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS') -Encoding ascii
 if (-not $signed) {'INTERNAL DEVELOPMENT BUILD. Unsigned. Not approved for public distribution or customer source activation.' | Set-Content -LiteralPath (Join-Path $output 'DEVELOPMENT-BUILD.txt')}

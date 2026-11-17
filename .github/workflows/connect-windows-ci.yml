@@ -1,10 +1,10 @@
 name: Connect Windows candidate
 on:
   pull_request:
-    paths: ['connect-windows/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   push:
     branches: [main]
-    paths: ['connect-windows/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,13 +42,31 @@ jobs:
       - run: node scripts/verify-hosted-approval.mjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
       - run: npm run build
+      - name: Install and locate the pinned Electron runtime
+        timeout-minutes: 5
+        run: node -e 'const fs=require("node:fs"); const exe=require("electron"); console.log("Electron",require("electron/package.json").version,exe,fs.statSync(exe).size,"bytes");'
+      - name: Check the built renderer at supported scales with keyboard navigation
+        timeout-minutes: 5
+        run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connect-renderer-layout-${{ github.sha }}
+          path: connect-windows/build/renderer-layout.json
+          if-no-files-found: ignore
       - run: npm run publish:native
       - run: npm run package:win
       - run: npm run verify:artifacts
+      - name: Prepare pending encrypted work with the historical LocalService writer
+        run: ./scripts/seed-legacy-queue-ci.ps1
       - name: Exercise actual LocalService protected storage and bridge
         run: ./scripts/smoke-native-foundation.ps1
+      - name: Upgrade the historical partitioned queue with the packaged service
+        run: ./scripts/smoke-legacy-queue-upgrade.ps1
       - name: Reject unhealthy installation and repair retained storage safely
         run: ./scripts/smoke-storage-repair.ps1
+      - name: Qualify read-only Windows PowerShell 5.1 installation diagnostics
+        run: '& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -File tests/installation-diagnostics.test.ps1'
       # Never publish an executable from a failed install/repair qualification.
       - uses: actions/upload-artifact@v4
         if: success()
@@ -60,9 +78,12 @@ jobs:
             connect-windows/release/development/win32-x64/*.exe
             connect-windows/release/development/win32-x64/SHA256SUMS
             connect-windows/release/development/win32-x64/release-evidence.json
+            connect-windows/release/development/win32-x64/build-provenance.json
             connect-windows/release/development/win32-x64/DEVELOPMENT-BUILD.txt
             connect-windows/release/development/win32-x64/native-foundation-smoke.json
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
+            connect-windows/release/development/win32-x64/legacy-queue-input.json
+            connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -72,3 +93,5 @@ jobs:
           path: |
             connect-windows/release/development/win32-x64/native-foundation-smoke.json
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
+            connect-windows/release/development/win32-x64/legacy-queue-input.json
+            connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json

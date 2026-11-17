@@ -27,6 +27,7 @@ import { createPartnerArtifactsRouter } from '../records/partner-artifacts-route
 import { createSnapshotSharesRouter } from '../records/snapshot-shares.js';
 import { createRecordDeletionRouter } from '../records/deletion-requests.js';
 import { createPartnerOperationalSnapshotsRouter } from '../records/operational-snapshots-router.js';
+import {createReconstructionPartnerRouter} from '../records/reconstruction-router.js';
 
 type PartnerRequest=Request & {partnerActor:PartnerActor};
 const route=(fn:(req:PartnerRequest,res:Response)=>Promise<void>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req as PartnerRequest,res).catch(next);};
@@ -41,6 +42,7 @@ export function createPartnerRouter(deps:AppDependencies){
    .then(async actor=>{await authorizeAgentRoute(deps.db,deps.clock,actor,raw.method,raw.path);await consumeApiRate(deps.db,deps.clock,actor.tenantId);(raw as PartnerRequest).partnerActor=actor;next();}).catch(next);
  });
  router.use(createAgentPartnerRouter(deps));
+ router.use(createReconstructionPartnerRouter(deps));
  router.use(createPartnerRecordsRouter(deps));
  router.use(createPartnerOperationsRouter(deps));
  router.use(createPartnerIngestionsRouter(deps));

@@ -1,0 +1,51 @@
+import { vi } from "vitest";
+import type { ConnectBridge, ConnectStatus } from "./types";
+export { analysis, configuration, selected } from "./test-shipment";
+export function bridgeFor(
+  current: ConnectStatus,
+  overrides: Partial<ConnectBridge> = {},
+): ConnectBridge {
+  const result = async () => current;
+  return {
+    chooseBackfillFiles: vi.fn(result),
+    proposeBackfill: vi.fn(result),
+    pauseBackfill: vi.fn(result),
+    resumeBackfill: vi.fn(result),
+    openBackfillApproval: vi.fn(async()=>undefined),
+    chooseNewSubscriptionFolder: vi.fn(result),
+    inspectSubscriptionDraft: vi.fn(result),
+    proposeSubscription: vi.fn(result),
+    chooseSubscriptionFolder: vi.fn(result),
+    inspectSubscriptionFile: vi.fn(result),
+    previewSubscription: vi.fn(result),
+    commitSubscription: vi.fn(result),
+    verifySubscription: vi.fn(result),
+    pauseSubscription: vi.fn(result),
+    resumeSubscription: vi.fn(result),
+    openSubscriptionApproval: vi.fn(async()=>undefined),
+    openSubscriptionCase: vi.fn(async()=>undefined),
+    getStatus: vi.fn(result),
+    checkComputer: vi.fn(result),
+    beginEnrollment: vi.fn(result),
+    recoverEnrollment: vi.fn(result),
+    pollEnrollment: vi.fn(result),
+    chooseFolder: vi.fn(result),
+    previewLocal: vi.fn(result),
+    analyzeLocal: vi.fn(result),
+    startSetup: vi.fn(result),
+    proposeConfiguration: vi.fn(result),
+    previewCloud: vi.fn(result),
+    commitBatch: vi.fn(result),
+    verifyImport: vi.fn(result),
+    proposeActivation: vi.fn(result),
+    activate: vi.fn(result),
+    pause: vi.fn(result),
+    resume: vi.fn(result),
+    refresh: vi.fn(result),
+    exportDiagnostics: vi.fn(async () => ({ saved: false })),
+    openApproval: vi.fn(async () => undefined),
+    openRecord: vi.fn(async () => undefined),
+    openPortal: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
