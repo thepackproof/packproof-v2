@@ -26,7 +26,7 @@ public sealed partial class AgentRuntime
     private async Task RefreshSubscriptions(CancellationToken ct)
     {
         typedSourceSubscriptions=false;
-        if(!TypedDiscoveryAdvertised || !TypedInstallationMayRead){foreach(var source in state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId))source.CapabilityApproved=false;return;}
+        if(!TypedDiscoveryAdvertised){foreach(var source in state.SourceSubscriptions.Where(s=>s.Id!=SourceSubscriptionState.LegacyId))source.CapabilityApproved=false;return;}
         string? cursor=null;var seen=new HashSet<string>(StringComparer.Ordinal);var views=new List<JsonElement>();
         do
         {

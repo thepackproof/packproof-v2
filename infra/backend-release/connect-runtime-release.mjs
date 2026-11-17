@@ -133,7 +133,8 @@ export function connectProbeRunRequest(snapshot,r,kind,registered,script,now=Dat
  return {cluster:p.clusterArn,taskDefinition:t.taskDefinitionArn,count:1,networkConfiguration:structuredClone(p.networkConfiguration),...(p.capacityProviderStrategy?.length?{capacityProviderStrategy:structuredClone(p.capacityProviderStrategy)}:{launchType:'FARGATE'}),...(p.platformVersion?{platformVersion:p.platformVersion}:{}),enableExecuteCommand:false,clientToken:hash({review:r,kind}),startedBy:`connect-${r.sourceSha.slice(0,12)}-${kind}`,tags:[{key:'packproof-connect-release',value:r.sourceSha}]};
 }
 /** Root Docker layout; source is re-fetched and checksummed even for an unversioned bucket. */
-export function connectRuntimeBuildRequest({sourceSha,archiveSha256,sourceVersion,predecessorImages,profile='zero-touch-v1'}){
+export function connectRuntimeBuildRequest({sourceSha,archiveSha256,sourceVersion,predecessorImages,profile='zero-touch-v1',sourceTransport='s3'}){
+ check(sourceTransport==='s3'||sourceTransport==='git-commit' && !sourceVersion && ['reconstruction-v10','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_TRANSPORT_REQUIRED');
  check(['zero-touch-v1','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
  const reviewedProfile=profile!=='zero-touch-v1';
  const inventories={'zero-touch-v1':CONNECT_RUNTIME_INVENTORY,'reconstruction-v7':shipmentRuntimeInventory,
@@ -168,8 +169,20 @@ console.log(JSON.stringify({event:'shipment_release_build_policy',bundleSha256:p
   `test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' '${baseImage}')" = '${baseSha}'`,
   `docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/${compatibility?'Dockerfile.order-workspace-bridge':'Dockerfile.hosted-lock-profile'} .`
  ]:['docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/Dockerfile .'];
- const buildspec=JSON.stringify({version:'0.2',phases:{pre_build:{'on-failure':'ABORT',commands:[`test "$(aws sts get-caller-identity --query Account --output text)" = ${TARGET.account}`,`test "$REVIEWED_SOURCE_SHA" = '${sourceSha}' && test "$IMAGE_TAG" = '${buildTag}'`,retention,`if [ -n "$SOURCE_OBJECT_VERSION" ]; then aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' --version-id "$SOURCE_OBJECT_VERSION" /tmp/connect-reviewed.zip; else aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' /tmp/connect-reviewed.zip; fi`,`echo '${archiveSha256}  /tmp/connect-reviewed.zip' | sha256sum --check -`,'mkdir /tmp/connect-reviewed && python3 -m zipfile -e /tmp/connect-reviewed.zip /tmp/connect-reviewed',`ECR=${repository}; export ECR`,`aws ecr get-login-password --region ${TARGET.region} | docker login --username AWS --password-stdin ${TARGET.account}.dkr.ecr.${TARGET.region}.amazonaws.com`]},build:{'on-failure':'ABORT',commands:['cd /tmp/connect-reviewed','test -f backend/Dockerfile && test -f packages/evidence-contracts/package.json && test -f config/rnd/research-build.json',...buildImage,verify]},post_build:{'on-failure':'ABORT',commands:['test "$CODEBUILD_BUILD_SUCCEEDING" = 1','docker push "$ECR:$IMAGE_TAG"',`aws ecr batch-get-image --repository-name ${TARGET.serviceName} --image-ids "imageTag=$IMAGE_TAG" --query 'images[].imageId' --output json`]}}});
- const request=buildRequest({sourceSha,zipSha256:archiveSha256,sourceVersion,buildspec});request.environmentVariablesOverride[1].value=buildTag;request.environmentVariablesOverride.push({name:'SOURCE_OBJECT_VERSION',value:sourceVersion??'',type:'PLAINTEXT'});
+ const sourceCommands=sourceTransport==='git-commit'?[
+  'git init -q /tmp/connect-source',
+  'git -C /tmp/connect-source remote add origin https://github.com/thepackproof/packproof-v2.git',
+  'GIT_TERMINAL_PROMPT=0 git -C /tmp/connect-source fetch --no-tags --depth=1 origin "$REVIEWED_SOURCE_SHA"',
+  'git -C /tmp/connect-source checkout -q --detach FETCH_HEAD && test "$(git -C /tmp/connect-source rev-parse HEAD)" = "$REVIEWED_SOURCE_SHA"',
+  '(cd /tmp/connect-source && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip reconstruction-v10 && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip reconstruction-v10 --verify)'
+ ]:[`if [ -n "$SOURCE_OBJECT_VERSION" ]; then aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' --version-id "$SOURCE_OBJECT_VERSION" /tmp/connect-reviewed.zip; else aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' /tmp/connect-reviewed.zip; fi`];
+ const buildspec=JSON.stringify({version:'0.2',phases:{pre_build:{'on-failure':'ABORT',commands:[`test "$(aws sts get-caller-identity --query Account --output text)" = ${TARGET.account}`,`test "$REVIEWED_SOURCE_SHA" = '${sourceSha}' && test "$IMAGE_TAG" = '${buildTag}'`,retention,...sourceCommands,`echo '${archiveSha256}  /tmp/connect-reviewed.zip' | sha256sum --check -`,'mkdir /tmp/connect-reviewed && python3 -m zipfile -e /tmp/connect-reviewed.zip /tmp/connect-reviewed',`ECR=${repository}; export ECR`,`aws ecr get-login-password --region ${TARGET.region} | docker login --username AWS --password-stdin ${TARGET.account}.dkr.ecr.${TARGET.region}.amazonaws.com`]},build:{'on-failure':'ABORT',commands:['cd /tmp/connect-reviewed','test -f backend/Dockerfile && test -f packages/evidence-contracts/package.json && test -f config/rnd/research-build.json',...buildImage,verify]},post_build:{'on-failure':'ABORT',commands:['test "$CODEBUILD_BUILD_SUCCEEDING" = 1','docker push "$ECR:$IMAGE_TAG"',`aws ecr batch-get-image --repository-name ${TARGET.serviceName} --image-ids "imageTag=$IMAGE_TAG" --query 'images[].imageId' --output json`]}}});
+ const request=buildRequest({sourceSha,zipSha256:archiveSha256,sourceVersion,buildspec});
+ request.environmentVariablesOverride[1].value=buildTag;
+ if(sourceTransport==='git-commit'){
+  request.sourceTypeOverride='NO_SOURCE';
+  delete request.sourceLocationOverride;
+ }else request.environmentVariablesOverride.push({name:'SOURCE_OBJECT_VERSION',value:sourceVersion??'',type:'PLAINTEXT'});
  return {...request,timeoutInMinutesOverride:30,queuedTimeoutInMinutesOverride:5,idempotencyToken:buildTag};
 }
 export const connectReleaseHash=hash;

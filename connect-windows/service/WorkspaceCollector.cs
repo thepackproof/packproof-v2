@@ -8,7 +8,30 @@ public sealed partial class AgentRuntime
     // Callbacks only mark a folder dirty. Reconciliation and immutable admission run
     // on the serialized service lane. A wakeup can be lost without losing the cursor.
     private readonly Dictionary<string,FileSystemWatcher> workspaceWatchers = [];
-    private readonly ConcurrentDictionary<string,string> workspaceChanges = new();
+    private sealed class FolderNotifications
+    {
+        private readonly HashSet<string> pending = new(StringComparer.OrdinalIgnoreCase);
+        private bool overflow;
+        public void Add(string? name)
+        {
+            lock (pending)
+            {
+                if (string.IsNullOrEmpty(name) || pending.Count >= 256) overflow = true;
+                else pending.Add(name);
+            }
+        }
+        public (string[] Names,bool Gap) Take()
+        {
+            lock (pending)
+            {
+                var names = pending.Take(8).ToArray();
+                foreach(var name in names) pending.Remove(name);
+                var gap = overflow; overflow=false;
+                return (names,gap);
+            }
+        }
+    }
+    private readonly ConcurrentDictionary<string,FolderNotifications> workspaceChanges = new();
     private const int SourceDirectoryLimit = 10000;
     private static string[] WorkspaceFiles(string folder)
     {
@@ -27,21 +50,35 @@ public sealed partial class AgentRuntime
         if (workspaceWatchers.ContainsKey(source.Id)) return;
         var watcher = new FileSystemWatcher(source.Folder) { IncludeSubdirectories = false,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size };
-        watcher.Created += Changed; watcher.Changed += Changed; watcher.Renamed += Changed; watcher.Deleted += Changed;
-        watcher.Error += (_, _) => workspaceChanges[source.Id] = "!overflow";
+        var notices = workspaceChanges.GetOrAdd(source.Id,_ => new FolderNotifications());
+        watcher.Created += Changed; watcher.Changed += Changed; watcher.Deleted += Changed;
+        watcher.Renamed += (_, e) => { notices.Add(e.OldName); notices.Add(e.Name); WakeService(); };
+        watcher.Error += (_, _) => { notices.Add(null); WakeService(); };
         try { watcher.EnableRaisingEvents = true; workspaceWatchers.Add(source.Id, watcher); }
+        catch (IOException) { watcher.Dispose(); source.CoverageGap = true; } // Some shares support listing only.
         catch { watcher.Dispose(); throw; }
         void Changed(object sender, FileSystemEventArgs e)
         {
-            workspaceChanges.TryAdd(source.Id, e.Name ?? "");
+            notices.Add(e.Name);
+            WakeService();
         }
     }
 
     private static JsonElement[] WorkspaceRecords(WorkspaceSource source, SourceReadResult parsed)
     {
-        if (source.ConfirmedWorkflow != null) return SourceReaders.NormalizeWorkflow(parsed, source.Id, source.ConfirmedWorkflow).EnumerateArray().ToArray();
+        var candidates = new List<JsonElement[]>();
         if (source.ConfirmedMap != null && source.Roles.Contains("order"))
-            return SourceReaders.NormalizeOrderLines(parsed, source.Id, source.ConfirmedMap).EnumerateArray().ToArray();
+        {
+            var orderLines = SourceReaders.NormalizeOrderLines(parsed, source.Id, source.ConfirmedMap).EnumerateArray().ToArray();
+            if (orderLines.Length > 0) candidates.Add(orderLines);
+        }
+        foreach (var workflow in source.ApprovedWorkflows())
+        {
+            var matches = SourceReaders.NormalizeWorkflow(parsed,source.Id,workflow).EnumerateArray().ToArray();
+            if (matches.Length > 0) candidates.Add(matches);
+        }
+        // An ambiguous file may not be applied independently to two workflow stages.
+        if (candidates.Count > 0) return candidates.Count == 1 ? candidates[0] : [];
         if (source.Roles.Count == 0 || source.Roles.Count > 1 && parsed.Rows.Any(r => !r.Fields.ContainsKey("kind"))) return [];
         return source.Roles.SelectMany(role => SourceReaders.Normalize(parsed, role).EnumerateArray())
             .DistinctBy(record => record.GetRawText()).ToArray();
@@ -69,10 +106,13 @@ public sealed partial class AgentRuntime
                 {
                     var parsed = SourceReaders.Read(name, FolderSource.WorkspaceSnapshot(path, name));
                     var mapped = WorkspaceRecords(source, parsed);
+                    var requestedKind = source.InspectRole switch { "shipping" => "label", "returns" => "return", var r => r };
+                    if (requestedKind != null && source.Roles.Count > 1)
+                        mapped = mapped.Where(r=>Optional(r,"kind")?.GetString() is { } k && (k==requestedKind || k=="correction")).ToArray();
                     var preview = parsed.Rows.FirstOrDefault()?.Fields
                         .Where(pair => pair.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
                         .Take(8).ToDictionary(pair => pair.Key, pair => string.Concat(pair.Value.ToString().Take(128)));
-                    if (mapped.Length == 0 && source.ConfirmedMap == null && source.Roles.SequenceEqual(new[] { "order" })
+                    if (mapped.Length == 0 && source.ConfirmedMap == null && (source.InspectRole ?? source.Roles.LastOrDefault()) == "order"
                         && SourceReaders.ProposeOrderMap(parsed) is { } proposal &&
                         SourceReaders.NormalizeOrderLines(parsed, source.Id, proposal).GetArrayLength() > 0)
                     {
@@ -148,7 +188,7 @@ public sealed partial class AgentRuntime
         if (!WorkspaceGrantCurrent) { StopWorkspaceWatchers(); return; }
         if (networkOnline && now >= nextOrderRefresh)
         {
-            nextOrderRefresh = now.AddSeconds(3);
+            nextOrderRefresh = now.AddSeconds(1);
             try
             {
                 var snap = await api.Request("GET", "/v1/partner/agent/order-proofs", null, state.Token, null, ct);
@@ -191,9 +231,14 @@ public sealed partial class AgentRuntime
             }
         }
         await AdvanceWorkspaceMedia(w,ct);
-        Save();
+        if (now >= nextWorkspaceCheckpoint)
+        {
+            nextWorkspaceCheckpoint = now.AddSeconds(10);
+            Save();
+        }
     }
 
+    private DateTimeOffset nextWorkspaceCheckpoint;
     private DateTimeOffset nextPartnerHistory;
     private async Task ReconcilePartnerHistory(OrderWorkspaceState w, CancellationToken ct)
     {
@@ -235,23 +280,27 @@ public sealed partial class AgentRuntime
         if (s.PhysicalRoot is { } expected && pin.KeyStrings.FirstOrDefault() != expected)
             throw new ConnectException("SOURCE_REPLACED", "This folder was replaced. Select it again and approve the new location.");
         MonitorWorkspaceSource(s); // Boundary first, reconciliation second.
-        workspaceChanges.TryRemove(s.Id, out var changed);
-        if (changed == "!overflow") s.CoverageGap = true;
-        if (changed is null && s.LastScanAt > now.AddSeconds(-15)) return;
+        var (changed,gap) = workspaceChanges.GetOrAdd(s.Id,_=>new FolderNotifications()).Take();
+        if (gap) s.CoverageGap = true;
+        if (!gap && changed.Length==0 && s.LastScanAt > now.AddSeconds(-15)) return;
         var names = WorkspaceFiles(folder);
+        var present = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in s.Inventory.Keys.Where(k=>!present.Contains(k) && !s.Inventory[k].Missing).ToArray())
+            s.Inventory[key] = s.Inventory[key] with {Missing=true};
+        if (changed.Any(n=>!present.Contains(n) && !s.Inventory.ContainsKey(n.ToUpperInvariant()) && !n.EndsWith(".tmp",StringComparison.OrdinalIgnoreCase)))
+            s.CoverageGap = true;
         var batch = names.Where(n => string.Compare(n, s.Cursor, StringComparison.OrdinalIgnoreCase) > 0).Take(4).ToArray();
         if (batch.Length == 0) batch = names.Take(4).ToArray();
-        if (!string.IsNullOrEmpty(changed) && names.Contains(changed, StringComparer.OrdinalIgnoreCase) && !batch.Contains(changed, StringComparer.OrdinalIgnoreCase))
-            CaptureWorkspaceFile(w,s,folder,changed);
-        foreach (var name in batch)
+        var prioritized = changed.Where(n=>present.Contains(n)).Concat(batch).Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in prioritized)
         {
             // A single bad report cannot starve the folder: advance the traversal
             // cursor, not the durable file version, when a particular file is busy.
             try { CaptureWorkspaceFile(w,s,folder,name); }
             catch (ConnectException e) when (e.Code is "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_SIZE_UNSUPPORTED" or "SOURCE_ACCESS_DENIED")
             { s.Issue = e.Code; }
-            s.Cursor = name;
         }
+        if (batch.Length > 0) s.Cursor = batch[^1];
         s.LastScanAt = batch.Length == 0 || names[^1] == batch[^1] ? now : null;
     }
 
@@ -261,7 +310,7 @@ public sealed partial class AgentRuntime
         var digest = HashBytes(bytes);
         var key = name.ToUpperInvariant();
         var previous = s.Inventory.GetValueOrDefault(key);
-        if (previous?.Digest == digest && previous.Generation == s.Generation) return;
+        if (previous?.Digest == digest && previous.Generation == s.Generation && !previous.Missing) return;
         if (previous is null && s.Inventory.Count >= SourceDirectoryLimit) throw new ConnectException("SOURCE_CAPACITY_REACHED", "The retained inventory needs a new approved folder or a retention review.");
         var sequence = checked((previous?.Sequence ?? 0) + 1);
         var obs = Hash(JsonSerializer.Serialize(new { installation = w.ActiveGrant!.InstallationId, s.Id, s.Generation, key, sequence, digest }));
@@ -284,6 +333,7 @@ public sealed partial class AgentRuntime
         var staged = queue.StageWorkspace(bytes, name, body, w.ActiveGrant!.InstallationId, obs, s);
         if (SourceReaders.IsMedia(name) && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
         s.Inventory[key] = new(digest, sequence, s.Generation, name);
+        WakeService();
         if (records.Length == 0) s.Issue = "IDENTITY_UNRESOLVED";
         else if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_ACCESS_DENIED") s.Issue = null;
         Save(); // Never checkpoint before durable staging. Replay reconstructs the same logical observation.
@@ -313,6 +363,7 @@ public sealed partial class AgentRuntime
             queue.Save(entry,payload,"complete",importId:receipt.GetProperty("receiptId").GetString());
             if (status == "pending") source.Issue = "IDENTITY_UNRESOLVED";
             ordersCurrent = false; nextOrderRefresh = DateTimeOffset.MinValue;
+            WakeService();
         }
         catch (Exception e) when (e is ApiException or HttpRequestException or ConnectException or JsonException or InvalidOperationException or KeyNotFoundException or TaskCanceledException && !ct.IsCancellationRequested)
         {

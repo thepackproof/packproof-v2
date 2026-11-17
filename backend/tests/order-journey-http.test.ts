@@ -6,6 +6,7 @@ import {copyFile,mkdir,mkdtemp,readFile,rename,rm,writeFile} from 'node:fs/promi
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {setTimeout as wait} from 'node:timers/promises';
+import {measureOrderLatency} from './order-journey-benchmark.js';
 import {openIsolatedTestDatabase} from './isolated-test-database.js';
 import {migrate} from '../src/db/migrate.js';
 import {insertUser} from '../src/domain/users.js';
@@ -133,7 +134,10 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     expect(await readFile(path.resolve(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),label.file))).toEqual(await readFile(path.join(fixture,'label.zpl')));
     mark('outputVerified');
     const status=await poll('desktop service projection of committed order',async()=>{const s=await receipt('service-status.json');return s?.workspace?.orders?.some((o:any)=>o.proofId===first.proofId&&o.revision===final.revision)?s:undefined;});
-    const msg={scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
+    const perfCount=Number(process.env.PACKPROOF_JOURNEY_PERF_N || 0);
+    if(perfCount) phase="latency measurement";
+    const benchmark=perfCount ? await measureOrderLatency(db.db,root,perfCount,()=>exited!==undefined) : undefined;
+    const msg={benchmark,scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
       proofId:first.proofId,earliestRevision:firstDoc.revision,latestRevision:final.revision,verifiedFiles:checked.filesVerified,
       activeSources:status.workspace.sources.length,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
       localAfterCommitObservedMs:Date.parse(timings.outputVerified)-Date.parse(timings.correctedOnline),routes};

@@ -1,3 +1,4 @@
+import {addOrderWorkspaceContract} from './generate-order-workspace-openapi.mjs';
 import fs from 'node:fs';
 import {addExistingDataContract} from './generate-existing-data-openapi.mjs';
 import path from 'node:path';
@@ -369,6 +370,7 @@ const shipmentDecision = {
 api.components.schemas.ShipmentInterpretationDecision=object(shipmentDecision,Object.keys(shipmentDecision));
 api.components.schemas.RecordImport.properties.interpretation=ref('ShipmentInterpretationDecision');
 addExistingDataContract(api,root);
+addOrderWorkspaceContract(api);
 const output = JSON.stringify(api, null, 2) + '\n';
 if (process.argv.includes('--check')) {
   if (output !== original) { console.error('Record API description is stale. Run node scripts/generate-records-openapi.mjs'); process.exitCode = 1; }

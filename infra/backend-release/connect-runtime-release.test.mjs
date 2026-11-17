@@ -89,16 +89,22 @@ test('accepts only the observed empty ECS systemControls default without changin
  assert.throws(()=>connectWorkerUpdate(plan,registered,{...f.snapshot.worker,observedAt:at},now),/REGISTERED_WORKER/);assert.throws(()=>connectApiUpdate(plan,observation,api,now),/WORKER_DIGEST/);
 });
 
-function shipmentFixture(version='v7'){
+function shipmentFixture(version='v7',preserve=false){
  const workspace=version==='v10',backfill=workspace||version==='v8'||version==='v9';
  const {snapshot,review:r}=fixture(),empty=hash([]),bundle='c'.repeat(64);
+ if(preserve){
+  for(const c of [snapshot.api.express.activeConfigurations[0].primaryContainer,snapshot.api.taskDefinition.containerDefinitions[0],snapshot.worker.taskDefinition.containerDefinitions[0]]){
+   c.environment.push({name:'PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED',value:'true'},{name:'PACKPROOF_SHIPMENT_WORKER_INTERPRETATION',value:'packproof.shipment-interpretation/v1'});
+  }
+  r.configurationLeaseSha256=connectConfigurationLease(snapshot);
+ }
  const inventory=workspace?'ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d':backfill?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
  const records=workspace?'fc90a9edbe22cc22fa5f553096d9d7b9da8a3bde62ad3784ef117abdb6147001':backfill?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
  const v={schema:`packproof.reconstruction-release-review/${version}`,...(backfill?{backfillJobsEnabled:false}:{}),...(workspace?{orderWorkspaceEnabled:false}:{}),...(workspace||version==='v9'?{platformLockPolicySha256:'cc1ff79558beac7c7178ccaecdb9c2138e7271077c8df15ff7950a73e6baf743'}:{}),source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
   ownerRole:'reviewed_owner',clusterArn:cluster,target:{host:r.database.host,database:r.database.name},featureActivation:false,
   customerReleaseQualified:false,inventorySha256:inventory,recordsMigrationSha256:records,expiresAt:r.expiresAt,
   automationPolicy:{bundleSha256:bundle,interpretationVersion:'packproof.shipment-interpretation/v1',headerPolicyVersion:'same_names_any_order/v1',
-   interpretationEnabled:false,headerVariantsEnabled:false,shadowSourcesSha256:empty}};
+   interpretationEnabled:preserve,headerVariantsEnabled:false,shadowSourcesSha256:empty},...(preserve?{preserveShipmentSettings:true}:{})};
  const review={...r,schema:`packproof.connect-runtime-review/${version}`,inventorySha256:inventory,preflightReview:v};
  const code={reader:readFileSync(new URL(workspace?'./order-workspace-rollback-reader.mjs':backfill?'./backfill-rollback-reader-probe.mjs':'./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  const definitions=connectProbeRegistrations(snapshot,review,code,now),probes={};
@@ -115,7 +121,7 @@ function shipmentFixture(version='v7'){
     inventorySha256:inventory,migrationsApplied:false,rolesChanged:false,featureActivation:false},
    durabilityPolicyMatches:true,tls:{ssl:true},immutableTriggerVerified:true,m2PrivilegesSha256:'f'.repeat(64),
    recordsPrivileges:{migrationSha256:records,sourceCommit:source,caller:dbRole},
-   automationPolicy:{...v.automationPolicy,schema:'packproof.shipment-policy-role/v1',kind,shadowSourceCount:0}};
+   automationPolicy:{...v.automationPolicy,schema:'packproof.shipment-policy-role/v1',kind,shadowSourceCount:0,...(preserve?{workerInterpretation:v.automationPolicy.interpretationVersion}:{})}};
   probes[name]={report,registered,task:{taskArn,clusterArn:cluster,lastStatus:'STOPPED',taskDefinitionArn:registered.taskDefinitionArn,
    containers:definition.containerDefinitions.map(c=>({name:c.name,exitCode:0,imageDigest:i.split('@')[1]}))}};
  }
@@ -223,6 +229,34 @@ test('v9 preserves the four-image-role review and binds the legacy hosted member
  const build=JSON.parse(request.buildspecOverride).phases.build.commands.join('\n');
  for(const value of ['reconstruction-v9-runtime-preflight.mjs','Dockerfile.hosted-lock-profile','hosted-backfill-automation-pair.mjs','rows.length!==121'])
   assert.ok(build.includes(value));
+});
+
+test('four-role reviews can preserve the exact approved shipment policy on API and worker',()=>{
+ for(const version of ['v9','v10']){
+  const {snapshot,review,probes,code}=shipmentFixture(version,true);
+  addHostedLocks(probes,review);
+  assert.equal(connectRuntimePlan(snapshot,review,probes,now,code).schema,'packproof.connect-runtime-plan/'+version);
+  const off=structuredClone(review);delete off.preflightReview.preserveShipmentSettings;
+  assert.throws(()=>connectRuntimePlan(snapshot,off,probes,now,code),/DEFAULT_OFF_REVIEW/);
+  const altered=structuredClone(snapshot);
+  altered.worker.taskDefinition.containerDefinitions[0].environment.find(e=>e.name==='PACKPROOF_SHIPMENT_WORKER_INTERPRETATION').value='other';
+  assert.throws(()=>connectRuntimePlan(altered,{...review,configurationLeaseSha256:connectConfigurationLease(altered)},probes,now,code),/EXISTING_APPROVAL/);
+ }
+});
+
+test('CodeBuild fetches an exact reviewed public Git commit and verifies independently reproduced archive bytes',()=>{
+ const input={sourceSha:source,archiveSha256:'a'.repeat(64),predecessorImages:[previous],sourceTransport:'git-commit'};
+ for(const profile of ['order-workspace-bridge','reconstruction-v10']){
+  const request=connectRuntimeBuildRequest({...input,profile}),spec=JSON.parse(request.buildspecOverride);
+  assert.equal(request.sourceTypeOverride,'NO_SOURCE');
+  assert.equal(request.sourceLocationOverride,undefined);
+  const commands=spec.phases.pre_build.commands.join('\n');
+  for(const value of ['https://github.com/thepackproof/packproof-v2.git','rev-parse HEAD','reconstruction-v10 --verify',input.archiveSha256,'sha256sum --check'])assert.ok(commands.includes(value));
+  assert.doesNotMatch(commands,/s3api/);
+  assert.equal(spec.phases.post_build.commands[0],'test "$CODEBUILD_BUILD_SUCCEEDING" = 1');
+ }
+ assert.throws(()=>connectRuntimeBuildRequest({...input,profile:'reconstruction-v10',sourceVersion:'object-version'}),/TRANSPORT/);
+ assert.throws(()=>connectRuntimeBuildRequest({...input,profile:'reconstruction-v7'}),/TRANSPORT/);
 });
 
 test('123 release binds both real roles, exact rollback readers, scope guards and separate compatibility image',()=>{

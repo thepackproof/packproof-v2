@@ -30,16 +30,17 @@ export function RemoveOrderLink(props: LinkProps) {
 }
 function ChooseOrder({ api, scope, item, onSaved }: {api:PackProofApi;scope:string;item:WaitingEvent;onSaved:()=>void}) {
   const [input,setInput]=useState(''), [query,setQuery]=useState(''), [choice,setChoice]=useState('');
-  const result=useWorkflowData<{orders:Match[]}>(api, query ? '/order-proofs?' + scope + '&limit=20&q=' + encodeURIComponent(query) : null);
+  const [searchRevision, setSearchRevision] = useState(0);
+  const result=useWorkflowData<{orders:Match[]}>(api, query ? '/order-proofs?' + scope + '&limit=20&q=' + encodeURIComponent(query) : null, searchRevision);
   const order=result.data?.orders.find(o=>o.proofId===choice);
   return <details><summary>Choose the matching order</summary>
-    <form onSubmit={e=>{e.preventDefault();setChoice('');setQuery(input.trim());}}>
+    <form onSubmit={e=>{e.preventDefault();setChoice('');setQuery(input.trim());setSearchRevision(value=>value+1);}}>
       <label>Order number<input required maxLength={200} value={input} onChange={e=>{setInput(e.target.value);setChoice('');setQuery('');}}/></label>
       <button className="records-button secondary">Find matching orders</button>
     </form>
     {result.loading && <p role="status">Checking orders…</p>}
     {result.error && <p role="alert">{result.error}</p>}
-    {result.data && !result.error && (result.data.orders.length ? <fieldset><legend>Compare the order with the report</legend>
+    {result.data && !result.loading && !result.error && (result.data.orders.length ? <fieldset><legend>Compare the order with the report</legend>
       {result.data.orders.map(o=><label key={o.proofId} className="agent-check"><input type="radio" name={item.eventKey} checked={o.proofId===choice} onChange={()=>setChoice(o.proofId)}/>
         {o.orderReference} · Updated {new Date(o.updatedAt).toLocaleString()} · <a href={'/app/order-proofs/'+encodeURIComponent(o.proofId)+'?'+scope} target="_blank" rel="noreferrer">Open order</a>
       </label>)}</fieldset> : <p>No matching order was found.</p>)}

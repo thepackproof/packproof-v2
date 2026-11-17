@@ -97,6 +97,7 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
   expect(early.status,early.text).toBe(200);expect(early.body.state).toBe('pending');
   const waiting=await request(app).get('/me/records/order-attention').query(w.scope).set(human(w.user));expect(waiting.status,waiting.text).toBe(200);expect(waiting.body.items[0].entity.id).toBe('P1');
   const sourceOrder=item('order-created','order',order,[],[{lineId:'20',sku:'A100',orderedQuantity:'2'},{lineId:'30',sku:'A100',orderedQuantity:'1'}]);
+  const deniedFacility=await send('order',{...sourceOrder,facilityId:foreign.site} as typeof sourceOrder,'forbidden-facility');expect(deniedFacility.status,deniedFacility.text).toBe(403);
   const first=await send('order',sourceOrder);expect(first.status,first.text).toBe(200);
   const id=first.body.proofs[0].proofId;expect(first.body.proofs[0].revision).toBe(1);
   const packed=await send('packing',item('packed','packing',pkg,[order],[{lineId:'20',shippedQuantity:'2'}]));
@@ -133,6 +134,24 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
   expect(moved.status,moved.text).toBe(200);expect(moved.body.proofs).toEqual(expect.arrayContaining([{proofId:id,revision:4},{proofId:cloudId,revision:3}]));
   const prior=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/3').set(service);
   expect(prior.body.events).toHaveLength(3);
+  const submitApi=(version:string,qty:string,key:string)=>{
+   const record=item(cloud.body.connectedEventId,'order',cloudRef,[],[{lineId:'4',orderedQuantity:qty}],version);
+   const raw=Buffer.from(JSON.stringify(record));
+   return request(app).post('/v1/partner/order-workspace/events').set('PackProof-Merchant-Id',w.org).set('Authorization','Bearer '+credential.token).set('Idempotency-Key',key)
+    .send({operatorMembershipId:w.member,integrationAccountId:pc.integration_account_id,connectOperation:cloudBody.connectOperation,
+     observation:{observationId:'event-'+version,fileName:'change.json',originalSha256:sha256Hex(raw),originalBase64:raw.toString('base64'),records:[record],mediaType:'application/json'}});
+  };
+  const concurrent=await Promise.all([submitApi('3','5','event-r3'),submitApi('2','4','event-r2'),submitApi('3','5','event-r3')]);
+  for(const response of concurrent)expect(response.status,response.text).toBe(202);
+  expect(concurrent[0].body.receiptId).toBe(concurrent[2].body.receiptId);
+  const afterRace=await request(app).get('/me/records/order-proofs/'+cloudId).query(w.scope).set(human(w.user));
+  expect(afterRace.body.lines[0]).toMatchObject({lineId:'4',orderedQuantity:'5',packedQuantity:'2'});
+  const unauthorizedOriginal=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/1/artifacts/'+first.body.receiptId).set(service);
+  expect(unauthorizedOriginal.status).toBe(404);
+  const conflict=await send('order',{...sourceOrder,lines:[{lineId:'20',orderedQuantity:'300'}]},'distinct-observation-with-conflict');
+  expect(conflict.status,conflict.text).toBe(200);expect(conflict.body).toMatchObject({state:'pending',code:'REVISION_CONFLICT'});
+  const current=await request(app).get('/me/records/order-proofs/'+id).query(w.scope).set(human(w.user));
+  expect(current.body.lines[0].orderedQuantity).toBe('3');
   if(process.env.PACKPROOF_ORDER_RECOVERY_PROBE==='1'){
    const tables=['record_order_roots','record_order_sessions','record_order_receipts','record_order_events','record_order_event_refs','record_order_revisions','record_order_decisions','record_order_link_state','record_order_api_progress'];
    const fingerprint=async(database:typeof opened.db)=>{const counts:Record<string,unknown>={};for(const name of tables)counts[name]=(await database.query(`SELECT COUNT(*)::integer n FROM ${name}`)).rows[0].n;return counts;};
@@ -150,5 +169,28 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
    expect(current).toEqual(prior.body);
    process.stdout.write('Offline backup and restore fixture '+JSON.stringify({milliseconds:Math.round(performance.now()-started),lostCommittedRevisions:0,rows:expected})+'\n');
   }
+ },90000);
+it('bridges two permitted facilities from an operation-wide installation and rejects foreign locations',async()=>{
+  vi.stubEnv('PACKPROOF_ORDER_WORKSPACE_ENABLED','true');
+  const w=await workspace(),outside=await workspace(),second=w.site+'-second',e=await start(w,'0.5.0');
+  await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[second,w.org,'Receiving dock',clock.now().toISOString()]);
+  const approval=await approve(w,e,{integrationAccountId:null,createLocalSource:true,locationId:null},'multi-facility');
+  expect(approval.status,approval.text).toBe(200);const {service}=await redeem(w,e);await acknowledge(e,service);
+  const agent=(path:string,body:unknown)=>request(app).post('/v1/partner/agent/'+path).set(service).send(body);
+  const session=await agent('order-workspace/proposals',{sources:[{id:'erp',generation:1,folderDigest:'a'.repeat(64),roles:['order'],profileVersion:'v1'},{id:'dock',generation:1,folderDigest:'b'.repeat(64),roles:['handoff'],profileVersion:'v1'}],outputDigest:'c'.repeat(64),history:'existing_and_future'});
+  const decision=await request(app).post('/me/records/agent-installations/'+approval.body.installationId+'/order-workspace/'+session.body.id+'/decision').set(human(w.user)).send({...w.scope,scopeDigest:session.body.scopeDigest,decision:'approve'});
+  expect(decision.status,decision.text).toBe(200);
+  const order={namespace:'SALES',type:'order',id:'X-100'},dock={namespace:'FREIGHT',type:'shipment',id:'S-100'};
+  const send=(sourceId:string,facilityId:string,ref:boolean,obs:string)=>{
+   const record={kind:sourceId==='erp'?'order':'handoff',eventId:obs,version:'1',facilityId,entity:sourceId==='erp'?order:dock,references:ref?[order]:[],fields:{},locator:'$.record'};
+   const bytes=Buffer.from(JSON.stringify(record));return agent('order-workspace/observations',{scopeDigest:session.body.scopeDigest,sourceId,generation:1,profileVersion:'v1',observationId:obs,fileName:'record.json',mediaType:'application/json',originalBase64:bytes.toString('base64'),originalSha256:sha256Hex(bytes),records:[record]});
+  };
+  const first=await send('erp',w.site,false,'created');expect(first.status,first.text).toBe(200);
+  const wrong=await send('dock',outside.site,true,'foreign');expect(wrong.status,wrong.text).toBe(403);
+  const withoutBridge=await send('dock',second,false,'dock-linked-later');expect(withoutBridge.body.state).toBe('pending');
+  const withBridge=await send('dock',second,true,'dispatch');expect(withBridge.status,withBridge.text).toBe(200);expect(withBridge.body.proofs).toEqual([{proofId:first.body.proofs[0].proofId,revision:2}]);
+  const detail=await request(app).get('/me/records/order-proofs/'+first.body.proofs[0].proofId).query(w.scope).set(human(w.user));
+  expect(detail.body.facilities).toEqual([w.site,second].sort());expect(detail.body.events.map((event:any)=>event.facilityId)).toEqual(expect.arrayContaining([w.site,second]));
+  const outsider=await request(app).get('/me/records/order-proofs/'+first.body.proofs[0].proofId).query(outside.scope).set(human(outside.user));expect(outsider.status).toBe(404);
  },90000);
 });

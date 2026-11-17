@@ -17,18 +17,16 @@ sealed class CollectionWorker(AgentRuntime agent, PipeServer pipe, InstallerRead
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var bridge = pipe.Run(stoppingToken);
-        var installationHealth = readiness.Run(stoppingToken);
-        try
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var bridge = pipe.Run(lifetime.Token);
+        var installationHealth = readiness.Run(lifetime.Token);
+        var collection = agent.RunTickLoop(lifetime.Token);
+        try { await await Task.WhenAny(collection, bridge, installationHealth); }
+        finally
         {
-            using var ticks = new PeriodicTimer(TimeSpan.FromSeconds(5));
-            while (await ticks.WaitForNextTickAsync(stoppingToken))
-            {
-                await agent.Tick(stoppingToken);
-                if (bridge.IsFaulted) await bridge;
-                if (installationHealth.IsFaulted) await installationHealth;
-            }
+            await lifetime.CancelAsync();
+            try { await Task.WhenAll(bridge, installationHealth, collection); }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         }
-        finally { try { await Task.WhenAll(bridge, installationHealth); } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { } }
     }
 }

@@ -120,6 +120,7 @@ public sealed class WorkspaceServiceTests
             var restored = new ProtectedStore(Path.Combine(root,"restored"),new TestProtector());
             CopyTree(snapshot,restored.Root);
             var reloaded = restored.Read<LocalState>("state.bin")!;
+            Assert.Equal(SourceStateMigration.ActiveWorkspaceVersion,reloaded.StateVersion);
             var retainedJob = reloaded.Workspace!.Sources.Single().Inventory.Single().Value;
             Assert.Equal(1L,retainedJob.Sequence);
             Assert.Equal(store.Read<LocalState>("state.bin")!.ProofOutput!.Writer,reloaded.ProofOutput!.Writer);

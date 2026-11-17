@@ -60,6 +60,7 @@ jobs:
         timeout-minutes: 5
         env:
           PACKPROOF_JOURNEY_REAL_HTTP: "1"
+          PACKPROOF_JOURNEY_PERF_N: "20"
           PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/http-journey-result.json
         run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
       - name: Compare the real local package to the Windows reader and backend projection

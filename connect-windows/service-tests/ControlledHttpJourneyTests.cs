@@ -48,7 +48,17 @@ public sealed class ControlledHttpJourneyTests
     private static void Signal(string root,string name,object value)
     {
         var final=Path.Combine(root,name);var pending=final+"."+Guid.NewGuid().ToString("N");
-        File.WriteAllBytes(pending,Json.Bytes(value));File.Move(pending,final,true);
+        File.WriteAllBytes(pending,Json.Bytes(value));
+        try
+        {
+            for (var attempt=0;;attempt++)
+            {
+                try { File.Move(pending,final,true); break; }
+                catch(IOException) when(attempt<8) { Thread.Sleep(20); }
+                catch(UnauthorizedAccessException) when(attempt<8) { Thread.Sleep(20); }
+            }
+        }
+        finally { File.Delete(pending); }
     }
 
     [Fact]
@@ -67,7 +77,7 @@ public sealed class ControlledHttpJourneyTests
         var host=new HostConfiguration("development","https://local-api.example","https://local-web.example","S-1-5-32-545");
         var state=new LocalState{Token=token,InstallationId=installation,CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(30)};
         AgentRuntime Open()=>new(host,store,new PackProofClient(host,Connect(api,pipe)),state);
-        using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var ct=timeout.Token;
         using(var setup=Open())
         {
@@ -84,6 +94,15 @@ public sealed class ControlledHttpJourneyTests
         }
         state=store.Read<LocalState>("state.bin")!;
         var runtime=Open();bool restarted=false;
+        var schedule=CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task scheduler=Task.CompletedTask;
+        async Task StopScheduler()
+        {
+            schedule.Cancel();
+            try { await scheduler; }
+            catch (OperationCanceledException) when(schedule.IsCancellationRequested) {}
+            schedule.Dispose();
+        }
         try
         {
             await runtime.Command("activateWorkspace",Json.Element(new{}),ct);
@@ -92,20 +111,22 @@ public sealed class ControlledHttpJourneyTests
             if(string.IsNullOrEmpty(session) || state.Workspace.ScopeDigest is null)throw new Exception("No exact pending browser session.");
             Signal(root,"scope.json",new{sessionId=session,scopeDigest=state.Workspace.ScopeDigest,
                 sources=state.Workspace.Sources.Select(s=>new{s.Id,role=s.Roles.FirstOrDefault(),s.Generation})});
+            scheduler=runtime.RunTickLoop(schedule.Token);
             while(!File.Exists(Path.Combine(root,"done")))
             {
                 if(!restarted && File.Exists(Path.Combine(root,"restart")))
                 {
-                    runtime.Dispose();state=store.Read<LocalState>("state.bin")!;runtime=Open();
+                    await StopScheduler();runtime.Dispose();state=store.Read<LocalState>("state.bin")!;runtime=Open();
+                    schedule=CancellationTokenSource.CreateLinkedTokenSource(ct);scheduler=runtime.RunTickLoop(schedule.Token);
                     restarted=true;Signal(root,"restarted.json",new{resumed=true});
                 }
-                await runtime.Tick(ct);
+                if(scheduler.IsFaulted) await scheduler;
                 var status=Json.Element(await runtime.Command("status",null,ct));
                 Signal(root,"service-status.json",new{restarted,at=DateTimeOffset.UtcNow,workspace=status.GetProperty("workspace"),
-                    output=runtime.ReadProofOutput(),lastError=state.LastErrorCode});
+                    output=status.GetProperty("proofOutput"),lastError=state.LastErrorCode});
                 await Task.Delay(200,ct);
             }
         }
-        finally {runtime.Dispose();}
+        finally {await StopScheduler();runtime.Dispose();}
     }
 }

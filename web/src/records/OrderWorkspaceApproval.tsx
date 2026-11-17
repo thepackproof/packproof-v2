@@ -12,7 +12,7 @@ type ApprovalSession = {
   scope: {
     history: string;
     outputName?: string;
-    sources: { id: string; displayName?: string; roles: string[] }[];
+    sources: { id: string; displayName?: string; roles: string[]; transport?: 'folder' | 'api'; sourceNamespace?: string }[];
   };
 };
 
@@ -50,15 +50,20 @@ export function OrderWorkspaceApproval({ api, organizationId, environment, param
   }
   if (!canManage || !valid) return <p role="alert">{canManage ? 'Reopen this request from the computer where you selected the sources.' : 'Sign in as an administrator of this workspace to review collection.'}</p>;
   return <section className="records-panel agent-approval">
-    <h1>Allow collection on this computer?</h1>
+    <h1>{session?.state === 'active' ? 'Collection approved' : 'Allow collection on this computer?'}</h1>
     {result.error ? <div role="alert"><p>{result.error}</p><button className="records-button secondary" onClick={() => setRefresh(n => n + 1)}>Try again</button></div>
       : !session ? <p role="status">{result.loading ? 'Opening the request…' : 'The request changed. Reopen it from PackProof Connect.'}</p>
       : <>
         <h2>{session.deviceName}</h2>
-        <p>PackProof will read reports from these sources and retain their original files online for this workspace.</p>
-        <ul>{session.scope.sources.map(source => <li key={source.id}>{source.displayName || 'Selected source'}</li>)}</ul>
+        <p>Review the sources this computer can use to assemble order proofs.</p>
+        <ul>{session.scope.sources.map(source => <li key={source.id}>
+          <strong>{source.displayName || 'Selected source'}</strong>
+          {source.transport === 'api' ? <p>Connected system{source.sourceNamespace ? ' · ' + source.sourceNamespace : ''}. Earlier orders may contain only a saved summary.</p>
+            : <p>Read files in this folder and retain the originals online.</p>}
+          <small>Records included · {source.roles.join(', ')}</small>
+        </li>)}</ul>
         <dl className="records-facts">
-          <div><dt>Records included</dt><dd>{session.scope.history === 'existing_and_future' ? 'Existing files and future changes' : session.scope.history}</dd></div>
+          <div><dt>Collection period</dt><dd>{session.scope.history === 'existing_and_future' ? 'Existing records and future changes' : session.scope.history}</dd></div>
           <div><dt>Offline collection</dt><dd>Up to one hour after the last successful access check</dd></div>
           <div><dt>Saved proofs</dt><dd>{session.scope.outputName || 'The folder selected on this computer'}</dd></div>
         </dl>

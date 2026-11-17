@@ -13,7 +13,7 @@ namespace PackProof.Connect;
 public static partial class SourceReaders
 {
     public static bool IsMedia(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() is
-        ".pdf" or ".jpeg" or ".jpg" or ".tif" or ".tiff" or ".png";
+        ".pdf" or ".jpeg" or ".jpg" or ".tif" or ".tiff" or ".png" or ".heic" or ".webp";
     private static string InspectDocument(byte[] bytes,string format,List<SourceReaderRow> rows,List<string> issues)
     {
         var b=bytes.AsSpan();
@@ -128,11 +128,30 @@ public static partial class SourceReaders
                     }
                 }
             }
+            else if(initial.Format is "heic" or "webp")
+            {
+                var decoded=WindowsSourceCodec.DecodeStill(bytes);
+                ReadImage(EncodeDecodedStill(decoded.Width,decoded.Height,decoded.Bgra),"image",rows,issues);
+            }
             else ReadImage(bytes,"image",rows,issues);
         }
         catch(Exception e) when(e is not (OutOfMemoryException or StackOverflowException or OperationCanceledException))
         {rows.Clear();issues.Add(e is InvalidDataException?e.Message:"The document could not be decoded. The original remains available.");}
         return initial with {State=rows.Count>0?"parsed":"recognized",Rows=rows,Headers=rows.SelectMany(r=>r.Fields.Keys).Distinct().ToArray(),Issues=issues.Distinct().ToArray()};
+    }
+    private static byte[] EncodeDecodedStill(int width,int height,byte[] bgra)
+    {
+        if(!OperatingSystem.IsWindows())throw new InvalidDataException("The Windows image codec is unavailable.");
+        using var bitmap=new Bitmap(width,height,PixelFormat.Format32bppArgb);
+        var area=bitmap.LockBits(new Rectangle(0,0,width,height),ImageLockMode.WriteOnly,PixelFormat.Format32bppArgb);
+        try
+        {
+            for(int y=0;y<height;y++)Marshal.Copy(bgra,y*width*4,area.Scan0+y*area.Stride,width*4);
+        }
+        finally{bitmap.UnlockBits(area);}
+        using var output=new MemoryStream();
+        bitmap.Save(output,System.Drawing.Imaging.ImageFormat.Png);
+        return output.ToArray();
     }
     private static void Dimensions(int w,int h) => Require(w>0&&h>0&&w<=8192&&h<=8192&&(long)w*h<=12_000_000,"The image exceeds the supported pixel limit.");
     private static void MediaRow(List<SourceReaderRow> rows,string path,string method,string value,float? confidence,object region)

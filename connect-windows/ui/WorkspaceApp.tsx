@@ -45,7 +45,7 @@ function Clarify({source,bridge,run,busy}:{source:WorkspaceSource;bridge:Connect
 function SourceCard({source,children}:{source:WorkspaceSource;children?:React.ReactNode}) {
   return <article className="ws-source">
     <h3>{sourceTitle(source)}</h3>
-    <p className={needsHelp(source) ? "ws-warning" : "ws-caption"}>{source.recognition.message}</p>
+    <p role="status" className={needsHelp(source) ? "ws-warning" : "ws-caption"}>{source.recognition.message}</p>
     {source.recognition.state === "recognized" && <ExampleFields sample={source.recognition.sample}/>}
     <details><summary>Source details</summary>{source.folder && <p className="ws-path">{source.folder}</p>}{source.sourceNamespace && <p>Upstream system · {source.sourceNamespace}</p>}
       <p>{source.roles.map(role=>categories[role]?.name).filter(Boolean).join(" · ")}</p></details>
@@ -65,7 +65,7 @@ function Picker({role,sources,bridge,run,busy}:{role:SourceRole;sources:Workspac
       <button className="quiet" disabled={busy} onClick={()=>run("Updating this source",()=>bridge.removeWorkspaceRole(source.id,role))}>Remove from this step</button>
     </SourceCard>)}
     <div className="ws-actions">
-      <button className={selected.length ? "secondary" : "primary"} disabled={busy} onClick={()=>run("Checking your folder",()=>bridge.chooseWorkspaceFolder(role))}>{selected.length ? "Add another location" : "Choose folder"}</button>
+      <button data-folder-picker={role} className={selected.length ? "secondary" : "primary"} disabled={busy} onClick={()=>run("Checking your folder",()=>bridge.chooseWorkspaceFolder(role))}>{selected.length ? "Add another location" : "Choose folder"}</button>
       {!!reusable.length && <details className="ws-reuse"><summary>Use an existing location</summary>
         <label>Records folder<select value={reuse} onChange={e=>setReuse(e.target.value)}><option value="">Choose a location</option>
           {reusable.map(item=><option key={item.id} value={item.id}>{item.folder}</option>)}</select></label>
@@ -116,7 +116,7 @@ function Setup({status,bridge,run,busy,legacy}:{status:ConnectStatus;bridge:Conn
       </>}
       {step==="output" && <><p className="ws-intro">Choose a folder for your order summaries and evidence. Your proofs will also appear in the dashboard.</p>
         {output && <p className="ws-path">{output}</p>}
-        <button className="primary" disabled={busy} onClick={()=>run("Checking write access",()=>bridge.chooseWorkspaceOutput())}>{output ? "Change folder" : "Choose proof folder"}</button>
+        <button data-folder-picker="output" className="primary" disabled={busy} onClick={()=>run("Checking write access",()=>bridge.chooseWorkspaceOutput())}>{output ? "Change folder" : "Choose proof folder"}</button>
         {output && <p role="status">{outputReady ? "The background service can save proofs here." : temporaryOutput ? "This destination is temporarily unavailable." : "Write access needs attention. Choose another folder or check its permissions."}</p>}
         <p className="ws-caption">Example folder name · SO10482 with its unique proof key</p>
       </>}
@@ -124,8 +124,9 @@ function Setup({status,bridge,run,busy,legacy}:{status:ConnectStatus;bridge:Conn
         <p className="ws-intro">Review the sources and destination for this computer.</p>
         <h2>Records to collect</h2>
         {sources.length ? <ul>{sources.map(source=><li key={source.id}><strong>{sourceTitle(source)}</strong> · {source.roles.map(role=>categories[role].name).join(", ")}
-          {!eligible(source) && " · Needs attention"}</li>)}</ul> : <p>Choose at least one records source to begin.</p>}
-        <p>{sources.some(s=>s.transport!=="api") && "PackProof will read existing files in the selected folders and check there for new or changed files. Subfolders can be added separately. "}{sources.some(s=>s.transport==="api") && "The partner connection will accept new orders sent within its approved scope. "}Approved originals are retained with order proofs available to your team online.</p>
+          {!eligible(source) && " · Needs attention"}{source.folder && <small className="ws-source-path">{source.folder}</small>}{source.transport==="api" && source.sourceNamespace && <small className="ws-source-path">Upstream system · {source.sourceNamespace}</small>}</li>)}</ul> : <p>Choose at least one records source to begin.</p>}
+        <p>{sources.some(s=>s.transport!=="api") && "PackProof will read existing files in the selected folders and check there for new or changed files. Subfolders can be added separately. "}{sources.some(s=>s.transport==="api") && "The partner connection will accept orders from your selected system. Previously saved orders may include a summary only. "}PackProof will upload and retain the approved originals. Your team can open the resulting order proofs online.</p>
+        {sources.some(s=>s.transport!=="api") && <p className="ws-caption">Folder collection can continue offline for up to one hour after the last access check.</p>}
         <p><strong>Local copies</strong><br/><span className="ws-path">{output || "Choose a proof folder."}</span></p>
         {!!pending.length && <p className="ws-warning">{pending.length} {pending.length===1 ? "source needs" : "sources need"} a review before collection can start there.</p>}
         {status.authorizationNotice && <p role="status">{status.authorizationNotice}</p>}
@@ -222,12 +223,26 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
     if(inAction.current) return;
     inAction.current=true;
     const id=++epoch.current;
+    const picker=document.activeElement instanceof HTMLButtonElement ? document.activeElement.dataset.folderPicker : undefined;
+    const startingStep=displayed.current?.workspace?.step;
     setBusy(label);setError("");
     try {
       const value=await operation();
       if (mounted.current && id===epoch.current && isStatus(value)) accept(value);
     } catch(e) { if(mounted.current && id===epoch.current) setError(e instanceof Error ? e.message : "This action could not be completed. Try again."); }
-    finally { inAction.current=false;if(mounted.current && id===epoch.current) setBusy(""); }
+    finally {
+      inAction.current=false;
+      if(mounted.current && id===epoch.current) {
+        setBusy("");
+        if(picker && startingStep===displayed.current?.workspace?.step) {
+          window.requestAnimationFrame(()=>{
+            if(!mounted.current || id!==epoch.current || startingStep!==displayed.current?.workspace?.step)return;
+            const current=document.querySelector<HTMLButtonElement>('[data-folder-picker="'+picker+'"]');
+            if(current && !current.disabled && (document.activeElement===document.body || document.activeElement===current))current.focus();
+          });
+        }
+      }
+    }
   },[accept]);
   useEffect(()=>{
     mounted.current=true;

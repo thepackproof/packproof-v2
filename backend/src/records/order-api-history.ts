@@ -87,7 +87,7 @@ export async function reconcileApiHistory(deps:AppDependencies,db:Database,actor
     const receipt=newId('order_receipt'),fields:Record<string,string>={};
     if(typeof old.snapshot.itemTitle==='string')fields.itemTitle=old.snapshot.itemTitle;
     if(old.snapshot.quantity!=null)fields.quantity=String(old.snapshot.quantity);
-    const record=normalizedRecord({eventId:old.proof_id,version:'1',kind:'order',
+    const record=normalizedRecord({eventId:old.proof_id,version:'1',kind:'order',facilityId:i.location_id,
       entity:{namespace:source.sourceNamespace,type:'order',id:old.external_id},references:[],fields,locator:'$.transaction'});
     await db.query(`INSERT INTO record_order_receipts(id,operation_key,source_id,generation,observation_id,payload_digest,original_sha256,
       object_key,object_version,file_name,media_type,profile_version,issues,received_at,session_id)

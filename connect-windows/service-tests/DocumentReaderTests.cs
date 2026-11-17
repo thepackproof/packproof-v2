@@ -67,4 +67,23 @@ public sealed class DocumentReaderTests
         Assert.Contains(result.Rows,row=>row.Fields["method"].GetString()=="barcode/QR_CODE" && row.Fields["text"].GetString()=="PKG-0092");
         Assert.Equal(0,SourceReaders.Normalize(result,"evidence").GetArrayLength());
     }
+    [Theory]
+    [InlineData("packing_photo.heic")]
+    [InlineData("packing_photo.webp")]
+    public void Qualified_windows_codec_reads_still_or_reports_missing_extension(string name)
+    {
+        var bytes=File.ReadAllBytes(Fixture(name));
+        Assert.Equal("recognized",SourceReaders.Read(name,bytes).State);
+        try
+        {
+            var decoded=WindowsSourceCodec.DecodeStill(bytes);
+            Assert.Equal(240,decoded.Width);Assert.Equal(80,decoded.Height);Assert.Equal(240*80*4,decoded.Bgra.Length);
+        }
+        catch(InvalidDataException e) when(e.Message.Contains("installed Windows codec",StringComparison.Ordinal))
+        {
+            var pending=SourceReaders.ReadDerived(name,bytes);
+            Assert.Equal("recognized",pending.State);
+            Assert.Contains(pending.Issues,issue=>issue.Contains("installed Windows codec",StringComparison.Ordinal));
+        }
+    }
 }

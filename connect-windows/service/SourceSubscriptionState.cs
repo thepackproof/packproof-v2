@@ -54,6 +54,9 @@ public sealed record QueueSourceIdentity(string SourceId, string SourceProfile, 
 public static class SourceStateMigration
 {
     public const int Version = 4;
+    // Existing 0.4.x collectors accept source-aware SQLite but cannot drain
+    // a workspace observation. Protect an activated store before queue access.
+    public const int ActiveWorkspaceVersion = 6;
     internal static void ValidatePropertyNames(JsonElement root)
     {
         // Only reject ambiguous serialized state keys. A raw source document or
@@ -84,7 +87,7 @@ public static class SourceStateMigration
     }
     public static void Validate(LocalState state)
     {
-        if (state.StateVersion is < 1 or > Version || state.SourceSubscriptions is null || state.SourceSubscriptions.Any(s => s is null || string.IsNullOrWhiteSpace(s.Id) || s.GrantRevision < 0 ||
+        if (state.StateVersion < 1 || state.StateVersion > Version && !(state.StateVersion == ActiveWorkspaceVersion && state.Workspace?.Version == 1) || state.SourceSubscriptions is null || state.SourceSubscriptions.Any(s => s is null || string.IsNullOrWhiteSpace(s.Id) || s.GrantRevision < 0 ||
                 s.Id == SourceSubscriptionState.LegacyId && (s.SourceProfile != SourceSubscriptionState.LegacyProfile || s.GrantRevision != 0 || s.CapabilityApproved)) ||
             state.SourceSubscriptions.Select(s => s.Id).Distinct(StringComparer.Ordinal).Count() != state.SourceSubscriptions.Count)
             throw new ConnectException("LOCAL_STATE_UNSUPPORTED", "Install the compatible collector. Protected approvals and pending originals have been preserved.");
@@ -115,7 +118,7 @@ public static class SourceStateMigration
         // This migration does not reinterpret old CSV permissions as typed-source
         // approval, nor rewrite any old queue configuration/credential identity.
         legacy.CapabilityApproved = false;
-        state.StateVersion = Version;
+        state.StateVersion = state.StateVersion == ActiveWorkspaceVersion || state.Workspace?.ActiveGrant != null ? ActiveWorkspaceVersion : Version;
     }
 }
 

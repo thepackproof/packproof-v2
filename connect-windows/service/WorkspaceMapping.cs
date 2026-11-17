@@ -6,8 +6,8 @@ public sealed partial class AgentRuntime
 {
     private bool InspectWorkflowColumns(WorkspaceSource source, SourceReadResult parsed, string fileName, Dictionary<string,string>? preview)
     {
-        if (source.ConfirmedWorkflow != null || source.ConfirmedMap != null || source.Roles.Count != 1 || state.Workspace is not { } w) return false;
-        var role = source.Roles[0];
+        var role = source.InspectRole ?? source.Roles.LastOrDefault();
+        if (role is null || !source.Roles.Contains(role) || source.ApprovedWorkflows().Any(m=>m.Role==role) || state.Workspace is not { } w) return false;
         var possible = new Dictionary<string,WorkspaceSource[]>(StringComparer.Ordinal);
         foreach (var producerRole in new[] { "order", "picking", "packing", "shipping" })
         {

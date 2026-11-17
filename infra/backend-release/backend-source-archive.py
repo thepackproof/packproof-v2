@@ -55,7 +55,15 @@ def archive(source,destination,profile,verify=False):
             if verify:
                 if z.read(name)!=raw:raise ValueError('ARCHIVE_BLOB_MISMATCH')
             else:
-                info=zipfile.ZipInfo(name);info.external_attr=(int(mode,8)<<16);info.compress_type=zipfile.ZIP_DEFLATED;z.writestr(info,raw)
+                info=zipfile.ZipInfo(name)
+                info.external_attr=int(mode,8)<<16
+                if profile=='reconstruction-v10':
+                    # A local review and Linux CodeBuild must reproduce the same ZIP bytes.
+                    info.create_system=3
+                    info.compress_type=zipfile.ZIP_STORED
+                else:
+                    info.compress_type=zipfile.ZIP_DEFLATED
+                z.writestr(info,raw)
             if (name.startswith('migrations/') or name.startswith('backend/migrations/')) and name.endswith('.sql'):
                 inventory.append({'id':name.rsplit('/',1)[1][:-4],'checksum':hashlib.sha256(raw).hexdigest()})
     if offset!=len(payload):raise ValueError('BLOB_TRAILING_BYTES')

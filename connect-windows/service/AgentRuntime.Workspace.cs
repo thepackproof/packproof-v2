@@ -114,11 +114,15 @@ public sealed partial class AgentRuntime
                 using var pin = new ProofOutputPaths.DirectoryPin(folder);
                 var physical = pin.KeyStrings.FirstOrDefault();
                 var equivalent = physical == null ? null : w.Sources.FirstOrDefault(s => s.PhysicalRoot == physical && s.Roles.Count > 0);
-                var picked = w.Assign(equivalent?.Folder ?? folder, p.GetProperty("role").GetString() ?? "");
+                var requestedRole = p.GetProperty("role").GetString() ?? "";
+                var picked = w.Assign(equivalent?.Folder ?? folder, requestedRole);
+                picked.InspectRole = requestedRole;
                 if (picked.PhysicalRoot is { } oldRoot && oldRoot != physical)
                 {
                     picked.Generation = checked(picked.Generation + 1);
                     picked.ConfirmedMap = null;
+                    picked.ConfirmedWorkflow = null;
+                    picked.Workflows.Clear();
                     w.Invalidate();
                 }
                 picked.PhysicalRoot = physical;
@@ -149,11 +153,16 @@ public sealed partial class AgentRuntime
                 if (toMap.Generation != p.GetProperty("expectedGeneration").GetInt32() || proposedProfile == null
                     || proposedProfile != p.GetProperty("profileVersion").GetString())
                     throw new ConnectException("PROFILE_CHANGED", "Check the folder again before confirming its order references.");
-                toMap.ConfirmedWorkflow = toMap.ProposedWorkflow;
+                if (toMap.ConfirmedWorkflow != null) { toMap.Workflows.Add(toMap.ConfirmedWorkflow); toMap.ConfirmedWorkflow = null; }
+                if (toMap.ProposedWorkflow is { } workflow)
+                {
+                    toMap.Workflows.RemoveAll(m=>m.Role==workflow.Role);
+                    toMap.Workflows.Add(workflow);
+                }
                 toMap.ProposedWorkflow = null;
                 toMap.ConfirmedDependencies = toMap.RelatedSources.Values.Distinct().Where(id => w.Sources.Any(s=>s.Id==id && s.Roles.Count>0))
                     .ToDictionary(id=>id,id=>w.Sources.Single(s=>s.Id==id).Generation);
-                toMap.ConfirmedMap = toMap.ProposedMap;
+                if (toMap.ProposedMap != null) toMap.ConfirmedMap = toMap.ProposedMap;
                 toMap.ProposedMap = null;
                 toMap.Generation = checked(toMap.Generation + 1);
                 w.Invalidate();
@@ -173,6 +182,10 @@ public sealed partial class AgentRuntime
                     changed.Generation = checked(changed.Generation + 1);
                     changed.Paused = changed.Roles.Count == 0;
                     changed.Recognition = null;
+                    changed.Workflows.RemoveAll(m=>m.Role==removingRole);
+                    if (changed.ConfirmedWorkflow?.Role==removingRole) changed.ConfirmedWorkflow=null;
+                    if (removingRole=="order") changed.ConfirmedMap=null;
+                    changed.InspectRole=changed.Roles.LastOrDefault();
                     w.Invalidate();
                     if (changed.Roles.Count > 0 && changed.Transport == "folder") InspectWorkspaceSource(changed);
                 }

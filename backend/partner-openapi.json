@@ -47008,6 +47008,1392 @@
           }
         }
       }
+    },
+    "/v1/partner/agent/order-workspace/proposals": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_proposals",
+        "summary": "Review exact source and output scope",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectScopeSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectOperationScope"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_workspace",
+        "summary": "Read current authorization session",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectScopeSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/order-workspace/{sessionId}": {
+      "get": {
+        "operationId": "connect_get_me_records_agent_installations_installationId_order_workspace_sessionId",
+        "summary": "Inspect this installation approval",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectScopeSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/order-workspace/{sessionId}/decision": {
+      "post": {
+        "operationId": "connect_post_me_records_agent_installations_installationId_order_workspace_sessionId_decision",
+        "summary": "Approve or decline the exact pending scope",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectScopeSession"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "decision": {
+                    "enum": [
+                      "approve",
+                      "deny"
+                    ]
+                  },
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "decision",
+                  "scopeDigest"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/observations": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_observations",
+        "summary": "Submit original bytes and versioned source interpretations",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectObservationReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectSourceSubmission"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/order-workspace/events": {
+      "post": {
+        "operationId": "connect_post_v1_partner_order_workspace_events",
+        "summary": "Submit a directly authorized API order event",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectObservationReceipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "integrationAccountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "operatorMembershipId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "connectOperation": {
+                    "$ref": "#/components/schemas/ConnectOperationBinding"
+                  },
+                  "observation": {
+                    "$ref": "#/components/schemas/ConnectObservationFile"
+                  }
+                },
+                "required": [
+                  "integrationAccountId",
+                  "operatorMembershipId",
+                  "connectOperation",
+                  "observation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/derivatives": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_derivatives",
+        "summary": "Attach derived media text and location lineage to a retained original",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "observationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "originalSha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "readerVersion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "format": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "maxItems": 200
+                  },
+                  "issues": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "maxItems": 64
+                  }
+                },
+                "required": [
+                  "sourceId",
+                  "generation",
+                  "scopeDigest",
+                  "observationId",
+                  "originalSha256",
+                  "readerVersion",
+                  "format",
+                  "rows",
+                  "issues"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/reconcile-api-source": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_reconcile_api_source",
+        "summary": "Process a bounded page of approved historical API snapshots",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "sourceId",
+                  "generation",
+                  "scopeDigest"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/api-source-pause": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_api_source_pause",
+        "summary": "Pause or resume one approved API source",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "paused": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "sourceId",
+                  "generation",
+                  "scopeDigest",
+                  "paused"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-attention": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_attention",
+        "summary": "List unresolved order references",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectReviewList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-proofs": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_proofs",
+        "summary": "Read recent authorized orders and a committed feed boundary",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-proofs/{proofId}/revisions/{revision}": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_proofs_proofId_revisions_revision",
+        "summary": "Read an immutable authorized revision",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofRevision"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-attention": {
+      "get": {
+        "operationId": "connect_get_me_records_order_attention",
+        "summary": "List unresolved order references",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectReviewList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs",
+        "summary": "Read recent authorized orders and a committed feed boundary",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/revisions/{revision}": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs_proofId_revisions_revision",
+        "summary": "Read an immutable authorized revision",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofRevision"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs_proofId",
+        "summary": "Read the latest authorized order revision",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofRevision"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-changes": {
+      "get": {
+        "operationId": "connect_get_me_records_order_changes",
+        "summary": "Resume order revision notifications",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofChanges"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-changes": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_changes",
+        "summary": "Resume committed revisions for this exporter",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectProofChanges"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-proofs/{proofId}/revisions/{revision}/artifacts/{receiptId}": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_proofs_proofId_revisions_revision_artifacts_receiptId",
+        "summary": "Read authorized exact media bytes or a scoped excerpt status",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/associations": {
+      "post": {
+        "operationId": "connect_post_me_records_order_proofs_proofId_associations",
+        "summary": "Review and correct an observation link",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "eventKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "action": {
+                    "enum": [
+                      "link",
+                      "unlink"
+                    ]
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "eventKey",
+                  "action",
+                  "expectedRevision",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -47139,6 +48525,16 @@
             "required": [
               "itemTitle"
             ]
+          },
+          "connectOperation": {
+            "$ref": "#/components/schemas/ConnectOperationBinding"
+          },
+          "orderLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectOrderLine"
+            },
+            "maxItems": 256
           }
         },
         "required": [
@@ -58190,6 +59586,753 @@
           "actor",
           "fields"
         ]
+      },
+      "ConnectOrderLine": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sku": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orderedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "pickedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "packedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "shippedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "returnedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "cancelledQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          }
+        },
+        "required": [
+          "lineId"
+        ]
+      },
+      "ConnectEntityReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "namespace",
+          "type",
+          "id"
+        ]
+      },
+      "ConnectNormalizedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "kind": {
+            "enum": [
+              "order",
+              "picking",
+              "packing",
+              "evidence",
+              "label",
+              "handoff",
+              "delivery",
+              "return",
+              "correction"
+            ]
+          },
+          "facilityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional canonical facility within this authorized operation. External site labels remain source fields."
+          },
+          "entity": {
+            "$ref": "#/components/schemas/ConnectEntityReference"
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectEntityReference"
+            },
+            "maxItems": 32
+          },
+          "fields": {
+            "type": "object",
+            "maxProperties": 96,
+            "additionalProperties": {
+              "type": [
+                "string",
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectOrderLine"
+            },
+            "maxItems": 256
+          },
+          "occurredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sourceModifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "locator": {
+            "type": "string",
+            "maxLength": 1600
+          },
+          "fieldLineage": {
+            "type": "object",
+            "maxProperties": 160,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1600
+            }
+          }
+        },
+        "required": [
+          "eventId",
+          "version",
+          "kind",
+          "entity",
+          "references",
+          "fields",
+          "locator"
+        ]
+      },
+      "ConnectSourceScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "folderDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "order",
+                "picking",
+                "packing",
+                "shipping",
+                "handoff",
+                "delivery",
+                "returns",
+                "evidence"
+              ]
+            },
+            "maxItems": 8
+          },
+          "profileVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "transport": {
+            "enum": [
+              "folder",
+              "api"
+            ]
+          },
+          "sourceNamespace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "generation",
+          "folderDigest",
+          "roles",
+          "profileVersion"
+        ]
+      },
+      "ConnectOperationScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectSourceScope"
+            },
+            "maxItems": 64
+          },
+          "history": {
+            "const": "existing_and_future"
+          },
+          "outputDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "outputName": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "sources",
+          "history",
+          "outputDigest"
+        ]
+      },
+      "ConnectOperationBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "scopeDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "installationId",
+          "sourceId",
+          "generation",
+          "scopeDigest"
+        ]
+      },
+      "ConnectObservationFile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "observationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "fileName": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "originalSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "originalBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "maxLength": 4194304
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectNormalizedEvent"
+            },
+            "maxItems": 512
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "observationId",
+          "fileName",
+          "originalSha256",
+          "originalBase64",
+          "mediaType",
+          "records"
+        ]
+      },
+      "ConnectSourceSubmission": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "scopeDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profileVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "observationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "fileName": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "originalSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "originalBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "maxLength": 4194304
+          },
+          "mediaType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectNormalizedEvent"
+            },
+            "maxItems": 512
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "maxItems": 64
+          }
+        },
+        "required": [
+          "sourceId",
+          "generation",
+          "scopeDigest",
+          "profileVersion",
+          "observationId",
+          "fileName",
+          "originalSha256",
+          "originalBase64",
+          "mediaType",
+          "records"
+        ]
+      },
+      "ConnectProofRevision": {
+        "type": "object",
+        "required": [
+          "proofId",
+          "revision",
+          "orderReference",
+          "updatedAt",
+          "events",
+          "lines",
+          "evidence"
+        ],
+        "properties": {
+          "proofId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "orderReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "facilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectOrderLine"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "originalArtifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "integrity": {
+            "const": "source_reported"
+          }
+        }
+      },
+      "ConnectProofPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proofId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "orderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "proofId",
+                "revision",
+                "orderReference",
+                "updatedAt"
+              ]
+            }
+          },
+          "cursor": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "orders",
+          "cursor"
+        ]
+      },
+      "ConnectProofChanges": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proofId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "sequence": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "proofId",
+                "revision",
+                "sequence"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changes",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "ConnectScopeSession": {
+        "type": "object",
+        "required": [
+          "state",
+          "scopeDigest",
+          "approvalPath"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "enum": [
+              "draft",
+              "pending",
+              "active",
+              "denied",
+              "superseded",
+              "expired"
+            ]
+          },
+          "scopeDigest": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvalPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ConnectOperationScope"
+          },
+          "deviceName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "offlineWindowSeconds": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ConnectObservationReceipt": {
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "state": {
+            "enum": [
+              "accepted",
+              "pending"
+            ]
+          },
+          "proofs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proofId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "proofId",
+                "revision"
+              ]
+            }
+          },
+          "originalSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "receiptId",
+          "state",
+          "proofs",
+          "originalSha256"
+        ]
+      },
+      "ConnectReviewList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "hasMore"
+        ]
       }
     }
   },
@@ -58250,5 +60393,11 @@
       "PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED"
     ],
     "externalGate": "G0 source-owner/security/usability/load/restore/Windows qualification remains required. Candidate contracts are not a production activation claim."
+  },
+  "x-packproof-order-workspace": {
+    "version": "packproof.order-workspace/v1",
+    "activation": "PACKPROOF_ORDER_WORKSPACE_ENABLED",
+    "originalMaxBytes": 3145728,
+    "feed": "poll after nextCursor; sequences can have gaps across authorization scopes"
   }
 }

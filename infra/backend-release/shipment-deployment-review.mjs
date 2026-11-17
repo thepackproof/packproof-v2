@@ -44,16 +44,23 @@ export function verifyShipmentDeploymentReview(snapshot,r,now){
   v.target.host===r.database.host&&v.target.database===r.database.name&&Date.parse(v.expiresAt)>=Date.parse(r.expiresAt),
   'SHIPMENT_DEPLOYMENT_REVIEW_BINDING_MISMATCH');
  const policy=v.automationPolicy;
+ const preserve=v.preserveShipmentSettings===true && ['v9','v10'].includes(profile.version);
  const switches=profile.version==='v10'?new Set([...offSwitches,'PACKPROOF_ORDER_WORKSPACE_ENABLED']):offSwitches;
- check((profile.version==='v7'||v.backfillJobsEnabled===false)&&!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
+ check((profile.version==='v7'||v.backfillJobsEnabled===false)&&policy.interpretationEnabled===preserve&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
   'SHIPMENT_DEFAULT_OFF_REVIEW_REQUIRED');
  const containers=[snapshot.api.express.activeConfigurations[0].primaryContainer,
   ...snapshot.api.taskDefinition.containerDefinitions,...snapshot.worker.taskDefinition.containerDefinitions];
  for(const c of containers){
-  check(!c.environmentFiles?.length&&!(c.secrets??[]).some(x=>switches.has(x.name)||[shadow,reviewJson,reviewHash].includes(x.name)),
+  check(!c.environmentFiles?.length&&!(c.secrets??[]).some(x=>switches.has(x.name)||[shadow,reviewJson,reviewHash,'PACKPROOF_SHIPMENT_WORKER_INTERPRETATION','PACKPROOF_CSV_HEADER_WORKER_POLICY'].includes(x.name)),
    'SHIPMENT_OPAQUE_POLICY_FORBIDDEN');
+  const values=Object.fromEntries((c.environment??[]).map(({name,value})=>[name,value]));
+  if(preserve&&(['api','worker'].includes(values.PACKPROOF_PROCESS_ROLE)||c===containers[0])){
+   check(values.PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED==='true'&&
+    values.PACKPROOF_SHIPMENT_WORKER_INTERPRETATION===policy.interpretationVersion&&!values.PACKPROOF_CSV_HEADER_WORKER_POLICY,
+    'SHIPMENT_EXISTING_APPROVAL_REQUIRED');
+  }
   for(const {name,value} of c.environment??[]){
-   if(switches.has(name))check(value==='false'||value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
+   if(switches.has(name))check(preserve&&name==='PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED'?value==='true':value==='false'||value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
    if(name===shadow)check(value==='','SHIPMENT_DEFAULT_OFF_REQUIRED');
    check(name!==reviewJson&&name!==reviewHash,'SHIPMENT_PROBE_BINDING_EXISTS');
   }
@@ -87,7 +94,7 @@ export function verifyShipmentProbeReports(r,probes,now){
  const taskArns=new Set();
  for(const kind of ['api','worker']){
   const candidate=probes[kind].report,reader=probes['previous-'+kind].report,prev=kind==='api'?r.expectedApi:r.expectedWorker;
-  check(candidate.automationPolicy.interpretationEnabled===false&&candidate.automationPolicy.headerVariantsEnabled===false&&
+  check(candidate.automationPolicy.interpretationEnabled===(r.preflightReview.preserveShipmentSettings===true)&&candidate.automationPolicy.headerVariantsEnabled===false&&
    candidate.automationPolicy.shadowSourceCount===0&&candidate.automationPolicy.shadowSourcesSha256===reconstructionDigest([]),
    'SHIPMENT_DEFAULT_OFF_RECEIPTS_REQUIRED');
   const elapsed=now-Date.parse(reader?.completedAt);

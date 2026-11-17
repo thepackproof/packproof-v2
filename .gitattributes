@@ -12,3 +12,5 @@
 /examples/multisource-journey/fixtures/*.jpg binary
 /examples/multisource-journey/fixtures/*.pdf binary
 /examples/multisource-journey/fixtures/*.xlsx binary
+/examples/multisource-journey/fixtures/*.heic binary
+/examples/multisource-journey/fixtures/*.webp binary

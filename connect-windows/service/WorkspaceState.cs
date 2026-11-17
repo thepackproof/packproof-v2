@@ -44,6 +44,7 @@ public sealed class OrderWorkspaceState
         else if (source.Roles.Contains(role)) return source;
         if (source.Roles.Count > 0 || source.Paused) source.Generation = checked(source.Generation + 1);
         source.Roles.Add(role);
+        source.InspectRole = role;
         source.Paused = false;
         source.Recognition = null;
         Invalidate();
@@ -96,11 +97,29 @@ public sealed class WorkspaceSource
     public Dictionary<string,string> RelatedSources { get; set; } = [];
     public Dictionary<string,int> ConfirmedDependencies { get; set; } = [];
     public string? ObservedNamespace { get; set; }
+    public string? InspectRole { get; set; }
+    public List<WorkflowColumnMap> Workflows { get; set; } = [];
     public WorkflowColumnMap? ProposedWorkflow { get; set; }
     public WorkflowColumnMap? ConfirmedWorkflow { get; set; }
     public OrderColumnMap? ProposedMap { get; set; }
     public OrderColumnMap? ConfirmedMap { get; set; }
-    public string ProfileVersion => Transport == "api" ? "packproof.partner-order/v1" : ConfirmedWorkflow is not null ? SourceReaders.WorkflowProfileVersion(ConfirmedWorkflow) : ConfirmedMap is null ? SourceReaders.ProfileId : SourceReaders.OrderProfileVersion(ConfirmedMap);
+    public IEnumerable<WorkflowColumnMap> ApprovedWorkflows() =>
+        Workflows.Concat(ConfirmedWorkflow is { } old ? new[] {old} : []).Where(m=>Roles.Contains(m.Role))
+        .DistinctBy(SourceReaders.WorkflowProfileVersion);
+
+    public string ProfileVersion
+    {
+        get
+        {
+            if (Transport == "api") return "packproof.partner-order/v1";
+            var versions=ApprovedWorkflows().Select(SourceReaders.WorkflowProfileVersion).ToList();
+            if (ConfirmedMap != null && Roles.Contains("order")) versions.Add(SourceReaders.OrderProfileVersion(ConfirmedMap));
+            if (versions.Count == 0) return SourceReaders.ProfileId;
+            if (versions.Count == 1) return versions[0];
+            var bytes = Json.Bytes(versions.Order(StringComparer.Ordinal));
+            return "packproof.order-profile-set/v1/" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+        }
+    }
     public bool Paused { get; set; }
     public string? Cursor { get; set; }
     public DateTimeOffset? LastScanAt { get; set; }
@@ -118,5 +137,5 @@ public sealed class WorkspaceSource
 public sealed record WorkspaceGrant(string InstallationId, string ScopeDigest, string OutputDigest, Dictionary<string,int> Generations,
     DateTimeOffset CheckedAt, int OfflineWindowSeconds);
 
-public sealed record WorkspaceFileVersion(string Digest, long Sequence, int Generation, string Name);
+public sealed record WorkspaceFileVersion(string Digest, long Sequence, int Generation, string Name, bool Missing = false);
 

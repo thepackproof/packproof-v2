@@ -159,11 +159,19 @@ async function main() {
       if (details.level === "error") console.error("Renderer:",details.message);
     });
     if (packaged) {
-      await require("./workspace-layout.cjs")({page,state,appUrl,report,stage,reach,keyboard,waitFor,checkPage,
+      const harness={page,state,appUrl,report,stage,reach,keyboard,waitFor,checkPage,
         directory:path.join(root,"build","workspace-screens"), setStatus:next=>{ currentState=next; },
-        register:(method,data)=>ipcMain.handle("connect:"+method, event=>{
-          assert.equal(event.sender,page); assert.equal(event.senderFrame.url,appUrl); return {ok:true,value:data};
-        })});
+        register:(method,data)=>{
+          ipcMain.removeHandler("connect:"+method);
+          ipcMain.handle("connect:"+method,async (event,...args)=>{
+            assert.equal(event.sender,page);
+            assert.equal(event.senderFrame.url,appUrl);
+            const value=typeof data === "function" ? await data(...args) : data;
+            return {ok:true,value};
+          });
+        }};
+      await require("./workspace-layout.cjs")(harness);
+      await require("./workspace-walkthrough.cjs")(harness);
     } else for (const [width,height] of [[1280,720],[1920,1080],[560,720]]) {
       for (const scale of (width === 560 ? [1] : [1,1.25,1.5,2])) {
         for (const theme of ["light","dark"]) await exercise(page, width,height,scale,theme);
