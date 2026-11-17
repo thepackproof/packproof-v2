@@ -104,7 +104,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
       const phase=proof?'order':'consent';
       const locator=path.join(root,'browser-'+phase+'.json');
       await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath,proof}),{flag:'wx'});
-      const executable=createRequire(path.join(desktop,'package.json'))('electron') as string;
+      const executable=process.env.PACKPROOF_JOURNEY_ELECTRON || createRequire(path.join(desktop,'package.json'))('electron') as string;
       const browser=spawn(executable,['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile-'+phase),path.join(desktop,'scripts/browser-order-approval.cjs')],{
         cwd:desktop,windowsHide:true,stdio:['ignore','inherit','inherit'],timeout:60000,env:{...process.env,PACKPROOF_BROWSER_FIXTURE:locator}
       });
