@@ -1,0 +1,108 @@
+name: Rebuild and verify Connect web distribution 92
+on:
+  push:
+    branches: [qa/connect-web-dist-92]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  distribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      CI: 'true'
+      TZ: UTC
+      LC_ALL: C.UTF-8
+      PACKPROOF_WEB_RELEASE_COMMIT: 2fe5c5ccdfdd8d7e0fca502813909b495a4bff74
+      EXPECTED_TREE: 699360965bc7185334d87cec16348569e71fd7ab
+      EXPECTED_INDEX: ab77499388bdf82fe7a2f439e428c14e14df07b8a7c5444694cb3e43a3eca290
+      VITE_PACKPROOF_API_BASE_URL: https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws
+      VITE_PACKPROOF_AUTH_MODE: cognito
+      VITE_PACKPROOF_COGNITO_USER_POOL_ID: us-east-1_GdgTeYaOO
+      VITE_PACKPROOF_COGNITO_CLIENT_ID: 34pnucunllka2jcs8hsq762m5e
+      VITE_PACKPROOF_COGNITO_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2fe5c5ccdfdd8d7e0fca502813909b495a4bff74
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+      - name: Install exact tooling and locked source dependencies
+        run: |
+          test "$(git rev-parse HEAD)" = "$PACKPROOF_WEB_RELEASE_COMMIT"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          test -z "$(git status --porcelain)"
+          npm install --global npm@11.21.1 --no-fund --no-audit
+          test "$(node --version)" = 'v22.23.4'
+          test "$(npm --version)" = '11.21.1'
+          npm --prefix mobile ci --ignore-scripts --no-audit --no-fund
+          npm --prefix web ci --no-audit --no-fund
+      - name: Verify portal behavior and reproduce the distribution twice
+        run: |
+          npm --prefix web test -- src/tests/order-workspace.test.tsx src/tests/connect-approval-return.test.ts src/tests/records-portal.test.tsx
+          test -z "$(git status --porcelain)"
+          npm --prefix web run build
+          node web/scripts/write-connect-release.mjs
+          mv web/dist "$RUNNER_TEMP/first-web-dist"
+          npm --prefix web run build
+          node web/scripts/write-connect-release.mjs
+          test -z "$(git status --porcelain)"
+      - name: Verify the published inventory, both builds and CodeBuild index
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHash} from 'node:crypto';
+          import {readFile,readdir,writeFile,mkdir,cp} from 'node:fs/promises';
+          import path from 'node:path';
+          const {RUNNER_TEMP:temp,EXPECTED_INDEX:index,EXPECTED_TREE:tree,PACKPROOF_WEB_RELEASE_COMMIT:commit,VITE_PACKPROOF_API_BASE_URL:apiUrl}=process.env;
+          const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+          async function inventory(dir,base='') {
+            const files=[];
+            for(const entry of await readdir(dir,{withFileTypes:true})){
+              const file=path.join(dir,entry.name), key=base+entry.name;
+              if(entry.isDirectory()) files.push(...await inventory(file,key+'/'));
+              else {
+                assert(entry.isFile(),'Unexpected filesystem entry: '+key);
+                const bytes=await readFile(file);
+                files.push({path:key,sha256:sha(bytes),byteSize:bytes.length});
+              }
+            }
+            return files.sort((a,b)=>Buffer.from(a.path).compare(Buffer.from(b.path)));
+          }
+          const output=path.resolve('web/dist'), first=path.join(temp,'first-web-dist');
+          const actual=await inventory(output);
+          assert.deepEqual(actual,await inventory(first),'The two builds differ');
+          const manifestBytes=await readFile(path.join(output,'release.json'));
+          const manifest=JSON.parse(manifestBytes);
+          assert.equal(manifest.schema,'packproof.web-release/v1');
+          assert.equal(manifest.commit,commit);
+          assert.equal(manifest.environment,'production');
+          assert.equal(manifest.apiUrl,apiUrl);
+          assert.equal(manifest.approvalPath,'/app/records/connect/approve');
+          assert.equal(manifest.capabilities.connectApproval,1);
+          assert.equal(manifest.capabilities.orderWorkspaceApproval,1);
+          assert.equal(manifest.indexSha256,index);
+          assert.equal(actual.find(item=>item.path==='index.html').sha256,index);
+          assert.equal(actual.length,54);
+          const sortedManifest=[...manifest.assets].sort((a,b)=>Buffer.from(a.path).compare(Buffer.from(b.path)));
+          assert.deepEqual(sortedManifest,actual.filter(item=>item.path!=='release.json'));
+          const artifacts=path.join(temp,'web-92-package');
+          await mkdir(artifacts);
+          await cp(output,path.join(artifacts,'dist'),{recursive:true,errorOnExist:true,force:false});
+          assert.deepEqual(await inventory(path.join(artifacts,'dist')),actual);
+          const receipt={schema:'packproof.web-distribution-qualification/v1',source:commit,tree,apiUrl,authMode:process.env.VITE_PACKPROOF_AUTH_MODE,
+            node:process.version,npm:'11.21.1',codeBuildRun:'d625463e-f100-466f-8274-9b048b6690eb',indexSha256:index,releaseSha256:sha(manifestBytes),
+            fileCount:actual.length,orderWorkspaceApproval:1,bothBuildsIdentical:true,files:actual,
+            workflowCommit:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,producedAt:new Date().toISOString()};
+          await writeFile(path.join(artifacts,'qualification.json'),JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify({source:commit,indexSha256:index,releaseSha256:receipt.releaseSha256,fileCount:actual.length,bothBuildsIdentical:true}));
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-web-dist-2fe5c5cc
+          path: ${{ runner.temp }}/web-92-package/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
