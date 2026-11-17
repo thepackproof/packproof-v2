@@ -42,8 +42,12 @@ jobs:
       - run: node scripts/verify-hosted-approval.mjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
       - run: npm run build
+      - name: Install and locate the pinned Electron runtime
+        timeout-minutes: 5
+        run: node -e 'const fs=require("node:fs"); const exe=require("electron"); console.log("Electron",require("electron/package.json").version,exe,fs.statSync(exe).size,"bytes");'
       - name: Check the built renderer at supported scales with keyboard navigation
-        run: npx --no-install electron scripts/check-renderer-layout.cjs
+        timeout-minutes: 5
+        run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
