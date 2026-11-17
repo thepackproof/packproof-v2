@@ -198,6 +198,16 @@ public sealed partial class AgentRuntime
                     orderReference = Optional(order, "orderReference"), updatedAt = Optional(order, "updatedAt")
                 })).ToArray();
                 ordersScope = w.ActiveGrant?.ScopeDigest; ordersCurrent = true;
+                if (w.Sources.Any(s=>s.Issue=="IDENTITY_UNRESOLVED") && now >= nextReferenceRefresh)
+                {
+                    nextReferenceRefresh=now.AddSeconds(5);
+                    var attention=await api.Request("GET","/v1/partner/agent/order-attention",null,state.Token,null,ct);
+                    if (attention.GetProperty("hasMore").ValueKind == JsonValueKind.False)
+                    {
+                        var unresolved=attention.GetProperty("items").EnumerateArray().Select(x=>x.GetProperty("sourceId").GetString()).ToHashSet();
+                        foreach(var source in w.Sources.Where(s=>s.Issue=="IDENTITY_UNRESOLVED" && !unresolved.Contains(s.Id))) source.Issue=null;
+                    }
+                }
             }
             catch (Exception e) when (e is ApiException or HttpRequestException or JsonException or KeyNotFoundException or TaskCanceledException && !ct.IsCancellationRequested)
             {
@@ -238,6 +248,7 @@ public sealed partial class AgentRuntime
         }
     }
 
+    private DateTimeOffset nextReferenceRefresh;
     private DateTimeOffset nextWorkspaceCheckpoint;
     private DateTimeOffset nextPartnerHistory;
     private async Task ReconcilePartnerHistory(OrderWorkspaceState w, CancellationToken ct)
@@ -334,8 +345,13 @@ public sealed partial class AgentRuntime
         if (SourceReaders.IsMedia(name) && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
         s.Inventory[key] = new(digest, sequence, s.Generation, name);
         WakeService();
-        if (records.Length == 0) s.Issue = "IDENTITY_UNRESOLVED";
+        if (!awaitingSidecar && records.Length == 0) s.Issue = "PROFILE_NEEDS_REVIEW";
         else if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_ACCESS_DENIED") s.Issue = null;
+        if (records.Length > 0 && Optional(s.Recognition, "state")?.GetString() == "empty")
+        {
+            s.Recognition = Json.Element(new {state="recognized",message=$"Found {records.Length} record(s) in {name}.",
+                fields=parsed.Headers.Take(16).Select(h=>string.Concat(h.Take(80))),fileName=name});
+        }
         Save(); // Never checkpoint before durable staging. Replay reconstructs the same logical observation.
     }
 
@@ -345,15 +361,25 @@ public sealed partial class AgentRuntime
         if (entry is null) return;
         var payload = queue.Payload(entry);
         var wire = payload.PreviewWireBody ?? throw new ConnectException("WORKSPACE_PAYLOAD_MISSING","The retained original is unavailable. Preserve the queue and contact support.");
-        var originalScope = Json.Read<JsonElement>(wire).GetProperty("scopeDigest").GetString();
-        if (originalScope != w.ActiveGrant!.ScopeDigest)
+        if (HashBytes(wire) != payload.PreviewBodySha256) throw new ConnectException("SPOOL_DIGEST_MISMATCH", "The captured request failed its integrity check.");
+        var captured = Json.Read<JsonElement>(wire);
+        var sendDigest = payload.PreviewBodySha256!;
+        if (captured.GetProperty("scopeDigest").GetString() != w.ActiveGrant!.ScopeDigest)
         {
-            queue.Save(entry, payload, "action_needed", error:"WORKSPACE_SCOPE_CHANGED");
-            source.Issue = "WORKSPACE_SCOPE_CHANGED"; return;
+            if (source.Id != captured.GetProperty("sourceId").GetString() || source.Generation != captured.GetProperty("generation").GetInt32()
+                || source.ProfileVersion != captured.GetProperty("profileVersion").GetString() || entry.CredentialGeneration != w.ActiveGrant.InstallationId)
+            {
+                queue.Save(entry,payload,"action_needed",error:"WORKSPACE_SCOPE_CHANGED"); source.Issue="WORKSPACE_SCOPE_CHANGED"; return;
+            }
+            // Another source or the destination changed. Authorize delivery of
+            // the identical recorded action under the newly approved same source generation.
+            var fields = captured.EnumerateObject().ToDictionary(p=>p.Name,p=>p.Value);
+            fields["scopeDigest"] = Json.Element(w.ActiveGrant.ScopeDigest);
+            wire=Json.Bytes(fields); sendDigest=HashBytes(wire);
         }
         try
         {
-            var receipt = await api.Request("POST", WorkspaceApi + "/observations", new ExactJsonBody(wire, payload.PreviewBodySha256!),
+            var receipt = await api.Request("POST", WorkspaceApi + "/observations", new ExactJsonBody(wire, sendDigest),
                 state.Token, entry.PreviewKey, ct);
             var status = receipt.GetProperty("state").GetString();
             if (status is not ("accepted" or "pending") || receipt.GetProperty("originalSha256").GetString() != entry.Digest
@@ -361,7 +387,7 @@ public sealed partial class AgentRuntime
                 throw new ConnectException("RECEIPT_MISMATCH","The server receipt does not identify the captured original. Preserve the queue and retry.");
             payload.Receipt = receipt;
             queue.Save(entry,payload,"complete",importId:receipt.GetProperty("receiptId").GetString());
-            if (status == "pending") source.Issue = "IDENTITY_UNRESOLVED";
+            if (status == "pending" && captured.GetProperty("records").GetArrayLength() > 0) source.Issue = "IDENTITY_UNRESOLVED";
             ordersCurrent = false; nextOrderRefresh = DateTimeOffset.MinValue;
             WakeService();
         }

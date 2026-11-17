@@ -82,7 +82,7 @@ try {
         await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: width === 1440 ? 1200 : 844, deviceScaleFactor: 1, mobile: width === 390 });
         await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, { name: 'prefers-color-scheme', value: 'light' }] });
         await cdp.send('Page.navigate', { url: `${origin}/?scenario=${scenario}` });
-        await until(cdp, `document.body.innerText.includes(${JSON.stringify(scenario === 'backfill' ? 'Waiting for historical import approval' : 'Configure snapshot completeness controls')})`);
+        await until(cdp, `document.body?.innerText.includes(${JSON.stringify(scenario === 'backfill' ? 'Waiting for historical import approval' : 'Configure snapshot completeness controls')})`);
         let submit;
         if (scenario === 'backfill') {
           await disclosure(cdp, 'Exact historical originals (2)');

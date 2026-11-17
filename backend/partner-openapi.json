@@ -60397,6 +60397,7 @@
   "x-packproof-order-workspace": {
     "version": "packproof.order-workspace/v1",
     "activation": "PACKPROOF_ORDER_WORKSPACE_ENABLED",
+    "guide": "docs/ORDER_WORKSPACE_API.md",
     "originalMaxBytes": 3145728,
     "feed": "poll after nextCursor; sequences can have gaps across authorization scopes"
   }

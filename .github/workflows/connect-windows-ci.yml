@@ -55,11 +55,22 @@ jobs:
           npm ci --no-audit --no-fund --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm exec --offline -- vitest run tests/order-journey-receipts.test.ts
-      - name: Run the Windows collector against an isolated HTTP application and verify exported revisions
+      - name: Build the web portal for the isolated browser approval
+        # This portal build uses the fixture login and is never published.
+        working-directory: web
+        shell: pwsh
+        run: |
+          npm ci --prefix ../mobile --no-audit --no-fund --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --no-audit --no-fund --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+      - name: Approve collection in Chromium and verify the Windows service exports the resulting order
         working-directory: backend
         timeout-minutes: 5
         env:
           PACKPROOF_JOURNEY_REAL_HTTP: "1"
+          PACKPROOF_JOURNEY_BROWSER: "1"
           PACKPROOF_JOURNEY_PERF_N: "20"
           PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/http-journey-result.json
         run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1

@@ -14,7 +14,7 @@ import {BearerUserAdapter} from '../src/auth/adapter.js';
 import {createServerApp} from '../src/server-app.js';
 import {DisabledEmailDelivery} from '../src/integrations/email/delivery.js';
 import {LocalObjectStore} from '../src/s3/local-object-store.js';
-import {createOrganization,setOrganizationEntitlement} from '../src/platform/organizations.js';
+import {createOrganization,setOrganizationEntitlement,createServicePrincipal,issuePartnerCredential} from '../src/platform/organizations.js';
 
 afterEach(()=>vi.unstubAllEnvs());
 
@@ -81,6 +81,12 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const grant=await call('POST','/connect/enrollments/'+e.id+'/redeem',{redeemSecret:e.redeemSecret});
     const credentials={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
     await call('POST','/v1/partner/agent/heartbeat',{version:'0.5.0',queueCount:0,enrollmentAcknowledged:true},credentials);
+    const account=(await db.db.query<{id:string}>('SELECT integration_account_id AS id FROM record_agent_installations WHERE id=$1',[enrolled.installationId])).rows[0].id;
+    const sender=await createServicePrincipal(db.db,clock,owner,org,{name:'Fixture ERP'},'fixture');
+    const credential=await issuePartnerCredential(db.db,clock,owner,org,sender.id,{scopes:['proofs:write','proofs:read'],expiresAt:new Date(Date.now()+86400000).toISOString()},'fixture');
+    const merchant={'Authorization':'Bearer '+credential.token,'PackProof-Merchant-Id':org};
+    const partnerOrder={integrationAccountId:account,operatorMembershipId:member,externalId:'API-BEFORE',transaction:{itemTitle:'Existing direct order',quantity:2}};
+    const earlier=await call('POST','/v1/partner/proofs',partnerOrder,{...merchant,'Idempotency-Key':'before-approval'});
     for(const folder of ['order','picking','packing','evidence','shipping','handoff','delivery','output']) await mkdir(path.join(root,folder));
     const ps=process.env.PACKPROOF_JOURNEY_NATIVE_PS;
     runner=spawn(ps?'pwsh':'dotnet',ps?['-NoProfile','-NonInteractive','-File',ps]:['test','service-tests/PackProof.Connect.Service.Tests.csproj','-c','Release','--no-build','--filter','FullyQualifiedName~Run_real_order_service_against_isolated_http_application'],
@@ -91,7 +97,21 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const resource='/me/records/agent-installations/'+enrolled.installationId+'/order-workspace/'+session.sessionId;
     const pending=await call('GET',resource+query,undefined,adminHeaders);
     expect(pending.scopeDigest).toBe(session.scopeDigest);
-    const approved=await call('POST',resource+'/decision'+query,{...scope,scopeDigest:pending.scopeDigest,decision:'approve'},adminHeaders);
+    const useBrowser=process.env.PACKPROOF_JOURNEY_BROWSER==='1';
+    if(useBrowser) {
+      await db.db.query("UPDATE users SET username='fixture-owner',display_name='Fixture owner' WHERE id=$1",[owner]);
+      const desktop=path.join(repo,'connect-windows');
+      const locator=path.join(root,'browser-fixture.json');
+      await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath}),{flag:'wx'});
+      const browser=spawn(path.join(desktop,'node_modules/electron/dist/electron.exe'),['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile'),path.join(desktop,'scripts/browser-order-approval.cjs')],{
+        cwd:desktop,windowsHide:true,stdio:['ignore','inherit','inherit'],timeout:60000,env:{...process.env,PACKPROOF_BROWSER_FIXTURE:locator}
+      });
+      await new Promise<void>((resolve,reject)=>{
+        browser.once('error',reject);
+        browser.once('exit',code=>code===0?resolve():reject(Error('Browser consent check exited '+code)));
+      });
+    } else await call('POST',resource+'/decision'+query,{...scope,scopeDigest:pending.scopeDigest,decision:'approve'},adminHeaders);
+    const approved=await call('GET',resource+query,undefined,adminHeaders);
     expect(approved.state).toBe('active'); mark('authorized');
     const list=()=>call('GET','/me/records/order-proofs'+query,undefined,adminHeaders);
     const view=(id:string)=>call('GET','/me/records/order-proofs/'+id+query,undefined,adminHeaders);
@@ -134,12 +154,21 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     expect(await readFile(path.resolve(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),label.file))).toEqual(await readFile(path.join(fixture,'label.zpl')));
     mark('outputVerified');
     const status=await poll('desktop service projection of committed order',async()=>{const s=await receipt('service-status.json');return s?.workspace?.orders?.some((o:any)=>o.proofId===first.proofId&&o.revision===final.revision)?s:undefined;});
+    const historical=await poll('historical API order under original proof ID',async()=>(await list()).orders.find((r:any)=>r.proofId===earlier.proofId));
+    expect((await view(historical.proofId)).evidence.some((r:any)=>r.originalStatus==='original_unavailable')).toBe(true);
+    const senderSource=session.sources.find((r:any)=>r.transport==='api');
+    const binding={installationId:enrolled.installationId,scopeDigest:session.scopeDigest,sourceId:senderSource.id,generation:senderSource.generation};
+    const cloud=await call('POST','/v1/partner/proofs',{...partnerOrder,externalId:'API-LIVE',connectOperation:binding},{...merchant,'Idempotency-Key':'after-approval'});
+    const cloudView=await view(cloud.proofId);
+    expect(cloudView.orderReference).toBe('API-LIVE');
+    await poll('local package for cloud-only order',async()=>{try{return await verifier.verifyOutput(path.join(root,'output'),cloudView);}catch{return undefined;}});
+    expect(Object.keys(routes).some(route=>route.startsWith('POST ') && route.endsWith('/agent/order-workspace/reconcile-api-source 200'))).toBe(true);
     const perfCount=Number(process.env.PACKPROOF_JOURNEY_PERF_N || 0);
     if(perfCount) phase="latency measurement";
     const benchmark=perfCount ? await measureOrderLatency(db.db,root,perfCount,()=>exited!==undefined) : undefined;
     const msg={benchmark,scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
       proofId:first.proofId,earliestRevision:firstDoc.revision,latestRevision:final.revision,verifiedFiles:checked.filesVerified,
-      activeSources:status.workspace.sources.length,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
+      activeSources:status.workspace.sources.length,browserApproval:useBrowser,cloudOrderExported:true,historicalApiProofIdPreserved:true,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
       localAfterCommitObservedMs:Date.parse(timings.outputVerified)-Date.parse(timings.correctedOnline),routes};
     if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify(msg,null,2));
     console.log('Real HTTP journey',JSON.stringify({earliest:firstDoc.revision,latest:final.revision,verifiedFiles:checked.filesVerified,timings}));

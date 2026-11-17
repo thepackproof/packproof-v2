@@ -40,4 +40,10 @@ $application=Get-Content -LiteralPath (Join-Path $root 'dist/main/build-provenan
 Copy-Item -LiteralPath (Join-Path $root 'dist/main/build-provenance.json') -Destination (Join-Path $output 'build-provenance.json')
 @{schemaVersion=2;product='PackProof Connect';version=$version;sourceCommit=$sha;sourceDirty=$application.sourceDirty;channel=$channel;signed=$signed;application=$application;publicDistributionAllowed=$false;artifacts=$artifacts;executables=$inventory;nativeLayout=$nativeLayout;installerScripts=$installerScripts;gate='internal-build-only';nativeAcceptance='not_run';customerAcceptance='not_run'} | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'release-evidence.json') -Encoding utf8NoBOM
 $artifacts | ForEach-Object {$_.sha256+'  '+$_.file} | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS') -Encoding ascii
+# Record the installer hash separately from the ZIP digest returned by Actions.
+foreach ($candidate in $artifacts) {
+ $line = "Installer SHA-256 $($candidate.sha256)  $($candidate.file)"
+ Write-Output $line
+ if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $line }
+}
 if (-not $signed) {'INTERNAL DEVELOPMENT BUILD. Unsigned. Not approved for public distribution or customer source activation.' | Set-Content -LiteralPath (Join-Path $output 'DEVELOPMENT-BUILD.txt')}

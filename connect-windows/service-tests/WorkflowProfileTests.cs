@@ -34,6 +34,22 @@ public sealed class WorkflowProfileTests
         Assert.Equal("1",returned.GetProperty("lines")[0].GetProperty("returnedQuantity").GetString());
     }
     [Fact]
+    public void Facility_scope_requires_the_exact_canonical_input_field()
+    {
+        const string csv="DeliveryEventID,ShipmentNumber,DeliveredAt,SiteCode,packproofLocationId\nD-4,S-1,2026-11-17T14:00:00Z,WH-04,F-1";
+        var scoped=Interpret(csv,"delivery","carrier");
+        Assert.Equal("F-1",scoped.GetProperty("facilityId").GetString());
+        Assert.True(scoped.GetProperty("fieldLineage").TryGetProperty("packproofLocationId",out _));
+        var vendor=Interpret(csv.Replace("packproofLocationId","PackProofLocationID"),"delivery","carrier");
+        Assert.False(vendor.TryGetProperty("facilityId",out _));
+        Assert.Equal("WH-04",vendor.GetProperty("fields").GetProperty("SiteCode").GetString());
+        var renamed=SourceReaders.Read("export.csv",Encoding.UTF8.GetBytes(csv.Replace("packproofLocationId","Region")),
+            new SourceReaderProfile(Mapping:new(){["packproofLocationId"]="SiteCode"}));
+        Assert.Equal("invalid",renamed.State);
+        var order=Parse("OrderNumber,OrderLineID,Version,Qty,UOM,packproofLocationId\nO-1,10,1,2,EA,F-2");
+        Assert.Equal("F-2",SourceReaders.NormalizeOrderLines(order,"sales",SourceReaders.ProposeOrderMap(order)!)[0].GetProperty("facilityId").GetString());
+    }
+    [Fact]
     public void Delivery_schedule_and_label_issuance_never_imply_delivery_or_handoff()
     {
         var delivery=Interpret("DeliveryEventID,ShipmentNumber,DeliveryStatus,Version\nD-2,S-1,In Transit,3","delivery","delivery");

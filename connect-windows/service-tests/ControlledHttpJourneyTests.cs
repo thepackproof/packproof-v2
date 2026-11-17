@@ -88,6 +88,7 @@ public sealed class ControlledHttpJourneyTests
                 Directory.CreateDirectory(folder);
                 await setup.Command("addWorkspaceSource",Json.Element(new{folder,role}),ct);
             }
+            await setup.Command("addWorkspaceDirectSource",Json.Element(new {role="order",sourceNamespace="HTTP_FIXTURE_API"}),ct);
             var output=Directory.CreateDirectory(Path.Combine(root,"output")).FullName;
             await setup.Command("setWorkspaceOutput",Json.Element(new{folder=output}),ct);
             await setup.Command("saveWorkspaceStep",Json.Element(new{step="activate"}),ct);
@@ -110,7 +111,7 @@ public sealed class ControlledHttpJourneyTests
             var session=System.Web.HttpUtility.ParseQueryString(approval.Query)["workspaceSession"];
             if(string.IsNullOrEmpty(session) || state.Workspace.ScopeDigest is null)throw new Exception("No exact pending browser session.");
             Signal(root,"scope.json",new{sessionId=session,scopeDigest=state.Workspace.ScopeDigest,
-                sources=state.Workspace.Sources.Select(s=>new{s.Id,role=s.Roles.FirstOrDefault(),s.Generation})});
+                sources=state.Workspace.Sources.Select(s=>new{s.Id,s.Transport,role=s.Roles.FirstOrDefault(),s.Generation})});
             scheduler=runtime.RunTickLoop(schedule.Token);
             while(!File.Exists(Path.Combine(root,"done")))
             {

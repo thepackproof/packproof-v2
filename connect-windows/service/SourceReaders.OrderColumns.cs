@@ -51,6 +51,7 @@ public static partial class SourceReaders
             var paths=new Dictionary<string,string>{{"orderReference",raw.Lineage[map.Order]},{"entityId",raw.Lineage[map.Order]},
                 {"version",raw.Lineage[map.Version]},{"lineId",raw.Lineage[map.Line]},{"orderedQuantity",raw.Lineage[map.Quantity]},{"unit",raw.Lineage[map.Unit]}};
             if(map.Sku!=null && raw.Fields.TryGetValue(map.Sku,out var sku)){fields["sku"]=sku;paths["sku"]=raw.Lineage[map.Sku];}
+            CopyFacility(raw,fields,paths);
             rows.Add(new(raw.Location,fields,paths));
         }
         return Normalize(input with {Rows=rows},"order");

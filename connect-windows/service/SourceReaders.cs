@@ -117,6 +117,7 @@ public static partial class SourceReaders
             var values=new Dictionary<string,(JsonElement value,string lineage)>();
             foreach(var (destination,source) in mapping)
             {
+                Require(destination!="packproofLocationId" || source==destination,"Use the canonical PackProof location field for facility scope.");
                 Require(row.Fields.ContainsKey(source),"A mapped field is missing. Review the source profile.");
                 Require(destination==source || !row.Fields.ContainsKey(destination),"Two source fields would have the same interpretation.");
                 values.Add(destination,(row.Fields[source],row.Lineage[source]));

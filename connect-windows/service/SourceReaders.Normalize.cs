@@ -71,6 +71,11 @@ public static partial class SourceReaders
                 else if(!string.IsNullOrEmpty(Get("lineId")))matches.Add(MapLine(fields));
                 var record=new Dictionary<string,object?> {["eventId"]=eventId,["version"]=version,["kind"]=kind,["entity"]=entity,
                     ["references"]=refs,["fields"]=WireFields(fields),["lines"]=matches,["locator"]=row.Location,["fieldLineage"]=row.Lineage };
+                if(fields.TryGetValue("packproofLocationId",out var facility) && facility.ValueKind!=JsonValueKind.Null)
+                {
+                    Require(facility.ValueKind==JsonValueKind.String && IdentityPart(facility.GetString()),"The declared PackProof location is invalid.");
+                    record["facilityId"]=facility.GetString();
+                }
                 Require(row.Location.Length<=1600 && row.Lineage.Values.All(path=>path.Length<=1600),"A field location exceeds the record limit.");
                 foreach(var key in new[]{"occurredAt","sourceModifiedAt"})
                 {
@@ -85,6 +90,13 @@ public static partial class SourceReaders
         }
         catch(InvalidDataException){return Val(Array.Empty<object>());}
         return Val(records);
+    }
+    private static void CopyFacility(SourceReaderRow raw,Dictionary<string,JsonElement> canonical,Dictionary<string,string> lineage)
+    {
+        const string key="packproofLocationId";
+        if(!raw.Fields.TryGetValue(key,out var value))return;
+        canonical[key]=value;
+        lineage[key]=raw.Lineage[key];
     }
     private static Dictionary<string,JsonElement> WireFields(Dictionary<string,JsonElement> fields)
     {

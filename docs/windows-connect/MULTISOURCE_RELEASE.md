@@ -26,9 +26,21 @@ Use examples/multisource-journey/README.md for isolated fixture publication, rec
 
 Seven physical source directories fed the real Windows AgentRuntime over HTTP through a local named pipe. An isolated PackProof API performed enrollment, redeemed the service credential, accepted the operator's exact browser-session approval, and committed order revisions using its migrated test database and local original-object store. All customer data and live endpoints stayed outside the test operation.
 
-An initial SO10482 revision appeared 6.901 seconds after order publication. Picking, two packages, carrier labels, handoff and delivery evidence reached that same proof. Detached evidence joined when a later package relationship arrived. The worker reopened its persisted state. During a local output outage the correction raised the line 20 ordered quantity to three, while the shipped quantity remained two. The human-facing endpoint showed the correction after 4.291 seconds. The previous completed copy remained readable throughout the interruption. After restoration, the independent verifier observed revision eight in 1.343 seconds, checked all 17 manifest files and matched the exported original ZPL label byte-for-byte. The desktop service feed and human-facing proof returned the same revision.
+SO10482 appeared from the sales order source at revision one. Picking, two packages, carrier labels, handoff and delivery evidence reached that same proof. Detached evidence joined when a later package relationship arrived. The worker reopened its persisted state. During a local output outage the correction raised the line 20 ordered quantity to three, while the shipped quantity remained two. The human-facing endpoint showed the correction on the same order. The previous completed copy remained readable throughout the interruption. After restoration, the independent verifier observed revision eight, checked all 17 manifest files and matched the exported original ZPL label byte-for-byte. The desktop service feed and human-facing proof returned the same revision.
 
-The observations are single-run timings. The fixture invokes the service command runtime under the test login, uses a test secret protector and exercises the browser approval HTTP endpoint programmatically. Hosted Windows CI builds the packaged application and runs the full native dependency set. Installed UI review, machine reboot and pilot data qualification remain independent gates.
+A separate mixed-source run activated seven folders and one direct PackProof Partner API source. A historical partner order retained its original Proof ID after reconciliation, with the earlier transaction snapshot labeled as derived evidence. A new partner order arrived through the API and produced a verified local proof package without a local input file. SO10482 progressed from revision one to nine, and the verifier checked all 17 manifest files in its completed package. This run used the production service scheduler, an isolated API and database, and the test secret protector.
+
+In a subsequent healthy-load measurement, the native fixture and Windows service used the same event-driven RunTickLoop scheduler. Twenty distinct small order files arrived one second apart. The table reports nearest-rank latencies in milliseconds.
+
+| Interval | Median | p95 | Maximum | Pilot target |
+| --- | ---: | ---: | ---: | ---: |
+| File publication to durable receipt | 1059 | 2075 | 2094 | 5000 |
+| File publication to committed revision | 1097 | 2138 | 2155 | 5000 |
+| Commit to desktop service feed | 297 | 723 | 741 | 2000 |
+| Commit to published local summary | 5325 | 8518 | 8986 | 30000 |
+
+The measurements describe one isolated Windows run with a local test database and filesystem. The service feed was sampled every 180 milliseconds. UI rendering time, network shares and production throughput require separate qualification. Set PACKPROOF_JOURNEY_PERF_N to a sample count from five through forty to reproduce the benchmark. The Windows candidate workflow exercises twenty. Its JSON receipt includes publication, acceptance, commit, feed observation and local summary times for each order.
+The fixture invokes the service command runtime under the test login, uses a test secret protector and exercises the browser approval HTTP endpoint programmatically. Hosted Windows CI builds the packaged application and runs the full native dependency set. Installed UI review, machine reboot and pilot data qualification remain independent gates.
 
 ## Windows service recovery
 

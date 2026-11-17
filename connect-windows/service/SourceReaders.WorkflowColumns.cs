@@ -160,6 +160,7 @@ public static partial class SourceReaders
                 // The normalizer enforces exact decimals, time offsets and bounded references for every representation.
                 var lineage=new Dictionary<string,string>(StringComparer.Ordinal);
                 foreach(var (key,heading) in map.Columns)if(raw.Lineage.TryGetValue(heading,out var location))lineage[key]=location;
+                CopyFacility(raw,canonical,lineage);
                 var translated=new SourceReaderRow(raw.Location,canonical,lineage);
                 string normalizedRole=kind=="evidence"?"evidence":map.Role;
                 var canonicalRecords=Normalize(input with {Rows=[translated]},normalizedRole);

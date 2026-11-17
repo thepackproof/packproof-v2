@@ -15,7 +15,7 @@ public sealed partial class AgentRuntime
 
     private async Task AdvanceWorkspaceMedia(OrderWorkspaceState w,CancellationToken ct)
     {
-        if (w.ActiveGrant is not { } grant || !WorkspaceGrantCurrent) return;
+        if (w.ActiveGrant is not { } grant || !WorkspaceGrantCurrent || mediaWork == null && DateTimeOffset.UtcNow < nextMediaSend) return;
         var eligible = w.Sources.Where(s => !s.Paused && grant.Generations.GetValueOrDefault(s.Id) == s.Generation);
         var chosen = eligible.SelectMany(s => s.MediaJobs.Select(id => (source:s,id)))
             .FirstOrDefault(x => mediaEntryId != null ? x.id == mediaEntryId : queue.Find(x.id)?.State == "complete");
@@ -29,7 +29,7 @@ public sealed partial class AgentRuntime
         var payload = queue.Payload(entry);
         if (payload.PreviewWireBody == null) return;
         var capture = Json.Read<JsonElement>(payload.PreviewWireBody);
-        if (capture.GetProperty("scopeDigest").GetString() != grant.ScopeDigest) return;
+        if (capture.GetProperty("generation").GetInt32() != chosen.source.Generation || entry.CredentialGeneration != grant.InstallationId) return;
         var cacheName = $"media-{entry.Id}.bin";
         var derived = store.Read<SourceReadResult>(cacheName);
         if (derived == null)
@@ -56,6 +56,18 @@ public sealed partial class AgentRuntime
             }
             finally { mediaWork = null; mediaEntryId = null; }
             if (derived.ContentSha256 != entry.Digest) throw new ConnectException("MEDIA_DIGEST_MISMATCH","The derived result identifies a different original.");
+            if (derived.State == "recognized" && derived.Rows.Count == 0)
+            {
+                chosen.source.Issue = "MEDIA_READER_UNAVAILABLE";
+                chosen.source.MediaJobs.Remove(entry.Id); chosen.source.MediaJobs.Add(entry.Id);
+                nextMediaSend = DateTimeOffset.UtcNow.AddMinutes(2); return;
+            }
+            var size = Json.Bytes(derived).Length;
+            var retained = Directory.EnumerateFiles(store.Root, "media-*.bin").Sum(p=>new FileInfo(p).Length);
+            if (retained + size > 128L*1024*1024 || new DriveInfo(Path.GetPathRoot(store.Root)!).AvailableFreeSpace - size <= DurableQueue.DiskReserveBytes)
+            {
+                chosen.source.Issue = "MEDIA_STORAGE_PENDING"; nextMediaSend = DateTimeOffset.UtcNow.AddMinutes(5); return;
+            }
             store.Write(cacheName,derived);
         }
         if (!networkOnline || DateTimeOffset.UtcNow < nextMediaSend) return;
@@ -75,6 +87,9 @@ public sealed partial class AgentRuntime
             if (Optional(receipt,"originalSha256")?.GetString() != entry.Digest)
                 throw new ConnectException("DERIVATIVE_RECEIPT_INVALID","The derived text receipt does not match its original.");
             chosen.source.MediaJobs.Remove(entry.Id);
+            // The checked server receipt is durable; the encrypted source remains
+            // in the original spool. This temporary replay cache is reproducible.
+            try { File.Delete(Path.Combine(store.Root,cacheName)); } catch (IOException) { }
         }
         catch (Exception error) when (error is ApiException or ConnectException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {

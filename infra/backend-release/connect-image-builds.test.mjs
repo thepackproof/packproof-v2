@@ -160,14 +160,18 @@ test('exact committed120 Git archive supplies all v6 Docker inputs while frozen1
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
 
+const backfillHead='93274b085113dee70ee4fe7516b384cacfcd385e';
+const currentHead=execFileSync('git',['rev-parse','HEAD'],{cwd:backfillRoot,encoding:'utf8'}).trim();
 const shipmentHead='fb9f80ab2c6c4f013e794ad654f7ca55d168ac19';
 for(const [profile,previousProfile,head,previousHead,count,inventory,pair] of [
  ['reconstruction-v7','reconstruction-v6',shipmentHead,'66a258e9eaeaea7695fff18f76ce0de3212c0573',120,
   '3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5','shipment-automation-pair.mjs'],
- ['reconstruction-v8','reconstruction-v7',execFileSync('git',['rev-parse','HEAD'],{cwd:backfillRoot,encoding:'utf8'}).trim(),shipmentHead,121,
+ ['reconstruction-v8','reconstruction-v7',backfillHead,shipmentHead,121,
   'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804','backfill-automation-pair.mjs'],
+ ['reconstruction-v10','reconstruction-v8',currentHead,'c1d9bad13ddbd2e20a70152d3c1a270d28dd57ec',122,
+  'ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d','order-workspace-pair.mjs'],
 ])test(profile+' archive verifies every Docker input and rejects adjacent catalogs', () => {
- const directory = mkdtempSync(path.join(tmpdir(), 'reconstruction-v7-source-'));
+ const directory = mkdtempSync(path.join(tmpdir(), profile+'-source-'));
  const script = path.join(backfillRoot, 'infra/backend-release/backend-source-archive.py');
  const run = (source, profile, name, ...options) => execFileSync('python',
   [script, source, path.join(directory, name), profile, ...options],
@@ -191,15 +195,24 @@ for(const [profile,previousProfile,head,previousHead,count,inventory,pair] of [
     assert.ok(names.some(name => name === input || name.startsWith(input + '/')), 'missing Docker COPY input ' + input);
    }
   }
-  for (const probe of [profile+'-runtime-preflight.mjs',profile+'-release-review.mjs',pair]) {
-   assert.ok(dockerfile.includes('COPY infra/backend-release/' + probe + ' /release/' + probe));
+  // Build the actual /release directory, including Docker COPY instructions
+  // that put multiple modules into a directory. Loading the preflight detects
+  // imports omitted by the Dockerfile even if a module exists in the archive.
+  const installed = new Set();
+  for (const line of dockerfile.split('\n').filter(line => line.startsWith('COPY ') && !line.includes('--from='))) {
+   const [, ...paths] = line.trim().split(/\s+/);
+   const destination = paths.pop();
+   if (!destination.startsWith('/release/')) continue;
+   for (const source of paths) {
+    const name = destination.endsWith('/') ? path.posix.basename(source) : path.posix.basename(destination);
+    const raw = execFileSync('python', ['-c',
+     'import sys,zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))', archive, source]);
+    writeFileSync(path.join(directory, name), raw);
+    installed.add(name);
+   }
   }
-  // Load only the modules installed into /release by this archived Dockerfile.
-  // This also detects an unshipped static import even when the entrypoint exists.
-  for (const [, source, name] of dockerfile.matchAll(/^COPY (\S+) \/release\/([^/\s]+)$/gm)) {
-   const raw = execFileSync('python', ['-c',
-    'import sys,zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))', archive, source]);
-   writeFileSync(path.join(directory, name), raw);
+  for (const probe of [profile+'-runtime-preflight.mjs',profile+'-release-review.mjs',pair]) {
+   assert.ok(installed.has(probe), 'missing runtime probe ' + probe);
   }
   assert.throws(() => execFileSync(process.execPath, [path.join(directory,profile+'-runtime-preflight.mjs'), 'api'],
    {cwd:directory, env:{}, stdio:'pipe'}), /RECONSTRUCTION_REVIEW_BINDING_REQUIRED/);

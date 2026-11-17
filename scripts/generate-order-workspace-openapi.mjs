@@ -79,5 +79,5 @@ export function addOrderWorkspaceContract(api) {
   op('post',agent+'order-changes','Resume committed revisions for this exporter',ref('ConnectProofChanges'),{body:obj({after:seq,limit:num},[])});
   op('get',agent+'order-proofs/{proofId}/revisions/{revision}/artifacts/{receiptId}','Read authorized exact media bytes or a scoped excerpt status',open);
   op('post',human+'order-proofs/{proofId}/associations','Review and correct an observation link',open,{body:obj({...ws,eventKey:string,action:enumOf('link','unlink'),expectedRevision:num,reason:{type:'string',maxLength:1024}}),idempotent:true});
-  api['x-packproof-order-workspace']={version:'packproof.order-workspace/v1',activation:'PACKPROOF_ORDER_WORKSPACE_ENABLED',originalMaxBytes:3145728,feed:'poll after nextCursor; sequences can have gaps across authorization scopes'};
+  api['x-packproof-order-workspace']={version:'packproof.order-workspace/v1',activation:'PACKPROOF_ORDER_WORKSPACE_ENABLED',guide:'docs/ORDER_WORKSPACE_API.md',originalMaxBytes:3145728,feed:'poll after nextCursor; sequences can have gaps across authorization scopes'};
 }
