@@ -9,7 +9,8 @@ const { setTimeout: delay } = require('node:timers/promises');
 async function run() {
   const fixture = JSON.parse(await readFile(process.env.PACKPROOF_BROWSER_FIXTURE, 'utf8'));
   if (!/^packproof-journey-[a-f0-9-]{36}$/.test(fixture.pipe) ||
-      !fixture.approvalPath.startsWith('/app/records/connect/approve?')) throw Error('Unexpected fixture scope');
+      !fixture.approvalPath.startsWith('/app/records/connect/approve?') ||
+      (fixture.proof && (!/^proof_[a-zA-Z0-9]+$/.test(fixture.proof.id) || !Number.isSafeInteger(fixture.proof.revision)))) throw Error('Unexpected fixture scope');
   const dist = path.resolve(__dirname, '../../web/dist');
   const socketPath = '\\\\.\\pipe\\' + fixture.pipe;
   const http = createServer(async (incoming, response) => {
@@ -46,7 +47,9 @@ async function run() {
     const identity = { apiBaseUrl: origin + '/api', authMode: 'dev', userId: fixture.owner, username: 'fixture-owner',
       displayName: 'Fixture owner', token: fixture.owner, subject: fixture.owner };
     await browser.executeJavaScript('sessionStorage.setItem("packproof-v2-web.session", ' + JSON.stringify(JSON.stringify(identity)) + ')');
-    await win.loadURL(origin + fixture.approvalPath);
+    const locator = new URL(fixture.approvalPath, origin);
+    const scope = new URLSearchParams({ organizationId: locator.searchParams.get('organizationId'), environment: locator.searchParams.get('environment') });
+    await win.loadURL(fixture.proof ? origin + '/app/order-proofs/' + fixture.proof.id + '?' + scope : locator.href);
     async function until(expression, description) {
       for (let i = 0; i < 120; i++) {
         const value = await browser.executeJavaScript(expression);
@@ -56,6 +59,22 @@ async function run() {
       const headings = await browser.executeJavaScript("Array.from(document.querySelectorAll('h1,h2,[role=alert]'), el=>el.textContent.slice(0,120)).slice(0,6)");
       throw Error(description + ' · ' + headings.join(' / '));
     }
+    const shots = path.resolve(__dirname, '../build/workspace-screens');
+    await mkdir(shots, { recursive: true });
+    if (fixture.proof) {
+      const expectation = JSON.stringify('Revision ' + fixture.proof.revision + ' · ' + fixture.proof.id);
+      await until(`(() => {
+        const heading = Array.from(document.querySelectorAll('h1')).some(el => el.textContent.trim() === 'SO10482');
+        const history = Array.from(document.querySelectorAll('details p')).some(el => el.textContent.trim() === ${expectation});
+        const line = Array.from(document.querySelectorAll('li')).find(el => el.textContent.includes('Line 20') && el.querySelector('dl'));
+        if (!heading || !history || !line) return false;
+        const values = Object.fromEntries(Array.from(line.querySelectorAll('dt'), el => [el.textContent, el.nextElementSibling?.textContent]));
+        return values.Ordered === '3' && values.Shipped === '2';
+      })()`, 'The order page did not show the verified revision and line quantities');
+      await writeFile(path.join(shots, 'browser-verified-order.png'), (await browser.capturePage()).toPNG());
+      win.destroy();
+      return;
+    }
     const point = await until(`(() => {
       const button = Array.from(document.querySelectorAll('button')).find(el => el.textContent.trim() === 'Approve collection' && !el.disabled);
       if (!button) return null;
@@ -63,8 +82,6 @@ async function run() {
       const box=button.getBoundingClientRect(), x=Math.floor(box.x+box.width/2), y=Math.floor(box.y+box.height/2);
       return button.contains(document.elementFromPoint(x,y)) ? {x,y} : null;
     })()`, 'Consent control was unavailable');
-    const shots = path.resolve(__dirname, '../build/workspace-screens');
-    await mkdir(shots, { recursive: true });
     await writeFile(path.join(shots, 'browser-approval-scope.png'), (await browser.capturePage()).toPNG());
     browser.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
     browser.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...point });

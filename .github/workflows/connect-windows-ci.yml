@@ -55,6 +55,9 @@ jobs:
           npm ci --no-audit --no-fund --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm exec --offline -- vitest run tests/order-journey-receipts.test.ts
+      - name: Install and locate the pinned Electron runtime
+        timeout-minutes: 5
+        run: node -e 'const fs=require("node:fs"); const exe=require("electron"); console.log("Electron",require("electron/package.json").version,exe,fs.statSync(exe).size,"bytes");'
       - name: Build the web portal for the isolated browser approval
         # This portal build uses the fixture login and is never published.
         working-directory: web
@@ -83,9 +86,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node ../examples/multisource-journey/verify-output.mjs "$env:PACKPROOF_JOURNEY_OUTPUT" "$env:PACKPROOF_JOURNEY_PROJECTED"
       - run: npm run build
-      - name: Install and locate the pinned Electron runtime
-        timeout-minutes: 5
-        run: node -e 'const fs=require("node:fs"); const exe=require("electron"); console.log("Electron",require("electron/package.json").version,exe,fs.statSync(exe).size,"bytes");'
       - name: Check the built renderer at supported scales with keyboard navigation
         timeout-minutes: 5
         run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs

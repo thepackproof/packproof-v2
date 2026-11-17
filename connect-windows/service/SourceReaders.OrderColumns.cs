@@ -54,6 +54,6 @@ public static partial class SourceReaders
             CopyFacility(raw,fields,paths);
             rows.Add(new(raw.Location,fields,paths));
         }
-        return Normalize(input with {Rows=rows},"order");
+        return Normalize(input with {Rows=rows},"order",input.Rows);
     }
 }

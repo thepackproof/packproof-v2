@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),backend=path.join(root,'backend');
-const expectedMigrationCount=121;
-const expectedInventorySha256='ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804';
+const expectedMigrationCount=122;
+const expectedInventorySha256='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d';
 let directory:string;
 afterAll(async()=>{if(directory)await rm(directory,{recursive:true,force:true});});
 it('keeps the backend locked install independent of the parent application package',async()=>{
@@ -23,15 +23,16 @@ it('keeps the backend locked install independent of the parent application packa
  expect(docker).toContain('COPY backend/claim-export-openapi.json ./claim-export-openapi.json');
  expect(docker).toContain('COPY backend/certs /app/certs'); // Preserve the live absolute CA-file binding.
 });
-it('keeps all 121 migration files through the 0.4.1 backfill scope repair byte-identical to the reviewed Git index with LF endings',async()=>{
+it('keeps the order workspace migration and every predecessor byte-identical to the reviewed Git index with LF endings',async()=>{
  const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(expectedMigrationCount);
- expect(files.at(-1)).toBe('122_backfill_collector_041.sql');
+ expect(files.slice(-2)).toEqual(['122_backfill_collector_041.sql','123_order_workspace.sql']);
  const output=execFileSync('git',['ls-files','--stage','--','backend/migrations'],{cwd:root,encoding:'utf8'});
  const indexed=new Map(output.trim().split(/\r?\n/).map(line=>{const found=/^100644 ([a-f0-9]{40}) 0\t(.+)$/.exec(line);if(!found)throw Error('Unmerged or unexpected migration index entry');return [found[2],found[1]];}));
  expect(indexed.size).toBe(expectedMigrationCount);
  const inventory:Array<{id:string;checksum:string}>=[];
  for(const name of files){const bytes=await readFile(path.join(backend,'migrations',name)),gitBlob=execFileSync('git',['cat-file','blob',indexed.get('backend/migrations/'+name)!],{cwd:root});expect(bytes.includes(13),name).toBe(false);const checksum=createHash('sha256').update(bytes).digest('hex');expect(checksum,name).toBe(createHash('sha256').update(gitBlob).digest('hex'));inventory.push({id:name.slice(0,-4),checksum});}
  expect(createHash('sha256').update(JSON.stringify(inventory)).digest('hex')).toBe(expectedInventorySha256);
+ expect(createHash('sha256').update(JSON.stringify(inventory.slice(0,-1))).digest('hex')).toBe('ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804');
 },30_000);
 it('imports the compiled server graph and resolves contracts, profile, migrations and scripts from the image layout',async()=>{
  directory=await mkdtemp(path.join(tmpdir(),'packproof-image-layout-'));const imageBackend=path.join(directory,'backend');await mkdir(imageBackend,{recursive:true});

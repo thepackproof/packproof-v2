@@ -1,5 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {spawn,type ChildProcess} from 'node:child_process';
+import {createRequire} from 'node:module';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {createServer,request as makeRequest} from 'node:http';
 import {copyFile,mkdir,mkdtemp,readFile,rename,rm,writeFile} from 'node:fs/promises';
@@ -98,18 +99,23 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const pending=await call('GET',resource+query,undefined,adminHeaders);
     expect(pending.scopeDigest).toBe(session.scopeDigest);
     const useBrowser=process.env.PACKPROOF_JOURNEY_BROWSER==='1';
-    if(useBrowser) {
-      await db.db.query("UPDATE users SET username='fixture-owner',display_name='Fixture owner' WHERE id=$1",[owner]);
+    async function checkInBrowser(proof?: {id:string;revision:number}) {
       const desktop=path.join(repo,'connect-windows');
-      const locator=path.join(root,'browser-fixture.json');
-      await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath}),{flag:'wx'});
-      const browser=spawn(path.join(desktop,'node_modules/electron/dist/electron.exe'),['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile'),path.join(desktop,'scripts/browser-order-approval.cjs')],{
+      const phase=proof?'order':'consent';
+      const locator=path.join(root,'browser-'+phase+'.json');
+      await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath,proof}),{flag:'wx'});
+      const executable=createRequire(path.join(desktop,'package.json'))('electron') as string;
+      const browser=spawn(executable,['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile-'+phase),path.join(desktop,'scripts/browser-order-approval.cjs')],{
         cwd:desktop,windowsHide:true,stdio:['ignore','inherit','inherit'],timeout:60000,env:{...process.env,PACKPROOF_BROWSER_FIXTURE:locator}
       });
       await new Promise<void>((resolve,reject)=>{
         browser.once('error',reject);
         browser.once('exit',code=>code===0?resolve():reject(Error('Browser consent check exited '+code)));
       });
+    }
+    if(useBrowser) {
+      await db.db.query("UPDATE users SET username='fixture-owner',display_name='Fixture owner' WHERE id=$1",[owner]);
+      await checkInBrowser();
     } else await call('POST',resource+'/decision'+query,{...scope,scopeDigest:pending.scopeDigest,decision:'approve'},adminHeaders);
     const approved=await call('GET',resource+query,undefined,adminHeaders);
     expect(approved.state).toBe('active'); mark('authorized');
@@ -153,6 +159,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     expect(label?.originalSha256).toBe(final.originalArtifacts.find((a:any)=>a.fileName==='label.zpl').originalSha256);
     expect(await readFile(path.resolve(root,'output',checked.directory,'revision-'+String(final.revision).padStart(8,'0'),label.file))).toEqual(await readFile(path.join(fixture,'label.zpl')));
     mark('outputVerified');
+    if(useBrowser) await checkInBrowser({id:first.proofId,revision:final.revision});
     const status=await poll('desktop service projection of committed order',async()=>{const s=await receipt('service-status.json');return s?.workspace?.orders?.some((o:any)=>o.proofId===first.proofId&&o.revision===final.revision)?s:undefined;});
     const historical=await poll('historical API order under original proof ID',async()=>(await list()).orders.find((r:any)=>r.proofId===earlier.proofId));
     expect((await view(historical.proofId)).evidence.some((r:any)=>r.originalStatus==='original_unavailable')).toBe(true);

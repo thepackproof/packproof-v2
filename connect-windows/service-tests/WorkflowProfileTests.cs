@@ -46,8 +46,12 @@ public sealed class WorkflowProfileTests
         var renamed=SourceReaders.Read("export.csv",Encoding.UTF8.GetBytes(csv.Replace("packproofLocationId","Region")),
             new SourceReaderProfile(Mapping:new(){["packproofLocationId"]="SiteCode"}));
         Assert.Equal("invalid",renamed.State);
-        var order=Parse("OrderNumber,OrderLineID,Version,Qty,UOM,packproofLocationId\nO-1,10,1,2,EA,F-2");
-        Assert.Equal("F-2",SourceReaders.NormalizeOrderLines(order,"sales",SourceReaders.ProposeOrderMap(order)!)[0].GetProperty("facilityId").GetString());
+        var order=Parse("OrderNumber,OrderLineID,Version,Qty,UOM,packproofLocationId,SiteCode,warehouseId\nO-1,10,1,2,EA,F-2,WH-02,unqualified");
+        var sales=SourceReaders.NormalizeOrderLines(order,"sales",SourceReaders.ProposeOrderMap(order)!)[0];
+        Assert.Equal("F-2",sales.GetProperty("facilityId").GetString());
+        Assert.Equal("WH-02",sales.GetProperty("fields").GetProperty("SiteCode").GetString());
+        Assert.True(sales.GetProperty("fieldLineage").TryGetProperty("SiteCode",out _));
+        Assert.Equal(0,sales.GetProperty("references").GetArrayLength());
     }
     [Fact]
     public void Delivery_schedule_and_label_issuance_never_imply_delivery_or_handoff()

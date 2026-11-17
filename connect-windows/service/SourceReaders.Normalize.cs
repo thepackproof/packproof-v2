@@ -24,15 +24,17 @@ public static partial class SourceReaders
         Require(IdentityPart(ns)&&IdentityPart(type)&&IdentityPart(id),"A source reference lacks an explicit namespace, entity type or identifier.");
         return new { @namespace=ns,type,id };
     }
-    public static JsonElement Normalize(SourceReadResult source,string role)
+    public static JsonElement Normalize(SourceReadResult source,string role)=>Normalize(source,role,null);
+    private static JsonElement Normalize(SourceReadResult source,string role,IReadOnlyList<SourceReaderRow>? originals)
     {
         var records=new List<Dictionary<string,object?>>();
         if(source.State!="parsed" || !RoleKinds.TryGetValue(role,out var defaultKind))return Val(records);
         // The whole original is one import. Never silently release a partially understood batch.
         try
         {
-            foreach(var row in source.Rows)
+            for(int index=0;index<source.Rows.Count;index++)
             {
+                var row=source.Rows[index];
                 var fields=row.Fields;
                 string? Get(string k)=>Scalar(fields,k);
                 var eventId=Get("eventId");var version=Get("version");
@@ -69,14 +71,24 @@ public static partial class SourceReaders
                     }
                 }
                 else if(!string.IsNullOrEmpty(Get("lineId")))matches.Add(MapLine(fields));
+                var projected=WireFields(fields);
+                var paths=new Dictionary<string,string>(row.Lineage,StringComparer.Ordinal);
+                // Preserve supplementary source facts only after interpreting the approved columns.
+                // A vendor column cannot create a relationship or change facility scope.
+                if(originals!=null)
+                {
+                    foreach(var (key,value) in WireFields(originals[index].Fields))projected.TryAdd(key,value);
+                    foreach(var (key,path) in originals[index].Lineage)paths.TryAdd(key,path);
+                }
+                Require(projected.Count<=96 && paths.Count<=160 && row.Location.Length<=1600 && paths.Values.All(path=>path.Length<=1600),
+                    "The record exceeds the bounded field or location limits.");
                 var record=new Dictionary<string,object?> {["eventId"]=eventId,["version"]=version,["kind"]=kind,["entity"]=entity,
-                    ["references"]=refs,["fields"]=WireFields(fields),["lines"]=matches,["locator"]=row.Location,["fieldLineage"]=row.Lineage };
+                    ["references"]=refs,["fields"]=projected,["lines"]=matches,["locator"]=row.Location,["fieldLineage"]=paths };
                 if(fields.TryGetValue("packproofLocationId",out var facility) && facility.ValueKind!=JsonValueKind.Null)
                 {
                     Require(facility.ValueKind==JsonValueKind.String && IdentityPart(facility.GetString()),"The declared PackProof location is invalid.");
                     record["facilityId"]=facility.GetString();
                 }
-                Require(row.Location.Length<=1600 && row.Lineage.Values.All(path=>path.Length<=1600),"A field location exceeds the record limit.");
                 foreach(var key in new[]{"occurredAt","sourceModifiedAt"})
                 {
                     var time=Get(key);

@@ -324,7 +324,13 @@ jobs:
           cache-dependency-path: ${{ matrix.project }}/package-lock.json
       - run: npm ci
       - name: Block high and critical known dependency findings
-        run: npm audit --audit-level=high --json > "$RUNNER_TEMP/dependency-audit.json"
+        run: |
+          audit_report="$RUNNER_TEMP/dependency-audit.json"
+          npm audit --audit-level=high --json > "$audit_report" || {
+            status=$?
+            cat "$audit_report"
+            exit "$status"
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
