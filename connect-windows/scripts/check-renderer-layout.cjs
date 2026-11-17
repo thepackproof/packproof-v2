@@ -3,10 +3,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { setTimeout: delay } = require("node:timers/promises");
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, net, protocol } = require("electron");
 
 const root = path.join(__dirname, "..");
+const renderer = path.join(root, "dist", "renderer");
+const appUrl = "packproof-connect://app/index.html";
+protocol.registerSchemesAsPrivileged([{scheme:"packproof-connect", privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
+app.enableSandbox();
 const report = { scope: "synthetic Electron renderer", platform: process.platform, electron: process.versions.electron, runs: [] };
 const out = path.join(root, "build", "renderer-layout.json");
 let watchdog;
@@ -33,7 +38,13 @@ async function waitFor(page, predicate) {
     if (await page.executeJavaScript(predicate)) return;
     await delay(50);
   }
-  throw new Error("Renderer did not reach expected state: " + predicate);
+  const actual = await page.executeJavaScript(`({
+    heading: document.querySelector("h1")?.textContent,
+    bridge: typeof window.packproofConnect?.getStatus,
+    focused: document.activeElement?.textContent?.trim().slice(0,100),
+    ready: document.readyState,
+  })`);
+  throw new Error(`Renderer did not reach expected state: ${predicate}; observed ${JSON.stringify(actual)}`);
 }
 
 function button(name) {
@@ -75,7 +86,7 @@ async function exercise(page, width, height, scale, theme) {
   await page.debugger.sendCommand("Emulation.setDeviceMetricsOverride", { width: cssWidth, height: Math.round(height / scale), deviceScaleFactor: scale, mobile: false });
   await page.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name:"prefers-color-scheme", value:theme }, { name:"prefers-reduced-motion", value:"reduce" }] });
   stage("load built renderer");
-  await page.loadFile(path.join(root, "dist/renderer/index.html"));
+  await page.loadURL(appUrl);
   stage("wait for shipment preview");
   await waitFor(page, 'document.querySelector("h1")?.textContent === "We found your shipments."');
   stage("wait for fonts and measure preview");
@@ -107,7 +118,18 @@ async function main() {
     await build({entryPoints:[path.join(root, "ui/test-shipment.ts")], outfile:fixture, bundle:true, platform:"node"});
     stage("create Electron window");
     await app.whenReady();
-    win = new BrowserWindow({show:true, webPreferences:{sandbox:true, contextIsolation:true, nodeIntegration:false, backgroundThrottling:false}});
+    protocol.handle("packproof-connect", async request => {
+      const url = new URL(request.url);
+      if (url.host !== "app") return new Response(null,{status:403});
+      const file = path.resolve(renderer, "." + decodeURIComponent(url.pathname));
+      if (!file.startsWith(renderer + path.sep)) return new Response(null,{status:403});
+      const response = await net.fetch(pathToFileURL(file).href);
+      const headers = new Headers(response.headers);
+      headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+      headers.set("X-Content-Type-Options", "nosniff");
+      return new Response(response.body,{status:response.status,headers});
+    });
+    win = new BrowserWindow({show:true, webPreferences:{preload:path.join(root,"dist","main","preload.cjs"),sandbox:true, contextIsolation:true, nodeIntegration:false, backgroundThrottling:false}});
     win.focus();
     const page = win.webContents;
     stage("start renderer before attaching device emulation");
@@ -120,15 +142,19 @@ async function main() {
     const version = "packproof.shipment-interpretation/v1";
     state.analysis.interpretation = { version, outcome: "automatic", grain: "shipment", reasonCodes: [] };
     state.capabilities.interpretationVersions = [version];
-    await page.debugger.sendCommand("Page.addScriptToEvaluateOnNewDocument", {source:`
-      const fixture = ${JSON.stringify(state)};
-      function state() {
+    for (const method of ["getStatus","checkComputer"]) {
+      ipcMain.handle("connect:" + method, event => {
+        assert.equal(event.sender, page);
+        assert.equal(event.senderFrame.url, appUrl);
         const now = Date.now();
-        return {...fixture, transport:{...fixture.transport, attemptedAt:new Date(now-1000).toISOString(),
-          succeededAt:new Date(now-500).toISOString(), expiresAt:new Date(now+100000).toISOString()}};
-      }
-      window.packproofConnect = {getStatus:async()=>state(), checkComputer:async()=>state()};
-    `});
+        return {ok:true,value:{...state,transport:{...state.transport,attemptedAt:new Date(now-1000).toISOString(),
+          succeededAt:new Date(now-500).toISOString(),expiresAt:new Date(now+100000).toISOString()}}};
+      });
+    }
+    page.on("preload-error", (_event, _file, error) => console.error("Preload failed:",error.message));
+    page.on("console-message", details => {
+      if (details.level === "error") console.error("Renderer:",details.message);
+    });
     for (const [width,height] of [[1280,720],[1920,1080],[560,720]]) {
       for (const scale of (width === 560 ? [1] : [1,1.5,2])) {
         for (const theme of ["light","dark"]) await exercise(page, width,height,scale,theme);
