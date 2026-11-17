@@ -182,9 +182,20 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const perfCount=Number(process.env.PACKPROOF_JOURNEY_PERF_N || 0);
     if(perfCount) phase="latency measurement";
     const benchmark=perfCount ? await measureOrderLatency(db.db,root,perfCount,()=>exited!==undefined) : undefined;
+    const initial=await call('GET','/me/records/order-proofs/'+first.proofId+'/revisions/'+firstDoc.revision+query,undefined,adminHeaders);
+    expect(initial).toEqual(firstDoc);
+    await call('POST','/me/records/agent-installations/'+enrolled.installationId+'/actions'+query,
+      {...scope,action:'revoke'},{...adminHeaders,'Idempotency-Key':'revoke-controlled-computer'});
+    await expect(call('GET','/v1/partner/agent/order-proofs/'+first.proofId+'/revisions/'+final.revision,undefined,credentials)).rejects.toThrow(/ 40[13] /);
+    await poll('revoked computer clears scoped order cards',async()=>{
+      const state=await receipt('service-status.json');
+      return state?.workspace?.canReadOrders===false && state.workspace.orders.length===0 ? true : undefined;
+    },85000);
+    expect((await view(first.proofId)).revision).toBe(final.revision);
+    await verifier.verifyOutput(path.join(root,'output'),final);
     const msg={benchmark,scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
       proofId:first.proofId,earliestRevision:firstDoc.revision,latestRevision:final.revision,verifiedFiles:checked.filesVerified,
-      activeSources:status.workspace.sources.length,browserApproval:useBrowser,cloudOrderExported:true,historicalApiProofIdPreserved:true,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
+      activeSources:status.workspace.sources.length,browserApproval:useBrowser,cloudOrderExported:true,historicalApiProofIdPreserved:true,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,revocationClearedDesktop:true,firstRevisionPreserved:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
       localAfterCommitObservedMs:Date.parse(timings.outputVerified)-Date.parse(timings.correctedOnline),routes};
     if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify(msg,null,2));
     console.log('Real HTTP journey',JSON.stringify({earliest:firstDoc.revision,latest:final.revision,verifiedFiles:checked.filesVerified,timings}));

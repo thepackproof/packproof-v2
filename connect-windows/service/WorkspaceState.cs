@@ -5,6 +5,7 @@ namespace PackProof.Connect;
 public sealed partial class LocalState
 {
     public OrderWorkspaceState? Workspace { get; set; }
+    public bool LegacyWorkspaceMigrationChecked { get; set; }
 }
 
 public sealed class OrderWorkspaceState

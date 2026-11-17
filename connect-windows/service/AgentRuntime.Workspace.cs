@@ -30,18 +30,25 @@ public sealed partial class AgentRuntime
 
     private bool WorkspaceTookOver(string previousId) => state.Workspace?.Sources.Any(s => s.PreviousCollectorId == previousId && s.ReplacesPreviousCollector) == true;
 
-    private void MigrateExistingWorkspace()
+    private void InitializeSourceState()
     {
-        if (state.Workspace is null && state.SourceSubscriptions.Any(s => s.Folder != null))
+        var previousVersion = state.StateVersion;
+        SourceStateMigration.SynchronizeLegacy(state);
+        // Only folders already present at upgrade are eligible for automatic migration.
+        // A new CSV setup may preview a folder without registering a workspace source.
+        var migrateFolders = !state.LegacyWorkspaceMigrationChecked && state.Workspace is null &&
+            state.SourceSubscriptions.Any(s => s.Folder is not null);
+        if (migrateFolders)
         {
-            var migrated = Draft();
+            var migrated = Draft(includePreviousSetup: true);
             if (state.SourceSubscriptions.Any(s => s.Folder != null && s.ServerState == "active" && !s.LocalPaused))
                 migrated.Step = "overview";
-            Save();
         }
+        state.LegacyWorkspaceMigrationChecked = true;
+        if (migrateFolders || previousVersion < SourceStateMigration.Version) Save();
     }
 
-    private OrderWorkspaceState Draft()
+    private OrderWorkspaceState Draft(bool includePreviousSetup = false)
     {
         if (state.Workspace is { Version: not 1 }) throw new ConnectException("WORKSPACE_VERSION_UNSUPPORTED", "Install a compatible PackProof update to open this setup.");
         if (state.Workspace is not null) return state.Workspace;
@@ -50,7 +57,8 @@ public sealed partial class AgentRuntime
         if (store.Read<LocalState>("state.bin") is { } previous && store.Read<LocalState>("pre-workspace-state.bin") is null)
             store.Write("pre-workspace-state.bin", previous);
         var result = new OrderWorkspaceState();
-        foreach (var prior in state.SourceSubscriptions.Where(s => s.Folder is not null))
+        foreach (var prior in state.SourceSubscriptions.Where(s => s.Folder is not null &&
+            (includePreviousSetup || s.CapabilityApproved || s.ApprovedConfiguration is not null || s.ServerState == "active")))
         {
             if (result.Sources.Any(s => string.Equals(s.Folder, prior.Folder, StringComparison.OrdinalIgnoreCase))) continue;
             var source = result.Assign(prior.Folder!, "shipping");

@@ -24,6 +24,52 @@ public sealed class WorkspaceServiceTests
     }
 
     [Fact]
+    public async Task Restart_preserves_new_CSV_setup_and_only_migrates_existing_folders_once()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = Directory.CreateTempSubdirectory("pp-workspace-upgrade-").FullName;
+        var folder = Directory.CreateDirectory(Path.Combine(root,"csv")).FullName;
+        var orders = Directory.CreateDirectory(Path.Combine(root,"orders")).FullName;
+        var store = new ProtectedStore(Path.Combine(root,"store"),new TestProtector());
+        store.Initialize();
+        var host = new HostConfiguration("development","https://api.example","https://portal.example","S-1-5-32-545");
+        AgentRuntime Open(LocalState s) => new(host,store,new PackProofClient(host,new WorkspaceServer()),s);
+        byte[] Persisted() => File.ReadAllBytes(Path.Combine(store.Root,"state.bin"));
+        static JsonElement Data(object value) => Json.Element(value);
+        try
+        {
+            using (var app = Open(new()))
+                await app.Command("selectFolder",Data(new {folder}),default);
+            var before = Persisted();
+            using (var app = Open(store.Read<LocalState>("state.bin")!))
+            {
+                await app.Tick(default);
+                var status = Data(await app.Command("status",null,default));
+                Assert.Equal(folder,status.GetProperty("source").GetProperty("folder").GetString());
+                Assert.Empty(status.GetProperty("workspace").GetProperty("sources").EnumerateArray());
+                Assert.Equal(before,Persisted());
+                var draft = Data(await app.Command("addWorkspaceSource",Data(new{folder=orders,role="order"}),default));
+                Assert.Single(draft.GetProperty("workspace").GetProperty("sources").EnumerateArray());
+            }
+
+            // An installation from before the migration marker can contain
+            // partially completed source setup. Preserve that identity and folder.
+            var legacy = new LocalState { Folder = folder };
+            SourceStateMigration.SynchronizeLegacy(legacy);
+            store.Write("state.bin",legacy);
+            using (Open(legacy)) { }
+            var migrated = store.Read<LocalState>("state.bin")!;
+            Assert.Single(migrated.Workspace!.Sources);
+            Assert.Equal(folder,migrated.Workspace.Sources[0].Folder);
+            Assert.Equal(SourceSubscriptionState.LegacyId,migrated.Workspace.Sources[0].Id);
+            before = Persisted();
+            using (Open(migrated)) { }
+            Assert.Equal(before,Persisted());
+        }
+        finally { SqliteConnection.ClearAllPools(); Directory.Delete(root,recursive:true); }
+    }
+
+    [Fact]
     public async Task Worker_persists_the_draft_captures_a_new_order_and_replays_the_same_bytes_after_restart()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -164,8 +210,10 @@ public sealed class WorkspaceServiceTests
 
     private sealed class TestProtector : ISecretProtector
     {
-        public byte[] Protect(byte[] value) => value.ToArray();
-        public byte[] Unprotect(byte[] value) => value.ToArray();
+        // Distinguish a needless rewrite of unchanged plaintext from keeping the
+        // original persisted bytes, as CurrentUser DPAPI does on the installed service.
+        public byte[] Protect(byte[] value) => [.. Guid.NewGuid().ToByteArray(), .. value];
+        public byte[] Unprotect(byte[] value) => value[16..];
     }
     private sealed class WorkspaceServer : HttpMessageHandler
     {

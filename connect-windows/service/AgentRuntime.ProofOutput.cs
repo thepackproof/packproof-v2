@@ -18,6 +18,8 @@ public sealed class ProofOutputConfiguration
     public string State { get; set; } = "ready";
     public string? ErrorCode { get; set; }
     public bool HasMore { get; set; }
+    public DateTimeOffset? RequestRetryAt { get; set; }
+    public int FeedFailures { get; set; }
     public List<ProofOutputJob> Jobs { get; set; } = [];
     public string[] PhysicalPath { get; set; } = [];
     public List<PreviousProofFolder> PreviousFolders { get; set; } = [];
@@ -173,6 +175,7 @@ public sealed partial class AgentRuntime
     {
         var revision=await api.Request("GET",$"/v1/partner/agent/order-proofs/{job.ProofId}/revisions/{job.Revision}",null,state.Token,null,ct);
         ct.ThrowIfCancellationRequested();
+        RememberWorkspaceRevision(revision,job.ProofId,job.Revision);
         var originals=new List<ProofOutputBundle.ManifestEntry>();
         if(revision.TryGetProperty("originalArtifacts",out var artifacts))
         {
@@ -197,12 +200,19 @@ public sealed partial class AgentRuntime
         if (target.InstallationId!=null && target.InstallationId!=state.InstallationId) return;
         if (target.InstallationId==null) { target.InstallationId=state.InstallationId; Save(); }
         var now=DateTimeOffset.UtcNow;
-        if (nextOutputFetch>now) return;
-        nextOutputFetch=now.AddSeconds(5);
+        if (target.RequestRetryAt>now) return;
+        var fetchDue = nextOutputFetch<=now;
+        if (!fetchDue && !target.Jobs.Any(j=>j.NextAttemptAt==null || j.NextAttemptAt<=now)) return;
         ProofOutputJob? job=null;
         try
         {
-            await FetchOutputJobs(target,ct);
+            if (fetchDue)
+            {
+                await FetchOutputJobs(target,ct);
+                target.FeedFailures=0;
+                target.RequestRetryAt=null;
+                nextOutputFetch=now.AddSeconds(target.HasMore ? 1 : 5);
+            }
             var due = target.Jobs.Where(j=>j.NextAttemptAt==null || j.NextAttemptAt<=now).ToArray();
             job=due.FirstOrDefault();
             if (job==null)
@@ -244,8 +254,17 @@ public sealed partial class AgentRuntime
             {
                 job.Attempts=Math.Min(job.Attempts+1,30); job.ErrorCode=target.ErrorCode;
                 job.NextAttemptAt=DurableQueue.RetryAt(now,job.Attempts,(error as ApiException)?.RetryAfter);
+                if (error is ApiException { Status: 429 or 401 or 403 } || error is UnauthorizedAccessException or IOException ||
+                    target.ErrorCode is "OUTPUT_LOCATION_CHANGED" or "OUTPUT_WRITER_CONFLICT")
+                    target.RequestRetryAt=job.NextAttemptAt;
             }
-            else nextOutputFetch=now.AddSeconds(30);
+            else
+            {
+                target.FeedFailures=Math.Min(target.FeedFailures+1,30);
+                target.RequestRetryAt=error is ApiException { Transient:false }
+                    ? now.AddSeconds(30) : DurableQueue.RetryAt(now,target.FeedFailures,(error as ApiException)?.RetryAfter);
+                nextOutputFetch=target.RequestRetryAt.Value;
+            }
         }
         Save();
     }

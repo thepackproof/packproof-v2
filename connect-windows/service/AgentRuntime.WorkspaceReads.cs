@@ -4,6 +4,19 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime
 {
+    // A revision retrieved for local output is already authenticated against the
+    // operation. Update an existing card without exposing a historical job as a
+    // new order or carrying cards across a change of scope.
+    private void RememberWorkspaceRevision(JsonElement document, string proofId, int revision)
+    {
+        if (!WorkspaceGrantCurrent || ordersScope != state.Workspace?.ActiveGrant?.ScopeDigest ||
+            !document.TryGetProperty("proofId",out var id) || id.GetString() != proofId ||
+            !document.TryGetProperty("revision",out var version) || version.GetInt32() != revision) return;
+        var index = Array.FindIndex(workspaceOrders,item=>item.GetProperty("proofId").GetString()==proofId);
+        if (index < 0 || workspaceOrders[index].GetProperty("revision").GetInt32() >= revision) return;
+        workspaceOrders[index] = Json.Element(SmallFields(document,["proofId","revision","orderReference","updatedAt"]));
+    }
+
     private async Task<object> WorkspaceSearchOrders(JsonElement payload,CancellationToken ct)
     {
         if (!WorkspaceGrantCurrent) throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to search orders.");

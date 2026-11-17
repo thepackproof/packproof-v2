@@ -16,10 +16,11 @@ const validName = name => typeof name === 'string' && /^[a-z][a-z0-9_]{0,62}$/.t
 const ledger = async db => (await db.query('SELECT id,checksum FROM schema_migrations ORDER BY id')).rows;
 const cloneIdentifier = 'packproof-order-workspace-rehearsal-20261117';
 const clusterArn = 'arn:aws:ecs:us-east-1:784514617543:cluster/'+cloneIdentifier;
-const host = cloneIdentifier+'.c8v2esku2zyt.us-east-1.rds.amazonaws.com';
+const allowedHosts = [cloneIdentifier,cloneIdentifier+'-pitr'].map(id=>id+'.c8v2esku2zyt.us-east-1.rds.amazonaws.com');
 
 export function validateRestoredLaunch(env,review,metadata) {
-  check(review?.schema==='packproof.restored-order-workspace/v1' && review.targetHost===host &&
+  const host=review?.targetHost;
+  check(review?.schema==='packproof.restored-order-workspace/v1' && allowedHosts.includes(host) &&
     review.database==='packproof_v2' && review.clusterArn===clusterArn && review.migrationSha256===sqlDigest,'TARGET');
   check([review.apiRole,review.workerRole,review.ownerRole].every(validName) && new Set([review.apiRole,review.workerRole,review.ownerRole]).size===3,'ROLES');
   check(review.source===env.PACKPROOF_RELEASE_SHA && /^[a-f0-9]{40}$/.test(review.source) &&
@@ -111,6 +112,19 @@ function scram(password) {
   return 'SCRAM-SHA-256$'+iterations+':'+salt.toString('base64')+'$'+stored+':'+server;
 }
 
+async function inspectRestoredInventory(tx,migrationInventory) {
+  const source=await migrationInventory(), applied=await ledger(tx);
+  check(digest(ids(source))===current && source.every(v=>digest(v.sql)===v.checksum),'SOURCE_INVENTORY');
+  const expected=new Map(ids(source).filter(v=>v.id!==addition).map(v=>[v.id,v.checksum]));
+  const observed=new Map(applied.map(v=>[v.id,v.checksum]));
+  const missing=[...expected.keys()].filter(id=>!observed.has(id));
+  const mismatches=[...expected].filter(([id,checksum])=>observed.has(id)&&observed.get(id)!==checksum)
+    .map(([id,checksum])=>({id,expected:checksum,observed:observed.get(id)}));
+  const unexpected=[...observed.keys()].filter(id=>!expected.has(id)).map(id=>digest(id));
+  return {schema:'packproof.restored-inventory-inspection/v1',rows:applied.length,observedDigest:digest(ids(applied)),expectedDigest:prior,
+    missing,mismatches,unexpected,readOnly:true};
+}
+
 async function prepareCloneLogins(tx,review,env) {
   const who=(await tx.query('SELECT current_user AS role,session_user AS login,current_database() AS database,current_schema() AS schema')).rows[0];
   check(who.role===review.ownerRole && who.login===who.role && who.database===review.database && who.schema==='public','DATABASE_IDENTITY');
@@ -133,7 +147,7 @@ async function prepareCloneLogins(tx,review,env) {
 async function main() {
   const env=process.env;
   const mode=process.argv.at(-1);
-  check(['--rehearse','--rehearse-rollback','--reset-restored-logins'].includes(mode),'MODE');
+  check(['--rehearse','--rehearse-rollback','--reset-restored-logins','--inspect'].includes(mode),'MODE');
   const review=JSON.parse(env.PACKPROOF_RESTORED_REVIEW_JSON ?? '');
   const uri=env.ECS_CONTAINER_METADATA_URI_V4;
   check(/^http:\/\/169\.254\.170\.2\/v4\/[A-Za-z0-9_-]+$/.test(uri),'METADATA_URI');
@@ -143,6 +157,7 @@ async function main() {
   };
   const [container,task]=await Promise.all([fetchMetadata(''),fetchMetadata('/task')]);
   validateRestoredLaunch(env,review,{container,task});
+  const host=review.targetHost;
   const [{createPgDatabase},{migrationInventory},{splitSqlStatements},{planRecordsRuntimePrivileges}]=await Promise.all([
     import('/app/backend/dist/db/postgres.js'),import('/app/backend/dist/db/migrate.js'),
     import('/app/backend/dist/db/sql.js'),import('/app/backend/scripts/records-runtime-privileges.mjs')]);
@@ -153,7 +168,9 @@ async function main() {
   const rollback=new Error('rehearsal-complete');
   try {
     await opened.db.transaction(async tx=>{
+      if(mode==='--inspect')await tx.query('SET TRANSACTION READ ONLY');
       check((await tx.query('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')).rows[0]?.ssl===true,'TLS');
+      if(mode==='--inspect'){receipt=await inspectRestoredInventory(tx,migrationInventory);return;}
       receipt=mode==='--reset-restored-logins' ? await prepareCloneLogins(tx,review,env) : await applyRestoredDelta(tx,{...review,schema:'public'},{migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges});
       if(mode==='--rehearse-rollback') throw rollback;
     });

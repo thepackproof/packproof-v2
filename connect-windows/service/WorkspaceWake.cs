@@ -21,7 +21,11 @@ public sealed partial class AgentRuntime
             if (debounce > TimeSpan.Zero) await Task.Delay(debounce,ct);
             var active = state.Workspace?.Phase is "active" or "awaiting_approval" || state.Workspace?.ActiveGrant != null;
             using var period = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            period.CancelAfter(TimeSpan.FromSeconds(active ? 1 : 5));
+            var interval = TimeSpan.FromSeconds(active ? 1 : 5);
+            var untilOrderRefresh = nextOrderRefresh - DateTimeOffset.UtcNow;
+            if (active && networkOnline && untilOrderRefresh > TimeSpan.Zero && untilOrderRefresh < interval)
+                interval = untilOrderRefresh;
+            period.CancelAfter(interval);
             try { await serviceWake.Reader.ReadAsync(period.Token); }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
         }

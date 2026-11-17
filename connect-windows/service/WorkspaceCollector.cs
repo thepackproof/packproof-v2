@@ -174,6 +174,13 @@ public sealed partial class AgentRuntime
                     else if (Optional(result,"state")?.GetString() != "pending") w.ActiveGrant = null;
                 }
             }
+            catch (ApiException limited) when (limited.Status == 429)
+            {
+                // Keep the existing grant and its original expiry. A busy policy
+                // endpoint must not stop independently authorized queue or output work.
+                nextWorkspacePoll = DurableQueue.RetryAt(now,2,limited.RetryAfter);
+                w.Attention = "PackProof is busy. Retrying the connection.";
+            }
             catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
             {
                 networkOnline = false; ordersCurrent = false;
@@ -186,9 +193,52 @@ public sealed partial class AgentRuntime
             }
         }
         if (!WorkspaceGrantCurrent) { StopWorkspaceWatchers(); return; }
+        if (networkOnline) await ReconcilePartnerHistory(w, ct);
+        var active = w.Sources.Where(s => s.Transport == "folder" && !s.Paused && w.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation).ToArray();
+        foreach (var id in workspaceWatchers.Keys.Where(id => !active.Any(s => s.Id == id)).ToArray()) DropWatcher(id);
+        if (active.Length == 0) { await RefreshWorkspaceOrders(w,ct); return; }
+        var offset = (Array.FindIndex(active, s => s.Id == w.LastScheduled) + 1) % active.Length;
+        for (var i = 0; i < Math.Min(4, active.Length); i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var source = active[(offset+i)%active.Length];
+            w.LastScheduled = source.Id;
+            if (source.RetryAt > now) continue;
+            try
+            {
+                if (networkOnline) await SubmitOneWorkspaceOriginal(w, source, ct);
+                if (!WorkspaceGrantCurrent) break;
+                CaptureWorkspaceTurn(w,source,now);
+            }
+            catch (Exception e) when (e is IOException or ConnectException or UnauthorizedAccessException)
+            {
+                source.Issue = e is ConnectException ce ? ce.Code : "SOURCE_UNREADABLE";
+                source.CoverageGap = true;
+                source.RetryAt = now.AddSeconds(10);
+                DropWatcher(source.Id);
+            }
+        }
+        if (!WorkspaceGrantCurrent) return;
+        await RefreshWorkspaceOrders(w,ct);
+        if (!WorkspaceGrantCurrent) return;
+        await AdvanceWorkspaceMedia(w,ct);
+        if (now >= nextWorkspaceCheckpoint)
+        {
+            nextWorkspaceCheckpoint = now.AddSeconds(10);
+            Save();
+        }
+    }
+
+    private DateTimeOffset earliestReceiptRefresh;
+    private async Task RefreshWorkspaceOrders(OrderWorkspaceState w, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
         if (networkOnline && now >= nextOrderRefresh)
         {
-            nextOrderRefresh = now.AddSeconds(1);
+            // Intake and the desktop share the installation's request budget. Multiple
+            // accepted originals can be covered by the same authoritative snapshot.
+            nextOrderRefresh = now.AddMilliseconds(1250);
+            earliestReceiptRefresh = now.AddMilliseconds(850);
             try
             {
                 var snap = await api.Request("GET", "/v1/partner/agent/order-proofs", null, state.Token, null, ct);
@@ -212,39 +262,10 @@ public sealed partial class AgentRuntime
             catch (Exception e) when (e is ApiException or HttpRequestException or JsonException or KeyNotFoundException or TaskCanceledException && !ct.IsCancellationRequested)
             {
                 ordersCurrent = false;
+                if (e is ApiException { Status:429 } limited)
+                    earliestReceiptRefresh = nextOrderRefresh = DurableQueue.RetryAt(DateTimeOffset.UtcNow,2,limited.RetryAfter);
                 if (e is ApiException denied && denied.Status is 401 or 403) { w.ActiveGrant = null; w.Invalidate(); w.Attention = "Access changed. Review the connection again."; Save(); return; }
             }
-        }
-        if (networkOnline) await ReconcilePartnerHistory(w, ct);
-        var active = w.Sources.Where(s => s.Transport == "folder" && !s.Paused && w.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation).ToArray();
-        foreach (var id in workspaceWatchers.Keys.Where(id => !active.Any(s => s.Id == id)).ToArray()) DropWatcher(id);
-        if (active.Length == 0) return;
-        var offset = (Array.FindIndex(active, s => s.Id == w.LastScheduled) + 1) % active.Length;
-        for (var i = 0; i < Math.Min(4, active.Length); i++)
-        {
-            ct.ThrowIfCancellationRequested();
-            var source = active[(offset+i)%active.Length];
-            w.LastScheduled = source.Id;
-            if (source.RetryAt > now) continue;
-            try
-            {
-                if (networkOnline) await SubmitOneWorkspaceOriginal(w, source, ct);
-                if (!WorkspaceGrantCurrent) break;
-                CaptureWorkspaceTurn(w,source,now);
-            }
-            catch (Exception e) when (e is IOException or ConnectException or UnauthorizedAccessException)
-            {
-                source.Issue = e is ConnectException ce ? ce.Code : "SOURCE_UNREADABLE";
-                source.CoverageGap = true;
-                source.RetryAt = now.AddSeconds(10);
-                DropWatcher(source.Id);
-            }
-        }
-        await AdvanceWorkspaceMedia(w,ct);
-        if (now >= nextWorkspaceCheckpoint)
-        {
-            nextWorkspaceCheckpoint = now.AddSeconds(10);
-            Save();
         }
     }
 
@@ -388,7 +409,13 @@ public sealed partial class AgentRuntime
             payload.Receipt = receipt;
             queue.Save(entry,payload,"complete",importId:receipt.GetProperty("receiptId").GetString());
             if (status == "pending" && captured.GetProperty("records").GetArrayLength() > 0) source.Issue = "IDENTITY_UNRESOLVED";
-            ordersCurrent = false; nextOrderRefresh = DateTimeOffset.MinValue;
+            if (receipt.TryGetProperty("proofs",out var changed) && changed.ValueKind == JsonValueKind.Array &&
+                changed.EnumerateArray().Any(item => item.TryGetProperty("proofId",out var id) && item.TryGetProperty("revision",out var revision) &&
+                    !workspaceOrders.Any(card => card.GetProperty("proofId").GetString()==id.GetString() && card.GetProperty("revision").GetInt32()>=revision.GetInt32())))
+            {
+                ordersCurrent = false;
+                if (nextOrderRefresh > earliestReceiptRefresh) nextOrderRefresh = earliestReceiptRefresh;
+            }
             WakeService();
         }
         catch (Exception e) when (e is ApiException or HttpRequestException or ConnectException or JsonException or InvalidOperationException or KeyNotFoundException or TaskCanceledException && !ct.IsCancellationRequested)
@@ -414,4 +441,3 @@ public sealed partial class AgentRuntime
     }
     private void StopWorkspaceWatchers() { foreach (var id in workspaceWatchers.Keys.ToArray()) DropWatcher(id); }
 }
-
