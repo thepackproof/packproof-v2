@@ -43,6 +43,14 @@ function Admin-Only([string]$Path,[bool]$Directory) {
  Set-Acl -LiteralPath $Path -AclObject $acl
 }
 try {
+ $mediaId='12a456789abcdef0123456789abcdef0'
+ foreach($name in @('pre-workspace-state.bin','pre-workspace-state.bin.new',("media-$mediaId.bin"),("media-$mediaId.bin.new"))) {
+  if(-not (Test-ConnectProtectedRootFileName $name)) { throw 'A service-owned workspace backup or media cache filename would block repair.' }
+ }
+ foreach($name in @('pre-workspace-state-old.bin','pre-workspace-state.bin.bak','media-bad-id.bin',("media-$mediaId.bin.exe"),'unknown.bin')) {
+  if(Test-ConnectProtectedRootFileName $name) { throw 'An unknown protected filename passed the repair classifier.' }
+ }
+ Record-Pass 'repair recognizes the exact workspace backup and media queue filenames and refuses unfamiliar variants'
  if(-not (Test-Path -LiteralPath (Join-Path $data 'state.bin'))) { throw 'Run the foundation smoke first; its retained protected state is required.' }
  Install-Checked
  $ready=Wait-ConnectReadiness $serviceName $pipeName $binary

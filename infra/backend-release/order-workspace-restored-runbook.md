@@ -21,4 +21,18 @@ Load the reviewed standalone source into the task definition's `command` as a si
 5. Embed `order-workspace-rollback-reader.mjs` in the same way in the pinned bridge, with `['node','--input-type=module','-e',script,'reader',JSON.stringify(bridgeReview)]`. Run each actual login separately. A compatible bridge passes its own schema admission, authority, scope guard and legacy sample checks after 123. Keep workspace activation off during a rollback. Preserve the additive tables and stored immutable revisions.
 6. Capture redacted receipts and task exit codes. Stop any remaining test task, deregister and delete its dedicated task definition, and delete the rehearsal stack by its complete creation ARN. The existing source snapshot remains available. Verify the clone, roles, secrets, security groups, logs and temporary cluster have been removed and that customer-serving service task definitions, image identities and database identity are unchanged.
 
-The restored run checks backend schema compatibility and does not qualify production rollout or the installer. The repository also exercises transaction reversal and successful migration with distinct actual Postgres 16 logins in `backend/tests/order-workspace-restored.test.ts`. That synthetic test can run on the existing GitHub-hosted PostgreSQL CI service independently of AWS operations.
+## Observed release checks
+
+The final candidate committed migration 123 on the 19:18 UTC RDS restore at 19:40:46 UTC. Before commit, a distinct owner task applied the same migration and 60 narrowly scoped grant statements inside a transaction and rolled it back. The subsequent commit started from all 121 predecessor receipts and produced all 122 release receipts. Both runs produced matching hashes for the old ledger and ACLs, legacy row counts and sampled data, and the grant statements.
+
+| Measurement | SHA-256 |
+| --- | --- |
+| Migration 123 | `941c88e20122caaaab739ee28f791d5b65157a6bb4acd347c4ff7e2e3801c1bd` |
+| Applied inventory | `ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d` |
+| Historical receipt ledger and ACLs | `6c5abb0f2b20aa21edce1d12380fcaea4315a25588cd6a30c0b7100172a810e1` |
+| Legacy row counts and bounded data samples | `272df733c2842033cbb616037916ac6d8a16415c0475eec84d646206080e50a9` |
+| 60 grant statements | `64e62fcfc18e4e5b3629f61be30c551d13f600ebd1655632b74a30aa9c0e3e04` |
+| Scoped candidate API receipt | `de2d25c474d7214b386768c810e39279fea947091352ecbdb38ad63490627312` |
+| Scoped candidate worker receipt | `4b5888a1acc0a7dfd92028ff906bd2b54f9bfe1aae68435e22df0e91c5ec09f2` |
+
+Both candidate roles and both compatibility bridge roles completed their independent read-only PostgreSQL 16.15 checks with exit code 0. Each bridge role read an existing legacy receipt on schema 123. The offline role-pair verifier accepted the two candidate receipts. Workspace activation remained off. The service-serving database did not participate in the owner or runtime SQL checks. The repository also exercises transaction reversal and successful migration with distinct actual Postgres 16 logins in `backend/tests/order-workspace-restored.test.ts`. That synthetic test can run on the existing GitHub-hosted PostgreSQL CI service independently of AWS operations.

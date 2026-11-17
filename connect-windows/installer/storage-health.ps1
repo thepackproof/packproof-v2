@@ -50,6 +50,11 @@ public static class PackProofStorageNative {
 }
 '@
 }
+function Test-ConnectProtectedRootFileName([string]$Name) {
+ # ProtectedStore atomically stages each encrypted file with a .new suffix.
+ # Media cache entries use the same 32-digit queue ID as the encrypted spool.
+ return $Name -match '^(?:(?:state|spool-key|pre-workspace-state|(?:recovery|media)-[a-f0-9]{32})\.bin(?:\.new)?|queue\.sqlite(?:-wal|-shm)?|\.readiness-[a-f0-9]{32}(?:\.new)?)\z'
+}
 function Repair-ConnectStoragePermissions([string]$Root,[string]$ServiceSid) {
  $trusted=@('S-1-5-18','S-1-5-32-544','S-1-5-19',$ServiceSid)
  $entries=New-Object 'System.Collections.Generic.List[System.IO.FileSystemInfo]'
@@ -63,7 +68,7 @@ function Repair-ConnectStoragePermissions([string]$Root,[string]$ServiceSid) {
    if($entry.PSIsContainer) {
     if($directory -ne $Root -or $entry.Name -ne 'spool') { throw 'PROTECTED_STORAGE_LAYOUT: An unknown protected directory needs review. Nothing was reset.' }
     $pending.Enqueue($entry.FullName)
-   } elseif($directory -eq $Root -and $entry.Name -notmatch '^(state\.bin(?:\.new)?|spool-key\.bin(?:\.new)?|queue\.sqlite(?:-wal|-shm)?|recovery-[a-f0-9]{32}\.bin(?:\.new)?|\.readiness-[a-f0-9]{32}(?:\.new)?)$') {
+   } elseif($directory -eq $Root -and -not (Test-ConnectProtectedRootFileName $entry.Name)) {
     throw 'PROTECTED_STORAGE_LAYOUT: An unknown protected file needs review. Nothing was reset.'
    }
    [PackProofStorageNative]::AssertOrdinary($entry.FullName,[bool]$entry.PSIsContainer)
