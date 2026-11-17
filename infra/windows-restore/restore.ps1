@@ -88,9 +88,14 @@ try {
  & 7z x $payload[0].FullName "-o$unpacked" -y -bd | Out-Null
  if ($LASTEXITCODE -ne 0) { throw 'Could not extract candidate x64 application.' }
  $manifest=Get-Content -LiteralPath (Join-Path $artifact 'release-evidence.json') -Raw | ConvertFrom-Json
- foreach ($relative in @('resources/service/PackProof.Connect.Service.exe','resources/service/PackProof.Connect.Service.dll','resources/bridge/PackProof.Connect.Bridge.exe','resources/bridge/PackProof.Connect.Bridge.dll')) {
-  $entry=@($manifest.executables | Where-Object file -CEQ ('win-unpacked/'+$relative))
-  if ($entry.Count -ne 1 -or (Hash (Join-Path $unpacked $relative)) -cne $entry[0].sha256) { throw 'Extracted service or bridge differs from recorded executable hashes.' }
+ # The service ships as a single-file executable. Verify the two mandatory
+ # programs and every additional native component listed in the release inventory.
+ $native=@($manifest.executables | Where-Object { $_.file -cmatch '^win-unpacked/resources/(service/PackProof\.Connect\.Service|bridge/PackProof\.Connect\.Bridge)\.(exe|dll)$' })
+ foreach ($required in @('win-unpacked/resources/service/PackProof.Connect.Service.exe','win-unpacked/resources/bridge/PackProof.Connect.Bridge.exe')) {
+  if (@($native | Where-Object file -CEQ $required).Count -ne 1) { throw "Missing required release component: $required." }
+ }
+ foreach ($entry in $native) {
+  if ((Hash (Join-Path $release $entry.file)) -cne $entry.sha256) { throw "Extracted component differs from candidate inventory: $($entry.file)." }
  }
  Passed 'Pinned installer SHA-256 and included service and bridge SHA-256 verified.'
  # No customer credentials are involved. The pinned legacy CI writer runs as the real
