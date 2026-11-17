@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {reconstructionDigest} from './reconstruction-v7-release-review.mjs';
 import {TARGET,hash} from './backend-deployment-plan.mjs';
-import {CONNECT_RUNTIME_INVENTORY,connectConfigurationLease,connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
+import {CONNECT_RUNTIME_INVENTORY,connectConfigurationLease,connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
 const now=Date.parse('2026-11-17T12:00:00Z'),at=new Date(now).toISOString(),source='b'.repeat(40),old='a'.repeat(40),image=`${TARGET.repository}@sha256:${'b'.repeat(64)}`,previous=`${TARGET.repository}@sha256:${'a'.repeat(64)}`;
 const arn=(family,revision)=>`arn:aws:ecs:${TARGET.region}:${TARGET.account}:task-definition/${family}:${revision}`;
 const cluster=`arn:aws:ecs:${TARGET.region}:${TARGET.account}:cluster/${TARGET.cluster}`,workerArn=`arn:aws:ecs:${TARGET.region}:${TARGET.account}:service/${TARGET.cluster}/observed-worker`;
@@ -90,28 +90,28 @@ test('accepts only the observed empty ECS systemControls default without changin
 });
 
 function shipmentFixture(version='v7'){
- const v8=version==='v8';
+ const backfill=version==='v8'||version==='v9';
  const {snapshot,review:r}=fixture(),empty=hash([]),bundle='c'.repeat(64);
- const inventory=v8?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
- const records=v8?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
- const v={schema:`packproof.reconstruction-release-review/${version}`,...(v8?{backfillJobsEnabled:false}:{}),source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
+ const inventory=backfill?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
+ const records=backfill?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
+ const v={schema:`packproof.reconstruction-release-review/${version}`,...(backfill?{backfillJobsEnabled:false}:{}),...(version==='v9'?{platformLockPolicySha256:'cc1ff79558beac7c7178ccaecdb9c2138e7271077c8df15ff7950a73e6baf743'}:{}),source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
   ownerRole:'reviewed_owner',clusterArn:cluster,target:{host:r.database.host,database:r.database.name},featureActivation:false,
   customerReleaseQualified:false,inventorySha256:inventory,recordsMigrationSha256:records,expiresAt:r.expiresAt,
   automationPolicy:{bundleSha256:bundle,interpretationVersion:'packproof.shipment-interpretation/v1',headerPolicyVersion:'same_names_any_order/v1',
    interpretationEnabled:false,headerVariantsEnabled:false,shadowSourcesSha256:empty}};
  const review={...r,schema:`packproof.connect-runtime-review/${version}`,inventorySha256:inventory,preflightReview:v};
- const code={reader:readFileSync(new URL(v8?'./backfill-rollback-reader-probe.mjs':'./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
+ const code={reader:readFileSync(new URL(backfill?'./backfill-rollback-reader-probe.mjs':'./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  const definitions=connectProbeRegistrations(snapshot,review,code,now),probes={};
  for(const [index,[name,definition]] of Object.entries(definitions).entries()){
   const reader=name.startsWith('previous-'),kind=reader?name.slice(9):name,dbRole=kind==='api'?r.apiRole:r.workerRole;
   const taskArn=cluster.replace(':cluster/',':task/')+'/'+String(index+1).repeat(32),i=reader?previous:image;
   const registered={...definition,taskDefinitionArn:arn(definition.family,3)};
   const shared={kind,completedAt:at,readOnly:true,reviewSha256:reconstructionDigest(v)};
-  const report=reader?{...shared,schema:v8?'packproof.backfill-rollback-reader/v1':'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:old,
+  const report=reader?{...shared,schema:backfill?'packproof.backfill-rollback-reader/v1':'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:old,
    environment:r.environment,databaseHost:r.database.host,databaseName:r.database.name,clusterArn:cluster,taskArn,
-   inventorySha256:inventory,compatibleReader:true}:{...shared,schema:`packproof.reconstruction-runtime-preflight/${version}`,...(v8?{backfillJobsEnabled:false,backfillScopeVerified:true}:{}),
+   inventorySha256:inventory,compatibleReader:true}:{...shared,schema:`packproof.reconstruction-runtime-preflight/${version}`,...(backfill?{backfillJobsEnabled:false,backfillScopeVerified:true}:{}),
    source,customerReleaseQualified:false,identity:{role:dbRole,login:dbRole,read_only:'on',schema:'public',database:r.database.name},
-   taskIdentity:{taskArn,image:i,imageDigest:i.split('@')[1]},sourceInventory:{sourceCount:v8?121:120,appliedCount:v8?121:120,
+   taskIdentity:{taskArn,image:i,imageDigest:i.split('@')[1]},sourceInventory:{sourceCount:backfill?121:120,appliedCount:backfill?121:120,
     inventorySha256:inventory,migrationsApplied:false,rolesChanged:false,featureActivation:false},
    durabilityPolicyMatches:true,tls:{ssl:true},immutableTriggerVerified:true,m2PrivilegesSha256:'f'.repeat(64),
    recordsPrivileges:{migrationSha256:records,sourceCommit:source,caller:dbRole},
@@ -178,4 +178,44 @@ test('v7 rejects incompatible readers, hidden activation, substitutions, drift a
   const f=shipmentFixture();mutate(f);assert.throws(()=>connectRuntimePlan(f.snapshot,f.review,f.probes,now,f.code),
    /(?:AUTOMATION_|SHIPMENT_|CONNECT_RUNTIME_|RECONSTRUCTION_)/);
  }
+});
+
+test('v9 preserves the four-image-role review and binds the legacy hosted membership observation per login',()=>{
+ const f=shipmentFixture('v9'), {probes,review,snapshot,code}=f;
+ for(const kind of ['api','worker']){
+  probes[kind].report.platformLocks={
+   schema:'packproof.hosted-platform-lock-observation/v1',role:probes[kind].report.identity.role,
+   policySha256:review.preflightReview.platformLockPolicySha256,
+   membership:{selectTable:true,updateTable:false,updateColumns:['revoked_at'],grantableUpdate:false,idMutable:false,
+    triggerSha256:'85290fcfa99548c8c15bac587a335bfb30fa35589a76776b63390225fbe63dd6',
+    functionSha256:'981746c709450f6ee117421020f623cfedb9a60591176037df75d12b9b30f774',
+    bodySha256:'cf116d09c6fb507a38a9f4cfa7cb74a897ee31e0cf4184ef1ec5c13425cf2bf7'},
+   proof:{idUpdate:true,idUpdateGrantable:false},
+   membershipLock:{mode:'EXPLAIN WITHOUT ANALYZE',authorized:true,plan:'LockRows/Result/false',readOnlyTransaction:true,statementExecuted:false},
+   grantsApplied:false};
+  assert.deepEqual(f.definitions[kind].containerDefinitions[0].command,['node','/release/reconstruction-v9-runtime-preflight.mjs',kind]);
+  for(const name of [kind,'previous-'+kind])
+   assert.equal(connectProbeRunRequest(snapshot,review,name,probes[name].registered,code,now).taskDefinition,probes[name].registered.taskDefinitionArn);
+ }
+ const plan=connectRuntimePlan(snapshot,review,probes,now,code);
+ assert.equal(plan.schema,'packproof.connect-runtime-plan/v9');
+ assert.equal(plan.shipmentPair.platformLockPolicySha256,review.preflightReview.platformLockPolicySha256);
+ assert.ok(connectWorkerRegistration(plan,now).containerDefinitions.length);
+ assert.throws(()=>connectRollbackWorker(plan,{},{}),/ROLLBACK_NEEDS_NEW_PAIRED_REVIEW/);
+ for(const change of [
+  reports=>{reports.worker.report.platformLocks.membership.updateColumns.push('id')},
+  reports=>{reports.worker.report.platformLocks.membership.grantableUpdate=true},
+  reports=>{reports.worker.report.platformLocks.role=reports.api.report.identity.role},
+  reports=>{reports.worker.report.platformLocks.membershipLock.statementExecuted=true},
+  reports=>{reports.api.report.platformLocks.membership.bodySha256='e'.repeat(64)},
+  reports=>{reports.api.report.schema='packproof.reconstruction-runtime-preflight/v8'},
+  reports=>{reports['previous-worker'].report.compatibleReader=false}
+ ]){
+  const invalid=structuredClone(probes);change(invalid);
+  assert.throws(()=>connectRuntimePlan(snapshot,review,invalid,now,code),/EVIDENCE_MISMATCH|ROLE_RECEIPT|COMPATIBLE_PREDECESSOR/);
+ }
+ const request=connectRuntimeBuildRequest({sourceSha:source,archiveSha256:'c'.repeat(64),predecessorImages:[previous],profile:'reconstruction-v9'});
+ const build=JSON.parse(request.buildspecOverride).phases.build.commands.join('\n');
+ for(const value of ['reconstruction-v9-runtime-preflight.mjs','Dockerfile.hosted-lock-profile','hosted-backfill-automation-pair.mjs','rows.length!==121'])
+  assert.ok(build.includes(value));
 });

@@ -1,5 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {backfillMigrationInventorySha256,backfillRecordsInventorySha256,validateReconstructionReview as validateBackfillReview} from './reconstruction-v8-release-review.mjs';
+import {validateReconstructionReview as validateHostedReview} from './reconstruction-v9-release-review.mjs';
+import {inspectHostedBackfillAutomationPair} from './hosted-backfill-automation-pair.mjs';
 import {inspectBackfillAutomationPair} from './backfill-automation-pair.mjs';
 import {gzipSync} from 'node:zlib';
 import {inspectShipmentAutomationPair} from './shipment-automation-pair.mjs';
@@ -20,6 +22,8 @@ const profiles={
   validate:validateReconstructionReview,pair:inspectShipmentAutomationPair,reader:'shipment-rollback-reader-probe.mjs',readerSchema:'packproof.shipment-rollback-reader/v1'},
  'packproof.connect-runtime-review/v8':{version:'v8',inventory:backfillMigrationInventorySha256,records:backfillRecordsInventorySha256,
   validate:validateBackfillReview,pair:inspectBackfillAutomationPair,reader:'backfill-rollback-reader-probe.mjs',readerSchema:'packproof.backfill-rollback-reader/v1'},
+ 'packproof.connect-runtime-review/v9':{version:'v9',inventory:backfillMigrationInventorySha256,records:backfillRecordsInventorySha256,
+  validate:validateHostedReview,pair:inspectHostedBackfillAutomationPair,reader:'backfill-rollback-reader-probe.mjs',readerSchema:'packproof.backfill-rollback-reader/v1'},
 };
 export const shipmentRelease=r=>Object.hasOwn(profiles,r?.schema);
 export const shipmentReleaseInventory=r=>profiles[r.schema].inventory;
@@ -36,7 +40,7 @@ export function verifyShipmentDeploymentReview(snapshot,r,now){
   v.target.host===r.database.host&&v.target.database===r.database.name&&Date.parse(v.expiresAt)>=Date.parse(r.expiresAt),
   'SHIPMENT_DEPLOYMENT_REVIEW_BINDING_MISMATCH');
  const policy=v.automationPolicy;
- check((profile.version!=='v8'||v.backfillJobsEnabled===false)&&!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
+ check((profile.version==='v7'||v.backfillJobsEnabled===false)&&!policy.interpretationEnabled&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
   'SHIPMENT_DEFAULT_OFF_REVIEW_REQUIRED');
  const containers=[snapshot.api.express.activeConfigurations[0].primaryContainer,
   ...snapshot.api.taskDefinition.containerDefinitions,...snapshot.worker.taskDefinition.containerDefinitions];
