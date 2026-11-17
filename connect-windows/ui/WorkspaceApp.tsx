@@ -199,6 +199,10 @@ function Dashboard({status,bridge,run,busy,legacy}:{status:ConnectStatus;bridge:
     </main></div>;
 }
 
+function awaitingApproval(status:ConnectStatus|null) {
+  return status?.workspace?.phase==="awaiting_approval" || status?.enrollment?.state==="pending";
+}
+
 export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
   const [status,setStatus] = useState<ConnectStatus|null>(null);
   const [error,setError] = useState("");
@@ -206,6 +210,7 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
   const [pollError,setPollError] = useState("");
   const [legacy,setLegacy] = useState(false);
   const inAction=useRef(false), epoch=useRef(0), mounted=useRef(true), displayed=useRef<ConnectStatus|null>(null);
+  const pollAfterApprovalRequest=useRef<(() => void)|null>(null);
   const followupApproval=useRef(false);
   const accept=useCallback((value:ConnectStatus)=>{
     const ws = value.workspace;
@@ -234,6 +239,7 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
       inAction.current=false;
       if(mounted.current && id===epoch.current) {
         setBusy("");
+        if(awaitingApproval(displayed.current)) pollAfterApprovalRequest.current?.();
         if(picker && startingStep===displayed.current?.workspace?.step) {
           window.requestAnimationFrame(()=>{
             if(!mounted.current || id!==epoch.current || startingStep!==displayed.current?.workspace?.step)return;
@@ -261,15 +267,16 @@ export function WorkspaceApp({bridge=getBridge()}:{bridge?:ConnectBridge}) {
       finally{
         polling=false;
         if(!stopped && (!displayed.current || displayed.current.workspace)){
-          const pending = displayed.current?.workspace?.phase==="awaiting_approval" || displayed.current?.enrollment?.state==="pending";
+          const pending = awaitingApproval(displayed.current);
           timer=setTimeout(schedule,pending ? 1800 : displayed.current?.workspace?.phase==="active" ? 2000 : 10000);
         }
       }
     };
     const schedule=()=>{if(inAction.current) {clearTimeout(timer);timer=setTimeout(schedule,750);} else void poll();};
+    pollAfterApprovalRequest.current=schedule;
     const focus=()=>{if(document.visibilityState!=="hidden") schedule();};
     schedule();window.addEventListener("focus",focus);document.addEventListener("visibilitychange",focus);
-    return ()=>{stopped=true;mounted.current=false;epoch.current++;clearTimeout(timer);window.removeEventListener("focus",focus);document.removeEventListener("visibilitychange",focus);};
+    return ()=>{stopped=true;mounted.current=false;pollAfterApprovalRequest.current=null;epoch.current++;clearTimeout(timer);window.removeEventListener("focus",focus);document.removeEventListener("visibilitychange",focus);};
   },[bridge,legacy,accept]);
   if (bridge && (legacy || status && (!status.workspace || status.installationId && status.capabilities?.orderWorkspace===false))) return <>
     {legacy && <button className="secondary" onClick={()=>setLegacy(false)}>Return to workspace</button>}<ConnectApp bridge={bridge}/></>;

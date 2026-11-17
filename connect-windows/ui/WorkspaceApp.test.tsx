@@ -70,6 +70,20 @@ it("resumes a browser approval and opens the committed revision from Overview",a
   expect(bridge.workspaceOrderDetail).toHaveBeenCalledWith("p1",3);
 });
 
+it("checks for browser approval as soon as Start collecting returns pending",async()=>{
+  const draft=status({step:"activate",outputFolder:"C:\\Proofs",outputState:"ready",sources:[folder]});
+  const awaiting=status({...draft.workspace,phase:"awaiting_approval",approvalPath:"/app/records/connect/approve?installationId=i"});
+  const active=status({...draft.workspace,phase:"active",step:"overview"});
+  const bridge=bridgeFor(draft,{
+    activateWorkspace:vi.fn(async()=>awaiting),
+    getWorkspaceStatus:vi.fn(async()=>active)
+  });
+  render(<WorkspaceApp bridge={bridge}/>);
+  fireEvent.click(await screen.findByRole("button",{name:"Start collecting"}));
+  expect(await screen.findByRole("heading",{name:"Overview"})).toBeVisible();
+  expect(bridge.getWorkspaceStatus).toHaveBeenCalledOnce();
+});
+
 
 it("asks which source owns an ambiguous reference before confirming a profile",async()=>{
   const current=status({sources:[{...folder,recognition:{state:"ambiguous",message:"Read picking references.",
