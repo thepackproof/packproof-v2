@@ -125,6 +125,12 @@ internal sealed class ProofOutputBundle : IDisposable
             var hasDiscrepancy = lines.Any(line => Field(line,"orderedShippedDiscrepancy") is not null);
             html.Append("<section><h2>Items</h2><table><thead><tr><th>Line</th><th>Item</th><th>Ordered</th><th>Picked</th><th>Packed</th><th>Shipped</th><th>Returned</th><th>Unit</th>");
             if (hasDiscrepancy) html.Append("<th>Quantity difference</th>");
+            (string Key,string Label)[] optionalStages = [
+                ("loadedQuantity","Loaded"), ("acknowledgedQuantity","Acknowledged"), ("backorderedQuantity","Backordered"),
+                ("loadedAcknowledgedDiscrepancy","Load and receipt difference")
+            ];
+            var presentStages=optionalStages.Where(stage=>lines.Any(line=>Field(line,stage.Key) is not null)).ToArray();
+            foreach(var stage in presentStages)html.Append("<th>").Append(stage.Label).Append("</th>");
             html.Append("</tr></thead><tbody>");
             foreach (var line in lines)
             {
@@ -132,6 +138,7 @@ internal sealed class ProofOutputBundle : IDisposable
                 foreach(var field in new[]{"lineId","sku","orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity","unit"})
                     html.Append("<td>").Append(E(Field(line,field))).Append("</td>");
                 if (hasDiscrepancy) html.Append("<td>").Append(WebUtility.HtmlEncode(Field(line,"orderedShippedDiscrepancy"))).Append("</td>");
+                foreach(var stage in presentStages)html.Append("<td>").Append(E(Field(line,stage.Key))).Append("</td>");
                 html.Append("</tr>");
             }
             html.Append("</tbody></table></section>");

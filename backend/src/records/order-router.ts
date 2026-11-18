@@ -9,6 +9,7 @@ import { checkedInstallation, workspaceState, proposeScope, readSession, decideS
 import { decideAssociation, humanAttentionFilter, deviceAttentionFilter, attention } from './order-review.js';
 import { reconcileApiHistory, setApiSourcePaused } from './order-api-history.js';
 import { storeDerivation } from './order-derivatives.js';
+import { readOrderSource } from './order-source.js';
 import { readOrderArtifact } from './order-artifact.js';
 import { ingestOrderFile } from './order-ledger.js';
 import { agentOrderFilter, humanOrderFilter, listOrders, orderChanges, readOrder } from './order-feed.js';
@@ -74,6 +75,7 @@ export function orderAgentRouter(deps: AppDependencies) {
   router.get('/agent/order-attention', call(async (tx, i) => attention(tx, await deviceAttentionFilter(tx, i))));
   router.get('/agent/order-proofs', call(async (tx, i, _a, r) => listOrders(tx, await agentOrderFilter(tx, i), r.query.q, r.query.limit)));
   router.post('/agent/order-changes', call(async (tx, i, _a, r) => orderChanges(tx, await agentOrderFilter(tx, i), r.body?.after, r.body?.limit)));
+  router.get('/agent/order-proofs/:proofId/revisions/:revision/sources/:eventKey', call((tx, i, _a, r) => readOrderSource(deps, tx, i, r.params.proofId, r.params.revision, r.params.eventKey)));
   router.get('/agent/order-proofs/:proofId/revisions/:revision/artifacts/:receiptId', call((tx, i, _a, r) => readOrderArtifact(deps, tx, i, r.params.proofId, r.params.revision, r.params.receiptId)));
   router.get('/agent/order-proofs/:proofId/revisions/:revision', call(async (tx, i, _a, r) => readOrder(tx, await agentOrderFilter(tx, i), r.params.proofId, r.params.revision)));
   return router;

@@ -66,7 +66,7 @@ describe('finite historical backfill authority and receipt accounting',()=>{
  let prior:Fixture;
  let priorJob:{id:string;latestDecisionId:string;originals:{id:string}[];grantRevision:number;manifestSha256:string};
  const historical=file('retained-040.csv',17,'5');
- it('preserves a pre-122 approved job and its grant across the 0.4.1 heartbeat and admits both exact collector builds',async()=>{
+ it('preserves a pre-122 approved job and its grant across upgrades and admits only the supported collector builds',async()=>{
   const currentGrant=()=>opened.db.query<{grant_revision:number}>('SELECT grant_revision FROM record_source_subscriptions WHERE id=$1',[prior.subId]);
   const grant=(await currentGrant()).rows[0].grant_revision;
   expect(Number(grant)).toBe(priorJob.grantRevision);
@@ -80,7 +80,7 @@ describe('finite historical backfill authority and receipt accounting',()=>{
   await commit(prior.service,captured.body,'retained-122');
   await processPendingTypedImports(deps,10);
   expect((await read(prior,priorJob.id)).body.state).toBe('completed');
-  for(const version of ['0.4.1','0.4.0']){
+  for(const version of ['0.4.1','0.4.0','0.5.0','0.6.0']){
    expect((await heartbeat(version)).status).toBe(200);
    const original=file('after-'+version+'.csv',16,'4');
    const result=await propose(prior,[original],'after-'+version);

@@ -17,10 +17,14 @@ const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const reviewedSource = {id, configurationRevision:z.number().int().nonnegative(), grantRevision:z.number().int().nonnegative(), originalSha256:sha256};
 const role = z.enum(sourceRoles);
 export const argumentsByMethod={
+ workspaceOrderPage:z.tuple([z.number().int().positive().safe()]),
+ workspaceSourceRecord:z.tuple([id,z.number().int().positive().safe(),id]),
+ getWorkspaceFolderSuggestion:z.tuple([role]),useWorkspaceFolderSuggestion:z.tuple([role,z.string().min(1).max(32767)]),
+ replaceWorkspaceFolder:z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceRelatedSource:z.tuple([id,z.number().int().positive().safe(),role,id]),
  confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
  workspaceSearchOrders: z.tuple([z.string().min(1).max(200)]),
- workspaceAttention: z.tuple([]),
+ workspaceAttention:z.union([z.tuple([]),z.tuple([z.number().int().positive().safe()])]),
  openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.tuple([id,z.number().int().positive().safe()]),
  getWorkspaceStatus:z.tuple([]),addWorkspaceDirectSource:z.union([z.tuple([]),z.tuple([z.string().regex(/^[A-Za-z0-9._-]{1,100}$/)])]),copyWorkspaceDirectProfile:z.tuple([id]),
  workspaceDraftPreview: z.tuple([]),

@@ -30,6 +30,8 @@ public static partial class SourceReaders
         ["eventAt"]=["OccurredAt","EventTime","EventTimestamp"],
         ["pickedQuantity"]=["PickedQuantity","PickedQty","QuantityPicked","QtyPicked"],
         ["packedQuantity"]=["PackedQuantity","PackedQty","QuantityPacked","QtyPacked","PackedUnits"],
+        ["loadedQuantity"]=["LoadedQuantity","LoadedQty","QtyLoaded","QuantityLoaded"],
+        ["acknowledgedQuantity"]=["AcknowledgedQuantity","AcknowledgedQty","QtyAcknowledged","QuantityAcknowledged","ReceivedQuantity","QtyReceived"],
         ["shippedQuantity"]=["ShippedQuantity","ShippedQty","QuantityShipped","QtyShipped"],
         ["returnedQuantity"]=["ReceivedReturnQuantity","ReturnedQuantity","ReturnReceivedQty","QtyReturned"],
         ["state"]=["EventStatus","ShipmentStatus","DeliveryStatus","HandoffStatus","ReturnStatus","LabelStatus","Status"],
@@ -59,7 +61,7 @@ public static partial class SourceReaders
         if(role=="shipping")hasSubject=hasSubject || fullTracking;
         if(role is "handoff" or "delivery")hasSubject=hasSubject || columns.ContainsKey("eventId");
         if(!hasSubject)return null;
-        if(rule.quantity!=""&&columns.ContainsKey(rule.quantity)&&(!columns.ContainsKey("lineId")||!columns.ContainsKey("unit")))return null;
+        if(WorkflowAmounts(role,rule.quantity).Any(columns.ContainsKey)&&(!columns.ContainsKey("lineId")||!columns.ContainsKey("unit")))return null;
         var references=new Dictionary<string,string>(StringComparer.Ordinal);
         foreach(var (entity,targetRole) in ReferenceRole)
         {
@@ -69,6 +71,12 @@ public static partial class SourceReaders
         // A foreign column without a confirmed producer is only a source fact. It cannot join orders.
         if(references.Count==0)return null;
         return new(role,columns,references);
+    }
+    private static IEnumerable<string> WorkflowAmounts(string role,string primary)
+    {
+        if(primary!="")yield return primary;
+        if(role is "shipping" or "handoff")yield return "loadedQuantity";
+        if(role=="delivery")yield return "acknowledgedQuantity";
     }
     private static bool TrackingColumns(Dictionary<string,string> columns) =>
         new[]{"trackingId","trackingCarrier","trackingAccount","trackingPeriod"}.All(columns.ContainsKey);
@@ -155,7 +163,7 @@ public static partial class SourceReaders
                 };
                 if(utc!=null)canonical["occurredAt"]=Val(utc);
                 if(Get("asOf") is {} modified)canonical["sourceModifiedAt"]=Val(modified);
-                foreach(var key in new[]{"lineId","sku","unit",rule.quantity}.Where(k=>k!=""))
+                foreach(var key in new[]{"lineId","sku","unit"}.Concat(WorkflowAmounts(map.Role,rule.quantity)))
                     if(map.Columns.TryGetValue(key,out var sourceField)&&raw.Fields.TryGetValue(sourceField,out var val))canonical[key]=val;
                 // The normalizer enforces exact decimals, time offsets and bounded references for every representation.
                 var lineage=new Dictionary<string,string>(StringComparer.Ordinal);

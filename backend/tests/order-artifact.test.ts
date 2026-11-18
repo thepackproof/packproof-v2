@@ -5,6 +5,7 @@ import type {Installation} from '../src/records/agent-enrollments.js';
 import type {ObjectStore} from '../src/s3/object-store.js';
 import {installationOperation} from '../src/records/order-workspace.js';
 import {attachMedia,affectedMediaReferences,qualifiedArtifactBytes,readOrderArtifact} from '../src/records/order-artifact.js';
+import {matchingSourceText} from '../src/records/order-source.js';
 import {sha256Hex} from '../src/hash.js';
 import {normalizedRecord,projectOrders,refKey} from '../src/records/order-projection.js';
 
@@ -68,4 +69,16 @@ describe('revision-bound original export',()=>{
     expect(qualifiedArtifactBytes(Buffer.from('order,name\n1,Sample'),'image/jpeg')).toBe(false);
     expect(qualifiedArtifactBytes(Buffer.from('%PDF-1.7'),'application/pdf')).toBe(false);
   });
+});
+
+it('shows exact source text only for a single fully represented row',()=>{
+  const record=normalizedRecord({eventId:'e',version:'1',kind:'order',entity:{namespace:'erp',type:'order',id:'A'},
+    references:[],fields:{order:'A',amount:'8'},lines:[],locator:'row 2'});
+  const read=(value:string,file='row.json')=>matchingSourceText(Buffer.from(value),file,record);
+  expect(read(' { "order": "A", "amount": 8 } ')).toBe(' { "order": "A", "amount": 8 } ');
+  expect(read('order,amount\r\nA,8\r\n','order.csv')).toBe('order,amount\r\nA,8\r\n');
+  expect(read('[{"order":"A"},{"order":"B"}]')).toBeNull();
+  expect(read('{"order":"B","order":"A"}')).toBeNull();
+  expect(read('{"order":"A","anotherOrder":{"order":"B"}}')).toBeNull();
+  expect(read('order,amount\nA,8\nB,3','order.csv')).toBeNull();
 });

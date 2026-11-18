@@ -241,12 +241,13 @@ public sealed partial class AgentRuntime
             earliestReceiptRefresh = now.AddMilliseconds(850);
             try
             {
-                var snap = await api.Request("GET", "/v1/partner/agent/order-proofs", null, state.Token, null, ct);
-                workspaceOrders = snap.GetProperty("orders").EnumerateArray().Take(20).Select(order => Json.Element(new
-                {
-                    proofId = order.GetProperty("proofId"), revision = order.GetProperty("revision"),
-                    orderReference = Optional(order, "orderReference"), updatedAt = Optional(order, "updatedAt")
-                })).ToArray();
+                var dayStart=DateTime.Today.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'",System.Globalization.CultureInfo.InvariantCulture);
+                var snap = await api.Request("GET","/v1/partner/agent/order-proofs?dayStart="+Uri.EscapeDataString(dayStart),null,state.Token,null,ct);
+                workspaceOrders = snap.GetProperty("orders").EnumerateArray().Take(20).Select(SummaryForDesktop).ToArray();
+                orderPageCursor = OrderCursor(snap);
+                totalOrders = OptionalCount(snap,"totalOrders");
+                updatedToday = OptionalCount(snap,"updatedToday");
+                updatedLast24Hours = OptionalCount(snap,"updatedLast24Hours");
                 ordersScope = w.ActiveGrant?.ScopeDigest; ordersCurrent = true;
                 if (w.Sources.Any(s=>s.Issue=="IDENTITY_UNRESOLVED") && now >= nextReferenceRefresh)
                 {

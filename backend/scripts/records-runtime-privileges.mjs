@@ -167,7 +167,7 @@ const policy123 = {
 //119 adds only an index: its catalog columns and effective grants remain118.
 const policiesByMigration=new Map([
  [108,policy108],[109,policy],[113,policy113],[116,policy116],[117,policy117],
- [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],[123,policy123],
+ [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],[123,policy123],[124,policy123],
 ]);
 function selectPolicy(throughMigration){
  const result=policiesByMigration.get(throughMigration);

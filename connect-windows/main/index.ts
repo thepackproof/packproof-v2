@@ -8,6 +8,7 @@ import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
 import {workspaceParams,currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
 import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
+import type {SourceRole,WorkspaceFolderSuggestion} from '../ui/workspace-types';
 import type {ConnectStatus} from '../ui/types';
 protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);app.enableSandbox();
 let win:BrowserWindow|null=null;
@@ -19,12 +20,43 @@ function safeError(error:unknown){const message=error instanceof Error?error.mes
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);return {ok:true,value:await fn(...parsed)};}catch(error){return {ok:false,error:safeError(error)};}});}
 async function openWorkspaceApproval(current:ConnectStatus) {
+ if (!current.installationId && current.enrollment?.state === 'pending') {
+  await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl));
+  return;
+ }
  const path = current.workspace?.approvalPath;
  if (!path || current.workspace?.phase !== 'awaiting_approval')
    throw Error('Review your selected sources and start collecting to request permission.');
  await open(approvalUrl(path, config.webBaseUrl));
 }
+async function workspaceFolderSuggestion(role:SourceRole):Promise<WorkspaceFolderSuggestion|null>{
+ const current=await status();
+ const known=current.workspace?.sources.find(source=>source.transport!=='api' && source.roles.includes(role));
+ const choices:WorkspaceFolderSuggestion[]=[];
+ if(known?.folder)choices.push({folder:known.folder,kind:'selected'});
+ choices.push({folder:preparedExportPath(config.channel,process.env.ProgramData),kind:'prepared'});
+ for(const choice of choices){
+  if(await stat(choice.folder).then(info=>info.isDirectory(),()=>false))return choice;
+ }
+ return null;
+}
 function setup(){
+ bind('getWorkspaceFolderSuggestion',workspaceFolderSuggestion);
+ bind('useWorkspaceFolderSuggestion',async (role,expectedFolder)=>{
+  const choice=await workspaceFolderSuggestion(role);
+  if(!choice || choice.folder!==expectedFolder)throw Error('That folder is unavailable. Choose a records folder to continue.');
+  return mutate('addWorkspaceSource',{role,folder:choice.folder});
+ });
+ bind('replaceWorkspaceFolder',async (sourceId,expectedGeneration)=>{
+  const current=await status();
+  const source=current.workspace?.sources.find(s=>s.id===sourceId && s.generation===expectedGeneration && s.transport!=='api');
+  if(!source)throw Error('This connection has changed. Reopen it to choose its folder.');
+  const result=await dialog.showOpenDialog(win!,{title:'Choose the folder for this connection',defaultPath:source.folder,properties:['openDirectory','dontAddToRecent']});
+  if(result.canceled || result.filePaths.length!==1)return status();
+  return mutate('replaceWorkspaceFolder',{sourceId,expectedGeneration,folder:result.filePaths[0]});
+ });
+ bind('workspaceOrderPage',async before=>rendererSafe(await bridge.request('workspaceOrderPage',{before})));
+ bind('workspaceSourceRecord',async (proofId,revision,eventKey)=>bridge.request('workspaceSourceRecord',{proofId,revision,eventKey}));
  bind('chooseWorkspaceRelatedSource',(sourceId,expectedGeneration,role,relatedId)=>mutate('chooseWorkspaceRelatedSource',{sourceId,expectedGeneration,role,relatedId}));
  bind('confirmWorkspaceOrderMap',(sourceId,expectedGeneration,profileVersion)=>mutate('confirmWorkspaceOrderMap',{sourceId,expectedGeneration,profileVersion}));
  bind('openWorkspaceReview',async()=>{
@@ -40,7 +72,7 @@ function setup(){
   await open(new URL('/app/order-proofs/'+encodeURIComponent(proofId)+'?'+params,config.webBaseUrl).href);
  });
  bind('workspaceSearchOrders',async query=>rendererSafe(await bridge.request('workspaceSearchOrders',{query})));
- bind('workspaceAttention',async()=>rendererSafe(await bridge.request('workspaceAttention')));
+ bind('workspaceAttention',async before=>rendererSafe(await bridge.request('workspaceAttention',before===undefined?{}:{before})));
  bind('getWorkspaceStatus',status);
  bind('addWorkspaceDirectSource',(sourceNamespace?:string)=>mutate('addWorkspaceDirectSource',{role:'order',sourceNamespace}));
  bind('copyWorkspaceDirectProfile',async sourceId=>{
@@ -51,9 +83,9 @@ function setup(){
   clipboard.writeText(encoded);
  });
  bind('workspaceDraftPreview',async()=>rendererSafe(await bridge.request('workspaceDraftPreview')));
- bind('workspaceOrderDetail', async (proofId,revision) => rendererSafe(await bridge.request('workspaceOrderDetail', {proofId,revision})));
+ bind('workspaceOrderDetail', async (proofId,revision) => bridge.request('workspaceOrderDetail', {proofId,revision}));
  bind('chooseWorkspaceFolder', async role => {
-  const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', properties:['openDirectory','dontAddToRecent'] });
+  const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', defaultPath:(await workspaceFolderSuggestion(role))?.folder, properties:['openDirectory','dontAddToRecent'] });
   if (result.canceled || result.filePaths.length !== 1) return status();
   return mutate('addWorkspaceSource', {role, folder:result.filePaths[0]});
  });

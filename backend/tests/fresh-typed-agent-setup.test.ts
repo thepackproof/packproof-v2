@@ -74,7 +74,7 @@ describe('fresh typed source setup through the assembled application',()=>{
 
 it('approves an exact multi-source scope, links late evidence, and streams immutable revisions',async()=>{
   vi.stubEnv('PACKPROOF_ORDER_WORKSPACE_ENABLED','true');
-  const w=await workspace(),e=await start(w,'0.5.0'),approval=await approve(w,e,{integrationAccountId:null,createLocalSource:true},'multi-order-test');
+  const w=await workspace(),e=await start(w,'0.6.0'),approval=await approve(w,e,{integrationAccountId:null,createLocalSource:true},'multi-order-test');
   expect(approval.status,approval.text).toBe(200);
   const {service}=await redeem(w,e);await acknowledge(e,service);
   const post=(p:string,b:unknown)=>request(app).post('/v1/partner/agent/'+p).set(service).send(b);
@@ -108,6 +108,12 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
   const detail=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/3').set(service);
   expect(detail.status,detail.text).toBe(200);expect(detail.body.events).toHaveLength(3);
   expect(detail.body.lines).toEqual([{lineId:'20',sku:'A100',orderedQuantity:'3',shippedQuantity:'2'},{lineId:'30',sku:'A100',orderedQuantity:'1'}]);
+  const observationKey=detail.body.evidence.find((v:{eventId:string;version:string})=>v.eventId==='order-created' && v.version==='1').eventKey;
+  const inspect=(proof:string,revision:number,key:string)=>request(app).get('/v1/partner/agent/order-proofs/'+proof+'/revisions/'+revision+'/sources/'+key).set(service);
+  const source=await inspect(id,3,observationKey);
+  expect(source.status,source.text).toBe(200);
+  expect(source.body).toMatchObject({kind:'original',eventKey:observationKey,receiptId:first.body.receiptId,originalText:JSON.stringify(sourceOrder)});
+  expect((await inspect(id,1,waiting.body.items[0].eventKey)).status).toBe(404);
   const humanRead=await request(app).get('/me/records/order-proofs/'+id).query(w.scope).set(human(w.user));
   expect(humanRead.body).toEqual(detail.body);
   const other=await request(app).get('/me/records/order-proofs/'+id).query(foreign.scope).set(human(foreign.user));
@@ -134,6 +140,10 @@ it('approves an exact multi-source scope, links late evidence, and streams immut
   expect(moved.status,moved.text).toBe(200);expect(moved.body.proofs).toEqual(expect.arrayContaining([{proofId:id,revision:4},{proofId:cloudId,revision:3}]));
   const prior=await request(app).get('/v1/partner/agent/order-proofs/'+id+'/revisions/3').set(service);
   expect(prior.body.events).toHaveLength(3);
+  const movedSource=await inspect(id,3,waiting.body.items[0].eventKey);
+  expect(movedSource.body).toMatchObject({kind:'derived_excerpt',reason:'shared_or_reassigned_record',fields:{}});
+  expect(movedSource.body.originalText).toBeUndefined();
+  expect((await inspect(cloudId,3,observationKey)).status).toBe(404);
   const submitApi=(version:string,qty:string,key:string)=>{
    const record=item(cloud.body.connectedEventId,'order',cloudRef,[],[{lineId:'4',orderedQuantity:qty}],version);
    const raw=Buffer.from(JSON.stringify(record));

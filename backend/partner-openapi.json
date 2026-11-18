@@ -47635,7 +47635,27 @@
             "PartnerCredential": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "includeOrderIssues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Authorized result.",
@@ -47678,6 +47698,24 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 200
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "dayStart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
             }
           },
           {
@@ -47884,6 +47922,24 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 200
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "dayStart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
             }
           },
           {
@@ -48389,6 +48445,148 @@
                   "expectedRevision",
                   "reason"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-proofs/{proofId}/revisions/{revision}/sources/{eventKey}": {
+      "get": {
+        "operationId": "connect_get_v1_partner_agent_order_proofs_proofId_revisions_revision_sources_eventKey",
+        "summary": "Inspect one revision-bound source observation. Verified single-record UTF-8 originals are limited to 64 KiB. Other formats return only an authorized record excerpt.",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "eventKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "eventKey",
+                    "receiptId",
+                    "kind",
+                    "fields",
+                    "fieldLineage"
+                  ],
+                  "properties": {
+                    "eventKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "receiptId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "kind": {
+                      "enum": [
+                        "original",
+                        "derived_excerpt"
+                      ]
+                    },
+                    "originalSha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "fieldLineage": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "locator": {
+                      "type": "string"
+                    },
+                    "sourceId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "occurredAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "originalText": {
+                      "type": "string",
+                      "maxLength": 65536
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "artifactReceiptId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
               }
             }
           }
@@ -59608,6 +59806,24 @@
               "null"
             ]
           },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shipmentReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "orderedQuantity": {
             "type": [
               "string",
@@ -59629,7 +59845,28 @@
             ],
             "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
           },
+          "loadedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
           "shippedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "acknowledgedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "backorderedQuantity": {
             "type": [
               "string",
               "null"
@@ -59649,6 +59886,114 @@
               "null"
             ],
             "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "orderedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "pickedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "packedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "loadedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "shippedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "acknowledgedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "backorderedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "returnedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "cancelledQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
           }
         },
         "required": [
@@ -60134,6 +60479,24 @@
                 "updatedAt": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "customerName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "latestKind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "fulfillmentStatus": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "issue": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -60147,6 +60510,25 @@
           "cursor": {
             "type": "integer",
             "minimum": 0
+          },
+          "totalOrders": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedLast24Hours": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedToday": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextBefore": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
           }
         },
         "required": [
@@ -60327,6 +60709,68 @@
           },
           "hasMore": {
             "type": "boolean"
+          },
+          "orderIssues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proofId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "orderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "customerName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "latestKind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "fulfillmentStatus": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "issue": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "proofId",
+                "revision",
+                "orderReference",
+                "updatedAt"
+              ]
+            }
+          },
+          "orderIssueCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextIssuesBefore": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
           }
         },
         "required": [
@@ -60355,6 +60799,24 @@
               "null"
             ]
           },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shipmentReference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "orderedQuantity": {
             "type": [
               "string",
@@ -60376,7 +60838,28 @@
             ],
             "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
           },
+          "loadedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
           "shippedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "acknowledgedQuantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
+          },
+          "backorderedQuantity": {
             "type": [
               "string",
               "null"
@@ -60397,10 +60880,126 @@
             ],
             "pattern": "^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$"
           },
+          "orderedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "pickedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "packedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "loadedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "shippedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "acknowledgedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "backorderedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "returnedQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
+          "cancelledQuantityState": {
+            "enum": [
+              "not_due",
+              "missing",
+              "unavailable",
+              "reported",
+              "not_reported",
+              "scheduled",
+              "",
+              null
+            ]
+          },
           "orderedMinusShippedQuantity": {
             "type": "string",
             "pattern": "^-?[0-9]+(?:\\.[0-9]{1,9})?$",
             "description": "Exact ordered minus shipped. Present when both source quantities have the same unambiguous unit."
+          },
+          "loadedMinusAcknowledgedQuantity": {
+            "type": "string",
+            "description": "Exact loaded minus acknowledged for matching fulfillment scopes and known comparable units."
+          },
+          "loadedAcknowledgedDiscrepancy": {
+            "type": "string",
+            "description": "Human-readable difference between explicitly recorded loaded and acknowledged quantities."
           },
           "orderedShippedDiscrepancy": {
             "type": "string",

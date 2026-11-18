@@ -8,6 +8,8 @@ public sealed partial class AgentRuntime
     private DateTimeOffset nextWorkspacePoll;
     private DateTimeOffset nextOrderRefresh;
     private JsonElement[] workspaceOrders = [];
+    private long? orderPageCursor;
+    private int? totalOrders,updatedToday,updatedLast24Hours;
     private string? ordersScope;
     private bool ordersCurrent;
     private IEnumerable<string> WorkspaceSourceFolders => state.Workspace?.Sources.Where(s => s.Transport == "folder" && s.Roles.Count > 0).Select(s => s.Folder) ?? [];
@@ -73,6 +75,7 @@ public sealed partial class AgentRuntime
     private object WorkspaceView()
     {
         var w = state.Workspace;
+        bool currentOrders=WorkspaceGrantCurrent && ordersScope==w?.ActiveGrant?.ScopeDigest;
         return new
         {
             step = w?.Step ?? "order", phase = w?.Phase ?? "draft",
@@ -81,7 +84,10 @@ public sealed partial class AgentRuntime
                 "ready" or "pending" or "current" => "ready", "access_denied" => "denied", "unavailable" => "unavailable", _ => "unselected"
             },
             canReadOrders = WorkspaceGrantCurrent, viewKey = WorkspaceGrantCurrent ? w?.ActiveGrant?.ScopeDigest : null,
-            orders = WorkspaceGrantCurrent && ordersScope == w?.ActiveGrant?.ScopeDigest ? workspaceOrders : [],
+            orders = currentOrders ? workspaceOrders : [],
+            nextBefore = currentOrders ? orderPageCursor : null,
+            updatedToday = currentOrders ? updatedToday : null, totalOrders = currentOrders ? totalOrders : null,
+            updatedLast24Hours = currentOrders ? updatedLast24Hours : null,
             syncState = WorkspaceGrantCurrent && networkOnline && ordersCurrent ? "current" : "pending",
             sources = (w?.Sources ?? []).Where(s => s.Roles.Count > 0).Select(s => new
             {
@@ -114,6 +120,40 @@ public sealed partial class AgentRuntime
                 if (p.GetProperty("role").GetString() != "order") throw new ConnectException("SOURCE_ROLE_INVALID", "Partner API connections supply order records.");
                 w.ConnectPartner(Optional(p,"sourceNamespace")?.GetString() ?? "partner-api");
                 break;
+            case "replaceWorkspaceFolder":
+            {
+                var source=Source(w,p);
+                if(source.Transport!="folder" || source.Generation!=p.GetProperty("expectedGeneration").GetInt32())
+                    throw new ConnectException("SOURCE_REFERENCE_CHANGED","The connection changed. Open it again to select its folder.");
+                var raw=p.GetProperty("folder").GetString() ?? "";
+                ValidateProofSourceFolder(raw);
+                var folder=FolderSource.ValidateWorkspaceRoot(raw);
+                using var pin=new ProofOutputPaths.DirectoryPin(folder);
+                var physical=pin.KeyStrings.FirstOrDefault();
+                bool samePath=string.Equals(folder,source.Folder,StringComparison.OrdinalIgnoreCase);
+                bool sameIdentity=source.PhysicalRoot==null || source.PhysicalRoot==physical;
+                if(!samePath || !sameIdentity)
+                {
+                    if(w.Sources.Any(s=>s!=source && s.Roles.Count>0 && (string.Equals(s.Folder,folder,StringComparison.OrdinalIgnoreCase) ||
+                        physical!=null && s.PhysicalRoot==physical)))
+                        throw new ConnectException("SOURCE_ALREADY_CONNECTED","That folder already has a connection. Review its record types.");
+                    if(source.MediaJobs.Count>0 || queue.Counts(DurableQueue.WorkspaceLane(source.Id)).Any(pair=>pair.Key!="complete" && pair.Value>0))
+                        throw new ConnectException("SOURCE_WORK_PENDING","This connection still has captured records to send. Restore its current folder or add the new location as another source.");
+                    var nextGeneration=checked(source.Generation+1);
+                    if(workspaceWatchers.Remove(source.Id,out var watcher))watcher.Dispose();
+                    workspaceChanges.TryRemove(source.Id,out _);
+                    source.Folder=folder; source.Generation=nextGeneration;
+                    source.ObservedNamespace=null; source.ConfirmedMap=null; source.ProposedMap=null;
+                    source.ConfirmedWorkflow=null; source.ProposedWorkflow=null; source.Workflows.Clear();
+                    source.ConfirmedDependencies.Clear(); source.RelatedSources.Clear();
+                    source.Inventory.Clear(); source.Cursor=null; source.LastScanAt=null; source.RetryAt=null;
+                    source.CoverageGap=false; source.Issue=null;
+                    w.Invalidate(); w.Step=source.InspectRole ?? source.Roles[0];
+                }
+                source.PhysicalRoot=physical;
+                InspectWorkspaceSource(source);
+                break;
+            }
             case "addWorkspaceSource":
             {
                 var raw = p.GetProperty("folder").GetString() ?? "";
@@ -333,12 +373,10 @@ public sealed partial class AgentRuntime
 
     private async Task<object> WorkspaceOrderDetail(JsonElement p, CancellationToken ct)
     {
-        if (!WorkspaceGrantCurrent) throw new ConnectException("AUTH_REQUIRED", "Reconnect this workspace to open the latest order.");
-        var id = p.GetProperty("proofId").GetString();
-        var revision = p.GetProperty("revision").GetInt32();
-        if (id is not { Length: > 0 and <= 120 } || id.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_') || revision < 1)
-            throw new ConnectException("ORDER_INVALID", "Choose an order from the current list.");
-        return OrderForDesktop(await api.Request("GET", $"/v1/partner/agent/order-proofs/{id}/revisions/{revision}", null, state.Token, null, ct));
+        var (id,revision)=RequireOrderRead(p);
+        var proof=await api.Request("GET",RevisionPath(id,revision),null,state.Token,null,ct);
+        if(Optional(proof,"proofId")?.GetString()!=id || Optional(proof,"revision")?.GetInt32()!=revision)throw InvalidFeed();
+        return OrderForDesktop(proof);
     }
 }
 
