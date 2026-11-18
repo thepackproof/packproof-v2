@@ -7,6 +7,7 @@
     "dev": "vite",
     "review": "vite --config review.vite.config.ts",
     "build": "tsc --noEmit && vite build",
+    "build:connect-portal": "npm run build && node scripts/write-connect-release.mjs",
     "preview": "vite preview",
     "test": "npm run test:links && vitest run",
     "typecheck": "tsc --noEmit",
@@ -32,6 +33,10 @@
     "jsdom": "^26.1.0",
     "typescript": "^5.9.2",
     "vite": "^7.3.7",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "picomatch": "file:../backend/vendor/picomatch/picomatch-4.0.7-packproof.1.tgz"
+  },
+  "overrides": {
+    "picomatch": "$picomatch"
   }
 }

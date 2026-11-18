@@ -1,7 +1,21 @@
-name: Connect signed Windows candidate
+name: Connect signed Windows release
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Build a signed candidate or promote previously accepted bytes
+        type: choice
+        options: [build, publish]
+        default: build
+      reviewed_sha:
+        description: Full reviewed main commit used by the hosted release and installer
+        required: true
+      signed_run_id:
+        description: For publication, the successful signed build run ID
+      installer_sha256:
+        description: For publication, the SHA-256 of the accepted installer
+      acceptance_url:
+        description: For publication, the reviewed Windows and hosted acceptance evidence
       channel:
         description: Protected Connect release environment
         type: choice
@@ -13,7 +27,40 @@ concurrency:
   group: connect-release-${{ inputs.channel }}
   cancel-in-progress: false
 jobs:
+  source:
+    name: Verify reviewed source and Windows qualification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          OPERATION: ${{ inputs.operation }}
+          SIGNED_RUN_ID: ${{ inputs.signed_run_id }}
+          INSTALLER_SHA256: ${{ inputs.installer_sha256 }}
+          ACCEPTANCE_URL: ${{ inputs.acceptance_url }}
+        with:
+          script: |
+            const env = process.env;
+            if (context.ref !== 'refs/heads/main' || context.sha !== env.REVIEWED_SHA) throw Error('Select the reviewed main commit.');
+            const current = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            if (current.data.commit.sha !== context.sha) throw Error('The selected source is no longer main.');
+            const runs = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'connect-windows-ci.yml', branch: 'main', head_sha: context.sha, per_page: 100 });
+            const latest = runs.data.workflow_runs.filter(r => r.head_sha === context.sha && ['push','workflow_dispatch'].includes(r.event)).sort((a,b) => b.id - a.id)[0];
+            if (latest?.conclusion !== 'success') throw Error('Run Connect Windows candidate on the exact main commit and wait for success.');
+            if (env.OPERATION === 'publish') {
+              if (!/^[1-9][0-9]{0,14}$/.test(env.SIGNED_RUN_ID) || !/^[a-f0-9]{64}$/.test(env.INSTALLER_SHA256)) throw Error('Supply the accepted signed run and installer digest.');
+              const acceptance = new URL(env.ACCEPTANCE_URL);
+              if (acceptance.protocol !== 'https:' || acceptance.username || acceptance.password) throw Error('Supply an HTTPS acceptance receipt.');
+              const run = (await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: Number(env.SIGNED_RUN_ID) })).data;
+              if (run.head_sha !== context.sha || run.head_branch !== 'main' || run.path !== '.github/workflows/connect-windows-release.yml' || run.event !== 'workflow_dispatch' || run.conclusion !== 'success') throw Error('Only a successful signed release run on this reviewed source can be promoted.');
+            }
+
   signed:
+    if: inputs.operation == 'build'
+    needs: source
     environment: connect-${{ inputs.channel }}
     runs-on: windows-2025
     timeout-minutes: 60
@@ -27,7 +74,8 @@ jobs:
     env:
       APP_ENV: ${{ inputs.channel }}
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
-      PACKPROOF_WEB_BASE_URL: https://thepackproof.com
+      PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_WEB_BASE_URL }}
+      PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
       PACKPROOF_UPDATES_URL: https://downloads.thepackproof.com/connect/${{ inputs.channel }}/win32/x64/
       WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
       PACKPROOF_WINDOWS_SIGNING_PROVIDER: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx' }}
@@ -61,6 +109,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:release
+      - run: node --test tests/hosted-approval.test.mjs tests/connect-publication.test.cjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
       - run: npm run build
       - run: npm run publish:native
@@ -88,3 +137,48 @@ jobs:
             connect-windows/release/${{ inputs.channel }}/win32-x64/SHA256SUMS
             connect-windows/release/${{ inputs.channel }}/win32-x64/release-evidence.json
             connect-windows/release/${{ inputs.channel }}/win32-x64/build-provenance.json
+
+  publish:
+    if: inputs.operation == 'publish'
+    name: Publish the accepted Connect installer
+    needs: source
+    environment: connect-${{ inputs.channel }}-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_WEB_BASE_URL }}
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
+      PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
+      CONNECT_INSTALLER_SHA256: ${{ inputs.installer_sha256 }}
+      PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: connect-windows/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: connect-windows
+      - run: node connect-windows/scripts/verify-hosted-approval.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.signed_run_id }}
+          name: packproof-connect-${{ inputs.channel }}-win32-x64-${{ github.sha }}
+          path: signed-connect
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PACKPROOF_RELEASE_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: connect-release-${{ github.run_id }}
+      - name: Verify and promote the accepted files
+        run: |
+          test "$(aws sts get-caller-identity --query Account --output text)" = 784514617543
+          node connect-windows/scripts/publish-release.cjs signed-connect > "$RUNNER_TEMP/connect-promotion.json"
+          node -e 'const r=require(process.env.RUNNER_TEMP+"/connect-promotion.json"); require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, "Published PackProof Connect "+r.version+"\n\n[Download the verified installer]("+r.installer+")\n\nSHA-256: "+r.sha256+"\n")'

@@ -36,3 +36,27 @@ test('refuses a silently redirected approval response',async()=>{
 test('refuses insecure origins and embedded credentials',async()=>{
  for(const url of ['http://web.example','https://u:p@web.example','https://web.example/path'])await assert.rejects(verifyHostedApproval(url,api,responder()),/HTTPS origin/);
 });
+
+test('matches the reviewed hosted portal commit before signing or publishing', async () => {
+  await verifyHostedApproval(web, api, responder(), {expectedCommit:release.commit});
+  await assert.rejects(verifyHostedApproval(web, api, responder(), {expectedCommit:'b'.repeat(40)}), /reviewed portal commit/);
+});
+
+test('production checks use Cognito and the live approval locator on the reviewed release', async () => {
+  const manifest={...release,environment:'production',auth:{mode:'cognito'},capabilities:{connectApproval:1,orderWorkspaceApproval:1}};
+  const serve=responder(manifest), paths=[];
+  function serveApi(commit) {
+    return async (...args) => {
+      paths.push(args[0]);
+      if (args[0] === api + '/meta') return new Response(JSON.stringify({commit}),{headers:{'content-type':'application/json'}});
+      return serve(...args);
+    };
+  }
+  const requested={expectedCommit:release.commit,expectedEnvironment:'production',requireOrderWorkspace:true};
+  await verifyHostedApproval(web,api,serveApi(release.commit),requested);
+  await assert.rejects(verifyHostedApproval(web,api,serveApi('f'.repeat(40)),requested), /API does not match/);
+  assert.ok(paths.some(p=>p.includes('environment=live')));
+  for (const overrides of [{environment:'staging'},{auth:{mode:'fixture'}}]) {
+    await assert.rejects(verifyHostedApproval(web,api,responder({...manifest,...overrides}),{expectedEnvironment:'production'}),/environment and Cognito/);
+  }
+});

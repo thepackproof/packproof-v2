@@ -39,7 +39,8 @@
     "typescript": "^5.9.2",
     "vite": "7.3.7",
     "vitest": "4.1.12",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "picomatch": "file:../backend/vendor/picomatch/picomatch-4.0.7-packproof.1.tgz"
   },
   "overrides": {
     "source-map-js": "1.2.2",
@@ -51,6 +52,7 @@
     "undici@^6.0.0": "6.29.1",
     "undici@^7.0.0": "7.30.1",
     "glob@>=9.0.0 <14.0.2": "14.0.3",
-    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1",
+    "picomatch": "$picomatch"
   }
 }

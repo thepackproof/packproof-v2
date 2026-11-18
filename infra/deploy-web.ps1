@@ -49,6 +49,10 @@ function Get-StackOutputs([string]$Name) {
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $WebRoot = Join-Path $RepoRoot "web"
 $WebTemplate = Join-Path $PSScriptRoot "web.yaml"
+$apiMeta = Invoke-RestMethod -Method Get -Uri "$($StagingApiUrl.TrimEnd('/'))/meta"
+if ($apiMeta.environment -ne "staging") {
+  throw "This is a staging script. Use infra/connect-portal-release.mjs for the customer-facing portal."
+}
 $Foundation = Get-StackOutputs $FoundationStack
 
 Write-Host "Validating $WebTemplate"
@@ -71,9 +75,11 @@ $env:VITE_PACKPROOF_AUTH_MODE = "cognito"
 $env:VITE_PACKPROOF_COGNITO_USER_POOL_ID = $Foundation.CognitoUserPoolId
 $env:VITE_PACKPROOF_COGNITO_CLIENT_ID = $Foundation.CognitoClientId
 $env:VITE_PACKPROOF_COGNITO_REGION = $Region
+$env:PACKPROOF_WEB_RELEASE_COMMIT = (git -C $RepoRoot rev-parse HEAD).Trim()
+$env:PACKPROOF_WEB_RELEASE_ENVIRONMENT = "staging"
 Push-Location $WebRoot
 try {
-  npm run build
+  npm run build:connect-portal
   if ($LASTEXITCODE -ne 0) {
     throw "web production build failed"
   }
@@ -85,20 +91,6 @@ $Dist = Join-Path $WebRoot "dist"
 if (-not (Test-Path (Join-Path $Dist "index.html"))) {
   throw "web/dist/index.html is missing"
 }
-$releaseSha = (git -C $RepoRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $releaseSha -notmatch '^[0-9a-f]{40}$') { throw "Could not resolve web release commit" }
-# Publish exact build identity; generic UI strings cannot identify a release.
-$releaseAssets = @(Get-ChildItem (Join-Path $Dist "assets") -File | ForEach-Object {
-  @{ path = "assets/$($_.Name)"; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-})
-@{
-  commit = $releaseSha
-  environment = "staging"
-  apiUrl = $StagingApiUrl
-  indexSha256 = (Get-FileHash (Join-Path $Dist "index.html") -Algorithm SHA256).Hash.ToLowerInvariant()
-  assets = $releaseAssets
-} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Dist "release.json") -Encoding utf8
-
 # Keep prior content-addressed assets so open tabs can still load their chunks
 # while the new index propagates through CloudFront.
 Write-Host "Uploading $Dist to s3://$($Web.WebBucketName)"

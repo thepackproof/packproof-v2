@@ -323,6 +323,13 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.project }}/package-lock.json
       - run: npm ci
+      - name: Verify the reviewed file matcher used by installed consumers
+        run: node ../backend/vendor/picomatch/verify.cjs
+      - name: Reproduce reviewed matcher code and check for new upstream advisories
+        if: matrix.project == 'backend'
+        run: |
+          python3 vendor/picomatch/rebuild.py --check
+          node vendor/picomatch/audit-upstream.mjs
       - name: Block high and critical known dependency findings
         run: |
           audit_report="$RUNNER_TEMP/dependency-audit.json"

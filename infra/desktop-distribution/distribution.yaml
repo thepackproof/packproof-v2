@@ -164,6 +164,14 @@ Resources:
             Compress: false
             CachePolicyId: !Ref UncachedMetadata
             ResponseHeadersPolicyId: !Ref MetadataHeaders
+          - PathPattern: connect/*/win32/x64/latest.yml
+            TargetOriginId: release-s3
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            Compress: false
+            CachePolicyId: !Ref UncachedMetadata
+            ResponseHeadersPolicyId: !Ref MetadataHeaders
           - PathPattern: desktop/health.json
             TargetOriginId: release-s3
             ViewerProtocolPolicy: https-only
@@ -196,7 +204,10 @@ Resources:
             Effect: Allow
             Principal: {Service: cloudfront.amazonaws.com}
             Action: s3:GetObject
-            Resource: !Sub '${ReleaseBucket.Arn}/desktop/*'
+            Resource:
+              - !Sub '${ReleaseBucket.Arn}/desktop/*'
+              - !Sub '${ReleaseBucket.Arn}/connect/staging/win32/x64/*'
+              - !Sub '${ReleaseBucket.Arn}/connect/production/win32/x64/*'
             Condition:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
@@ -292,6 +303,90 @@ Resources:
         - {Key: Component, Value: DesktopUpdates}
         - {Key: Channel, Value: production}
 
+  ConnectStagingPublisher:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /packproof/connect/
+      Description: Publish verified Connect staging artifacts only; cannot alter production, health, DNS, signing credentials, or infrastructure.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:ref: refs/heads/main
+                token.actions.githubusercontent.com:repository_id: '1349680833'
+                token.actions.githubusercontent.com:repository_owner_id: '314726215'
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepositorySubject}:environment:connect-staging-publish'
+                  - !Sub 'repo:${GitHubImmutableRepositorySubject}:environment:connect-staging-publish'
+      Policies:
+        - PolicyName: PublishStagingReleasesOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListOnlyStagingPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ReleaseBucket.Arn
+                Condition:
+                  StringLike: {s3:prefix: ['connect/staging/win32/x64/*']}
+              - Sid: StagingObjectsOnly
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ReleaseBucket.Arn}/connect/staging/win32/x64/*'
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: ConnectUpdates}
+        - {Key: Channel, Value: staging}
+
+  ConnectProductionPublisher:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /packproof/connect/
+      Description: Publish verified Connect production artifacts only after protected environment approval; cannot alter staging, health, DNS, signing credentials, or infrastructure.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:ref: refs/heads/main
+                token.actions.githubusercontent.com:repository_id: '1349680833'
+                token.actions.githubusercontent.com:repository_owner_id: '314726215'
+                token.actions.githubusercontent.com:sub:
+                  - !Sub 'repo:${GitHubRepositorySubject}:environment:connect-production-publish'
+                  - !Sub 'repo:${GitHubImmutableRepositorySubject}:environment:connect-production-publish'
+      Policies:
+        - PolicyName: PublishProductionReleasesOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListOnlyProductionPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ReleaseBucket.Arn
+                Condition:
+                  StringLike: {s3:prefix: ['connect/production/win32/x64/*']}
+              - Sid: ProductionObjectsOnly
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${ReleaseBucket.Arn}/connect/production/win32/x64/*'
+      Tags:
+        - {Key: Application, Value: PackProof}
+        - {Key: Component, Value: ConnectUpdates}
+        - {Key: Channel, Value: production}
+
 Outputs:
   ActivationState:
     Description: Disabled until the same distribution is explicitly updated with the validated downloads certificate and alias.
@@ -314,3 +409,9 @@ Outputs:
   ProductionPublishRoleArn:
     Description: PACKPROOF_RELEASE_ROLE_ARN for desktop-production-publish only.
     Value: !GetAtt ProductionPublisher.Arn
+  ConnectStagingPublishRoleArn:
+    Description: PACKPROOF_RELEASE_ROLE_ARN for connect-staging-publish only.
+    Value: !GetAtt ConnectStagingPublisher.Arn
+  ConnectProductionPublishRoleArn:
+    Description: PACKPROOF_RELEASE_ROLE_ARN for connect-production-publish only.
+    Value: !GetAtt ConnectProductionPublisher.Arn

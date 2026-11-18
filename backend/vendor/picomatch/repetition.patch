@@ -1,0 +1,44 @@
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -506,5 +506,10 @@
+ 
+     if (extglobs.length && tok.type !== 'paren') {
+-      extglobs[extglobs.length - 1].inner += tok.value;
++      const group = extglobs[extglobs.length - 1];
++      group.inner += tok.value;
++      if (((tok.type === 'star' || tok.type === 'globstar') && tok.output)
++          || (tok.type === 'plus' && tok.output == null && tok.value === '+')) {
++        group.unbounded = true;
++      }
+     }
+ 
+@@ -542,5 +547,13 @@
+     const analysis = analyzeRepeatedExtglob(body, opts);
+ 
+-    if ((token.type === 'plus' || token.type === 'star') && analysis.risky) {
++    const repeated = token.type === 'plus' || token.type === 'star';
++    // Inside a plain single path segment, the wildcard can absorb subsequent
++    // copies of that segment. Keep its language and capture group without
++    // compiling a second unbounded repetition around it.
++    const flat = repeated && token.unbounded && !opts.bash
++      && /^[a-zA-Z0-9_.?-]*\*[a-zA-Z0-9_.?-]*$/.test(body);
++    if (flat) token.close = token.type === 'plus' ? ')' : ')?';
++
++    if (repeated && !flat && (analysis.risky || token.unbounded)) {
+       const safeOutput = analysis.safeOutput
+         ? (token.output ? '' : ONE_CHAR) + (opts.capture ? `(${analysis.safeOutput})` : analysis.safeOutput)
+@@ -560,4 +573,5 @@
+       state.output = token.output + open.output;
+       state.backtrack = true;
++      if (safeOutput && extglobs.length) extglobs[extglobs.length - 1].unbounded = true;
+ 
+       push({ type: 'paren', extglob: true, value, output: '' });
+@@ -596,4 +610,8 @@
+     }
+ 
++    // Keep the emitted group's width information through nested wrappers.
++    if (extglobs.length && (token.unbounded || repeated || token.type === 'negate')) {
++      extglobs[extglobs.length - 1].unbounded = true;
++    }
+     push({ type: 'paren', extglob: true, value, output });
+     decrement('parens');

@@ -66,6 +66,10 @@ $previousEnvironment = To-EnvironmentMap $previousContainer.environment
 if (-not $WebOrigins) { $WebOrigins = $previousEnvironment["PACKPROOF_WEB_ORIGINS"] }
 if (-not $WebOrigins) { $WebOrigins = $webUrl }
 $apiUrl = $before.ApiUrl
+$apiMeta = Invoke-RestMethod -Method Get -Uri "$($apiUrl.TrimEnd('/'))/meta"
+if ($apiMeta.environment -ne "staging") {
+  throw "This target serves another environment. Use the matching backend and portal release commands."
+}
 
 Write-Host "Current staging API: $apiUrl"
 Write-Host "Current staging web: $webUrl"

@@ -71,7 +71,8 @@
     "image-size": "npm:image-size-next@1.2.2",
     "typescript": "~5.8.3",
     "braces": "file:vendor/braces",
-    "node-forge": "file:vendor/node-forge"
+    "node-forge": "file:vendor/node-forge",
+    "picomatch": "file:vendor/picomatch/picomatch-3.0.2-packproof.1.tgz"
   },
   "overrides": {
     "@expo/plist": {
@@ -103,6 +104,18 @@
     "@istanbuljs/load-nyc-config@1.1.0": {
       "js-yaml": "4.3.2"
     },
-    "undici": "6.29.1"
+    "undici": "6.29.1",
+    "anymatch": {
+      "picomatch": "file:../../vendor/picomatch/picomatch-2.3.2-packproof.1.tgz"
+    },
+    "jest-util": {
+      "picomatch": "file:../../vendor/picomatch/picomatch-2.3.2-packproof.1.tgz"
+    },
+    "micromatch": {
+      "picomatch": "file:../../vendor/picomatch/picomatch-2.3.2-packproof.1.tgz"
+    },
+    "@expo/cli": {
+      "picomatch": "$picomatch"
+    }
   }
 }

@@ -14,7 +14,7 @@ function validate(env=process.env,platform=process.platform,{native=false}={}){
   if(platform!=='win32')throw Error('Signed Connect builds require native Windows');
   for(const k of ['PACKPROOF_API_BASE_URL','PACKPROOF_WEB_BASE_URL','WINDOWS_PUBLISHER_NAME'])if(!env[k])throw Error(`${k} is required`);
   if(!trustedUrl(env.PACKPROOF_API_BASE_URL)||!trustedUrl(env.PACKPROOF_WEB_BASE_URL))throw Error('Connect endpoints must be HTTPS origins');
-  if(new URL(env.PACKPROOF_WEB_BASE_URL).hostname!=='thepackproof.com')throw Error('Connect approval origin must be thepackproof.com');
+  if(!['thepackproof.com','dvpmnwc27i8tw.cloudfront.net'].includes(new URL(env.PACKPROOF_WEB_BASE_URL).hostname))throw Error('Connect approval origin must be an approved PackProof portal');
   if(env.PACKPROOF_UPDATES_URL!==c.updateUrl)throw Error('Connect update feed must match its environment');
   const provider=env.PACKPROOF_WINDOWS_SIGNING_PROVIDER||'pfx';
   if(provider==='pfx'){for(const k of ['WIN_CSC_LINK','WIN_CSC_KEY_PASSWORD'])if(!env[k])throw Error(`${k} is required`);}

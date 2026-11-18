@@ -41,7 +41,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:release
-      - run: node --test tests/hosted-approval.test.mjs
+      - run: node --test tests/hosted-approval.test.mjs tests/connect-publication.test.cjs
       - run: node scripts/verify-hosted-approval.mjs
       - run: dotnet test service-tests/PackProof.Connect.Service.Tests.csproj -c Release
         env:
