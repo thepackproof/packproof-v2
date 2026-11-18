@@ -13,10 +13,10 @@ import {sourceWorkRecheckIntervalMs,type SourceCoverage} from './coverage.js';
 /** Derived worker state contains no original files or viewer-specific Proof
  * visibility. Active assertions, not retained timeline history, drive rules. */
 export async function synchronizeOperationalCaseProjection(db:Database,clock:Clock,w:RecordWorkspace,caseId:string){
- const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
  const sourceHealthAvailable=reconstructionFeatureEnabled('sourceHealth');
  if(!sourceHealthAvailable){
   // The health-disabled loader omits sources; retain its counter preflight.
+  const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
   const sourceKeys=await readCaseSourceKeys(db,w,c);
   const sources:SourceCoverage[]=[];
   for(const key of sourceKeys){const [id,connectionId,namespace]=JSON.parse(key) as string[];sources.push(await readCaseSourceCoverage(db,clock,w,c,id,connectionId,namespace));}
@@ -52,7 +52,15 @@ export async function synchronizeOperationalCaseProjection(db:Database,clock:Clo
 export async function processPendingCaseProjections(db:Database,clock:Clock,limit=100){
  if(!reconstructionFeatureEnabled('reconstruction')||!reconstructionFeatureEnabled('pagedProjections'))return {processed:0,blocked:0};
  const n=Math.max(1,Math.min(100,Math.floor(limit))),now=clock.now().toISOString();
- const rows=(await db.query<{id:string;operator_membership_id:string;organization_id:string;environment:'sandbox'|'live'}>(`SELECT c.id,c.operator_membership_id,c.organization_id,c.environment FROM record_cases c LEFT JOIN record_case_projection_state s ON s.case_id=c.id WHERE s.case_id IS NULL OR (s.case_revision<c.revision AND (s.error_code IS NULL OR s.next_check_at<=$1)) OR s.next_check_at<=$1 ORDER BY CASE WHEN s.case_id IS NULL OR s.case_revision<c.revision THEN 0 ELSE 1 END,COALESCE(s.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
+ // A successful one-second recheck represents a recently incomplete source. Give
+ // its due time one routine cycle of precedence. Older maintenance can still lead.
+ const rows=(await db.query<{id:string;operator_membership_id:string;organization_id:string;environment:'sandbox'|'live'}>(`SELECT c.id,c.operator_membership_id,c.organization_id,c.environment
+  FROM record_cases c LEFT JOIN record_case_projection_state s ON s.case_id=c.id
+  WHERE s.case_id IS NULL OR (s.case_revision<c.revision AND (s.error_code IS NULL OR s.next_check_at<=$1)) OR s.next_check_at<=$1
+  ORDER BY CASE WHEN s.case_id IS NULL OR s.case_revision<c.revision THEN 0 ELSE 1 END,
+    CASE WHEN s.case_revision=c.revision AND s.error_code IS NULL AND s.next_check_at=s.created_at+interval '1 second'
+         THEN s.next_check_at-interval '60 seconds' ELSE COALESCE(s.next_check_at,c.created_at) END,
+    c.id LIMIT $2`,[now,n])).rows;
  let processed=0,blocked=0;
  for(const row of rows){try{
   const operator=(await db.query<{user_id:string}>('SELECT user_id FROM platform_memberships WHERE id=$1 AND organization_id=$2 AND revoked_at IS NULL',[row.operator_membership_id,row.organization_id])).rows[0];

@@ -82,11 +82,11 @@ export async function loadOperationalCaseProjection(db:Database,clock:Clock,w:Re
 }
 
 export async function loadOperationalCaseProjectionWithSourceKeys(db:Database,clock:Clock,w:RecordWorkspace,caseId:string,options:{evaluation?:boolean}={}) {
- await currentWorkspace(db,clock,w);
+ // requireCaseAccess reauthorizes the workspace before reading the scoped case.
  const c=await requireCaseAccess(db,clock,w,caseId) as CaseRow;
  const [assertionResult,entityResult,relationResult,membersResult,observationResult,receiptLimitations]=await Promise.all([
   db.query<AssertionRow>(`SELECT a.*,e.namespace,e.entity_type,e.external_id,e.parent_external_id,${currentCaseObservationProjectionSql('r','a.case_id')} AS normalized,r.history_eligibility,r.source_event_id,b.original_sha256,b.subscription_id,b.configuration_revision,b.grant_revision,b.source_profile,
-   NOT ${caseObservationSupersededSql('a.observation_id','a.case_id')} AS active
+   ${options.evaluation?'true':`NOT ${caseObservationSupersededSql('a.observation_id','a.case_id')}`} AS active
    FROM record_case_assertions a JOIN record_case_entities e ON e.id=a.entity_id AND e.case_id=a.case_id
    JOIN record_typed_rows r ON r.id=a.observation_id JOIN record_typed_batches b ON b.id=a.batch_id
    WHERE a.case_id=$1 AND ${currentCaseAssertionSql('a','r','a.case_id')} ${options.evaluation?`AND NOT ${caseObservationSupersededSql('a.observation_id','a.case_id')}`:''} AND b.organization_id=$2 AND b.environment=$3 ORDER BY a.received_at,a.id`,[caseId,w.organizationId,w.environment]),

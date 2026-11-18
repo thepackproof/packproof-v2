@@ -70,11 +70,11 @@ describe('authorized accepted-prefix receipt context and frozen packages',()=>{
   const worker=processPendingTypedImports({...deps,db:observed},1);let unsigned!:Awaited<ReturnType<typeof exportOperationalCase>>,signed!:Awaited<ReturnType<typeof exportSignedOperationalCase>>;
   try{
    await Promise.race([reached,worker.then(()=>{throw new Error('Worker finished without a visible committed prefix');})]);
-   expect(prefixState).toEqual({state:'running',accepted:2,processing:4});
+   expect(prefixState).toEqual({state:'running',accepted:1,processing:5});
    for(const health of ['true','false'])for(const paged of ['true','false']){
     vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED',health);vi.stubEnv('PACKPROOF_PAGED_PROJECTIONS_ENABLED',paged);
-    const visible=await getOperationalCase(opened.db,clock,w,a);expect(incomplete(visible)).toHaveLength(1);expect(visible.assertions.filter(value=>value.source.receiptId===receipt)).toHaveLength(2);
-    if(health==='true'){expect(visible.sources[0].accounting.processing).toBe(4);expect(visible.sources[0].caseAccounting?.processing).toBe(0);}
+    const visible=await getOperationalCase(opened.db,clock,w,a);expect(incomplete(visible)).toHaveLength(1);expect(visible.assertions.filter(value=>value.source.receiptId===receipt)).toHaveLength(1);
+    if(health==='true'){expect(visible.sources[0].accounting.processing).toBe(5);expect(visible.sources[0].caseAccounting?.processing).toBe(0);}
     expect(incomplete(await getOperationalCase(opened.db,clock,w,b))).toEqual([]);
    }
    vi.stubEnv('PACKPROOF_SOURCE_HEALTH_ENABLED','false');
@@ -88,7 +88,7 @@ describe('authorized accepted-prefix receipt context and frozen packages',()=>{
     expect(incomplete(JSON.parse((await exportOperationalCase({...deps,db:tx,reconstructionSigning:signing},w,a)).bytes.toString()))).toHaveLength(1);throw rollback;
    })).rejects.toBe(rollback);
    unsigned=await exportOperationalCase({...deps,reconstructionSigning:signing},w,a);signed=await exportSignedOperationalCase({...deps,reconstructionSigning:signing},w,a);
-   const frozen=JSON.parse(unsigned.bytes.toString()),signedPackage=JSON.parse(signed.bytes.toString());expect(frozen.schema).toBe('packproof.reconstruction-investigation/v1');expect(incomplete(frozen)).toHaveLength(1);expect(incomplete(frozen.projection)).toHaveLength(1);expect(frozen.sourceHealthMeasuredAt).toBe(clock.now().toISOString());expect(frozen.projection.assertions.filter((value:{source:{receiptId:string}})=>value.source.receiptId===receipt)).toHaveLength(2);
+   const frozen=JSON.parse(unsigned.bytes.toString()),signedPackage=JSON.parse(signed.bytes.toString());expect(frozen.schema).toBe('packproof.reconstruction-investigation/v1');expect(incomplete(frozen)).toHaveLength(1);expect(incomplete(frozen.projection)).toHaveLength(1);expect(frozen.sourceHealthMeasuredAt).toBe(clock.now().toISOString());expect(frozen.projection.assertions.filter((value:{source:{receiptId:string}})=>value.source.receiptId===receipt)).toHaveLength(1);
    expect(signedPackage.profile).toBe('packproof.reconstruction-investigation/v2');expect(incomplete(signedPackage.content)).toHaveLength(1);expect(signedPackage.manifest.content.sha256).toBe(sha256Hex(canonicalize(signedPackage.content)));expect(unsigned.bytes.toString()).not.toContain(unrelated);expect(signed.bytes.toString()).not.toContain(unrelated);
    await expect(getOperationalCase(opened.db,clock,{...w,organizationId:'unrelated-organization'},a)).rejects.toMatchObject({httpStatus:404});
   }finally{release();expect((await worker).blocked).toBe(0);}

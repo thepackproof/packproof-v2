@@ -98,10 +98,14 @@ export async function processPendingReconstructionIssues(db:Database,clock:Clock
  if(!reconstructionFeatureEnabled('reconstruction')||!reconstructionFeatureEnabled('sourceHealth')||!reconstructionFeatureEnabled('rules'))return {processed:0,blocked:0};
  const paged=reconstructionFeatureEnabled('pagedProjections'),n=Math.max(1,Math.min(paged?100:20,Math.floor(limit))),now=clock.now().toISOString();
  const projectionDirty=paged?`(p.case_revision=c.revision AND p.error_code IS NULL AND p.created_at>=state.checked_at AND p.projection_version IS DISTINCT FROM state.projection_version)`:'false',successfulRetry=paged?`(state.error_code IS NULL AND state.next_check_at=state.checked_at+interval '1 second')`:`state.error_code IS NULL`;
+ // Dirty revisions retain their existing ordering. A due one-second accounting
+ // retry can precede ordinary maintenance by at most its normal 60-second cycle.
+ const dueOrder=paged?`CASE WHEN state.case_revision=c.revision AND ${projectionDirty} IS NOT TRUE AND ${successfulRetry}
+   THEN state.next_check_at-interval '60 seconds' ELSE COALESCE(state.next_check_at,c.created_at) END`:'COALESCE(state.next_check_at,c.created_at)';
  const candidates=(await db.query<{id:string;revision:number;operator_membership_id:string;organization_id:string;environment:'sandbox'|'live'}>(`SELECT c.id,c.revision,c.operator_membership_id,c.organization_id,c.environment
   FROM record_cases c LEFT JOIN record_case_rule_state state ON state.case_id=c.id ${paged?'LEFT JOIN record_case_projection_state p ON p.case_id=c.id':''}
   WHERE state.case_id IS NULL OR ((state.case_revision<c.revision OR ${projectionDirty}) AND (state.error_code IS NULL OR state.next_check_at<=$1)) OR (state.next_check_at<=$1 AND (${successfulRetry} OR EXISTS(SELECT 1 FROM record_case_issues i WHERE i.case_id=c.id AND COALESCE((SELECT a.action FROM record_case_issue_actions a WHERE a.issue_id=i.id AND a.action NOT IN ('note','assign') ORDER BY sequence DESC LIMIT 1),'reopen') NOT IN ('resolve','system_resolve'))))
-  ORDER BY CASE WHEN state.case_id IS NULL OR state.case_revision<c.revision OR ${projectionDirty} THEN 0 ELSE 1 END,COALESCE(state.next_check_at,c.created_at),c.id LIMIT $2`,[now,n])).rows;
+  ORDER BY CASE WHEN state.case_id IS NULL OR state.case_revision<c.revision OR ${projectionDirty} THEN 0 ELSE 1 END,${dueOrder},c.id LIMIT $2`,[now,n])).rows;
  let processed=0,blocked=0;
  for(const candidate of candidates){
   try{

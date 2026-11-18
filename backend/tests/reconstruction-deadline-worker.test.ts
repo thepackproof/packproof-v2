@@ -74,4 +74,40 @@ describe('first durable finding at a qualified operational deadline',()=>{
   expect((await listOperationalCaseIssues(opened.db,clock,w,id)).issues).toEqual([expect.objectContaining({category:'label_acceptance_gap',evaluation:expect.objectContaining({outcome:'different',physicalCondition:'not_established'})})]);
   expect(await processPendingReconstructionIssues(opened.db,clock,1)).toEqual({processed:0,blocked:0});
  },60000);
+
+ it('prioritizes a due one-second retry while allowing overdue maintenance to age ahead of it',async()=>{
+  const savedTime=currentTime;
+  try{
+   currentTime=createdAt-300_000;
+   const orders=await source('schedule-order-source',undefined,'packproof.order-lines/v1');
+   const receipt=await ingest(orders,[order('scheduled-retry','SCHEDULED-RETRY'),order('scheduled-maintenance','SCHEDULED-MAINTENANCE')],'schedule-priority');
+   const [retry,maintenance]=receipt.caseIds;
+   expect(receipt.caseIds).toHaveLength(2);
+   await activate(orders,receipt.id);
+   const w=await workspace();
+   for(const id of [retry,maintenance]){
+    await synchronizeOperationalCaseProjection(opened.db,clock,w,id);
+    await synchronizeOperationalCaseIssues(opened.db,clock,w,id);
+   }
+   // Routine rule reevaluation is eligible only when the case has an open finding.
+   await opened.db.query(`INSERT INTO record_case_issues(id,case_id,category,rule_version,subject,created_at)
+    VALUES('schedule-open-finding',$1,'quantity_disagreement','schedule-fixture/1','{}'::jsonb,$2)`,[maintenance,clock.now().toISOString()]);
+   for(const [table,stamp,run] of [
+    ['record_case_projection_state','created_at',processPendingCaseProjections],
+    ['record_case_rule_state','checked_at',processPendingReconstructionIssues],
+   ] as const){
+    for(const [overdue,expected] of [[10_000,retry],[75_000,maintenance]] as const){
+     const checked=clock.now().toISOString(),ordinaryDue=new Date(currentTime-overdue).toISOString();
+     await opened.db.query(`UPDATE ${table}
+      SET next_check_at=CASE case_id WHEN $1 THEN $3::timestamptz ELSE $4::timestamptz END,
+       ${stamp}=CASE case_id WHEN $1 THEN $3::timestamptz-interval '1 second' ELSE $4::timestamptz-interval '60 seconds' END
+      WHERE case_id IN ($1,$2)`,[retry,maintenance,checked,ordinaryDue]);
+     expect(await run(opened.db,clock,1)).toEqual({processed:1,blocked:0});
+     const updated=await opened.db.query<{case_id:string}>(`SELECT case_id FROM ${table}
+      WHERE case_id IN ($1,$2) AND ${stamp}=$3`,[retry,maintenance,checked]);
+     expect(updated.rows,`${table} with routine maintenance overdue by ${overdue}ms`).toEqual([{case_id:expected}]);
+    }
+   }
+  }finally{currentTime=savedTime;}
+ },60000);
 });
