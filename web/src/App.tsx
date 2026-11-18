@@ -2,7 +2,7 @@ import { SIGNAL_ENABLED } from './signal/Signal';
 import { selectFirstProofStudy, recordStudyInteraction, pauseStudyAccount, retainStudyAuth, completeStudyAuth } from './analytics/study-capture';
 import { firstProofExperienceEnabled, draftStorageKey, creationOperation, completeCreation, rejectCreationValidation, type ExperienceState } from './first-experience/state';
 import { clearReauthenticationTask, readReauthenticationTask, reauthenticationDestination, retainReauthenticationTask } from './first-experience/auth-return';
-import { rememberConnectApprovalReturn, consumeConnectApprovalReturn } from './auth/connect-approval-return';
+import { connectApprovalReturnPath, rememberConnectApprovalReturn, consumeConnectApprovalReturn } from './auth/connect-approval-return';
 import { selectFirstExperience } from '../../packages/onboarding/model';
 import { SampleProof } from './site/SampleProof';
 import {DerivativeRedeem} from "./rnd/DerivativeRedeem";
@@ -516,7 +516,8 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     setConnectedProviders([]);
     setConnectedNotice(null);
     setError(null);
-    const destination = expired === true && reauthenticationTask.current ? reauthenticationTask.current.path : "/";
+    const approvalReturn = connectApprovalReturnPath(window.location.pathname + window.location.search);
+    const destination = expired === true && reauthenticationTask.current ? reauthenticationTask.current.path : approvalReturn || "/";
     writePath(destination);
     setRoute(parseHref(destination));
   }

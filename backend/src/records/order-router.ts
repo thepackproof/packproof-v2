@@ -12,7 +12,7 @@ import { storeDerivation } from './order-derivatives.js';
 import { readOrderSource } from './order-source.js';
 import { readOrderArtifact } from './order-artifact.js';
 import { ingestOrderFile } from './order-ledger.js';
-import { agentOrderFilter, humanOrderFilter, listOrders, orderChanges, readOrder } from './order-feed.js';
+import { agentOrderFilter, humanOrderFilter, listOrders, listOrderIssues, orderChanges, readOrder } from './order-feed.js';
 const route = (fn: (r: Request, s: Response) => Promise<unknown>) => (r: Request, s: Response, next: NextFunction) => void fn(r, s).catch(next);
 export function orderHumanRouter(deps: AppDependencies) {
   const router = express.Router();
@@ -51,7 +51,7 @@ export function orderHumanRouter(deps: AppDependencies) {
     });
     s.set('Cache-Control', 'private, no-store').json(value);
   }));
-  router.get('/order-proofs', read((tx, f, r) => listOrders(tx, f, r.query.q, r.query.limit)));
+  router.get('/order-proofs', read((tx, f, r) => listOrders(tx, f, r.query.q, r.query.limit, r.query.before, r.query.dayStart)));
   router.get('/order-changes', read((tx, f, r) => orderChanges(tx, f, r.query.after, r.query.limit)));
   router.get('/order-proofs/:proofId', read((tx, f, r) => readOrder(tx, f, r.params.proofId)));
   router.get('/order-proofs/:proofId/revisions/:revision', read((tx, f, r) => readOrder(tx, f, r.params.proofId, r.params.revision)));
@@ -72,8 +72,12 @@ export function orderAgentRouter(deps: AppDependencies) {
   router.post('/agent/order-workspace/api-source-pause', call((tx, i, _a, r) => setApiSourcePaused(tx, i, r.body), true));
   router.post('/agent/order-workspace/derivatives', call((tx, i, _a, r) => storeDerivation(tx, i, r.body), true));
   router.post('/agent/order-workspace/observations', call((tx, i, a, r) => ingestOrderFile(deps, tx, a, i, r.body), true));
-  router.get('/agent/order-attention', call(async (tx, i) => attention(tx, await deviceAttentionFilter(tx, i))));
-  router.get('/agent/order-proofs', call(async (tx, i, _a, r) => listOrders(tx, await agentOrderFilter(tx, i), r.query.q, r.query.limit)));
+  router.get('/agent/order-attention', call(async (tx, i, _a, r) => {
+    const pending=await attention(tx, await deviceAttentionFilter(tx, i));
+    if(r.query.includeOrderIssues!=='1')return pending;
+    return {...pending,...await listOrderIssues(tx,await agentOrderFilter(tx,i),r.query.before)};
+  }));
+  router.get('/agent/order-proofs', call(async (tx, i, _a, r) => listOrders(tx, await agentOrderFilter(tx, i), r.query.q, r.query.limit, r.query.before, r.query.dayStart)));
   router.post('/agent/order-changes', call(async (tx, i, _a, r) => orderChanges(tx, await agentOrderFilter(tx, i), r.body?.after, r.body?.limit)));
   router.get('/agent/order-proofs/:proofId/revisions/:revision/sources/:eventKey', call((tx, i, _a, r) => readOrderSource(deps, tx, i, r.params.proofId, r.params.revision, r.params.eventKey)));
   router.get('/agent/order-proofs/:proofId/revisions/:revision/artifacts/:receiptId', call((tx, i, _a, r) => readOrderArtifact(deps, tx, i, r.params.proofId, r.params.revision, r.params.receiptId)));

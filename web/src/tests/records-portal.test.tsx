@@ -205,3 +205,17 @@ it('does not offer computer approval for a disabled records workspace', async ()
   expect(screen.getByText(/The setup request has not been authorized/)).toBeVisible();
   expect(request.mock.calls.every(([path]) => path.startsWith('/context'))).toBe(true);
 });
+
+it("keeps account switching available on an approval addressed to a different workspace", async () => {
+  const recordsRequest=vi.fn(async()=>context);
+  const switchAccount=vi.fn(),user=userEvent.setup();
+  const href="/app/records/connect/approve?installationId=pc&workspaceSession=request&organizationId=other&environment=live";
+  render(<RecordsPortal api={{recordsRequest} as unknown as PackProofApi} session={session} href={href} onGo={vi.fn()} onSignOut={switchAccount}/>);
+  expect(await screen.findByRole("alert")).toHaveTextContent("cannot access the requested workspace");
+  await user.click(screen.getByRole("button",{name:"Use another work account"}));
+  expect(screen.getByRole("heading",{name:"Choose your work account."})).toBeVisible();
+  await user.click(screen.getByRole("button",{name:"Continue with this account"}));expect(switchAccount).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button",{name:"Use another work account"}));
+  await user.click(screen.getByRole("button",{name:"Sign in with another account"}));expect(switchAccount).toHaveBeenCalledOnce();
+  expect(recordsRequest).toHaveBeenCalledTimes(1);
+});
