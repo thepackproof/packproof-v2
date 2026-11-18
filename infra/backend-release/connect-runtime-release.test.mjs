@@ -402,3 +402,40 @@ test('hosted collector promotes with all four real-role receipts and enables onl
  const bridge=connectRuntimeBuildRequest({profile:'collector-hosted-bridge',sourceTransport:'git-commit',sourceSha:source,archiveSha256:'a'.repeat(64),predecessorImages:[previous]});
  for(const needle of ['reconstruction-v11 --verify','Dockerfile.collector-hosted-bridge','COLLECTOR_BRIDGE_GUARD','124_connect_collector_version'])assert.ok(bridge.buildspecOverride.includes(needle));
 });
+
+test('compares ECS environment bindings by unique name without normalizing other fields or the provider response',()=>{
+ const f=fixture(),actual=structuredClone(f.probes.api.registered);
+ const original=connectProbeRunRequest(f.snapshot,f.review,'api',actual,script,now);
+ const originalPlan=connectRuntimePlan(f.snapshot,f.review,f.probes,now,script);
+ const lease=connectConfigurationLease(f.snapshot);
+ actual.containerDefinitions[0].environment.reverse();
+ const raw=JSON.stringify(actual);
+ assert.deepEqual(connectProbeRunRequest(f.snapshot,f.review,'api',actual,script,now),original);
+ assert.equal(JSON.stringify(actual),raw);
+ f.probes.api.registered=actual;
+ assert.deepEqual(connectRuntimePlan(f.snapshot,f.review,f.probes,now,script),originalPlan);
+ assert.equal(connectConfigurationLease(f.snapshot),lease);
+ for(const change of [
+  t=>{t.containerDefinitions[0].environment[0].value+='-changed';},
+  t=>{t.containerDefinitions[0].environment.pop();},
+  t=>{t.containerDefinitions[0].environment[0].name+='-changed';},
+  t=>{t.containerDefinitions[0].environment.push({...t.containerDefinitions[0].environment[0]});},
+  t=>{t.containerDefinitions[0].environment[0].value=7;},
+  t=>{t.containerDefinitions[0].environment[0].name='';},
+  t=>{t.containerDefinitions[0].command.reverse();},
+  t=>{t.containerDefinitions[0].secrets[0].valueFrom+='-changed';},
+  t=>{t.containerDefinitions[0].dockerLabels={'test-header':'changed'};},
+  t=>{t.executionRoleArn+='-changed';}
+ ]){
+  const changed=structuredClone(actual);
+  change(changed);
+  assert.throws(()=>connectProbeRunRequest(f.snapshot,f.review,'api',changed,script,now),
+   /PROBE_REGISTRATION_MISMATCH|BINDINGS_AMBIGUOUS/);
+ }
+ const plan=originalPlan;
+ const registered={...structuredClone(plan.workerRegister),taskDefinitionArn:arn(plan.workerRegister.family,3)};
+ const observation={...f.snapshot.worker,observedAt:at};
+ const first=connectWorkerUpdate(plan,registered,observation,now);
+ registered.containerDefinitions[0].environment.reverse();
+ assert.deepEqual(connectWorkerUpdate(plan,registered,observation,now),first);
+});
