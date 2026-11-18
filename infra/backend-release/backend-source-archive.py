@@ -31,6 +31,9 @@ def archive(source,destination,profile,verify=False):
     if profile in ('reconstruction-v10','reconstruction-v11'):
         probes+=['infra/backend-release/hosted-membership-locks.mjs','infra/backend-release/reconstruction-v9-release-review.mjs','infra/backend-release/reconstruction-v9-runtime-preflight.mjs','infra/backend-release/hosted-backfill-automation-pair.mjs','infra/backend-release/reconstruction-v10-release-review.mjs','infra/backend-release/reconstruction-v10-runtime-preflight.mjs','infra/backend-release/order-workspace-pair.mjs','infra/backend-release/order-workspace-forward-read.mjs','backend/Dockerfile.order-workspace-bridge']
     if profile=='reconstruction-v11':
+        # Preserve the original isolated v11 archive for commits preceding the hosted release.
+        if b'connect-hosted-migration.mjs' in subprocess.check_output(['git','show',source+':backend/Dockerfile']):
+            probes+=['backend/Dockerfile.collector-hosted-bridge','infra/backend-release/collector-workspace-forward-read.mjs','infra/backend-release/reconstruction-v11-hosted-runtime-preflight.mjs','infra/backend-release/connect-hosted-migration.mjs','infra/backend-release/order-workspace-restored-rehearsal.mjs']
         probes+=['infra/backend-release/reconstruction-v11-release-review.mjs','infra/backend-release/reconstruction-v11-runtime-preflight.mjs','infra/backend-release/collector-version-pair.mjs']
     if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])

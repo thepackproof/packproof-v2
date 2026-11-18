@@ -25,7 +25,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
   const pipeName='packproof-journey-'+randomUUID();
   const socketPath='\\\\.\\pipe\\'+pipeName;
   const clock={now:()=>new Date()};
-  for(const flag of ['ORGANIZATIONS','SOURCE_SUBSCRIPTIONS','MULTI_SOURCE_AGENT','TYPED_INTAKE','ORDER_WORKSPACE','CASE_RECONSTRUCTION','SOURCE_IDENTITY_V2']) vi.stubEnv('PACKPROOF_'+flag+'_ENABLED','true');
+  for(const flag of ['ORGANIZATIONS','ORDER_WORKSPACE']) vi.stubEnv('PACKPROOF_'+flag+'_ENABLED','true');
   vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));
   // The reference operation may never use a configured external database.
   vi.stubEnv('PACKPROOF_TEST_DATABASE_URL','');
@@ -77,11 +77,11 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const adminHeaders={Authorization:'Bearer '+owner};
     const scope={organizationId:org,environment:'sandbox'};
     const query='?'+new URLSearchParams(scope);
-    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.5.0'});
+    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.6.0'});
     const enrolled=await call('POST','/me/records/agent-enrollments/'+e.id+'/decision'+query,{...scope,decision:'approve',comparisonCode:e.comparisonCode,operatorMembershipId:member,locationId:null,sourceName:'Controlled source files',integrationAccountId:null,createLocalSource:true},{...adminHeaders,'Idempotency-Key':'journey-enrollment'});
     const grant=await call('POST','/connect/enrollments/'+e.id+'/redeem',{redeemSecret:e.redeemSecret});
     const credentials={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
-    await call('POST','/v1/partner/agent/heartbeat',{version:'0.5.0',queueCount:0,enrollmentAcknowledged:true},credentials);
+    await call('POST','/v1/partner/agent/heartbeat',{version:'0.6.0',queueCount:0,enrollmentAcknowledged:true},credentials);
     const account=(await db.db.query<{id:string}>('SELECT integration_account_id AS id FROM record_agent_installations WHERE id=$1',[enrolled.installationId])).rows[0].id;
     const sender=await createServicePrincipal(db.db,clock,owner,org,{name:'Fixture ERP'},'fixture');
     const credential=await issuePartnerCredential(db.db,clock,owner,org,sender.id,{scopes:['proofs:write','proofs:read'],expiresAt:new Date(Date.now()+86400000).toISOString()},'fixture');

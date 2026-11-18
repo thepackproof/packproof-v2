@@ -6,7 +6,7 @@ import {collectorGrants,collectorInventory,collectorMigration,collectorRecords} 
 import {workspaceInventory} from './reconstruction-v10-release-review.mjs';
 import {reconstructionDigest} from './reconstruction-v7-release-review.mjs';
 import {TARGET,hash} from './backend-deployment-plan.mjs';
-import {CONNECT_RUNTIME_INVENTORY,connectConfigurationLease,connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
+import {CONNECT_RUNTIME_INVENTORY,connectConfigurationLease,connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker,connectWorkspaceSwitch,connectRecoveryProbe,connectRecoveryUpdate} from './connect-runtime-release.mjs';
 const now=Date.parse('2026-11-17T12:00:00Z'),at=new Date(now).toISOString(),source='b'.repeat(40),old='a'.repeat(40),image=`${TARGET.repository}@sha256:${'b'.repeat(64)}`,previous=`${TARGET.repository}@sha256:${'a'.repeat(64)}`;
 const arn=(family,revision)=>`arn:aws:ecs:${TARGET.region}:${TARGET.account}:task-definition/${family}:${revision}`;
 const cluster=`arn:aws:ecs:${TARGET.region}:${TARGET.account}:cluster/${TARGET.cluster}`,workerArn=`arn:aws:ecs:${TARGET.region}:${TARGET.account}:service/${TARGET.cluster}/observed-worker`;
@@ -93,16 +93,24 @@ test('accepts only the observed empty ECS systemControls default without changin
 });
 
 function shipmentFixture(version='v7',preserve=false){
- const workspace=version==='v10',backfill=workspace||version==='v8'||version==='v9';
+ const hostedCollector=version==='v11-hosted',workspace=version==='v10'||hostedCollector,backfill=workspace||version==='v8'||version==='v9';
  const {snapshot,review:r}=fixture(),empty=hash([]),bundle='c'.repeat(64);
+ if(hostedCollector){
+  r.database={host:'packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com',name:'packproof_v2'};
+  for(const container of [snapshot.api.express.activeConfigurations[0].primaryContainer,...snapshot.api.taskDefinition.containerDefinitions,...snapshot.worker.taskDefinition.containerDefinitions]){
+   container.environment.find(binding=>binding.name==='PACKPROOF_RELEASE_SHA').value=source;
+  }
+  snapshot.api.meta.commit=source;r.expectedApi.sourceSha=source;r.expectedWorker.sourceSha=source;
+  r.configurationLeaseSha256=connectConfigurationLease(snapshot);
+ }
  if(preserve){
   for(const c of [snapshot.api.express.activeConfigurations[0].primaryContainer,snapshot.api.taskDefinition.containerDefinitions[0],snapshot.worker.taskDefinition.containerDefinitions[0]]){
    c.environment.push({name:'PACKPROOF_SHIPMENT_INTERPRETATION_ENABLED',value:'true'},{name:'PACKPROOF_SHIPMENT_WORKER_INTERPRETATION',value:'packproof.shipment-interpretation/v1'});
   }
   r.configurationLeaseSha256=connectConfigurationLease(snapshot);
  }
- const inventory=workspace?'ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d':backfill?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
- const records=workspace?'fc90a9edbe22cc22fa5f553096d9d7b9da8a3bde62ad3784ef117abdb6147001':backfill?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
+ const inventory=hostedCollector?collectorInventory:workspace?'ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d':backfill?'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804':'3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5';
+ const records=hostedCollector?collectorRecords:workspace?'fc90a9edbe22cc22fa5f553096d9d7b9da8a3bde62ad3784ef117abdb6147001':backfill?'11b3a0e163438a2ea9f8122f76857866154be6b901b4abbcec4cf780d0625f38':'276f345802fb758d75028be0e47b6fab3179c20927317cf30a58aa044e7364de';
  const v={schema:`packproof.reconstruction-release-review/${version}`,...(backfill?{backfillJobsEnabled:false}:{}),...(workspace?{orderWorkspaceEnabled:false}:{}),...(workspace||version==='v9'?{platformLockPolicySha256:'cc1ff79558beac7c7178ccaecdb9c2138e7271077c8df15ff7950a73e6baf743'}:{}),source,candidateImage:image,apiRole:r.apiRole,workerRole:r.workerRole,
   ownerRole:'reviewed_owner',clusterArn:cluster,target:{host:r.database.host,database:r.database.name},featureActivation:false,
   customerReleaseQualified:false,inventorySha256:inventory,recordsMigrationSha256:records,expiresAt:r.expiresAt,
@@ -116,7 +124,7 @@ function shipmentFixture(version='v7',preserve=false){
   const taskArn=cluster.replace(':cluster/',':task/')+'/'+String(index+1).repeat(32),i=reader?previous:image;
   const registered={...definition,taskDefinitionArn:arn(definition.family,3)};
   const shared={kind,completedAt:at,readOnly:true,reviewSha256:reconstructionDigest(v)};
-  const report=reader?{...shared,schema:workspace?'packproof.order-workspace-rollback-reader/v1':backfill?'packproof.backfill-rollback-reader/v1':'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:old,
+  const report=reader?{...shared,schema:hostedCollector?'packproof.hosted-collector-rollback-reader/v1':workspace?'packproof.order-workspace-rollback-reader/v1':backfill?'packproof.backfill-rollback-reader/v1':'packproof.shipment-rollback-reader/v1',role:dbRole,image:i,sourceSha:hostedCollector?source:old,
    environment:r.environment,databaseHost:r.database.host,databaseName:r.database.name,clusterArn:cluster,taskArn,
    inventorySha256:inventory,compatibleReader:true}:{...shared,schema:`packproof.reconstruction-runtime-preflight/${version}`,...(backfill?{backfillJobsEnabled:false,backfillScopeVerified:true}:{}),...(workspace?{orderWorkspaceEnabled:false,orderHistoryGuardsVerified:true}:{}),
    source,customerReleaseQualified:false,identity:{role:dbRole,login:dbRole,read_only:'on',schema:'public',database:r.database.name},
@@ -125,6 +133,11 @@ function shipmentFixture(version='v7',preserve=false){
    durabilityPolicyMatches:true,tls:{ssl:true},immutableTriggerVerified:true,m2PrivilegesSha256:'f'.repeat(64),
    recordsPrivileges:{migrationSha256:records,sourceCommit:source,caller:dbRole},
    automationPolicy:{...v.automationPolicy,schema:'packproof.shipment-policy-role/v1',kind,shadowSourceCount:0,...(preserve?{workerInterpretation:v.automationPolicy.interpretationVersion}:{})}};
+  if(hostedCollector&&!reader){
+   report.collectorVersionVerified=true;
+   Object.assign(report.recordsPrivileges,{policySha256:collectorGrants,effectivePrivilegesSha256:'d'.repeat(64)});
+   Object.assign(report.sourceInventory,{sourceCount:123,appliedCount:123,predecessorSha256:workspaceInventory,additions:[collectorMigration]});
+  }
   probes[name]={report,registered,task:{taskArn,clusterArn:cluster,lastStatus:'STOPPED',taskDefinitionArn:registered.taskDefinitionArn,
    containers:definition.containerDefinitions.map(c=>({name:c.name,exitCode:0,imageDigest:i.split('@')[1]}))}};
  }
@@ -332,4 +345,60 @@ test('124 pairs fresh independent restored logins and rejects drift in either pr
   const altered=structuredClone(receipts);change(altered[i]);
   assert.throws(()=>pair(...altered),/MISMATCH/);
  }
+});
+
+test('hosted collector promotes with all four real-role receipts and enables only its API switch',()=>{
+ const {snapshot,review,probes,code,definitions}=shipmentFixture('v11-hosted',true);
+ addHostedLocks(probes,review);
+ const plan=connectRuntimePlan(snapshot,review,probes,now,code);
+ assert.equal(plan.schema,'packproof.connect-runtime-plan/v11-hosted');
+ assert.equal(plan.shipmentPair.collectorVersionVerified,true);
+ const api=structuredClone(snapshot.api);
+ api.express.activeConfigurations[0].primaryContainer=plan.apiUpdate.primaryContainer;
+ api.meta={image,commit:source};
+ api.observedAt=at;
+ api.tasks=[{lastStatus:'RUNNING',taskDefinitionArn:api.service.taskDefinition,containers:[{lastStatus:'RUNNING',imageDigest:image.split('@')[1]}]}];
+ const taskDefinition={...connectWorkerRegistration(plan,now),taskDefinitionArn:arn('existing-worker',4)};
+ const worker={observedAt:at,service:{...snapshot.worker.service,taskDefinition:taskDefinition.taskDefinitionArn},taskDefinition,
+  tasks:[{clusterArn:cluster,taskDefinitionArn:taskDefinition.taskDefinitionArn,lastStatus:'RUNNING',containers:[{name:'worker',lastStatus:'RUNNING',imageDigest:image.split('@')[1]}]}]};
+ const portal={commit:source,indexSha256:'f'.repeat(64),apiUrl:'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws',
+  approvalPath:'/app/records/connect/approve',capabilities:{connectApproval:1,orderWorkspaceApproval:1}};
+ const input={enabled:true,plan,apiObservation:api,workerObservation:worker,portalManifest:portal};
+ const request=connectWorkspaceSwitch(input,now);
+ assert.equal(request.serviceArn,TARGET.serviceArn);
+ assert.deepEqual(request.primaryContainer.environment.slice(0,-1),plan.apiUpdate.primaryContainer.environment);
+ assert.deepEqual(request.primaryContainer.environment.at(-1),{name:'PACKPROOF_ORDER_WORKSPACE_ENABLED',value:'true'});
+ assert.deepEqual(request.primaryContainer.secrets,plan.apiUpdate.primaryContainer.secrets);
+ assert.throws(()=>connectWorkspaceSwitch({...input,portalManifest:{...portal,commit:old}},now),/PORTAL_REQUIRED/);
+ assert.throws(()=>connectWorkspaceSwitch({...input,workerObservation:{...worker,tasks:[]}},now),/WORKER_DIGEST/);
+ assert.throws(()=>connectWorkspaceSwitch({...input,apiObservation:{...api,tasks:[]}},now),/API_TASK_DIGEST/);
+ assert.equal(connectWorkspaceSwitch({...input,enabled:false,workerObservation:undefined,portalManifest:undefined},now).primaryContainer.environment.at(-1).value,'false');
+ // Recovery can occur after the forward-deployment review has expired. Both actual bridge
+ // readers must be freshly rerun, and the API must be stably disabled before image reversal.
+ const later=now+3*3600000,observedAt=new Date(later).toISOString(),readers={};
+ for(const [index,kind] of ['api','worker'].entries()){
+  const original=structuredClone(probes['previous-'+kind]);
+  const request=connectRecoveryProbe({plan,kind,registered:original.registered,snapshot:{...snapshot,observedAt},attempt:'recovery-1'},later);
+  assert.equal(request.taskDefinition,original.registered.taskDefinitionArn);
+  const actual=cluster.replace(':cluster/',':task/')+'/'+String(index+7).repeat(32);
+  original.report.taskArn=actual;original.report.completedAt=observedAt;original.task.taskArn=actual;
+  readers[kind]=original;
+ }
+ const recoveryInput={plan,readers,apiObservation:{...api,topology:snapshot.topology,observedAt},workerObservation:{...worker,observedAt}};
+ assert.deepEqual(connectRecoveryUpdate({...recoveryInput,kind:'api'},later).primaryContainer,snapshot.api.express.activeConfigurations[0].primaryContainer);
+ const active=structuredClone(recoveryInput);active.apiObservation.express.activeConfigurations[0].primaryContainer=request.primaryContainer;
+ assert.throws(()=>connectRecoveryUpdate({...active,kind:'api'},later),/WORKSPACE_ACTIVE/);
+ const stale=structuredClone(recoveryInput);stale.readers.api=probes['previous-api'];
+ assert.throws(()=>connectRecoveryUpdate({...stale,kind:'api'},later),/FRESH_READER/);
+ const compromised=structuredClone(recoveryInput);compromised.readers.worker.task.overrides={containerOverrides:[{name:'worker',command:['bash']}]};
+ assert.throws(()=>connectRecoveryUpdate({...compromised,kind:'api'},later),/STOPPED_TASK/);
+ assert.throws(()=>connectRecoveryUpdate({...recoveryInput,kind:'worker'},later),/API_CHANGED/);
+ const stableBridge={...snapshot.api,observedAt,meta:{commit:source,image:previous},topology:snapshot.topology,
+  tasks:[{lastStatus:'RUNNING',taskDefinitionArn:api.service.taskDefinition,containers:[{lastStatus:'RUNNING',imageDigest:previous.split('@')[1]}]}]};
+ assert.equal(connectRecoveryUpdate({...recoveryInput,kind:'worker',apiObservation:stableBridge},later).taskDefinition,snapshot.worker.service.taskDefinition);
+ assert.deepEqual(definitions.api.containerDefinitions[0].command,['node','/release/reconstruction-v11-hosted-runtime-preflight.mjs','api']);
+ const changed=structuredClone(probes);changed['previous-worker'].report.schema='packproof.order-workspace-rollback-reader/v1';
+ assert.throws(()=>connectRuntimePlan(snapshot,review,changed,now,code),/COMPATIBLE_PREDECESSOR/);
+ const bridge=connectRuntimeBuildRequest({profile:'collector-hosted-bridge',sourceTransport:'git-commit',sourceSha:source,archiveSha256:'a'.repeat(64),predecessorImages:[previous]});
+ for(const needle of ['reconstruction-v11 --verify','Dockerfile.collector-hosted-bridge','COLLECTOR_BRIDGE_GUARD','124_connect_collector_version'])assert.ok(bridge.buildspecOverride.includes(needle));
 });

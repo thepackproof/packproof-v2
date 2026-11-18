@@ -37,6 +37,27 @@ describe('fresh typed source setup through the assembled application',()=>{
  const batch=(w:Workspace,account:string,subscriptionId='no-source-approved',grantRevision=1)=>({schema:'packproof.typed-source-batch/v2',identityPolicy,connectionId:account,locationId:w.site,sourceProfile:'packproof.order-lines/v1',mappingVersion:'fresh-order-lines/1',sourceNamespace:'fresh-order-erp',subscriptionId,configurationRevision:1,grantRevision,wholeFileConsent:true,original:{name:'orders-first.csv',mediaType:'text/csv',content:csv,sha256:sha256Hex(csv)},mapping,constants,completeness:{kind:'unknown',asOf:null,marker:null}});
  beforeAll(async()=>{for(const flag of ['PACKPROOF_ORGANIZATIONS_ENABLED',...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED'])vi.stubEnv(flag,'true');vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));dir=await mkdtemp(path.join(os.tmpdir(),'fresh-typed-setup-'));opened=process.env.PACKPROOF_ORDER_RECOVERY_PROBE==='1'?await createPgliteDatabase(path.join(dir,'db')):await openIsolatedTestDatabase();await migrate(opened.db);admin=await insertUser(opened.db,clock);await opened.db.query("INSERT INTO user_verified_contacts(user_id,email_normalized,verified_at,source) VALUES($1,'nericollin@gmail.com',$2,'COGNITO')",[admin,clock.now().toISOString()]);deps={db:opened.db,clock,objectStore:new LocalObjectStore(path.join(dir,'objects'),'http://localhost','fresh-fixture-secret'),auth:new BearerUserAdapter(opened.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']}};app=createServerApp({...deps,emailDelivery:new DisabledEmailDelivery()});},60000);
  afterAll(async()=>{await opened?.close();if(dir)await rm(dir,{recursive:true,force:true});vi.unstubAllEnvs();});
+ it('enrolls an empty 0.6.0 workspace with only the order feature enabled and keeps typed writes closed',async()=>{
+  const flags=[...typedFlags,'PACKPROOF_SOURCE_IDENTITY_V2_ENABLED','PACKPROOF_CASE_RECONSTRUCTION_ENABLED','PACKPROOF_ORDER_WORKSPACE_ENABLED'];
+  const before=Object.fromEntries(flags.map(key=>[key,process.env[key]]));
+  try {
+   for(const key of flags)process.env[key]=key==='PACKPROOF_ORDER_WORKSPACE_ENABLED'?'true':'false';
+   const w=await workspace(), e=await start(w,'0.6.0');
+   expect(e.detail.capabilities).toMatchObject({orderWorkspace:true,createLocalSource:true});
+   const approval=await approve(w,e,{integrationAccountId:null,createLocalSource:true},'workspace-only-approval');
+   expect(approval.status,approval.text).toBe(200);
+   const {service}=await redeem(w,e);
+   expect((await acknowledge(e,service)).capabilities.orderWorkspace).toBe(true);
+   const state=await request(app).get('/v1/partner/agent/order-workspace').set(service);
+   expect(state.status,state.text).toBe(200);
+   expect(state.body.state).toBe('draft');
+   const typed=await request(app).post('/v1/partner/source-subscriptions/proposals').set(service)
+    .set('Idempotency-Key','workspace-only-no-typed-grant').send({config:sourceConfig()});
+   expect(typed.status).toBe(403);
+  } finally {
+   for(const key of flags){if(before[key]===undefined)delete process.env[key];else process.env[key]=before[key];}
+  }
+ });
  it('starts from an empty account list and reaches an order-only recurring source without a legacy CSV setup',async()=>{
   const w=await workspace(),e=await start(w);expect(e.detail.choices.integrationAccounts).toEqual([]);expect(e.detail.capabilities.createLocalSource).toBe(true);
   const approved=await approve(w,e,{integrationAccountId:null,createLocalSource:true},'fresh-create-local');expect(approved.status,approved.text).toBe(200);const i=await loadInstallation(opened.db,approved.body.installationId);expect(i.status).toBe('ready');expect(i.approved_config).toBeNull();expect(i.config_revision).toBe(0);expect(i.test_import_id).toBeNull();expect(i.verified_import_id).toBeNull();

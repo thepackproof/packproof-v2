@@ -17,6 +17,8 @@ import { protectWebhookResponse, webhookConfigFromEnv } from '../platform/webhoo
 import {reconstructionFeatureEnabled,typedCollectorVersionSupported,supportsSourceBackfills,supportsOrderWorkspace} from './reconstruction-features.js';
 
 const typedSetupEnabled=(version:string)=>(version==='0.3.0'||supportsSourceBackfills(version))&&reconstructionFeatureEnabled('sourceSubscriptions')&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake');
+const localSourceEnrollmentEnabled=(version:string)=>typedSetupEnabled(version)||(supportsOrderWorkspace(version)&&reconstructionFeatureEnabled('orderWorkspace'));
+
 
 type Deps = Pick<AppDependencies, 'db'|'clock'|'auth'|'devAuth'|'testFixtures'|'webhookConfig'>;
 export interface AgentConfig {
@@ -89,7 +91,7 @@ export async function readEnrollment(deps:Deps,id:string,w?:RecordWorkspace){
   if(!w||i.organization_id!==w.organizationId||i.environment!==w.environment)fail('ENROLLMENT_NOT_FOUND','Setup request not found',404);
  }
  const choices=w?{integrationAccounts:(await deps.db.query(`SELECT id,provider AS name,external_account_id AS "sourceSystem" FROM platform_integration_accounts WHERE merchant_id=$1 AND environment=$2 ORDER BY provider,id LIMIT 100`,[w.organizationId,w.environment])).rows,operators:(await deps.db.query(`SELECT m.id,COALESCE(u.display_name,u.username,'Team member') AS name,m.role FROM platform_memberships m JOIN users u ON u.id=m.user_id WHERE m.organization_id=$1 AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND u.status='ACTIVE' ORDER BY m.id LIMIT 200`,[w.organizationId])).rows,locations:await listRecordLocations(deps.db,w)}:undefined;
- return {capabilities:{orderWorkspace:supportsOrderWorkspace(e.version)&&reconstructionFeatureEnabled('orderWorkspace'),createLocalSource:typedSetupEnabled(e.version)},id:e.id,comparisonCode:e.comparison_code,deviceName:e.device_name,version:e.version,state:new Date(e.expires_at)<=deps.clock.now()&&e.state!=='acknowledged'?'expired':e.state,expiresAt:iso(e.expires_at),...(choices?{choices}:{})};
+ return {capabilities:{orderWorkspace:supportsOrderWorkspace(e.version)&&reconstructionFeatureEnabled('orderWorkspace'),createLocalSource:localSourceEnrollmentEnabled(e.version)},id:e.id,comparisonCode:e.comparison_code,deviceName:e.device_name,version:e.version,state:new Date(e.expires_at)<=deps.clock.now()&&e.state!=='acknowledged'?'expired':e.state,expiresAt:iso(e.expires_at),...(choices?{choices}:{})};
 }
 export async function redeemEnrollment(deps:Deps,id:string,input:unknown){
  const b=strictBody(input,['redeemSecret']),secret=textField(b.redeemSecret,'redeemSecret',100);
@@ -137,7 +139,7 @@ export async function decideEnrollment(deps:Deps,tx:Database,w:RecordWorkspace,i
  let approvedBinding=b;
  if(b.createLocalSource!==undefined&&typeof b.createLocalSource!=='boolean')fail('INVALID_REQUEST','Choose whether to create a local file connection',400);
  if(b.createLocalSource===true){
-  if(!typedSetupEnabled(e.version)||b.integrationAccountId!=null)fail('LOCAL_SOURCE_SETUP_UNAVAILABLE','Choose a separately qualified collector and one exact local connection setup option',409);
+  if(!localSourceEnrollmentEnabled(e.version)||b.integrationAccountId!=null)fail('LOCAL_SOURCE_SETUP_UNAVAILABLE','Choose a separately qualified collector and one exact local connection setup option',409);
   const account=await createIntegrationAccount(tx,deps.clock,w.userId,w.organizationId,{provider:'packproof-connect-files',externalAccountId:`enrollment:${id}`},requestId);
   approvedBinding={...b,integrationAccountId:account.id};
  }

@@ -1,0 +1,54 @@
+name: Prepare Connect live release
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/connect-rollout-prepare.yml'
+      - 'infra/connect-rollout/**'
+      - 'infra/connect-portal-release.mjs'
+      - 'infra/backend-release/connect-hosted*'
+      - 'docs/windows-connect/LIVE_ROLLOUT.md'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            mobile/package-lock.json
+      - name: Install portal build dependencies
+        run: |
+          npm ci --prefix mobile --ignore-scripts --no-audit --no-fund
+          npm ci --prefix web --no-audit --no-fund
+      - name: Check rollout, rollback and publication commands
+        run: |
+          node --test infra/connect-rollout/*.test.mjs infra/connect-portal-release.test.mjs infra/backend-release/connect-hosted-*.test.mjs infra/desktop-distribution/configure-connect-environments.test.mjs
+          python3 -m py_compile infra/connect-rollout/stage-private.py
+      - name: Build and verify the release packet
+        env:
+          SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          node infra/connect-rollout/prepare.mjs prepare "$RUNNER_TEMP/connect-release/candidate" "$SOURCE"
+          node infra/connect-rollout/prepare.mjs verify "$RUNNER_TEMP/connect-release/candidate" "$SOURCE"
+      - name: Capture the current portal for rollback
+        run: node infra/connect-portal-release.mjs snapshot "$RUNNER_TEMP/connect-release/previous-portal"
+      - name: Preserve dotfiles and complete asset paths
+        run: tar -C "$RUNNER_TEMP/connect-release" -czf "$RUNNER_TEMP/packproof-connect-rollout.tar.gz" candidate previous-portal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: connect-rollout-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/packproof-connect-rollout.tar.gz
+          if-no-files-found: error
+          retention-days: 30

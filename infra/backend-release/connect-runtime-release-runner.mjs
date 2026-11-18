@@ -1,9 +1,9 @@
 /** Offline phase runner. Write private requests, execute them through the connected AWS app, reread results. */
 import {readFile,writeFile} from 'node:fs/promises';
-import {connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
+import {connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker,connectWorkspaceSwitch,connectRecoveryProbe,connectRecoveryUpdate} from './connect-runtime-release.mjs';
 const [phase,inputPath,outputPath]=process.argv.slice(2);
 async function probeCode(review){
- if(review?.schema==='packproof.connect-runtime-review/v10')return {reader:await readFile(new URL('./order-workspace-rollback-reader.mjs',import.meta.url),'utf8')};
+ if(['packproof.connect-runtime-review/v10','packproof.connect-runtime-review/v11-hosted'].includes(review?.schema))return {reader:await readFile(new URL('./order-workspace-rollback-reader.mjs',import.meta.url),'utf8')};
  if(['packproof.connect-runtime-review/v8','packproof.connect-runtime-review/v9'].includes(review?.schema))return {reader:await readFile(new URL('./backfill-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  if(review?.schema==='packproof.connect-runtime-review/v7')return {reader:await readFile(new URL('./shipment-rollback-reader-probe.mjs',import.meta.url),'utf8')};
  return readFile(new URL('./connect-runtime-probe.mjs',import.meta.url),'utf8');
@@ -24,6 +24,9 @@ try{
  else if(phase==='worker-register')result={service_name:'ecs',operation_name:'RegisterTaskDefinition',region_name:'us-east-1',params:connectWorkerRegistration(input.plan)};
  else if(phase==='worker-update')result={service_name:'ecs',operation_name:'UpdateService',region_name:'us-east-1',params:connectWorkerUpdate(input.plan,input.registered,input.observation)};
  else if(phase==='api-update')result={service_name:'ecs',operation_name:'UpdateExpressGatewayService',region_name:'us-east-1',params:connectApiUpdate(input.plan,input.workerObservation,input.apiObservation)};
+ else if(phase==='workspace-switch')result={service_name:'ecs',operation_name:'UpdateExpressGatewayService',region_name:'us-east-1',params:connectWorkspaceSwitch(input)};
+ else if(phase==='recovery-probe')result={service_name:'ecs',operation_name:'RunTask',region_name:'us-east-1',params:connectRecoveryProbe(input)};
+ else if(phase==='recovery-api'||phase==='recovery-worker')result={service_name:'ecs',operation_name:phase==='recovery-api'?'UpdateExpressGatewayService':'UpdateService',region_name:'us-east-1',params:connectRecoveryUpdate({...input,kind:phase.slice(9)})};
  else if(phase==='rollback-worker')result={service_name:'ecs',operation_name:'UpdateService',region_name:'us-east-1',params:connectRollbackWorker(input.plan,input.apiObservation,input.quiescence)};
  else throw Error('CONNECT_RELEASE_UNKNOWN_PHASE');
  await writeFile(outputPath,JSON.stringify(result,null,2)+'\n',{mode:0o600,flag:'wx'});

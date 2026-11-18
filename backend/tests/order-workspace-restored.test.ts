@@ -6,6 +6,9 @@ import {collectorInventory,collectorMigration,inspectCollectorPredecessor,inspec
 import {splitSqlStatements} from '../src/db/sql.js';
 import {planRecordsRuntimePrivileges,recordsMigrationInventory,verifyRecordsRuntimePrivileges} from '../scripts/records-runtime-privileges.mjs';
 import {createPgDatabase} from '../src/db/postgres.js';
+import {runOwnerTransaction} from '../../infra/backend-release/connect-hosted-migration.mjs';
+import {backfillMigrationInventorySha256} from '../../infra/backend-release/reconstruction-v8-release-review.mjs';
+import {workspaceInventory} from '../../infra/backend-release/reconstruction-v10-release-review.mjs';
 import {applyRestoredDelta} from '../../infra/backend-release/order-workspace-restored-rehearsal.mjs';
 
 const connection=process.env.PACKPROOF_TEST_DATABASE_URL;
@@ -47,6 +50,17 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       const deps={migrationInventory:async()=>predecessor,splitSqlStatements,planRecordsRuntimePrivileges};
       const params={apiRole,workerRole,source,...identity};
       const rollback=Error('EXPECTED_REHEARSAL_ROLLBACK');
+      const hostedDeps={migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges};
+      const hosted={...params,target:{database:identity.database},inventorySha256:collectorInventory,expectedLedger:backfillMigrationInventorySha256};
+      const owner=(mode:string, review=hosted)=>opened.db.transaction(tx=>runOwnerTransaction(tx,review,mode,hostedDeps,schema));
+      expect(await owner('inspect')).toMatchObject({initialLedger:backfillMigrationInventorySha256,through:122,applied:[]});
+      await expect(opened.db.transaction(async tx=>{
+        const result=await runOwnerTransaction(tx,hosted,'rehearse',hostedDeps,schema);
+        expect(result).toMatchObject({through:122,finalLedger:collectorInventory,applied:['123_order_workspace',collectorMigration.id]});
+        throw rollback;
+      })).rejects.toBe(rollback);
+      expect(await owner('inspect')).toMatchObject({initialLedger:backfillMigrationInventorySha256,through:122});
+
       await expect(opened.db.transaction(async tx=>{await applyRestoredDelta(tx,params,deps);throw rollback;})).rejects.toBe(rollback);
       expect((await opened.db.query("SELECT to_regclass('record_order_receipts') IS NULL AS rolled_back")).rows[0].rolled_back).toBe(true);
       const receipt=await opened.db.transaction(tx=>applyRestoredDelta(tx,params,deps));
@@ -73,8 +87,9 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       const policy123=options(123,(await recordsMigrationInventory(123)).migrationSha256);
       const granted123=await Promise.all(logins.map(login=>verifyRecordsRuntimePrivileges(login.db,policy123)));
 
-      await migrate(opened.db);
-
+      await expect(owner('apply')).rejects.toThrow('PREDECESSOR_CHANGED');
+      expect(await owner('apply',{...hosted,expectedLedger:workspaceInventory})).toMatchObject(
+        {through:123,applied:[collectorMigration.id],finalLedger:collectorInventory,grantStatementCount:0});
       const after=await ledger();
       expect(after.filter(row=>row.id!==collectorMigration.id)).toEqual(before);
       expect(after.at(-1)).toMatchObject({...collectorMigration,checksum_provenance:'EXECUTED_BYTES'});
@@ -90,6 +105,8 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       }
       expect((await logins[0].db.query("SELECT convert_from(original,'UTF8') AS original FROM preserved_sample")).rows).toEqual([{original:'kept original'}]);
       await expect(logins[1].db.query('SELECT * FROM record_order_receipts')).rejects.toMatchObject({code:'42501'});
+      expect(await owner('apply',{...hosted,expectedLedger:workspaceInventory})).toMatchObject(
+        {through:124,applied:[],finalLedger:collectorInventory,grantStatementCount:0});
       await migrate(opened.db);
       expect(await ledger()).toEqual(after);
     }finally{

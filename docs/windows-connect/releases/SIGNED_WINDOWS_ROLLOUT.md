@@ -32,6 +32,19 @@ Use `ReleaseBucketName` and the matching `ConnectProductionPublishRoleArn` or `C
 
 The existing customer-facing portal origin is `https://dvpmnwc27i8tw.cloudfront.net` and the API origin is `https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws`. A signed build verifies both origins at the reviewed commit, including the Cognito portal and the multi-source browser approval route. The desktop update origin is `https://downloads.thepackproof.com`.
 
+### Configure GitHub production environments
+
+Run these commands from the repository root using an authenticated GitHub administrator CLI session and an AWS profile that can describe the downloads stack. The first command previews the setup. The second applies the environment settings.
+
+```sh
+node infra/desktop-distribution/configure-connect-environments.mjs
+node infra/desktop-distribution/configure-connect-environments.mjs --apply
+```
+
+On creation, the helper uses the required reviewers, self-review rule, wait timer and administrator-bypass policy from the corresponding `desktop-production` or `desktop-production-publish` environment. It permits only the `main` branch and keeps existing Connect review protections. An existing environment with other deployment branches needs a manual branch-policy review in GitHub Settings before the helper proceeds. The helper sets the public portal/API origins, reads the bucket from the current stack, and sets the publisher role from `ConnectProductionPublishRoleArn`. If the change set is still pending, it reports exit status 2. Rerun after the stack update to finish. Repeating the command retains matching settings.
+
+Configure your authorized signer separately in `connect-production` using the signing administrator’s protected PFX secrets or Azure signing identity listed above. The helper never opens signing secrets, reads credentials from another environment, or prints credential values.
+
 ## Build and promote the same bytes
 
 1. Complete the coordinated backend and portal deployment. Run **Connect Windows candidate** on the reviewed main commit. The workflow supports a manual run at main if the file changes did not trigger it.

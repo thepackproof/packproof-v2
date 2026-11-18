@@ -2,13 +2,20 @@
 // migrated/approved isolated target; it cannot apply schema, grants or rollout.
 import {pathToFileURL} from 'node:url';
 import {readShipmentAutomationPolicy} from './shipment-automation-pair.mjs';
-import {reconstructionDigest,validateReconstructionReview,inspectReconstructionInventory,validateReconstructionTaskMetadata,verifyBackfillScopeGuard,verifyOrderHistoryGuards,collectorMigration,collectorGrants} from './reconstruction-v11-release-review.mjs';
+import {reconstructionDigest,validateReconstructionReview,validateHostedCollectorReview,inspectReconstructionInventory,validateReconstructionTaskMetadata,verifyBackfillScopeGuard,verifyOrderHistoryGuards,collectorMigration,collectorGrants} from './reconstruction-v11-release-review.mjs';
 import {verifyHostedMembershipLocks} from './hosted-membership-locks.mjs';
 import {verifyShipmentInterpretationGuard} from './reconstruction-v7-runtime-preflight.mjs';
-export async function runReconstructionPreflight(kind,env=process.env) {
+export function runReconstructionPreflight(kind,env=process.env) {
+ return measureCollector(kind,env,'v11',validateReconstructionReview);
+}
+export function runHostedCollectorPreflight(kind,env=process.env) {
+ return measureCollector(kind,env,'v11-hosted',validateHostedCollectorReview);
+}
+async function measureCollector(kind,env,version,validateReview) {
  if(!['api','worker'].includes(kind))throw Error('RECONSTRUCTION_PROCESS_ROLE_REQUIRED');
- let review;try{review=JSON.parse(env.PACKPROOF_RECONSTRUCTION_V11_REVIEW_JSON??'');}catch{throw Error('RECONSTRUCTION_REVIEW_BINDING_REQUIRED');}
- const reviewSha256=validateReconstructionReview(review,env.PACKPROOF_RECONSTRUCTION_V11_REVIEW_SHA256,env.PACKPROOF_RELEASE_SHA);
+ const binding='PACKPROOF_RECONSTRUCTION_'+version.toUpperCase().replace('-','_')+'_REVIEW';
+ let review;try{review=JSON.parse(env[binding+'_JSON']??'');}catch{throw Error('RECONSTRUCTION_REVIEW_BINDING_REQUIRED');}
+ const reviewSha256=validateReview(review,env[binding+'_SHA256'],env.PACKPROOF_RELEASE_SHA);
  let endpoint;try{endpoint=new URL(env.ECS_CONTAINER_METADATA_URI_V4);}catch{throw Error('RECONSTRUCTION_TASK_METADATA_REQUIRED');}
  if(endpoint.protocol!=='http:'||endpoint.hostname!=='169.254.170.2'||endpoint.port||endpoint.username||endpoint.password||endpoint.search||endpoint.hash||!/^\/v4\/[a-zA-Z0-9_-]+$/.test(endpoint.pathname))throw Error('RECONSTRUCTION_TASK_METADATA_REQUIRED');
  const metadata=async suffix=>{const response=await fetch(endpoint.href+suffix,{signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error('RECONSTRUCTION_TASK_METADATA_UNAVAILABLE');return response.json();};
@@ -55,7 +62,7 @@ export async function runReconstructionPreflight(kind,env=process.env) {
    const m2=await verifyM2RuntimePrivileges(db,{apiRole:review.apiRole,workerRole:review.workerRole});
    const policy=(await db.query('SELECT durability_required FROM policy_recovery_fence WHERE singleton=1')).rows[0];
    if(!policy||policy.durability_required!==(config.requireDurableReceipts===true))throw Error('RECONSTRUCTION_DURABILITY_CONFIGURATION_MISMATCH');
-   return {schema:'packproof.reconstruction-runtime-preflight/v11',reviewSha256,source:review.source,kind,taskIdentity,automationPolicy,collectorVersionVerified:true,immutableTriggerVerified:true,backfillScopeVerified:true,orderHistoryGuardsVerified:true,orderWorkspaceEnabled,backfillJobsEnabled,readOnly:true,identity,tls:{ssl:tls.ssl,version:tls.version},sourceInventory,recordsPrivileges:privileges,platformLocks,m2PrivilegesSha256:reconstructionDigest(m2),durabilityPolicyMatches:true,customerReleaseQualified:false,completedAt:new Date().toISOString()};
+   return {schema:'packproof.reconstruction-runtime-preflight/'+version,reviewSha256,source:review.source,kind,taskIdentity,automationPolicy,collectorVersionVerified:true,immutableTriggerVerified:true,backfillScopeVerified:true,orderHistoryGuardsVerified:true,orderWorkspaceEnabled,backfillJobsEnabled,readOnly:true,identity,tls:{ssl:tls.ssl,version:tls.version},sourceInventory,recordsPrivileges:privileges,platformLocks,m2PrivilegesSha256:reconstructionDigest(m2),durabilityPolicyMatches:true,customerReleaseQualified:false,completedAt:new Date().toISOString()};
   });
  }finally{await opened.close();}
 }

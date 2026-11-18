@@ -17,8 +17,8 @@ export const collectorMigration = Object.freeze({
   checksum: '66db31ba54b918122ede837715987c19273c8c76aecf4fd1b7a278d161eaa5be',
 });
 
-export function validateReconstructionReview(review, expectedHash, source, now = new Date()) {
-  if (review?.schema !== 'packproof.reconstruction-release-review/v11' || reconstructionDigest(review) !== expectedHash ||
+function validateInventoryReview(review, expectedHash, source, schema, now) {
+  if (review?.schema !== schema || reconstructionDigest(review) !== expectedHash ||
       review.inventorySha256 !== collectorInventory || review.recordsMigrationSha256 !== collectorRecords) {
     throw Error('RECONSTRUCTION_COLLECTOR_REVIEW_REQUIRED');
   }
@@ -27,6 +27,27 @@ export function validateReconstructionReview(review, expectedHash, source, now =
     inventorySha256: workspaceInventory, recordsMigrationSha256: workspaceRecords,
   };
   validateWorkspaceReview(workspaceReview, reconstructionDigest(workspaceReview), source, now);
+  return expectedHash;
+}
+
+export const hostedCollectorTarget = Object.freeze({
+  clusterArn: 'arn:aws:ecs:us-east-1:784514617543:cluster/packproof-v2-staging-cluster',
+  repository: '784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api',
+  host: 'packproof-v2-staging-db.c8v2esku2zyt.us-east-1.rds.amazonaws.com',
+  database: 'packproof_v2',
+});
+
+export function validateHostedCollectorReview(review, expectedHash, source, now = new Date()) {
+  validateInventoryReview(review, expectedHash, source, 'packproof.reconstruction-release-review/v11-hosted', now);
+  if (review.clusterArn !== hostedCollectorTarget.clusterArn || review.target.host !== hostedCollectorTarget.host ||
+      review.target.database !== hostedCollectorTarget.database || !review.candidateImage.startsWith(hostedCollectorTarget.repository+'@sha256:')) {
+    throw Error('COLLECTOR_HOSTED_TARGET_MISMATCH');
+  }
+  return expectedHash;
+}
+
+export function validateReconstructionReview(review, expectedHash, source, now = new Date()) {
+  validateInventoryReview(review, expectedHash, source, 'packproof.reconstruction-release-review/v11', now);
   const cluster = review.clusterArn.split('/').at(-1);
   const host = review.target.host.toLowerCase().split('.')[0];
   if (['packproof-v2-staging-cluster', 'packproof-staging-cluster'].includes(cluster) ||

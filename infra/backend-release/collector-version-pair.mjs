@@ -2,10 +2,16 @@ import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {inspectWorkspaceRoleReceipts} from './order-workspace-pair.mjs';
 import {workspaceInventory} from './reconstruction-v10-release-review.mjs';
-import {collectorGrants,collectorMigration,validateReconstructionReview} from './reconstruction-v11-release-review.mjs';
+import {collectorGrants,collectorMigration,validateHostedCollectorReview,validateReconstructionReview} from './reconstruction-v11-release-review.mjs';
 
 export function inspectCollectorVersionPair(review, api, worker, now = new Date()) {
-  const pair = inspectWorkspaceRoleReceipts(review, api, worker, now, 'v11', 123, validateReconstructionReview);
+  return inspectCollectorPair(review,api,worker,now,'v11',validateReconstructionReview);
+}
+export function inspectHostedCollectorPair(review,api,worker,now=new Date()) {
+  return inspectCollectorPair(review,api,worker,now,'v11-hosted',validateHostedCollectorReview);
+}
+function inspectCollectorPair(review,api,worker,now,version,validateReview) {
+  const pair = inspectWorkspaceRoleReceipts(review, api, worker, now, version, 123, validateReview);
   for (const receipt of [api, worker]) {
     const additions = receipt.sourceInventory.additions;
     if (receipt.collectorVersionVerified !== true ||

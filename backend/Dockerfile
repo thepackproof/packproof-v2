@@ -2,6 +2,7 @@ FROM public.ecr.aws/docker/library/node:22-alpine AS build
 RUN apk add --no-cache --upgrade 'zlib>=1.4-r0'
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
+COPY backend/vendor/picomatch/picomatch-4.0.7-packproof.1.tgz ./vendor/picomatch/
 RUN npm ci
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
@@ -67,6 +68,7 @@ COPY infra/backend-release/reconstruction-v8-release-review.mjs /release/reconst
 COPY infra/backend-release/reconstruction-v8-runtime-preflight.mjs /release/reconstruction-v8-runtime-preflight.mjs
 COPY infra/backend-release/hosted-membership-locks.mjs infra/backend-release/reconstruction-v9-release-review.mjs infra/backend-release/reconstruction-v10-release-review.mjs infra/backend-release/reconstruction-v10-runtime-preflight.mjs infra/backend-release/order-workspace-pair.mjs /release/
 COPY infra/backend-release/reconstruction-v11-release-review.mjs infra/backend-release/reconstruction-v11-runtime-preflight.mjs infra/backend-release/collector-version-pair.mjs /release/
+COPY infra/backend-release/reconstruction-v11-hosted-runtime-preflight.mjs infra/backend-release/connect-hosted-migration.mjs infra/backend-release/order-workspace-restored-rehearsal.mjs /release/
 COPY infra/backend-release/backfill-automation-pair.mjs /release/backfill-automation-pair.mjs
 COPY infra/backend-release/shipment-automation-pair.mjs /release/shipment-automation-pair.mjs
 COPY infra/backend-release/record-agent-previous-image-probe.mjs /release/record-agent-previous-image-probe.mjs

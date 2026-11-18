@@ -24,6 +24,17 @@ function bindings(container) {
   return Object.fromEntries((container.environment ?? []).map(item => [item.name, item.value]));
 }
 export function makePlan(snapshot, candidate) {
+  return planImage(snapshot,candidate,undefined);
+}
+
+// The recovery bridge and application are two distinct images built from the same reviewed tree.
+export function makeCollectorBridgeReplacement(snapshot,candidate,bridgeImage) {
+  if (candidate.sourceSha!==snapshot.meta.commit || candidate.expectedPreviousImage!==bridgeImage ||
+      bridgeImage!==snapshot.meta.image || bridgeImage===candidate.image) fail('COLLECTOR_BRIDGE_IDENTITY_MISMATCH');
+  return planImage(snapshot,candidate,bridgeImage);
+}
+
+function planImage(snapshot, candidate, compatibleBridge) {
   if (snapshot.account !== TARGET.account || snapshot.region !== TARGET.region || snapshot.service.serviceArn !== TARGET.serviceArn || snapshot.express.serviceArn !== TARGET.serviceArn) fail('TARGET_MISMATCH');
   if (snapshot.service.status !== 'ACTIVE' || snapshot.service.desiredCount < 1 || snapshot.service.runningCount !== snapshot.service.desiredCount || snapshot.service.pendingCount !== 0 || snapshot.nativeDeploymentStatus !== 'SUCCESSFUL') fail('PREDECESSOR_NOT_STABLE');
   if (snapshot.express.activeConfigurations?.length !== 1) fail('AMBIGUOUS_ACTIVE_CONFIGURATION');
@@ -37,7 +48,7 @@ export function makePlan(snapshot, candidate) {
   const imagePrefix = `${TARGET.repository}@sha256:`;
   const immutableImage = value => typeof value === 'string' && value.startsWith(imagePrefix) && /^[a-f0-9]{64}$/.test(value.slice(imagePrefix.length));
   if (!immutableImage(original.image) || !immutableImage(candidate.image)) fail('IMMUTABLE_IMAGE_REQUIRED');
-  if (!/^[a-f0-9]{40}$/.test(candidate.sourceSha) || candidate.sourceSha === snapshot.meta.commit || !/^[A-Za-z0-9._-]{1,100}$/.test(candidate.version)) fail('INVALID_CANDIDATE_IDENTITY');
+  if (!/^[a-f0-9]{40}$/.test(candidate.sourceSha) || (candidate.sourceSha === snapshot.meta.commit && !compatibleBridge) || !/^[A-Za-z0-9._-]{1,100}$/.test(candidate.version)) fail('INVALID_CANDIDATE_IDENTITY');
   if (candidate.expectedPreviousImage !== original.image || candidate.expectedPreviousTaskDefinition !== snapshot.service.taskDefinition) fail('PREDECESSOR_MISMATCH');
   if (candidate.ciPassed !== true || candidate.databasePreflightPassed !== true || candidate.sourceArchiveVerified !== true) fail('RELEASE_GATES_INCOMPLETE');
   const next = structuredClone(original);

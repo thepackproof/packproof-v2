@@ -3,13 +3,15 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
 const inventory='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d';
+const collectorInventory='d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60';
+const collectorBody='8515ac9f78d9a26f3d2eccfdc1e3e1444dc00eea4fc931dd4fd4b98b96a69c87';
 const guardBody='0c2c9ed1e2d7ee9c5dc5b1c0a758be67953cbe92585902912370db225f1f7011';
 const digest=s=>createHash('sha256').update(s).digest('hex');
 function requireValue(ok,code){if(!ok)throw Error('ROLLBACK_READER_'+code);}
 
 export function validateReaderReview(r,e) {
   requireValue(r && ['api','worker'].includes(r.kind) && /^[a-f0-9]{40}$/.test(r.sourceSha) &&
-    /^[a-f0-9]{64}$/.test(r.reviewSha256) && r.inventorySha256===inventory &&
+    /^[a-f0-9]{64}$/.test(r.reviewSha256) && [inventory,collectorInventory].includes(r.inventorySha256) &&
     /^\d{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9_./-]+@sha256:[a-f0-9]{64}$/.test(r.image) &&
     /^arn:aws:ecs:[a-z0-9-]+:\d{12}:cluster\/[a-zA-Z0-9_-]+$/.test(r.clusterArn) &&
     /^[a-zA-Z0-9.-]+\.[a-zA-Z0-9-]+$/.test(r.database?.host) && /^[a-zA-Z0-9_]{1,63}$/.test(r.database?.name) &&
@@ -37,7 +39,7 @@ export async function verifyReaderDatabase(db,r,role,assertSchemaCurrent) {
   requireValue(id?.role===role && id.login===role && id.database===r.database.name && id.schema==='public' &&
     id.ro==='on' && id.tls===true,'ACTUAL_LOGIN');
   const rows=(await db.query('SELECT id,checksum FROM public.schema_migrations ORDER BY id')).rows;
-  requireValue(rows.length===122 && digest(JSON.stringify(rows.map(({id,checksum})=>({id,checksum}))))===inventory,'APPLIED_INVENTORY');
+  requireValue(rows.length===(r.inventorySha256===collectorInventory?123:122) && digest(JSON.stringify(rows.map(({id,checksum})=>({id,checksum}))))===r.inventorySha256,'APPLIED_INVENTORY');
   // Invoke the predecessor application's actual startup guard, including its own forward-compatibility rules.
   try { await assertSchemaCurrent(db); } catch { throw Error('ROLLBACK_READER_SCHEMA_NOT_ADMITTED'); }
   const authority=(await db.query(`SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls
@@ -63,7 +65,7 @@ export async function verifyReaderDatabase(db,r,role,assertSchemaCurrent) {
     ['record_source_backfill_receipts','record_source_backfill_receipt_scope'],['record_source_backfill_decisions','record_source_backfill_decision_scope']]);
   requireValue(scopes.length===3&&scopes.every(row=>expected.get(row.relname)===row.tgname&&expected.delete(row.relname)
     &&['O','A'].includes(row.tgenabled)&&row.tgtype===7&&row.tgnargs===0&&row.unconditional&&row.columns===''
-    &&row.prosecdef===false&&digest(row.prosrc)==='1fab7cb281a8db0aa12ae1eb33a8b0890924d42ce64a4825dcf0ac7bfc3fd062'),'BACKFILL_SCOPE_GUARD');
+    &&row.prosecdef===false&&digest(row.prosrc)===(r.inventorySha256===collectorInventory?collectorBody:'1fab7cb281a8db0aa12ae1eb33a8b0890924d42ce64a4825dcf0ac7bfc3fd062')),'BACKFILL_SCOPE_GUARD');
   const receipt=(await db.query(`WITH sample AS MATERIALIZED (
     SELECT id,organization_id,integration_account_id,operator_membership_id,original_sha256,
       original_byte_size,original_version_id,preview_version,shipment_interpretation
@@ -95,8 +97,8 @@ async function main() {
   try {
     requireValue(opened.engine==='postgres','POSTGRES_REQUIRED');
     const sample=await opened.db.transaction(db=>verifyReaderDatabase(db,r,role,assertSchemaCurrent));
-    console.log(JSON.stringify({event:'shipment_rollback_reader',schema:'packproof.order-workspace-rollback-reader/v1',kind:r.kind,sourceSha:r.sourceSha,image:r.image,
-      environment:r.environment,inventorySha256:inventory,reviewSha256:r.reviewSha256,role,databaseHost:r.database.host,
+    console.log(JSON.stringify({event:'shipment_rollback_reader',schema:r.inventorySha256===collectorInventory?'packproof.hosted-collector-rollback-reader/v1':'packproof.order-workspace-rollback-reader/v1',kind:r.kind,sourceSha:r.sourceSha,image:r.image,
+      environment:r.environment,inventorySha256:r.inventorySha256,reviewSha256:r.reviewSha256,role,databaseHost:r.database.host,
       databaseName:r.database.name,taskArn:task.TaskARN,clusterArn:r.clusterArn,readOnly:true,compatibleReader:true,...sample,completedAt:new Date().toISOString()}));
   } finally { await opened.close(); }
 }

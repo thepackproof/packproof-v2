@@ -1,0 +1,8 @@
+# Preserve the deployed application and its 122-entrypoint contract. Only the
+# reviewed migrations 123 and 124 is readable ahead of deploying the new application.
+FROM 784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:3722c462d1e35de35aea2bc94c71dc0a74a617e729d16da7baabe4e817d7cbf3
+USER root
+RUN mv /app/backend/dist/db/forward-compatible-migrations.js /app/backend/dist/db/forward-compatible-migrations.previous.js
+COPY infra/backend-release/collector-workspace-forward-read.mjs /app/backend/dist/db/forward-compatible-migrations.js
+COPY infra/backend-release/hosted-membership-locks.mjs infra/backend-release/reconstruction-v9-release-review.mjs infra/backend-release/reconstruction-v9-runtime-preflight.mjs infra/backend-release/hosted-backfill-automation-pair.mjs /release/
+USER node

@@ -1,10 +1,10 @@
 /** Source-bound, image-only release requests. No AWS calls, DDL, grants or feature activation. */
 import {shipmentRelease,shipmentRuntimeInventory,shipmentReleaseInventory,verifyShipmentDeploymentReview,verifyShipmentProbeReports,configureShipmentProbe} from './shipment-deployment-review.mjs';
 import {backfillMigrationInventorySha256} from './reconstruction-v8-release-review.mjs';
-import {collectorInventory} from './reconstruction-v11-release-review.mjs';
+import {collectorInventory,collectorMigration} from './reconstruction-v11-release-review.mjs';
 import {workspaceInventory,workspaceMigration} from './reconstruction-v10-release-review.mjs';
 import {buildRequest} from './backend-release-requests.mjs';
-import {makePlan,TARGET,hash} from './backend-deployment-plan.mjs';
+import {makePlan,makeCollectorBridgeReplacement,TARGET,hash} from './backend-deployment-plan.mjs';
 
 export const CONNECT_RUNTIME_INVENTORY=Object.freeze({count:108,sha256:'a873b3f50dc1d4a380067d4a3d1a642472827df2fb2e99634ac3b45aa6260a6d'});
 const fail=code=>{throw Error(code);},check=(ok,code)=>{if(!ok)fail(code);};
@@ -78,12 +78,25 @@ export function connectRuntimePlan(snapshot,r,probes,now=Date.now(),script){
  const definitions=connectProbeRegistrations(snapshot,r,script,now);
  for(const [kind,definition] of Object.entries(definitions))qualification(probes?.[kind],r,kind,now,definition);
  const shipmentPair=shipmentRelease(r)?verifyShipmentProbeReports(r,probes,now):null;
- const api=makePlan({...snapshot.api,account:snapshot.account,region:snapshot.region},{sourceSha:r.sourceSha,image:r.image,version:r.version,expectedPreviousImage:r.expectedApi.image,expectedPreviousTaskDefinition:r.expectedApi.taskDefinition,ciPassed:true,databasePreflightPassed:true,sourceArchiveVerified:true});
+ const currentApi={...snapshot.api,account:snapshot.account,region:snapshot.region};
+ const candidate={sourceSha:r.sourceSha,image:r.image,version:r.version,expectedPreviousImage:r.expectedApi.image,expectedPreviousTaskDefinition:r.expectedApi.taskDefinition,ciPassed:true,databasePreflightPassed:true,sourceArchiveVerified:true};
+ const hosted=r.schema==='packproof.connect-runtime-review/v11-hosted';
+ if(hosted)check(r.expectedApi.image===r.expectedWorker.image && r.expectedApi.sourceSha===r.sourceSha && r.expectedWorker.sourceSha===r.sourceSha,'HOSTED_COLLECTOR_BRIDGE_SOURCE_MISMATCH');
+ const api=hosted?makeCollectorBridgeReplacement(currentApi,candidate,r.expectedWorker.image):makePlan(currentApi,candidate);
  const worker=cloneTask(snapshot.worker.taskDefinition);for(const c of worker.containerDefinitions){c.image=r.image;if(c===main(worker,'worker')||releaseNames.some(k=>Object.hasOwn(env(c),k)))replaceRelease(c,r);}
  check(hash(workerFixed({service:snapshot.worker.service,taskDefinition:{...worker,taskDefinitionArn:snapshot.worker.taskDefinition.taskDefinitionArn}}))===hash(workerFixed(snapshot.worker)),'CONNECT_RUNTIME_WORKER_PRESERVATION_FAILED');
- return {schema:shipmentPair?r.schema.replace('runtime-review','runtime-plan'):'packproof.connect-runtime-plan/v1',...(shipmentPair?{shipmentPair}:{}),sourceSha:r.sourceSha,image:r.image,reviewSha256:hash(r),configurationLeaseSha256:r.configurationLeaseSha256,preparedAt:new Date(now).toISOString(),expiresAt:r.expiresAt,apiConfigurationSha256:hash(snapshot.api.express.activeConfigurations),topologySha256:r.topologySha256,workerPredecessorSha256:hash(workerFixed(snapshot.worker)),workerPredecessorTaskDefinition:r.expectedWorker.taskDefinition,workerRegister:worker,apiUpdate:api.update,...(shipmentPair?{recovery:'Requalify the recovery images and reconcile admitted work before any reversal.'}:{rollbackApi:api.rollback,rollbackWorkerTaskDefinition:r.expectedWorker.taskDefinition}),workerServiceArn:r.expectedWorker.serviceArn,workerClusterArn:r.expectedWorker.clusterArn,order:['qualify_api_and_worker','promote_worker','verify_all_worker_tasks','promote_api','verify_public_identity_and_worker_health'],permittedChanges:['image','PACKPROOF_RELEASE_SHA','PACKPROOF_RELEASE_IMAGE','PACKPROOF_RELEASE_VERSION']};
+ const collectorRecovery=hosted?{
+  bridgeImage:r.expectedApi.image,api:api.rollback,network:snapshot.probe,
+  workerTaskDefinition:r.expectedWorker.taskDefinition,readerDefinitions:{},readerReports:{}
+ }:null;
+ if(collectorRecovery)for(const kind of ['api','worker']){
+  const q=probes['previous-'+kind];
+  collectorRecovery.readerDefinitions[kind]=q.registered.taskDefinition??q.registered;
+  collectorRecovery.readerReports[kind]=q.report;
+ }
+ return {schema:shipmentPair?r.schema.replace('runtime-review','runtime-plan'):'packproof.connect-runtime-plan/v1',...(shipmentPair?{shipmentPair}:{}),...(hosted?{collectorRecovery}:{}),sourceSha:r.sourceSha,image:r.image,reviewSha256:hash(r),configurationLeaseSha256:r.configurationLeaseSha256,preparedAt:new Date(now).toISOString(),expiresAt:r.expiresAt,apiConfigurationSha256:hash(snapshot.api.express.activeConfigurations),topologySha256:r.topologySha256,workerPredecessorSha256:hash(workerFixed(snapshot.worker)),workerPredecessorTaskDefinition:r.expectedWorker.taskDefinition,workerRegister:worker,apiUpdate:api.update,...(shipmentPair?{recovery:'Requalify the recovery images and reconcile admitted work before any reversal.'}:{rollbackApi:api.rollback,rollbackWorkerTaskDefinition:r.expectedWorker.taskDefinition}),workerServiceArn:r.expectedWorker.serviceArn,workerClusterArn:r.expectedWorker.clusterArn,order:['qualify_api_and_worker','promote_worker','verify_all_worker_tasks','promote_api','verify_public_identity_and_worker_health'],permittedChanges:['image','PACKPROOF_RELEASE_SHA','PACKPROOF_RELEASE_IMAGE','PACKPROOF_RELEASE_VERSION']};
 }
-function planFresh(plan,now){check(['packproof.connect-runtime-plan/v1','packproof.connect-runtime-plan/v7','packproof.connect-runtime-plan/v8','packproof.connect-runtime-plan/v9','packproof.connect-runtime-plan/v10'].includes(plan?.schema)&&fresh(plan.preparedAt,now)&&Date.parse(plan.expiresAt)>now,'CONNECT_RUNTIME_PLAN_EXPIRED');}
+function planFresh(plan,now){check(['packproof.connect-runtime-plan/v1','packproof.connect-runtime-plan/v7','packproof.connect-runtime-plan/v8','packproof.connect-runtime-plan/v9','packproof.connect-runtime-plan/v10','packproof.connect-runtime-plan/v11-hosted'].includes(plan?.schema)&&fresh(plan.preparedAt,now)&&Date.parse(plan.expiresAt)>now,'CONNECT_RUNTIME_PLAN_EXPIRED');}
 export function connectWorkerRegistration(plan,now=Date.now()){planFresh(plan,now);return structuredClone(plan.workerRegister);}
 export function connectWorkerUpdate(plan,registered,observation,now=Date.now()){
  planFresh(plan,now);
@@ -95,11 +108,123 @@ export function connectWorkerUpdate(plan,registered,observation,now=Date.now()){
 export function connectApiUpdate(plan,workerObservation,apiObservation,now=Date.now()){
  planFresh(plan,now);
  check(fresh(apiObservation?.observedAt,now)&&apiObservation.service?.serviceArn===TARGET.serviceArn&&apiObservation.service.runningCount===apiObservation.service.desiredCount&&apiObservation.service.pendingCount===0&&apiObservation.nativeDeploymentStatus==='SUCCESSFUL'&&hash(apiObservation.express?.activeConfigurations)===plan.apiConfigurationSha256&&hash(apiObservation.topology)===plan.topologySha256,'CONNECT_RUNTIME_API_DRIFT');
+ verifyPromotedWorker(plan,workerObservation,now);
+ return structuredClone(plan.apiUpdate);
+}
+function verifyPromotedWorker(plan,workerObservation,now) {
  const {service,tasks,taskDefinition,observedAt}=workerObservation??{};
  check(fresh(observedAt,now)&&service?.serviceArn===plan.workerServiceArn&&service.clusterArn===plan.workerClusterArn&&service.status==='ACTIVE'&&service.desiredCount>=1&&service.runningCount===service.desiredCount&&service.pendingCount===0&&service.deployments?.length===1&&service.deployments[0].rolloutState==='COMPLETED','CONNECT_RUNTIME_CANDIDATE_WORKER_NOT_STABLE');
  check(service.taskDefinition===taskDefinition?.taskDefinitionArn&&taskConfigurationHash(cloneTask(taskDefinition))===taskConfigurationHash(plan.workerRegister)&&tasks?.length===service.desiredCount&&tasks.every(t=>t.clusterArn===plan.workerClusterArn&&t.taskDefinitionArn===service.taskDefinition&&t.lastStatus==='RUNNING'&&t.containers?.length===plan.workerRegister.containerDefinitions.length&&hash(t.containers.map(c=>c.name).sort())===hash(plan.workerRegister.containerDefinitions.map(c=>c.name).sort())&&t.containers.every(c=>{const definition=plan.workerRegister.containerDefinitions.find(d=>d.name===c.name);return c.imageDigest===plan.image.split('@')[1]&&(env(definition).PACKPROOF_PROCESS_ROLE==='worker'?c.lastStatus==='RUNNING':c.lastStatus==='STOPPED'&&c.exitCode===0);})), 'CONNECT_RUNTIME_CANDIDATE_WORKER_DIGEST_REQUIRED');
- return structuredClone(plan.apiUpdate);
 }
+
+export function connectWorkspaceSwitch({enabled,plan,apiObservation:api,workerObservation,portalManifest},now=Date.now()) {
+ const flag='PACKPROOF_ORDER_WORKSPACE_ENABLED';
+ check(typeof enabled==='boolean' && plan?.schema==='packproof.connect-runtime-plan/v11-hosted' &&
+   plan.shipmentPair?.collectorVersionVerified===true && plan.shipmentPair.inventorySha256===collectorInventory &&
+   plan.shipmentPair.source===plan.sourceSha && plan.shipmentPair.image===plan.image, 'HOSTED_COLLECTOR_PLAN_REQUIRED');
+ check(fresh(api?.observedAt,now)&&api.meta?.commit===plan.sourceSha && api.meta.image===plan.image &&
+   api.service?.serviceArn===TARGET.serviceArn && api.express?.serviceArn===TARGET.serviceArn &&
+   api.nativeDeploymentStatus==='SUCCESSFUL' && api.service.status==='ACTIVE' && api.service.pendingCount===0 &&
+   api.service.desiredCount>=1 && api.service.runningCount===api.service.desiredCount && api.express.activeConfigurations?.length===1,
+   'HOSTED_COLLECTOR_API_NOT_STABLE');
+ const primary=api.express.activeConfigurations[0].primaryContainer;
+ check(primary?.image===plan.image && env(primary).PACKPROOF_RELEASE_SHA===plan.sourceSha &&
+   env(primary).PACKPROOF_RELEASE_IMAGE===plan.image && env(primary).PACKPROOF_MIGRATE_ON_START==='false' &&
+   !primary.environmentFiles?.length && !(primary.secrets??[]).some(s=>s.name===flag) &&
+   (primary.environment??[]).filter(s=>s.name===flag).length<=1, 'HOSTED_COLLECTOR_CONFIGURATION_CHANGED');
+ check(api.tasks?.length===api.service.desiredCount && api.tasks.every(t=>t.lastStatus==='RUNNING' &&
+   t.taskDefinitionArn===api.service.taskDefinition && t.containers?.length===1 &&
+   t.containers[0].lastStatus==='RUNNING' && t.containers[0].imageDigest===plan.image.split('@')[1]),
+   'HOSTED_COLLECTOR_API_TASK_DIGEST_REQUIRED');
+ if(enabled){
+   verifyPromotedWorker(plan,workerObservation,now);
+   check(portalManifest?.commit===plan.sourceSha && portalManifest?.apiUrl==='https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' &&
+     digest.test(portalManifest.indexSha256??'') && portalManifest.approvalPath==='/app/records/connect/approve' &&
+     portalManifest.capabilities?.connectApproval===1 && portalManifest.capabilities.orderWorkspaceApproval===1,
+      'HOSTED_COLLECTOR_PORTAL_REQUIRED');
+ }
+ const container=structuredClone(primary);
+ const binding=container.environment.find(v=>v.name===flag);
+ if(binding)binding.value=String(enabled);
+ else container.environment.push({name:flag,value:String(enabled)});
+ return {serviceArn:TARGET.serviceArn,primaryContainer:container};
+}
+function hostedRecovery(plan) {
+ const recovery=plan?.collectorRecovery;
+ check(plan?.schema==='packproof.connect-runtime-plan/v11-hosted'&&plan.shipmentPair?.collectorVersionVerified===true&&
+   plan.shipmentPair.inventorySha256===collectorInventory&&plan.shipmentPair.source===plan.sourceSha&&
+   plan.shipmentPair.image===plan.image&&image(recovery?.bridgeImage)&&recovery.bridgeImage!==plan.image,
+   'HOSTED_RECOVERY_QUALIFIED_PLAN_REQUIRED');
+ return recovery;
+}
+
+function checkedReaderDefinition(plan,kind,registered) {
+ const recovery=hostedRecovery(plan);
+ check(['api','worker'].includes(kind),'HOSTED_RECOVERY_READER_KIND');
+ const expected=recovery.readerDefinitions[kind],td=registered?.taskDefinition??registered;
+ check(td?.taskDefinitionArn===expected.taskDefinitionArn&&td.status!=='INACTIVE'&&
+   taskConfigurationHash(cloneTask(td))===taskConfigurationHash(cloneTask(expected)),
+   'HOSTED_RECOVERY_READER_DEFINITION');
+ return td;
+}
+
+export function connectRecoveryProbe({plan,kind,registered,snapshot,attempt},now=Date.now()){
+ const td=checkedReaderDefinition(plan,kind,registered);
+ const net=plan.collectorRecovery.network;
+ check(fresh(snapshot?.observedAt,now)&&snapshot.account===TARGET.account&&snapshot.region===TARGET.region&&
+   hash(snapshot.probe)===hash(net)&&hash(snapshot.topology)===plan.topologySha256&&
+   /^[a-zA-Z0-9-]{1,36}$/.test(attempt??''),'HOSTED_RECOVERY_OBSERVATION_REQUIRED');
+ return {cluster:net.clusterArn,taskDefinition:td.taskDefinitionArn,count:1,networkConfiguration:structuredClone(net.networkConfiguration),
+   ...(net.capacityProviderStrategy?.length?{capacityProviderStrategy:structuredClone(net.capacityProviderStrategy)}:{launchType:'FARGATE'}),
+   ...(net.platformVersion?{platformVersion:net.platformVersion}:{}),enableExecuteCommand:false,
+   clientToken:hash({plan:plan.reviewSha256,kind,attempt}),startedBy:'connect-recover-'+kind+'-'+plan.sourceSha.slice(0,12)};
+}
+
+function recoveryReaders(plan,readers,now){
+ const recovery=hostedRecovery(plan),taskArns=new Set(),prefix=recovery.network.clusterArn.replace(':cluster/',':task/')+'/';
+ for(const kind of ['api','worker']){
+  const entry=readers?.[kind],reg=checkedReaderDefinition(plan,kind,entry?.registered),task=entry?.task,report=entry?.report;
+  const original=recovery.readerReports[kind],keys=['schema','kind','sourceSha','image','environment','inventorySha256','reviewSha256','role','databaseHost','databaseName','clusterArn','readOnly','compatibleReader'];
+  check(report&&keys.every(k=>report[k]===original[k])&&fresh(report.completedAt,now)&&report.taskArn!==original.taskArn&&
+    report.taskArn===task?.taskArn&&report.taskArn?.startsWith(prefix)&&/^[0-9a-f]{32}$/.test(report.taskArn.slice(prefix.length)),
+    'HOSTED_RECOVERY_FRESH_READER_REQUIRED');
+  check(task.clusterArn===recovery.network.clusterArn&&task.lastStatus==='STOPPED'&&task.taskDefinitionArn===reg.taskDefinitionArn&&
+    !task.overrides?.taskRoleArn&&!task.overrides?.executionRoleArn&&(task.overrides?.containerOverrides??[]).every(c=>Object.keys(c).length===1)&&
+    task.containers?.length===reg.containerDefinitions.length&&hash(task.containers.map(c=>c.name).sort())===hash(reg.containerDefinitions.map(c=>c.name).sort())&&
+    task.containers.every(c=>c.exitCode===0&&c.imageDigest===recovery.bridgeImage.split('@')[1]),'HOSTED_RECOVERY_STOPPED_TASK_REQUIRED');
+  taskArns.add(task.taskArn);
+ }
+ check(taskArns.size===2,'HOSTED_RECOVERY_DISTINCT_READERS_REQUIRED');
+}
+
+export function connectRecoveryUpdate({plan,kind,readers,apiObservation,workerObservation},now=Date.now()){
+ const recovery=hostedRecovery(plan);
+ check(['api','worker'].includes(kind),'HOSTED_RECOVERY_KIND');
+ recoveryReaders(plan,readers,now);
+ const a=apiObservation,expected=kind==='api'?plan.apiUpdate.primaryContainer:recovery.api.primaryContainer;
+ const primary=a?.express?.activeConfigurations?.[0]?.primaryContainer;
+ const flag='PACKPROOF_ORDER_WORKSPACE_ENABLED';
+ // Express returns environment bindings in provider order after updates.
+ const withoutSwitch=c=>{
+  const copy=structuredClone(c);
+  copy.environment=copy.environment.filter(e=>e.name!==flag).sort((x,y)=>x.name.localeCompare(y.name));
+  if(copy.secrets)copy.secrets.sort((x,y)=>x.name.localeCompare(y.name));
+  return copy;
+ };
+ check(fresh(a?.observedAt,now)&&a.service?.serviceArn===TARGET.serviceArn&&a.express?.serviceArn===TARGET.serviceArn&&
+   a.express.activeConfigurations?.length===1&&a.nativeDeploymentStatus==='SUCCESSFUL'&&a.service.status==='ACTIVE'&&
+   a.service.pendingCount===0&&a.service.runningCount===a.service.desiredCount&&a.service.desiredCount>=1&&
+   a.meta?.commit===plan.sourceSha&&a.meta.image===expected.image&&hash(a.topology)===plan.topologySha256&&primary&&
+   !primary.environment.some(e=>e.name===flag&&e.value!=='false')&&hash(withoutSwitch(primary))===hash(withoutSwitch(expected)),
+   'HOSTED_RECOVERY_API_CHANGED_OR_WORKSPACE_ACTIVE');
+ check(a.tasks?.length===a.service.desiredCount&&a.tasks.every(t=>t.taskDefinitionArn===a.service.taskDefinition&&t.lastStatus==='RUNNING'&&
+   t.containers?.length===1&&t.containers[0].lastStatus==='RUNNING'&&t.containers[0].imageDigest===expected.image.split('@')[1]),
+   'HOSTED_RECOVERY_RUNNING_API_REQUIRED');
+ if(kind==='api')return structuredClone(recovery.api);
+ verifyPromotedWorker(plan,workerObservation,now);
+ return {cluster:plan.workerClusterArn,service:plan.workerServiceArn,taskDefinition:recovery.workerTaskDefinition};
+}
+
 export function connectRollbackWorker(plan,apiObservation,quiescence,now=Date.now()){
  check(plan?.schema==='packproof.connect-runtime-plan/v1','SHIPMENT_ROLLBACK_NEEDS_NEW_PAIRED_REVIEW');
  check(fresh(apiObservation?.observedAt,now)&&apiObservation.stable===true&&hash(apiObservation.primaryContainer)===hash(plan.rollbackApi.primaryContainer),'CONNECT_RUNTIME_ROLLBACK_API_FIRST');
@@ -135,14 +260,15 @@ export function connectProbeRunRequest(snapshot,r,kind,registered,script,now=Dat
 }
 /** Root Docker layout; source is re-fetched and checksummed even for an unversioned bucket. */
 export function connectRuntimeBuildRequest({sourceSha,archiveSha256,sourceVersion,predecessorImages,profile='zero-touch-v1',sourceTransport='s3'}){
- check(sourceTransport==='s3'||sourceTransport==='git-commit' && !sourceVersion && ['reconstruction-v10','reconstruction-v11','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_TRANSPORT_REQUIRED');
- check(['zero-touch-v1','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
+ check(sourceTransport==='s3'||sourceTransport==='git-commit' && !sourceVersion && ['reconstruction-v10','reconstruction-v11','order-workspace-bridge','collector-hosted-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_TRANSPORT_REQUIRED');
+ check(['zero-touch-v1','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11','order-workspace-bridge','collector-hosted-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
  const reviewedProfile=profile!=='zero-touch-v1';
  const inventories={'zero-touch-v1':CONNECT_RUNTIME_INVENTORY,'reconstruction-v7':shipmentRuntimeInventory,
   'reconstruction-v8':{count:121,sha256:backfillMigrationInventorySha256},'reconstruction-v9':{count:121,sha256:backfillMigrationInventorySha256},
   'reconstruction-v10':{count:122,sha256:workspaceInventory},'reconstruction-v11':{count:123,sha256:collectorInventory}};
- const compatibility=profile==='order-workspace-bridge';
- const buildTag=compatibility?'order-compat-'+sourceSha:'connect-runtime-'+sourceSha;
+ const collectorBridge=profile==='collector-hosted-bridge';
+ const compatibility=profile==='order-workspace-bridge'||collectorBridge;
+ const buildTag=collectorBridge?'collector-compat-'+sourceSha:compatibility?'order-compat-'+sourceSha:'connect-runtime-'+sourceSha;
  const inventory=inventories[compatibility?'reconstruction-v9':profile];
  const hosted=profile==='reconstruction-v9';
  const baseDigest=compatibility?'3722c462d1e35de35aea2bc94c71dc0a74a617e729d16da7baabe4e817d7cbf3':'cbccc2bca3c0efabd6fa957e48a95e4ee66009267914d342a073871e21dbf56b';
@@ -157,9 +283,10 @@ await import('/release/${probeProfile}-runtime-preflight.mjs');
 
 ${probeProfile==='reconstruction-v9'?"await import('/release/hosted-backfill-automation-pair.mjs');":''}
 ${profile==='reconstruction-v10'?"await import('/release/order-workspace-pair.mjs');await import('./dist/records/order-router.js');":''}
-${profile==='reconstruction-v11'?"await import('/release/collector-version-pair.mjs');await import('./dist/records/order-router.js');await import('./dist/records/order-source.js');":''}
+${profile==='reconstruction-v11'?"await import('/release/collector-version-pair.mjs');await import('/release/connect-hosted-migration.mjs');await import('/release/reconstruction-v11-hosted-runtime-preflight.mjs');await import('./dist/records/order-router.js');await import('./dist/records/order-source.js');":''}
 ${compatibility?`const {isReviewedForwardCompatibleMigration:ready}=await import('./dist/db/forward-compatible-migrations.js');const row=${JSON.stringify(workspaceMigration)};if(!ready(row)||ready({...row,checksum:'0'.repeat(64)})||ready({...row,id:'124_unapproved'}))throw Error('COMPATIBILITY_GUARD_MISMATCH');`:''}
 ${profile==='reconstruction-v8'?"await import('/release/backfill-automation-pair.mjs');":''}
+${collectorBridge?`const {isReviewedForwardCompatibleMigration:ok}=await import('./dist/db/forward-compatible-migrations.js'); const added=${JSON.stringify(collectorMigration)}; if(!ok(added)||ok({...added,checksum:'0'.repeat(64)})||ok({...added,id:'125_unknown'}))throw Error('COLLECTOR_BRIDGE_GUARD');`:''}
 const full=await migrationInventory();
 inspectReconstructionInventory(full,rows,{inventorySha256:'${inventory.sha256}'});
 const {readShipmentAutomationPolicy}=await import('/release/shipment-automation-pair.mjs');
@@ -170,9 +297,9 @@ console.log(JSON.stringify({event:'shipment_release_build_policy',bundleSha256:p
  const buildImage=hosted||compatibility?[
   `docker pull '${baseImage}'`,
   `test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' '${baseImage}')" = '${baseSha}'`,
-  `docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/${compatibility?'Dockerfile.order-workspace-bridge':'Dockerfile.hosted-lock-profile'} .`
+  `docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/${collectorBridge?'Dockerfile.collector-hosted-bridge':compatibility?'Dockerfile.order-workspace-bridge':'Dockerfile.hosted-lock-profile'} .`
  ]:['docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/Dockerfile .'];
- const sourceProfile=compatibility?'reconstruction-v10':profile;
+ const sourceProfile=collectorBridge?'reconstruction-v11':compatibility?'reconstruction-v10':profile;
  const sourceCommands=sourceTransport==='git-commit'?[
   'git init -q /tmp/connect-source',
   'git -C /tmp/connect-source remote add origin https://github.com/thepackproof/packproof-v2.git',

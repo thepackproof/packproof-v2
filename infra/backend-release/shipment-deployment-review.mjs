@@ -1,5 +1,7 @@
 import {validateReconstructionReview as validateWorkspaceReview, workspaceInventory, workspaceRecords} from './reconstruction-v10-release-review.mjs';
 import {inspectOrderWorkspacePair} from './order-workspace-pair.mjs';
+import {collectorInventory,collectorRecords,validateHostedCollectorReview} from './reconstruction-v11-release-review.mjs';
+import {inspectHostedCollectorPair} from './collector-version-pair.mjs';
 import {readFileSync} from 'node:fs';
 import {backfillMigrationInventorySha256,backfillRecordsInventorySha256,validateReconstructionReview as validateBackfillReview} from './reconstruction-v8-release-review.mjs';
 import {validateReconstructionReview as validateHostedReview} from './reconstruction-v9-release-review.mjs';
@@ -20,6 +22,8 @@ const offSwitches=new Set(['PACKPROOF_TYPED_INTAKE_ENABLED','PACKPROOF_SOURCE_SU
  'PACKPROOF_CSV_HEADER_VARIANTS_ENABLED']);
 const shadow='PACKPROOF_SHIPMENT_INTERPRETATION_SHADOW_SOURCES';
 const profiles={
+ 'packproof.connect-runtime-review/v11-hosted':{version:'v11-hosted',inventory:collectorInventory,records:collectorRecords,
+  validate:validateHostedCollectorReview,pair:inspectHostedCollectorPair,reader:'order-workspace-rollback-reader.mjs',readerSchema:'packproof.hosted-collector-rollback-reader/v1'},
  'packproof.connect-runtime-review/v10':{version:'v10',inventory:workspaceInventory,records:workspaceRecords,
   validate:validateWorkspaceReview,pair:inspectOrderWorkspacePair,reader:'order-workspace-rollback-reader.mjs',readerSchema:'packproof.order-workspace-rollback-reader/v1'},
  'packproof.connect-runtime-review/v7':{version:'v7',inventory:shipmentMigrationInventorySha256,records:shipmentRecordsInventorySha256,
@@ -32,7 +36,7 @@ const profiles={
 export const shipmentRelease=r=>Object.hasOwn(profiles,r?.schema);
 export const shipmentReleaseInventory=r=>profiles[r.schema].inventory;
 function reviewEnv(version){
- const base='PACKPROOF_RECONSTRUCTION_'+version.toUpperCase()+'_REVIEW';
+ const base='PACKPROOF_RECONSTRUCTION_'+version.toUpperCase().replace('-','_')+'_REVIEW';
  return {reviewJson:base+'_JSON',reviewHash:base+'_SHA256'};
 }
 export function verifyShipmentDeploymentReview(snapshot,r,now){
@@ -44,8 +48,8 @@ export function verifyShipmentDeploymentReview(snapshot,r,now){
   v.target.host===r.database.host&&v.target.database===r.database.name&&Date.parse(v.expiresAt)>=Date.parse(r.expiresAt),
   'SHIPMENT_DEPLOYMENT_REVIEW_BINDING_MISMATCH');
  const policy=v.automationPolicy;
- const preserve=v.preserveShipmentSettings===true && ['v9','v10'].includes(profile.version);
- const switches=profile.version==='v10'?new Set([...offSwitches,'PACKPROOF_ORDER_WORKSPACE_ENABLED']):offSwitches;
+ const preserve=v.preserveShipmentSettings===true && ['v9','v10','v11-hosted'].includes(profile.version);
+ const switches=['v10','v11-hosted'].includes(profile.version)?new Set([...offSwitches,'PACKPROOF_ORDER_WORKSPACE_ENABLED']):offSwitches;
  check((profile.version==='v7'||v.backfillJobsEnabled===false)&&policy.interpretationEnabled===preserve&&!policy.headerVariantsEnabled&&policy.shadowSourcesSha256===reconstructionDigest([]),
   'SHIPMENT_DEFAULT_OFF_REVIEW_REQUIRED');
  const containers=[snapshot.api.express.activeConfigurations[0].primaryContainer,
