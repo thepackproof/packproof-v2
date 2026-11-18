@@ -162,14 +162,17 @@ test('exact committed120 Git archive supplies all v6 Docker inputs while frozen1
 
 const backfillHead='93274b085113dee70ee4fe7516b384cacfcd385e';
 const currentHead=execFileSync('git',['rev-parse','HEAD'],{cwd:backfillRoot,encoding:'utf8'}).trim();
+const workspaceHead='e9d1446d7872351f47ba66c2ed425f6f6d9e2f3d';
 const shipmentHead='fb9f80ab2c6c4f013e794ad654f7ca55d168ac19';
 for(const [profile,previousProfile,head,previousHead,count,inventory,pair] of [
  ['reconstruction-v7','reconstruction-v6',shipmentHead,'66a258e9eaeaea7695fff18f76ce0de3212c0573',120,
   '3a0d0f641856846529659e12eb7ba166f8542753b663b4d5ab903862ee905de5','shipment-automation-pair.mjs'],
  ['reconstruction-v8','reconstruction-v7',backfillHead,shipmentHead,121,
   'ea1b7bd281d155919935362bd904a7cce80711c267c64090be84023d6dbbc804','backfill-automation-pair.mjs'],
- ['reconstruction-v10','reconstruction-v8',currentHead,'c1d9bad13ddbd2e20a70152d3c1a270d28dd57ec',122,
+ ['reconstruction-v10','reconstruction-v8',workspaceHead,'c1d9bad13ddbd2e20a70152d3c1a270d28dd57ec',122,
   'ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d','order-workspace-pair.mjs'],
+ ['reconstruction-v11','reconstruction-v10',currentHead,workspaceHead,123,
+  'd0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60','collector-version-pair.mjs'],
 ])test(profile+' archive verifies every Docker input and rejects adjacent catalogs', () => {
  const directory = mkdtempSync(path.join(tmpdir(), profile+'-source-'));
  const script = path.join(backfillRoot, 'infra/backend-release/backend-source-archive.py');

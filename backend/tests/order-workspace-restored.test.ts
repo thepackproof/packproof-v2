@@ -1,7 +1,8 @@
 import {randomBytes} from 'node:crypto';
 import {describe,expect,it} from 'vitest';
 import {migrateTestDatabaseThrough,openIsolatedTestDatabase} from './isolated-test-database.js';
-import {migrationInventory} from '../src/db/migrate.js';
+import {migrate,migrationInventory} from '../src/db/migrate.js';
+import {collectorInventory,collectorMigration,inspectCollectorPredecessor,inspectReconstructionInventory,verifyBackfillScopeGuard} from '../../infra/backend-release/reconstruction-v11-release-review.mjs';
 import {splitSqlStatements} from '../src/db/sql.js';
 import {planRecordsRuntimePrivileges,recordsMigrationInventory,verifyRecordsRuntimePrivileges} from '../scripts/records-runtime-privileges.mjs';
 import {createPgDatabase} from '../src/db/postgres.js';
@@ -9,7 +10,7 @@ import {applyRestoredDelta} from '../../infra/backend-release/order-workspace-re
 
 const connection=process.env.PACKPROOF_TEST_DATABASE_URL;
 describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
-  it('rolls back the first attempt, preserves old data and grants, then admits independent API and worker logins',async()=>{
+  it('restores the workspace on 123, applies only collector migration 124, and preserves API and worker access',async()=>{
     const opened=await openIsolatedTestDatabase();
     const suffix=randomBytes(6).toString('hex');
     const apiRole='workspace_api_'+suffix, workerRole='workspace_worker_'+suffix;
@@ -31,7 +32,7 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
         const target=new URL(connection!);target.username=name;target.password=password;target.searchParams.set('options','-c search_path='+schema);
         logins.push(createPgDatabase(target.toString()));
       }
-      const options=(throughMigration:122|123,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
+      const options=(throughMigration:122|123|124,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
       const policy122=options(122,(await recordsMigrationInventory(122)).migrationSha256);
       const baseline=await planRecordsRuntimePrivileges(opened.db,policy122);
       await opened.db.transaction(async tx=>{for(const sql of baseline.statements)await tx.query(sql);});
@@ -39,7 +40,11 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       await opened.db.query('CREATE TABLE preserved_sample(id integer PRIMARY KEY, original bytea NOT NULL)');
       await opened.db.query('INSERT INTO preserved_sample(id,original) VALUES(1,$1)',[Buffer.from('kept original')]);
       await opened.db.query(`GRANT SELECT ON preserved_sample TO ${apiRole}`);
-      const deps={migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges};
+      const candidate=await migrationInventory();
+      // Exercise the 122→123 restorer with its original release inventory before the
+      // candidate migrator sees the exact 123 predecessor and the single new file.
+      const predecessor=candidate.filter(row=>row.id<collectorMigration.id);
+      const deps={migrationInventory:async()=>predecessor,splitSqlStatements,planRecordsRuntimePrivileges};
       const params={apiRole,workerRole,source,...identity};
       const rollback=Error('EXPECTED_REHEARSAL_ROLLBACK');
       await expect(opened.db.transaction(async tx=>{await applyRestoredDelta(tx,params,deps);throw rollback;})).rejects.toBe(rollback);
@@ -55,6 +60,38 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       expect((await logins[0].db.query("SELECT convert_from(original,'UTF8') AS original FROM preserved_sample")).rows).toEqual([{original:'kept original'}]);
       await expect(logins[1].db.query('SELECT * FROM record_order_receipts')).rejects.toMatchObject({code:'42501'});
       await expect(opened.db.transaction(tx=>applyRestoredDelta(tx,params,deps))).rejects.toThrow('PREDECESSOR');
+
+      const ledger=async()=>(await opened.db.query<{id:string;checksum:string;applied_at:string}>(
+        'SELECT id,checksum,applied_at::text,checksum_provenance FROM schema_migrations ORDER BY id'
+      )).rows;
+      const before=await ledger();
+      expect(inspectCollectorPredecessor(candidate,before)).toMatchObject({appliedCount:122,addition:collectorMigration});
+      const guard123=predecessor.find(row=>row.id==='123_order_workspace')!;
+      const guard124=candidate.find(row=>row.id===collectorMigration.id)!;
+      await verifyBackfillScopeGuard(opened.db,guard123.sql);
+      await expect(verifyBackfillScopeGuard(opened.db,guard124.sql)).rejects.toThrow('BACKFILL_SCOPE_GUARD_MISMATCH');
+      const policy123=options(123,(await recordsMigrationInventory(123)).migrationSha256);
+      const granted123=await Promise.all(logins.map(login=>verifyRecordsRuntimePrivileges(login.db,policy123)));
+
+      await migrate(opened.db);
+
+      const after=await ledger();
+      expect(after.filter(row=>row.id!==collectorMigration.id)).toEqual(before);
+      expect(after.at(-1)).toMatchObject({...collectorMigration,checksum_provenance:'EXECUTED_BYTES'});
+      expect(inspectReconstructionInventory(candidate,after,{inventorySha256:collectorInventory})).toMatchObject({sourceCount:123,appliedCount:123});
+      await verifyBackfillScopeGuard(opened.db,guard124.sql);
+      await expect(verifyBackfillScopeGuard(opened.db,guard123.sql)).rejects.toThrow('BACKFILL_SCOPE_GUARD_MISMATCH');
+      const policy124=options(124,(await recordsMigrationInventory(124)).migrationSha256);
+      for(const [index,login] of logins.entries()){
+        const active=await verifyRecordsRuntimePrivileges(login.db,policy124);
+        expect(active.caller).toBe(roles[index]);
+        expect(active.policySha256).toBe(granted123[index].policySha256);
+        expect(active.effectivePrivilegesSha256).toBe(granted123[index].effectivePrivilegesSha256);
+      }
+      expect((await logins[0].db.query("SELECT convert_from(original,'UTF8') AS original FROM preserved_sample")).rows).toEqual([{original:'kept original'}]);
+      await expect(logins[1].db.query('SELECT * FROM record_order_receipts')).rejects.toMatchObject({code:'42501'});
+      await migrate(opened.db);
+      expect(await ledger()).toEqual(after);
     }finally{
       if(oldSource===undefined)delete process.env.PACKPROOF_RELEASE_SHA;else process.env.PACKPROOF_RELEASE_SHA=oldSource;
       for(const login of logins)await login.close();

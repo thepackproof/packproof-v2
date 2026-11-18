@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {inspectCollectorVersionPair} from './collector-version-pair.mjs';
+import {collectorGrants,collectorInventory,collectorMigration,collectorRecords} from './reconstruction-v11-release-review.mjs';
+import {workspaceInventory} from './reconstruction-v10-release-review.mjs';
 import {reconstructionDigest} from './reconstruction-v7-release-review.mjs';
 import {TARGET,hash} from './backend-deployment-plan.mjs';
 import {CONNECT_RUNTIME_INVENTORY,connectConfigurationLease,connectRuntimeBuildRequest,connectProbeRegistrations,connectProbeRunRequest,connectRuntimePlan,connectWorkerRegistration,connectWorkerUpdate,connectApiUpdate,connectRollbackWorker} from './connect-runtime-release.mjs';
@@ -275,4 +278,58 @@ test('123 release binds both real roles, exact rollback readers, scope guards an
   assert.ok(bridge.buildspecOverride.includes(text));
  for(const text of ['order-workspace-pair.mjs','reconstruction-v10-runtime-preflight.mjs','rows.length!==122','./dist/records/order-router.js'])
   assert.ok(candidate.buildspecOverride.includes(text));
+});
+
+
+test('124 builds the application from the verified v11 source without constructing a bridge or deployment',()=>{
+ const input={sourceSha:source,archiveSha256:'a'.repeat(64),predecessorImages:[previous],profile:'reconstruction-v11'};
+ for(const sourceTransport of ['s3','git-commit']){
+  const request=connectRuntimeBuildRequest({...input,sourceTransport});
+  const phases=JSON.parse(request.buildspecOverride).phases;
+  const build=phases.build.commands.join('\n'),prepare=phases.pre_build.commands.join('\n');
+  for(const text of [collectorInventory,'rows.length!==123','reconstruction-v11-release-review.mjs','reconstruction-v11-runtime-preflight.mjs',
+   'collector-version-pair.mjs','./dist/records/order-router.js','./dist/records/order-source.js'])assert.ok(build.includes(text),text);
+  assert.doesNotMatch(build,/Dockerfile.order-workspace-bridge|update-service|migrate-cli/);
+  assert.ok(prepare.includes(input.archiveSha256));
+  if(sourceTransport==='git-commit')assert.match(prepare,/reconstruction-v11 --verify/);
+  assert.equal(phases.post_build.commands[0],'test "$CODEBUILD_BUILD_SUCCEEDING" = 1');
+ }
+ const f=fixture(),review={...f.review,schema:'packproof.connect-runtime-review/v11'};
+ assert.throws(()=>connectProbeRegistrations(f.snapshot,review,script,now),/REVIEW_REQUIRED/);
+ assert.throws(()=>connectRuntimePlan(f.snapshot,review,{},now,script),/REVIEW_REQUIRED/);
+});
+
+test('124 pairs fresh independent restored logins and rejects drift in either privilege or scope receipt',()=>{
+ const f=shipmentFixture('v10');
+ addHostedLocks(f.probes,f.review);
+ const restoreCluster=cluster.replace(/\/[^/]+$/,'/collector-rehearsal');
+ const review={...f.review.preflightReview,schema:'packproof.reconstruction-release-review/v11',clusterArn:restoreCluster,
+  inventorySha256:collectorInventory,recordsMigrationSha256:collectorRecords};
+ const receipts=['api','worker'].map(kind=>{
+  const value=structuredClone(f.probes[kind].report);
+  value.schema='packproof.reconstruction-runtime-preflight/v11';
+  value.reviewSha256=reconstructionDigest(review);
+  value.taskIdentity.taskArn=value.taskIdentity.taskArn.replace(cluster.split('/').at(-1),'collector-rehearsal');
+  Object.assign(value.sourceInventory,{sourceCount:123,appliedCount:123,inventorySha256:collectorInventory,
+    predecessorSha256:workspaceInventory,additions:[collectorMigration]});
+  Object.assign(value.recordsPrivileges,{migrationSha256:collectorRecords,policySha256:collectorGrants,effectivePrivilegesSha256:'e'.repeat(64)});
+  value.collectorVersionVerified=true;
+  return value;
+ });
+ const pair=(api,worker)=>inspectCollectorVersionPair(review,api,worker,new Date(now));
+ const result=pair(...receipts);
+ assert.equal(result.schema,'packproof.collector-version-policy-pair/v1');
+ assert.equal(result.customerReleaseQualified,false);
+ assert.equal(result.apiReceiptSha256,reconstructionDigest(receipts[0]));
+ assert.equal(result.workerReceiptSha256,reconstructionDigest(receipts[1]));
+ for(const i of [0,1])for(const change of [
+  r=>{r.collectorVersionVerified=false;},r=>{r.orderHistoryGuardsVerified=false;},r=>{r.backfillScopeVerified=false;},
+  r=>{r.recordsPrivileges.policySha256='0'.repeat(64);},r=>{r.recordsPrivileges.effectivePrivilegesSha256='0'.repeat(64);},
+  r=>{r.sourceInventory.predecessorSha256='f'.repeat(64);},r=>{r.sourceInventory.additions=[];},
+  r=>{r.schema='packproof.reconstruction-runtime-preflight/v10';},r=>{r.identity.login='other';},
+  r=>{r.automationPolicy.shadowSourcesSha256='c'.repeat(64);}
+ ]){
+  const altered=structuredClone(receipts);change(altered[i]);
+  assert.throws(()=>pair(...altered),/MISMATCH/);
+ }
 });
