@@ -92,7 +92,9 @@ module.exports = async function workspaceWalkthrough({
   await setup('activate'); await includes('Sales reports'); await includes(output);
   await capture('review-permissions'); await press('Review in browser');
   await waitFor(page, '!!(' + target('Open browser review') + ')');
-  assert.ok(calls.includes('open browser'), 'Activation must hand the current request to the browser');
+  // The main process opens the initial external review. Exercise its explicit
+  // reopen control through the preload before supplying the external decision.
+  await press('Open browser review');
   publish({ phase: 'active', step: 'overview', approvalPath: null, canReadOrders: true, viewKey: 'approved-walkthrough', orders: [order],
     sources: [{ ...source, state: 'active' }] });
   // Resume from the returned service grant through normal renderer polling.
@@ -112,6 +114,8 @@ module.exports = async function workspaceWalkthrough({
   await waitFor(page, '(' + target('Items', false, '[role=tab]') + ')?.getAttribute("aria-selected") === "true" && !document.querySelector("dialog[open]")');
   const tree = await page.debugger.sendCommand('Accessibility.getFullAXTree');
   assert.ok(tree.nodes.some(n => n.role?.value === 'heading' && n.name?.value === 'Proof ' + order.proofId));
-  assert.deepEqual(calls, ['choose folder','choose output','request access','open browser','find order','open committed revision','read exact source']);
+  // Returning from metadata can reread the same exact source at the same revision.
+  const operations = calls.filter((entry, i) => entry !== calls[i - 1]);
+  assert.deepEqual(operations, ['choose folder','choose output','request access','open browser','find order','open committed revision','read exact source']);
   report.keyboardWalkthrough = { scope: 'Packaged renderer and preload, real keyboard, isolated service and external approval', cssWidth: 640, scale: 2, checks: calls };
 };

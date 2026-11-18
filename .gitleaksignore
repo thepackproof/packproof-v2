@@ -74,3 +74,7 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # Keep every scanner rule and every other historical location enabled.
 8231ac733979d2f49a10056b4e62be5fa8337529:docs/zero-touch-warehouse/RUNTIME_QUALIFICATION.json:generic-api-key:332
 8231ac733979d2f49a10056b4e62be5fa8337529:docs/zero-touch-warehouse/RUNTIME_QUALIFICATION.json:generic-api-key:472
+
+# PR 171, source scan job 134715786633. The historical codebuildId field
+# identifies an AWS CodeBuild execution, verified against BatchGetBuilds.
+af4905c028da19a0214f5ee1e97ae1d63949425e:docs/windows-connect/releases/0.5.0-web-build-receipt.json:generic-api-key:5
