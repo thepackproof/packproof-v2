@@ -96,7 +96,7 @@ describe('finite historical backfill authority and receipt accounting',()=>{
    FROM record_source_backfill_jobs j WHERE j.id=$1`,[priorJob.id])).rejects.toThrow(/does not match its original current source authority/);
   expect((await currentGrant()).rows[0].grant_revision).toBe(grant);
  });
- it.each(['pause','expiry'] as const)('rechecks historical %s after a committed two-row prefix without rewriting captured rows',async boundary=>{
+ it.each(['pause','expiry'] as const)('rechecks historical %s after the first committed row without rewriting captured rows',async boundary=>{
   const savedNow=now;
   try{
    const f=await activeSource(),original=file(`chunked-${boundary}.csv`);
@@ -108,14 +108,14 @@ describe('finite historical backfill authority and receipt accounting',()=>{
    const observed:Database={query:opened.db.query.bind(opened.db),async transaction<T>(work:(tx:Database)=>Promise<T>){
     let chunk=false;const result=await opened.db.transaction(tx=>work({query:async<R>(sql:string,params?:unknown[])=>{const value=await tx.query<R>(sql,params);if(sql.startsWith('UPDATE record_typed_batches SET lease_expires_at=')&&params?.[0]===captured.body.id)chunk=true;return value;},transaction:tx.transaction.bind(tx)}));
     if(chunk&&!interrupted){
-     interrupted=true;const progress=(await opened.db.query<{status:string;n:number}>('SELECT status,COUNT(*)::integer n FROM record_typed_rows WHERE batch_id=$1 GROUP BY status ORDER BY status',[captured.body.id])).rows;expect(progress).toEqual([{status:'accepted_linked',n:2},{status:'processing',n:9}]);
+     interrupted=true;const progress=(await opened.db.query<{status:string;n:number}>('SELECT status,COUNT(*)::integer n FROM record_typed_rows WHERE batch_id=$1 GROUP BY status ORDER BY status',[captured.body.id])).rows;expect(progress).toEqual([{status:'accepted_linked',n:1},{status:'processing',n:10}]);
      if(boundary==='pause'){const paused=await action(f,currentJob,'pause',`chunked-${boundary}-pause`);expect(paused.status,paused.text).toBe(200);currentJob=paused.body;}else now+=61000;
     }
     return result;
    }};
    expect(await processPendingTypedImports({...deps,db:observed},1)).toMatchObject({processed:0,blocked:1});expect(interrupted).toBe(true);
-   const view=await request(app).get(`/v1/partner/typed-imports/${captured.body.id}`).set(f.service);expect(view.status,view.text).toBe(200);expect(view.body).toMatchObject({state:'blocked_policy',errorCode:boundary==='pause'?'SOURCE_BACKFILL_NOT_APPROVED':'SOURCE_BACKFILL_APPROVAL_EXPIRED',counts:{acceptedLinked:2,processing:9}});expect((await originals()).rows).toEqual(before);
-   const accepted=(await opened.db.query<{id:string}>('SELECT id FROM record_case_assertions WHERE batch_id=$1 ORDER BY id',[captured.body.id])).rows;expect(accepted).toHaveLength(2);await processPendingTypedImports(deps,1);expect((await originals()).rows).toEqual(before);
+   const view=await request(app).get(`/v1/partner/typed-imports/${captured.body.id}`).set(f.service);expect(view.status,view.text).toBe(200);expect(view.body).toMatchObject({state:'blocked_policy',errorCode:boundary==='pause'?'SOURCE_BACKFILL_NOT_APPROVED':'SOURCE_BACKFILL_APPROVAL_EXPIRED',counts:{acceptedLinked:1,processing:10}});expect((await originals()).rows).toEqual(before);
+   const accepted=(await opened.db.query<{id:string}>('SELECT id FROM record_case_assertions WHERE batch_id=$1 ORDER BY id',[captured.body.id])).rows;expect(accepted).toHaveLength(1);await processPendingTypedImports(deps,1);expect((await originals()).rows).toEqual(before);
    const renewed=await action(f,currentJob,'resume',`chunked-${boundary}-resume`);expect(renewed.status,renewed.text).toBe(200);
    const resumed=await request(app).post(`/v1/partner/typed-imports/${captured.body.id}/reconcile`).set(f.service).set('Idempotency-Key',`chunked-${boundary}-receipt-resume`).send({});expect(resumed.status,resumed.text).toBe(202);
    expect(await processPendingTypedImports(deps,1)).toMatchObject({processed:1,blocked:0});const final=await request(app).get(`/v1/partner/typed-imports/${captured.body.id}`).set(f.service);expect(final.body).toMatchObject({state:'succeeded',counts:{acceptedLinked:11,processing:0}});expect((await originals()).rows).toEqual(before);

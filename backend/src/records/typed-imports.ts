@@ -18,7 +18,8 @@ import {enqueueShipmentProjectionWork,processPendingShipmentProjections} from '.
 
 export type TypedImportDeps=Pick<AppDependencies,'db'|'clock'|'objectStore'|'devAuth'>;
 type Outcome='processing'|'accepted_linked'|'accepted_unlinked'|'duplicate'|'conflict'|'quarantined'|'rejected';
-const FRESH_IMPORT_CHUNK_ROWS=2;
+// Release the authorization and site locks between observations so concurrent intake can proceed.
+const FRESH_IMPORT_CHUNK_ROWS=1;
 export interface TypedBatchRow {
  id:string;organization_id:string;environment:'sandbox'|'live';connection_id:string;location_id:string;subscription_id:string;
  configuration_revision:string|number;grant_revision:string|number;principal_id:string;credential_id:string;actor_context:PartnerActor;operator_membership_id:string;

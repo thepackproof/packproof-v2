@@ -283,18 +283,28 @@ describe('typed source receipts and operational case writes',()=>{
    if(renewed)await afterCommit(accepted);return result;
   }};
  }
- it('commits at most two rows per prefix, retaining processing accounting and one fenced renewable lease',async()=>{
+ it('commits one row at a time, retaining processing accounting and one fenced renewable lease',async()=>{
   const id=await queueChunkReceipt('CHUNK-PROGRESS'),snapshots:Array<{accepted:number;processing:number;state:string;lease:string|null;expires:number;counterProcessing:number}>=[];
   await reconcileProjectionSourceCounter(opened.db,clock,subscription);const baseline=(await readProjectionSourceCounter(opened.db,subscription)).counts.processing-12;
+  const rowIds=(await opened.db.query<{id:string}>('SELECT id FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number',[id])).rows.map(row=>row.id);
   let instant=clock.now().getTime();const liveClock={now:()=>new Date(instant)};
   const db=observeChunkDatabase(opened.db,async accepted=>{
-   expect(accepted.length).toBeLessThanOrEqual(2);const view=await readTypedImport({...deps,clock:liveClock},actor,id),row=(await opened.db.query<{lease_token:string;lease_expires_at:Date|string}>('SELECT lease_token,lease_expires_at FROM record_typed_batches WHERE id=$1',[id])).rows[0];
+   expect(accepted).toEqual([rowIds[snapshots.length]]);
+   const view=await readTypedImport({...deps,clock:liveClock},actor,id),row=(await opened.db.query<{lease_token:string;lease_expires_at:Date|string}>('SELECT lease_token,lease_expires_at FROM record_typed_batches WHERE id=$1',[id])).rows[0];
    snapshots.push({accepted:view.counts.acceptedLinked,processing:view.counts.processing,state:view.state,lease:row.lease_token,expires:row.lease_expires_at?new Date(row.lease_expires_at).getTime():0,counterProcessing:(await readProjectionSourceCounter(opened.db,subscription)).counts.processing});
    if(view.state==='running')instant+=90000;
   });
   expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
-  expect(snapshots.map(s=>[s.accepted,s.processing,s.state])).toEqual([[2,10,'running'],[4,8,'running'],[6,6,'running'],[8,4,'running'],[10,2,'running'],[12,0,'succeeded']]);
-  expect(snapshots.map(s=>s.counterProcessing)).toEqual([baseline+10,baseline+8,baseline+6,baseline+4,baseline+2,baseline]);expect(snapshots[0].lease).toBe(snapshots[1].lease);expect(snapshots[1].expires).toBeGreaterThan(snapshots[0].expires);
+  expect(snapshots).toHaveLength(rowIds.length);
+  for(const [index,snapshot] of snapshots.entries()){
+   const remaining=rowIds.length-index-1;
+   expect(snapshot).toMatchObject({accepted:index+1,processing:remaining,counterProcessing:baseline+remaining,state:remaining?'running':'succeeded'});
+   if(remaining){
+    expect(snapshot.lease).toEqual(expect.any(String));
+    expect(snapshot.lease).toBe(snapshots[0].lease);
+    if(index>0)expect(snapshot.expires).toBeGreaterThan(snapshots[index-1].expires);
+   }else expect(snapshot.lease).toBeNull();
+  }
  });
  for(const fault of ['raw','payload','missing'] as const)it(`validates ${fault} on the final retained row before committing any accepted prefix`,async()=>{
   const key=`CHUNK-PREVALIDATE-${fault}`,id=await queueChunkReceipt(key);let injected=false;
@@ -305,8 +315,9 @@ describe('typed source receipts and operational case writes',()=>{
  });
  it('rolls back a failed chunk and resumes its durable prefix without duplicate case or outbox effects',async()=>{
   const id=await queueChunkReceipt('CHUNK-RETRY'),ids=(await opened.db.query<{id:string}>('SELECT id FROM record_typed_rows WHERE batch_id=$1 ORDER BY row_number',[id])).rows.map(r=>r.id);let injected=false,instant=clock.now().getTime();const liveClock={now:()=>new Date(instant)};
-  const db=observeChunkDatabase(opened.db,undefined,async(sql,params)=>{if(!injected&&sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'")&&params?.[0]===ids[2]){injected=true;throw new Error('Synthetic mid-chunk retry');}});
+  const db=observeChunkDatabase(opened.db,undefined,async(sql,params)=>{if(!injected&&sql.startsWith("UPDATE record_typed_rows SET status='accepted_linked'")&&params?.[0]===ids[2]){injected=true;throw new Error('Synthetic failure within the third row transaction');}});
   expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:1});
+  expect(injected).toBe(true);
   expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'queued',counts:{acceptedLinked:2,processing:10}});
   const before=(await opened.db.query<{id:string;revision:number;n:number}>(`SELECT c.id,c.revision,(SELECT COUNT(*)::integer FROM record_case_outbox o WHERE o.case_id=c.id)n FROM record_cases c WHERE c.root_external_id LIKE 'CHUNK-RETRY-ORDER-%' ORDER BY c.id`)).rows;expect(before).toHaveLength(2);
   instant+=2000;expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
@@ -319,7 +330,8 @@ describe('typed source receipts and operational case writes',()=>{
   const db=observeChunkDatabase(opened.db,async()=>{if(intervened)return;intervened=true;instant+=121000;if(mode==='replaced')await opened.db.query("UPDATE record_typed_batches SET lease_token='synthetic-new-worker',lease_expires_at=$2 WHERE id=$1",[id,new Date(instant+120000).toISOString()]);});
   expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:0});
   const held=(await opened.db.query<{state:string;lease_token:string;error_code:string|null}>('SELECT state,lease_token,error_code FROM record_typed_batches WHERE id=$1',[id])).rows[0];expect(held.state).toBe('running');expect(held.error_code).toBeNull();if(mode==='replaced')expect(held.lease_token).toBe('synthetic-new-worker');
-  expect((await readTypedImport({...deps,clock:liveClock},actor,id)).counts).toMatchObject({acceptedLinked:2,processing:10});
+  expect(intervened).toBe(true);
+  expect((await readTypedImport({...deps,clock:liveClock},actor,id)).counts).toMatchObject({acceptedLinked:1,processing:11});
   instant+=121000;expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});expect((await readTypedImport({...deps,clock:liveClock},actor,id)).counts).toMatchObject({acceptedLinked:12,processing:0});
  });
  for(const boundary of ['authorization','audit'] as const)it(`rolls back when lease expiry occurs during final ${boundary} checks`,async()=>{
@@ -329,8 +341,9 @@ describe('typed source receipts and operational case writes',()=>{
    if(!expired&&(boundary==='authorization'&&accepted===2&&sql.startsWith('SELECT control_revision,paused FROM record_connection_state')||boundary==='audit'&&accepted===2&&sql.startsWith('INSERT INTO platform_action_audit'))){expired=true;instant+=121000;}
   });
   expect(await processPendingTypedImports({...deps,db,clock:liveClock},1)).toMatchObject({processed:0,blocked:0});expect(expired).toBe(true);
-  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'running',errorCode:null,counts:{acceptedLinked:0,processing:count}});
+  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'running',errorCode:null,counts:{acceptedLinked:1,processing:count-1}});
   expect(await processPendingTypedImports({...deps,clock:liveClock},1)).toMatchObject({processed:1,blocked:0});
+  expect(await readTypedImport({...deps,clock:liveClock},actor,id)).toMatchObject({state:'succeeded',counts:{acceptedLinked:count,processing:0}});
  });
  for(const mode of ['source_grant','credential','principal','site'] as const)it(`checks ${mode} authority again before accepting the next chunk`,async()=>{
   const savedActor=actor,savedMember=member;let revoked=false;
@@ -352,7 +365,7 @@ describe('typed source receipts and operational case writes',()=>{
     if(mode==='principal')await opened.db.query('UPDATE platform_principals SET revoked_at=$2 WHERE id=$1',[activeActor.principalId,clock.now().toISOString()]);
     if(mode==='site')await opened.db.query('DELETE FROM record_membership_locations WHERE membership_id=$1 AND organization_id=$2 AND location_id=$3',[activeMember,org,site]);revoked=true;
    });
-   expect(await processPendingTypedImports({...deps,db},1)).toMatchObject({processed:0,blocked:1});const row=(await opened.db.query<{state:string;accepted:number;processing:number}>(`SELECT b.state,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='accepted_linked')accepted,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='processing')processing FROM record_typed_batches b WHERE b.id=$1`,[id])).rows[0];expect(row).toEqual({state:'blocked_policy',accepted:2,processing:10});
+   expect(await processPendingTypedImports({...deps,db},1)).toMatchObject({processed:0,blocked:1});const row=(await opened.db.query<{state:string;accepted:number;processing:number}>(`SELECT b.state,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='accepted_linked')accepted,(SELECT COUNT(*)::integer FROM record_typed_rows r WHERE r.batch_id=b.id AND r.status='processing')processing FROM record_typed_batches b WHERE b.id=$1`,[id])).rows[0];expect(revoked).toBe(true);expect(row).toEqual({state:'blocked_policy',accepted:1,processing:11});
   }finally{
    // Revoked principals, credentials and source/site grants stay revoked.
    // Each test uses its own grant; only local fixture variables are restored.
