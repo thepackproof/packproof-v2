@@ -16,13 +16,16 @@ export function addOrderWorkspaceContract(api) {
   const query = (name,schema,required=false) => ({name,in:'query',required,schema});
   const location = query('locationId',string);
   const size = query('limit',{type:'integer',minimum:1,maximum:100});
-  const search = [query('q',string),size];
+  const search = [query('q',string),query('before',num),query('dayStart',{type:'string',format:'date-time'}),size];
   const schemas = api.components.schemas;
-  const line = {lineId:string,sku:{type:['string','null']},unit:{type:['string','null']}};
-  for(const field of ['orderedQuantity','pickedQuantity','packedQuantity','shippedQuantity','returnedQuantity','cancelledQuantity'])line[field]={type:['string','null'],pattern:'^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$'};
+  const line = {lineId:string,sku:{type:['string','null']},unit:{type:['string','null']},title:{type:['string','null']},description:{type:['string','null']},shipmentReference:{type:['string','null']}};
+  for(const field of ['orderedQuantity','pickedQuantity','packedQuantity','loadedQuantity','shippedQuantity','acknowledgedQuantity','backorderedQuantity','returnedQuantity','cancelledQuantity'])line[field]={type:['string','null'],pattern:'^(?:[0-9]{1,18}(?:\\.[0-9]{1,9})?)?$'};
+  for(const field of Object.keys(line).filter(f=>f.endsWith('Quantity')))line[field+'State']={enum:['not_due','missing','unavailable','reported','not_reported','scheduled','',null]};
   schemas.ConnectOrderLine=obj(line,['lineId']);
   schemas.ConnectProjectedOrderLine=obj({...line,
     orderedMinusShippedQuantity:{type:'string',pattern:'^-?[0-9]+(?:\\.[0-9]{1,9})?$',description:'Exact ordered minus shipped. Present when both source quantities have the same unambiguous unit.'},
+    loadedMinusAcknowledgedQuantity:{type:'string',description:'Exact loaded minus acknowledged for matching fulfillment scopes and known comparable units.'},
+    loadedAcknowledgedDiscrepancy:{type:'string',description:'Human-readable difference between explicitly recorded loaded and acknowledged quantities.'},
     orderedShippedDiscrepancy:{type:'string',description:'Human-readable difference when ordered and shipped quantities differ.'}
   },['lineId']);
   schemas.ConnectEntityReference=obj({namespace:string,type:string,id:string});
@@ -46,11 +49,12 @@ export function addOrderWorkspaceContract(api) {
   schemas.ConnectSourceSubmission=obj({...qualified,profileVersion:string,...observation},[...Object.keys(qualified),'profileVersion',...Object.keys(observation).filter(k=>k!=='issues')]);
   const version={proofId:string,revision:num};
   schemas.ConnectProofRevision={type:'object',required:['proofId','revision','orderReference','updatedAt','events','lines','evidence'],properties:{...version,orderReference:string,updatedAt:{type:'string',format:'date-time'},facilities:array(string),lines:array(ref('ConnectProjectedOrderLine')),events:array(open),evidence:array(open),originalArtifacts:array(open),conflicts:array(string),integrity:{const:'source_reported'}}};
-  schemas.ConnectProofPage=obj({orders:array(obj({...version,orderReference:string,updatedAt:{type:'string',format:'date-time'}})),cursor:seq});
+  const summary=obj({...version,orderReference:string,updatedAt:{type:'string',format:'date-time'},customerName:string,latestKind:string,fulfillmentStatus:string,issue:{type:'string'}},['proofId','revision','orderReference','updatedAt']);
+  schemas.ConnectProofPage=obj({orders:array(summary),cursor:seq,totalOrders:seq,updatedLast24Hours:seq,updatedToday:seq,nextBefore:{type:['integer','null'],minimum:1}},['orders','cursor']);
   schemas.ConnectProofChanges=obj({changes:array(obj({...version,sequence:seq})),nextCursor:seq,hasMore:{type:'boolean'}});
   schemas.ConnectScopeSession={type:'object',required:['state','scopeDigest','approvalPath'],properties:{id:string,state:enumOf('draft','pending','active','denied','superseded','expired'),scopeDigest:{anyOf:[hash,{type:'null'}]},approvalPath:{type:['string','null']},scope:ref('ConnectOperationScope'),deviceName:string,offlineWindowSeconds:seq}};
   schemas.ConnectObservationReceipt={type:'object',properties:{receiptId:string,state:enumOf('accepted','pending'),proofs:array(obj(version)),originalSha256:hash,issues:array(string),code:string},required:['receiptId','state','proofs','originalSha256']};
-  schemas.ConnectReviewList=obj({items:array(open),hasMore:{type:'boolean'}});
+  schemas.ConnectReviewList=obj({items:array(open),hasMore:{type:'boolean'},orderIssues:array(summary),orderIssueCount:seq,nextIssuesBefore:{type:['integer','null'],minimum:1}},['items','hasMore']);
   const media=(schema)=>({'application/json':{schema}});
   function op(method,path,description,response,{body,params=[],idempotent=false,status=200,queryWorkspace=false}={}){
     const human=path.startsWith('/me');
@@ -74,13 +78,14 @@ export function addOrderWorkspaceContract(api) {
   op('post',agent+'order-workspace/api-source-pause','Pause or resume one approved API source',open,{body:obj({...qualified,paused:{type:'boolean'}})});
   for(const base of [agent,human]){
     const opts=base===human?{queryWorkspace:true,params:[location]}:{};
-    op('get',base+'order-attention','List unresolved order references',ref('ConnectReviewList'),opts);
+    op('get',base+'order-attention','List unresolved order references',ref('ConnectReviewList'),base===agent?{params:[query('includeOrderIssues',{enum:['1']}),query('before',num)]}:opts);
     op('get',base+'order-proofs','Read recent authorized orders and a committed feed boundary',ref('ConnectProofPage'),{...opts,params:[...(opts.params??[]),...search]});
     op('get',base+'order-proofs/{proofId}/revisions/{revision}','Read an immutable authorized revision',ref('ConnectProofRevision'),opts);
   }
   op('get',human+'order-proofs/{proofId}','Read the latest authorized order revision',ref('ConnectProofRevision'),{queryWorkspace:true,params:[location]});
   op('get',human+'order-changes','Resume order revision notifications',ref('ConnectProofChanges'),{queryWorkspace:true,params:[location,query('after',seq),size]});
   op('post',agent+'order-changes','Resume committed revisions for this exporter',ref('ConnectProofChanges'),{body:obj({after:seq,limit:num},[])});
+  op('get',agent+'order-proofs/{proofId}/revisions/{revision}/sources/{eventKey}','Inspect one revision-bound source observation. Verified single-record UTF-8 originals are limited to 64 KiB. Other formats return only an authorized record excerpt.',{type:'object',required:['eventKey','receiptId','kind','fields','fieldLineage'],properties:{eventKey:string,receiptId:string,kind:enumOf('original','derived_excerpt'),originalSha256:hash,fileName:{type:'string'},fields:open,fieldLineage:open,locator:{type:'string'},sourceId:string,version:string,observedAt:{type:'string',format:'date-time'},occurredAt:{type:['string','null'],format:'date-time'},originalText:{type:'string',maxLength:65536},reason:string,artifactReceiptId:string}});
   op('get',agent+'order-proofs/{proofId}/revisions/{revision}/artifacts/{receiptId}','Read authorized exact media bytes or a scoped excerpt status',open);
   op('post',human+'order-proofs/{proofId}/associations','Review and correct an observation link',open,{body:obj({...ws,eventKey:string,action:enumOf('link','unlink'),expectedRevision:num,reason:{type:'string',maxLength:1024}}),idempotent:true});
   api['x-packproof-order-workspace']={version:'packproof.order-workspace/v1',activation:'PACKPROOF_ORDER_WORKSPACE_ENABLED',guide:'docs/ORDER_WORKSPACE_API.md',originalMaxBytes:3145728,feed:'poll after nextCursor; sequences can have gaps across authorization scopes'};

@@ -3,7 +3,7 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
-    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10'):
+    if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
         raise ValueError('INVALID_SOURCE_COMMIT')
@@ -14,10 +14,10 @@ def archive(source,destination,profile,verify=False):
     if profile=='reconstruction-v3':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs']
     if profile=='reconstruction-v4':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs']
     if profile=='reconstruction-v5':probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs']
-    if profile in ('reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10'):probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs','infra/backend-release/reconstruction-v6-release-review.mjs','infra/backend-release/reconstruction-v6-runtime-preflight.mjs']
-    if profile in ('reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10'):
+    if profile in ('reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):probes+=['infra/backend-release/reconstruction-release-review.mjs','infra/backend-release/reconstruction-runtime-preflight.mjs','infra/backend-release/reconstruction-v2-release-review.mjs','infra/backend-release/reconstruction-v2-runtime-preflight.mjs','infra/backend-release/reconstruction-v3-release-review.mjs','infra/backend-release/reconstruction-v3-runtime-preflight.mjs','infra/backend-release/reconstruction-v4-release-review.mjs','infra/backend-release/reconstruction-v4-runtime-preflight.mjs','infra/backend-release/reconstruction-v5-release-review.mjs','infra/backend-release/reconstruction-v5-runtime-preflight.mjs','infra/backend-release/reconstruction-v6-release-review.mjs','infra/backend-release/reconstruction-v6-runtime-preflight.mjs']
+    if profile in ('reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):
         probes+=['infra/backend-release/reconstruction-v7-release-review.mjs','infra/backend-release/reconstruction-v7-runtime-preflight.mjs','infra/backend-release/shipment-automation-pair.mjs']
-    if profile in ('reconstruction-v8','reconstruction-v9','reconstruction-v10'):
+    if profile in ('reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):
         probes+=['infra/backend-release/reconstruction-v8-release-review.mjs','infra/backend-release/reconstruction-v8-runtime-preflight.mjs','infra/backend-release/backfill-automation-pair.mjs']
     if profile=='reconstruction-v9':
         # The OCI adds only its release modules to this exact existing image.
@@ -28,9 +28,11 @@ def archive(source,destination,profile,verify=False):
         if subprocess.run(['git','diff','--quiet',base,source,'--',*inherited]).returncode!=0:
             raise ValueError('HOSTED_PROFILE_BASE_SOURCE_MISMATCH')
         probes+=['backend/Dockerfile.hosted-lock-profile','infra/backend-release/hosted-membership-locks.mjs','infra/backend-release/reconstruction-v9-release-review.mjs','infra/backend-release/reconstruction-v9-runtime-preflight.mjs','infra/backend-release/hosted-backfill-automation-pair.mjs']
-    if profile=='reconstruction-v10':
+    if profile in ('reconstruction-v10','reconstruction-v11'):
         probes+=['infra/backend-release/hosted-membership-locks.mjs','infra/backend-release/reconstruction-v9-release-review.mjs','infra/backend-release/reconstruction-v9-runtime-preflight.mjs','infra/backend-release/hosted-backfill-automation-pair.mjs','infra/backend-release/reconstruction-v10-release-review.mjs','infra/backend-release/reconstruction-v10-runtime-preflight.mjs','infra/backend-release/order-workspace-pair.mjs','infra/backend-release/order-workspace-forward-read.mjs','backend/Dockerfile.order-workspace-bridge']
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10'):paths+=probes
+    if profile=='reconstruction-v11':
+        probes+=['infra/backend-release/reconstruction-v11-release-review.mjs','infra/backend-release/reconstruction-v11-runtime-preflight.mjs','infra/backend-release/collector-version-pair.mjs']
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
     for record in tree.split(b'\0'):
@@ -38,7 +40,7 @@ def archive(source,destination,profile,verify=False):
         meta,name=record.split(b'\t',1);mode,kind,oid=meta.decode().split()
         if kind!='blob' or mode not in ('100644','100755'):raise ValueError('UNSUPPORTED_BLOB')
         n=name.decode();entries.append((n[8:] if profile=='bridge' else n,oid,mode))
-    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10') and not set(probes)<={name for name,_,_ in entries}:
+    if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11') and not set(probes)<={name for name,_,_ in entries}:
         raise ValueError('CONNECT_PROBES_REQUIRED')
     payload=subprocess.check_output(['git','cat-file','--batch'],input=('\n'.join(oid for _,oid,_ in entries)+'\n').encode())
     offset=0;inventory=[]
@@ -57,7 +59,7 @@ def archive(source,destination,profile,verify=False):
             else:
                 info=zipfile.ZipInfo(name)
                 info.external_attr=int(mode,8)<<16
-                if profile=='reconstruction-v10':
+                if profile in ('reconstruction-v10','reconstruction-v11'):
                     # A local review and Linux CodeBuild must reproduce the same ZIP bytes.
                     info.create_system=3
                     info.compress_type=zipfile.ZIP_STORED
@@ -127,6 +129,11 @@ def archive(source,destination,profile,verify=False):
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     if profile=='reconstruction-v10':
         if len(inventory)!=122 or hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest()!='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d':
+            raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+    if profile=='reconstruction-v11':
+        digest=lambda rows:hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()
+        if (len(inventory)!=123 or digest(inventory)!='d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60'
+            or digest(inventory[:-1])!='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d'):
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':

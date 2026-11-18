@@ -7,7 +7,7 @@ using Microsoft.Win32.SafeHandles;
 
 internal static class Program
 {
-    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "analyzeLocal", "startSetup", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint", "beginSubscriptionSource", "inspectSubscriptionDraft", "proposeSubscription", "selectSubscriptionSource", "inspectSubscriptionFile", "previewSubscription", "commitSubscription", "verifySubscription", "pauseSubscription", "resumeSubscription", "inspectBackfill", "proposeBackfill", "pauseBackfill", "resumeBackfill", "saveWorkspaceStep", "addWorkspaceSource", "removeWorkspaceRole", "inspectWorkspaceSource", "setWorkspaceOutput", "activateWorkspace", "pauseWorkspaceSource", "resumeWorkspaceSource", "workspaceOrderDetail", "workspaceDraftPreview", "confirmWorkspaceOrderMap", "workspaceSearchOrders", "workspaceAttention", "addWorkspaceDirectSource", "workspaceDirectConnection", "chooseWorkspaceRelatedSource"];
+    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "analyzeLocal", "startSetup", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint", "beginSubscriptionSource", "inspectSubscriptionDraft", "proposeSubscription", "selectSubscriptionSource", "inspectSubscriptionFile", "previewSubscription", "commitSubscription", "verifySubscription", "pauseSubscription", "resumeSubscription", "inspectBackfill", "proposeBackfill", "pauseBackfill", "resumeBackfill", "saveWorkspaceStep", "addWorkspaceSource", "removeWorkspaceRole", "inspectWorkspaceSource", "setWorkspaceOutput", "activateWorkspace", "pauseWorkspaceSource", "resumeWorkspaceSource", "workspaceOrderDetail", "workspaceSourceRecord", "workspaceOrderPage", "replaceWorkspaceFolder", "workspaceDraftPreview", "confirmWorkspaceOrderMap", "workspaceSearchOrders", "workspaceAttention", "addWorkspaceDirectSource", "workspaceDirectConnection", "chooseWorkspaceRelatedSource"];
     public static async Task<int> Main()
     {
         string id = "unknown";
@@ -44,7 +44,9 @@ internal static class Program
             if (channel != "development") VerifyPublisher(expected, config.GetProperty("publisher").GetString() ?? "");
             await pipe.WriteAsync(Encoding.UTF8.GetBytes(input + "\n"), timeout.Token);
             await pipe.FlushAsync(timeout.Token);
-            var response = await ReadBounded(pipe, 256 * 1024, timeout.Token);
+            var operation = root.GetProperty("operation").GetString();
+            var resultLimit = operation is "workspaceOrderDetail" or "workspaceSourceRecord" ? 12 * 1024 * 1024 : 256 * 1024;
+            var response = await ReadBounded(pipe, resultLimit, timeout.Token);
             using var parsed = JsonDocument.Parse(response);
             if (parsed.RootElement.GetProperty("id").GetString() != id || parsed.RootElement.GetProperty("version").GetInt32() != 1) throw new InvalidOperationException();
             await Console.Out.WriteLineAsync(response);
@@ -77,12 +79,17 @@ internal static class Program
     }
     private static async Task<string> ReadBounded(Stream stream, int limit, CancellationToken token = default)
     {
-        using var result = new MemoryStream(); var one = new byte[1];
-        while (await stream.ReadAsync(one, token) != 0)
+        using var result = new MemoryStream();
+        var block = new byte[8192];
+        while (true)
         {
-            if (one[0] == 10) break;
-            if (result.Length >= limit) throw new InvalidOperationException();
-            result.WriteByte(one[0]);
+            var count = await stream.ReadAsync(block, token);
+            if(count==0)break;
+            var newline=Array.IndexOf(block,(byte)10,0,count);
+            var length=newline<0?count:newline;
+            if(result.Length+length>limit)throw new InvalidOperationException();
+            result.Write(block,0,length);
+            if(newline>=0)break;
         }
         return new UTF8Encoding(false, true).GetString(result.ToArray());
     }

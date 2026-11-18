@@ -9,12 +9,13 @@ export class ServiceBridge{
   if(Buffer.byteLength(request)>64*1024)throw Error('The setup request exceeds its safe limit.');
   return new Promise((resolve,reject)=>{
    const child=spawn(join(this.resourcePath,'bridge','PackProof.Connect.Bridge.exe'),[],{shell:false,windowsHide:true,stdio:['pipe','pipe','pipe'],env:{SystemRoot:process.env.SystemRoot,PATH:process.env.SystemRoot+'\\System32'}});
-   let output='',settled=false;const timer=setTimeout(()=>finish(Error('The background service did not respond. Open diagnostics to check its status.')),50000);
+   const output:Buffer[]=[];let bytesRead=0,settled=false;
+   const limit=(operation==='workspaceOrderDetail'||operation==='workspaceSourceRecord'?12*1024*1024:256*1024)+2;const timer=setTimeout(()=>finish(Error('The background service did not respond. Open diagnostics to check its status.')),50000);
    function finish(error?:Error,value?:unknown){if(settled)return;settled=true;clearTimeout(timer);if(error){child.kill();reject(error);}else resolve(value);}
-   child.stdout.on('data',bytes=>{output+=bytes.toString('utf8');if(Buffer.byteLength(output)>256*1024)finish(Error('The service response exceeds its safe limit.'));});child.stderr.resume();
+   child.stdout.on('data',bytes=>{bytesRead+=bytes.length;if(bytesRead>limit){finish(Error('The service response exceeds its safe limit.'));return;}output.push(bytes);});child.stderr.resume();
    child.on('error',()=>finish(Error('The trusted background service bridge is unavailable. Repair this installation.')));
    child.on('close',code=>{if(settled)return;let reply:any;
-    try{reply=JSON.parse(output);if(reply.version!==1||reply.id!==id||typeof reply.ok!=='boolean')throw Error();}catch{finish(Error('The background service could not complete this action. Your pending work is preserved.'));return;}
+    try{reply=JSON.parse(Buffer.concat(output).toString('utf8'));if(reply.version!==1||reply.id!==id||typeof reply.ok!=='boolean')throw Error();}catch{finish(Error('The background service could not complete this action. Your pending work is preserved.'));return;}
     if(!reply.ok){const message=typeof reply.error?.message==='string'?reply.error.message.slice(0,350):'The service requires attention.';const code=typeof reply.error?.code==='string'&&/^[A-Z][A-Z0-9_]{1,63}$/.test(reply.error.code)?reply.error.code:'SERVICE_BRIDGE_UNAVAILABLE';finish(Error(`${message} (Code: ${code})`));return;}
     if(code!==0){finish(Error('The trusted background service bridge stopped unexpectedly. Pending work is preserved.'));return;}finish(undefined,reply.result);
    });

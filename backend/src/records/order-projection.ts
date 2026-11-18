@@ -5,7 +5,9 @@ import { strictBody } from '../platform/organizations.js';
 import { boundedText } from './order-workspace.js';
 const kinds = ['order', 'picking', 'packing', 'evidence', 'label', 'handoff', 'delivery', 'return', 'correction'];
 const entityTypes = ['order', 'order_line', 'warehouse_order', 'shipment', 'package', 'tracking', 'event', 'artifact', 'return', 'load', 'pallet', 'label', 'delivery', 'handoff', 'pick', 'packing', 'warehouse', 'document', 'photo', 'task'];
-const quantityFields = ['orderedQuantity', 'pickedQuantity', 'packedQuantity', 'shippedQuantity', 'returnedQuantity', 'cancelledQuantity'] as const;
+const quantityFields = ['orderedQuantity', 'pickedQuantity', 'packedQuantity', 'loadedQuantity', 'shippedQuantity', 'acknowledgedQuantity', 'backorderedQuantity', 'returnedQuantity', 'cancelledQuantity'] as const;
+const quantityStates = quantityFields.map(field => field+'State');
+const lineStates = new Set(['not_due','missing','unavailable','reported','not_reported','scheduled']);
 function reference(v: unknown) {
   const b = strictBody(v, ['namespace', 'type', 'id']);
   if (!entityTypes.includes(String(b.type))) throw new DomainError('PROFILE_AMBIGUOUS', 'Choose a supported entity type for this source.', 422);
@@ -25,7 +27,7 @@ type Line = Record<string, string | null> & {
 };
 export const refKey = (ref: Ref) => sha256Hex(canonicalize([ref.namespace, ref.type, ref.id]));
 function parseLine(v: unknown): Line {
-  const b = strictBody(v, ['lineId', 'sku', 'unit', ...quantityFields]);
+  const b = strictBody(v, ['lineId', 'sku', 'unit', 'title', 'description', 'shipmentReference', ...quantityFields, ...quantityStates]);
   const line: Line = {
     lineId: boundedText(b.lineId, 'order line')
   };
@@ -37,6 +39,7 @@ function parseLine(v: unknown): Line {
     }
     const value = boundedText(val, key);
     if (quantityFields.some(q => q === key) && !/^\d{1,18}(?:\.\d{1,9})?$/.test(value)) throw new DomainError('PROFILE_AMBIGUOUS', 'Quantities require a nonnegative decimal string.', 422);
+    if (quantityStates.includes(key) && !lineStates.has(value)) throw new DomainError('PROFILE_AMBIGUOUS','Provide a recognized source-reported stage state.',422);
     line[key] = value;
   }
   return line;
@@ -189,17 +192,18 @@ function decimalText(amount: bigint) {
 function decimalSum(values: string[]) {
   return decimalText(values.reduce((sum, value) => sum + decimalAmount(value), 0n));
 }
-function compareOrderedAndShipped(line: Line, orderedUnits?: Set<string | null>, shippedUnits?: Set<string | null>) {
-  const {orderedQuantity, shippedQuantity, unit} = line;
-  if (!orderedQuantity || !shippedQuantity || !unit ||
-      orderedUnits?.size !== 1 || !orderedUnits.has(unit) || shippedUnits?.size !== 1 || !shippedUnits.has(unit)) return;
-  const difference = decimalAmount(orderedQuantity) - decimalAmount(shippedQuantity);
-  line.orderedMinusShippedQuantity = decimalText(difference);
+function compareStages(line: Line, units: Map<string, Set<string | null>>, left: string, right: string, deltaKey: string, messageKey: string) {
+  const leftKey = left + 'Quantity', rightKey = right + 'Quantity', {unit} = line;
+  const a = line[leftKey], b = line[rightKey];
+  const aUnits = units.get(canonicalize([line.lineId,leftKey])), bUnits = units.get(canonicalize([line.lineId,rightKey]));
+  if (!a || !b || !unit || aUnits?.size !== 1 || !aUnits.has(unit) || bUnits?.size !== 1 || !bUnits.has(unit)) return;
+  const difference = decimalAmount(a) - decimalAmount(b);
+  line[deltaKey] = decimalText(difference);
   if (difference === 0n) return;
   const amount = decimalText(difference < 0n ? -difference : difference);
   const displayUnit = unit === 'each' ? 'EA' : unit;
-  const direction = difference > 0n ? 'more ordered than shipped' : 'more shipped than ordered';
-  line.orderedShippedDiscrepancy = [amount, displayUnit, direction].join(' ');
+  const direction = difference > 0n ? 'more '+left+' than '+right : 'more '+right+' than '+left;
+  line[messageKey] = [amount,displayUnit,direction].join(' ');
 }
 /** Expand only explicitly identified business relationships. An order is a terminal,
  * so a consolidated shipment cannot turn one sales order into another. */
@@ -268,7 +272,8 @@ export function projectOrders(events: StoredEvent[], roots: Root[]) {
       }));
     const claims = new Map<string, Map<string, Map<string, Set<string | null>>>>(),
       conflicts: string[] = [],
-      quantityUnits = new Map<string, Set<string | null>>();
+      quantityUnits = new Map<string, Set<string | null>>(),
+      deliveryScopes = new Map<string, Set<string>>();
     for (const e of used) {
       if ((members.get(e.id) ?? []).length > 1) continue;
       for (const l of e.record.lines) {
@@ -282,6 +287,14 @@ export function projectOrders(events: StoredEvent[], roots: Root[]) {
             const coordinate = canonicalize([l.lineId, key]),
               units = quantityUnits.get(coordinate) ?? new Set();
             units.add(l.unit ?? null);
+            if (key === 'loadedQuantity' || key === 'acknowledgedQuantity') {
+              const refs = [e.record.entity,...e.record.references];
+              const shipments = refs.filter(r => r.type === 'shipment');
+              const deliveries = new Set((shipments.length ? shipments : refs.filter(r => r.type === 'delivery')).map(refKey));
+              const scopes = deliveryScopes.get(coordinate) ?? new Set<string>();
+              scopes.add(deliveries.size === 1 ? [...deliveries][0] : 'unscoped:' + e.id);
+              deliveryScopes.set(coordinate, scopes);
+            }
             quantityUnits.set(coordinate, units);
           }
           // Count a package/line allocation once even if several independent sources report it.
@@ -309,11 +322,15 @@ export function projectOrders(events: StoredEvent[], roots: Root[]) {
           continue;
         }
         const v = entries.map(s => [...s][0]);
-        if (v.length === 1) line[key] = v[0];else if (v.every((x): x is string => typeof x === 'string' && /^\d+(?:\.\d+)?$/.test(x))) line[key] = decimalSum(v);else if (new Set(v).size === 1) line[key] = v[0];else conflicts.push(`${lineId}: ${key}`);
+        if (v.length === 1) line[key] = v[0];else if (key.endsWith('Quantity') && v.every((x): x is string => typeof x === 'string' && /^\d+(?:\.\d+)?$/.test(x))) line[key] = decimalSum(v);else if (new Set(v).size === 1) line[key] = v[0];else conflicts.push(`${lineId}: ${key}`);
       }
       if ((values.get('sku')?.get('line')?.size ?? 0) <= 1) {
-        compareOrderedAndShipped(line, quantityUnits.get(canonicalize([lineId, 'orderedQuantity'])),
-          quantityUnits.get(canonicalize([lineId, 'shippedQuantity'])));
+        compareStages(line,quantityUnits,'ordered','shipped','orderedMinusShippedQuantity','orderedShippedDiscrepancy');
+        const loads=deliveryScopes.get(canonicalize([lineId,'loadedQuantity']));
+        const receipts=deliveryScopes.get(canonicalize([lineId,'acknowledgedQuantity']));
+        if (loads && loads.size === receipts?.size && [...loads].every(scope => receipts.has(scope))) {
+          compareStages(line,quantityUnits,'loaded','acknowledged','loadedMinusAcknowledgedQuantity','loadedAcknowledgedDiscrepancy');
+        }
       }
       lines.push(line);
     }
@@ -321,6 +338,11 @@ export function projectOrders(events: StoredEvent[], roots: Root[]) {
       ...lineage(v),
       kind: 'derived_excerpt',
       entity: v.record.entity,
+      eventKind: v.record.kind,
+      references: v.record.references,
+      occurredAt: v.record.occurredAt,
+      associationScope: (members.get(v.id) ?? []).length > 1 ? 'shared' : 'order',
+      lines: (members.get(v.id) ?? []).length > 1 ? [] : v.record.lines,
       originalStatus: v.profile_version === 'packproof.partner-order-history/v1' ? 'original_unavailable' : 'retained',
       fieldLineage: v.record.fieldLineage,
       fields: v.record.fields

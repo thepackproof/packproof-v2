@@ -1,0 +1,293 @@
+.pp-approval-page {
+  --records-ink: #13243b;
+  --records-muted: #475e78;
+  --records-paper: white;
+  --records-wash: #f6f8fc;
+  --records-line: #dde5ef;
+  --records-blue: #3265f5;
+  --records-soft: #e9f0fe;
+  min-height: 100vh;
+  background: #f6f8fc;
+  color: #13243b;
+  font:
+    16px/1.45 Inter,
+    "Segoe UI",
+    sans-serif;
+  color-scheme: light;
+  padding-bottom: 45px;
+}
+.pp-approval-page * {
+  box-sizing: border-box;
+}
+.pp-approval-bar,
+.pp-approval-bar > div,
+.pp-approval-crumb,
+.pp-approval-row,
+.pp-approval-actions {
+  display: flex;
+  align-items: center;
+}
+.pp-approval-bar {
+  min-height: 76px;
+  background: white;
+  border-bottom: 1px solid #dde5ef;
+  padding: 14px clamp(20px, 3.4vw, 50px);
+  gap: 45px;
+}
+.pp-approval-bar > div {
+  gap: 13px;
+  color: #475e78;
+  font-size: 15px;
+}
+.pp-approval-bar b {
+  font-size: 19px;
+  color: #13243b;
+}
+.pp-approval-logo {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 29px;
+  height: 34px;
+}
+.pp-approval-logo img {
+  position: absolute;
+  width: 45px;
+  height: 45px;
+  max-width: none;
+  left: -8px;
+  top: -6px;
+}
+.pp-approval-icon {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.pp-approval-panel {
+  margin: clamp(28px, 3.8vw, 55px) auto 0;
+  padding: clamp(23px, 3.45vw, 50px);
+  width: min(calc(100% - 44px), 944px);
+  border-radius: 24px;
+  border: 1px solid #dce5ef;
+  background: white;
+}
+.pp-approval-crumb {
+  gap: 19px;
+  font-weight: 600;
+  color: #475e78;
+  font-size: 15px;
+  margin: 0 0 29px;
+}
+.pp-approval-page h1 {
+  color: #13243b;
+  font-size: clamp(29px, 3.02vw, 43px);
+  font-weight: 710;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+  margin: 0 0 15px;
+}
+.pp-approval-page p {
+  margin: 7px 0;
+  color: #475e78;
+  overflow-wrap: anywhere;
+}
+.pp-approval-sources {
+  display: grid;
+  gap: 12px;
+  margin: 32px 0 18px;
+}
+.pp-approval-row {
+  padding: 17px 20px;
+  gap: 22px;
+  background: #f6f8fc;
+  border: 1px solid #dde5ef;
+  border-radius: 14px;
+  overflow-wrap: anywhere;
+}
+.pp-approval-page h2 {
+  color: #13243b;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.pp-approval-row small {
+  color: #526780;
+  font-size: 13px;
+}
+.pp-approval-facts {
+  margin: 16px 0;
+  display: grid;
+  gap: 5px;
+}
+.pp-approval-facts > div {
+  display: grid;
+  grid-template-columns: 145px 1fr;
+  gap: 14px;
+  color: #475e78;
+  font-size: 14px;
+  align-items: baseline;
+}
+.pp-approval-facts dt {
+  font-weight: 600;
+  color: #13243b;
+}
+.pp-approval-facts dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.pp-approval-actions {
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 26px 0 15px;
+}
+.pp-approval-page button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.pp-approval-page button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pp-approval-page button:focus-visible {
+  outline: 3px solid #3265f5;
+  outline-offset: 3px;
+}
+.pp-approval-primary,
+.pp-approval-secondary {
+  border-radius: 11px;
+  min-height: 46px;
+  padding: 10px 23px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.pp-approval-primary {
+  background: #3265f5;
+  color: white;
+  border: 1px solid #3265f5;
+}
+.pp-approval-secondary {
+  background: white;
+  color: #13243b;
+  border: 1px solid #dce5ef;
+}
+.pp-approval-link {
+  background: none;
+  color: #264eb3;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 0;
+  border: none;
+  margin-top: 7px;
+}
+.pp-approval-link:hover {
+  text-decoration: underline;
+}
+.pp-approval-page .pp-approval-notice {
+  background: #e7f8f2;
+  color: #08765f;
+  border-radius: 10px;
+  padding: 14px;
+}
+.pp-approval-workspace {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #475e78;
+  margin-bottom: 16px;
+}
+.pp-approval-workspace select {
+  font: inherit;
+  color: #13243b;
+  background: white;
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.pp-approval-page .agent-approval {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.pp-approval-page .records-panel,
+.pp-approval-page .records-page-heading {
+  background: #fff;
+  color: #13243b;
+}
+.pp-approval-page .records-button {
+  background: #3265f5;
+  color: white;
+}
+.pp-approval-page .records-button.secondary {
+  background: #fff;
+  color: #13243b;
+}
+.pp-approval-page .agent-enrollment-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pp-approval-page .agent-enrollment-fields input,
+.pp-approval-page .agent-enrollment-fields select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 10px;
+  min-height: 42px;
+  color: #13243b;
+  background: white;
+  border: 1px solid #d4dfea;
+  border-radius: 8px;
+  font: inherit;
+}
+.pp-approval-page .agent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+}
+.pp-approval-page .agent-check input {
+  flex: 0 0 auto;
+  margin-top: 0.3em;
+}
+.pp-approval-page .records-eyebrow {
+  color: #526780;
+  letter-spacing: 0.045em;
+  font-size: 11px;
+}
+.pp-approval-page .records-page-heading {
+  margin: 20px 0;
+}
+@media (max-width: 640px) {
+  .pp-approval-bar {
+    gap: 17px;
+    padding: 12px 15px;
+    min-height: 62px;
+  }
+  .pp-approval-bar > div {
+    gap: 7px;
+    font-size: 12px;
+  }
+  .pp-approval-bar b {
+    font-size: 15px;
+  }
+  .pp-approval-panel {
+    width: calc(100% - 24px);
+    padding: 20px;
+    margin-top: 18px;
+  }
+  .pp-approval-facts > div {
+    grid-template-columns: 110px 1fr;
+    gap: 5px;
+  }
+  .pp-approval-row {
+    padding: 12px;
+    gap: 12px;
+  }
+  .pp-approval-actions {
+    gap: 8px;
+  }
+}

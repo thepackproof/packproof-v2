@@ -7,7 +7,7 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.5.0";
+    internal const string InstalledVersion="0.6.0";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
     private readonly Func<ISourceAdapter> sourceAdapterFactory=()=>new LocalNtfsSourceAdapter();
@@ -127,12 +127,14 @@ public sealed partial class AgentRuntime : IDisposable
                 case "beginSubscriptionSource": case "inspectSubscriptionDraft": case "proposeSubscription": await TypedDraftCommand(command,p,ct); break;
                 case "selectSubscriptionSource": case "inspectSubscriptionFile": case "previewSubscription": case "commitSubscription": case "verifySubscription": case "pauseSubscription": case "resumeSubscription": await TypedCommand(command,p,ct); break;
                 case "workspaceDirectConnection": return WorkspaceDirectConnection(p);
-                case "workspaceAttention": return await WorkspaceAttention(ct);
+                case "workspaceAttention": return await WorkspaceAttention(p,ct);
                 case "workspaceSearchOrders": return await WorkspaceSearchOrders(p,ct);
                 case "workspaceDraftPreview": return WorkspaceDraftPreview(ct);
+                case "workspaceOrderPage": return await WorkspaceOrderPage(p,ct);
+                case "workspaceSourceRecord": return await WorkspaceSourceRecord(p,ct);
                 case "workspaceOrderDetail": return await WorkspaceOrderDetail(p,ct);
                 case "chooseWorkspaceRelatedSource": case "addWorkspaceDirectSource": case "confirmWorkspaceOrderMap": case "saveWorkspaceStep": case "addWorkspaceSource": case "removeWorkspaceRole": case "inspectWorkspaceSource":
-                case "setWorkspaceOutput": case "activateWorkspace": case "pauseWorkspaceSource": case "resumeWorkspaceSource":
+                case "replaceWorkspaceFolder": case "setWorkspaceOutput": case "activateWorkspace": case "pauseWorkspaceSource": case "resumeWorkspaceSource":
                     await WorkspaceCommand(command,p,ct); WakeService(); break;
                 case "status": return Status();
                 case "preflight": return await Preflight(ct);

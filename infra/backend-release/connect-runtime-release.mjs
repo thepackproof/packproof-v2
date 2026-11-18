@@ -1,6 +1,7 @@
 /** Source-bound, image-only release requests. No AWS calls, DDL, grants or feature activation. */
 import {shipmentRelease,shipmentRuntimeInventory,shipmentReleaseInventory,verifyShipmentDeploymentReview,verifyShipmentProbeReports,configureShipmentProbe} from './shipment-deployment-review.mjs';
 import {backfillMigrationInventorySha256} from './reconstruction-v8-release-review.mjs';
+import {collectorInventory} from './reconstruction-v11-release-review.mjs';
 import {workspaceInventory,workspaceMigration} from './reconstruction-v10-release-review.mjs';
 import {buildRequest} from './backend-release-requests.mjs';
 import {makePlan,TARGET,hash} from './backend-deployment-plan.mjs';
@@ -134,14 +135,15 @@ export function connectProbeRunRequest(snapshot,r,kind,registered,script,now=Dat
 }
 /** Root Docker layout; source is re-fetched and checksummed even for an unversioned bucket. */
 export function connectRuntimeBuildRequest({sourceSha,archiveSha256,sourceVersion,predecessorImages,profile='zero-touch-v1',sourceTransport='s3'}){
- check(sourceTransport==='s3'||sourceTransport==='git-commit' && !sourceVersion && ['reconstruction-v10','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_TRANSPORT_REQUIRED');
- check(['zero-touch-v1','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
+ check(sourceTransport==='s3'||sourceTransport==='git-commit' && !sourceVersion && ['reconstruction-v10','reconstruction-v11','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_TRANSPORT_REQUIRED');
+ check(['zero-touch-v1','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11','order-workspace-bridge'].includes(profile),'CONNECT_RUNTIME_BUILD_PROFILE_REQUIRED');
  const reviewedProfile=profile!=='zero-touch-v1';
  const inventories={'zero-touch-v1':CONNECT_RUNTIME_INVENTORY,'reconstruction-v7':shipmentRuntimeInventory,
-  'reconstruction-v8':{count:121,sha256:backfillMigrationInventorySha256},'reconstruction-v9':{count:121,sha256:backfillMigrationInventorySha256}};
+  'reconstruction-v8':{count:121,sha256:backfillMigrationInventorySha256},'reconstruction-v9':{count:121,sha256:backfillMigrationInventorySha256},
+  'reconstruction-v10':{count:122,sha256:workspaceInventory},'reconstruction-v11':{count:123,sha256:collectorInventory}};
  const compatibility=profile==='order-workspace-bridge';
  const buildTag=compatibility?'order-compat-'+sourceSha:'connect-runtime-'+sourceSha;
- const inventory=compatibility?inventories['reconstruction-v9']:profile==='reconstruction-v10'?{count:122,sha256:workspaceInventory}:inventories[profile];
+ const inventory=inventories[compatibility?'reconstruction-v9':profile];
  const hosted=profile==='reconstruction-v9';
  const baseDigest=compatibility?'3722c462d1e35de35aea2bc94c71dc0a74a617e729d16da7baabe4e817d7cbf3':'cbccc2bca3c0efabd6fa957e48a95e4ee66009267914d342a073871e21dbf56b';
  const baseImage=TARGET.repository+'@sha256:'+baseDigest;
@@ -155,6 +157,7 @@ await import('/release/${probeProfile}-runtime-preflight.mjs');
 
 ${probeProfile==='reconstruction-v9'?"await import('/release/hosted-backfill-automation-pair.mjs');":''}
 ${profile==='reconstruction-v10'?"await import('/release/order-workspace-pair.mjs');await import('./dist/records/order-router.js');":''}
+${profile==='reconstruction-v11'?"await import('/release/collector-version-pair.mjs');await import('./dist/records/order-router.js');await import('./dist/records/order-source.js');":''}
 ${compatibility?`const {isReviewedForwardCompatibleMigration:ready}=await import('./dist/db/forward-compatible-migrations.js');const row=${JSON.stringify(workspaceMigration)};if(!ready(row)||ready({...row,checksum:'0'.repeat(64)})||ready({...row,id:'124_unapproved'}))throw Error('COMPATIBILITY_GUARD_MISMATCH');`:''}
 ${profile==='reconstruction-v8'?"await import('/release/backfill-automation-pair.mjs');":''}
 const full=await migrationInventory();
@@ -169,12 +172,13 @@ console.log(JSON.stringify({event:'shipment_release_build_policy',bundleSha256:p
   `test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' '${baseImage}')" = '${baseSha}'`,
   `docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/${compatibility?'Dockerfile.order-workspace-bridge':'Dockerfile.hosted-lock-profile'} .`
  ]:['docker build --label "org.opencontainers.image.revision=$REVIEWED_SOURCE_SHA" -t "$ECR:$IMAGE_TAG" -f backend/Dockerfile .'];
+ const sourceProfile=compatibility?'reconstruction-v10':profile;
  const sourceCommands=sourceTransport==='git-commit'?[
   'git init -q /tmp/connect-source',
   'git -C /tmp/connect-source remote add origin https://github.com/thepackproof/packproof-v2.git',
   'GIT_TERMINAL_PROMPT=0 git -C /tmp/connect-source fetch --no-tags --depth=1 origin "$REVIEWED_SOURCE_SHA"',
   'git -C /tmp/connect-source checkout -q --detach FETCH_HEAD && test "$(git -C /tmp/connect-source rev-parse HEAD)" = "$REVIEWED_SOURCE_SHA"',
-  '(cd /tmp/connect-source && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip reconstruction-v10 && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip reconstruction-v10 --verify)'
+  `(cd /tmp/connect-source && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip ${sourceProfile} && python3 infra/backend-release/backend-source-archive.py "$REVIEWED_SOURCE_SHA" /tmp/connect-reviewed.zip ${sourceProfile} --verify)`
  ]:[`if [ -n "$SOURCE_OBJECT_VERSION" ]; then aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' --version-id "$SOURCE_OBJECT_VERSION" /tmp/connect-reviewed.zip; else aws s3api get-object --bucket packproof-v2-staging-build-${TARGET.account} --key '${key}' /tmp/connect-reviewed.zip; fi`];
  const buildspec=JSON.stringify({version:'0.2',phases:{pre_build:{'on-failure':'ABORT',commands:[`test "$(aws sts get-caller-identity --query Account --output text)" = ${TARGET.account}`,`test "$REVIEWED_SOURCE_SHA" = '${sourceSha}' && test "$IMAGE_TAG" = '${buildTag}'`,retention,...sourceCommands,`echo '${archiveSha256}  /tmp/connect-reviewed.zip' | sha256sum --check -`,'mkdir /tmp/connect-reviewed && python3 -m zipfile -e /tmp/connect-reviewed.zip /tmp/connect-reviewed',`ECR=${repository}; export ECR`,`aws ecr get-login-password --region ${TARGET.region} | docker login --username AWS --password-stdin ${TARGET.account}.dkr.ecr.${TARGET.region}.amazonaws.com`]},build:{'on-failure':'ABORT',commands:['cd /tmp/connect-reviewed','test -f backend/Dockerfile && test -f packages/evidence-contracts/package.json && test -f config/rnd/research-build.json',...buildImage,verify]},post_build:{'on-failure':'ABORT',commands:['test "$CODEBUILD_BUILD_SUCCEEDING" = 1','docker push "$ECR:$IMAGE_TAG"',`aws ecr batch-get-image --repository-name ${TARGET.serviceName} --image-ids "imageTag=$IMAGE_TAG" --query 'images[].imageId' --output json`]}}});
  const request=buildRequest({sourceSha,zipSha256:archiveSha256,sourceVersion,buildspec});

@@ -10,6 +10,9 @@ export interface WorkspaceSource {
   folder: string;
   roles: SourceRole[];
   generation: number;
+  issue?:string|null;
+  coverageGap?:boolean;
+  lastScanAt?:string|null;
   transport?: "file" | "folder" | "api";
   displayName?: string;
   sourceNamespace?: string;
@@ -30,8 +33,16 @@ export interface OrderSummary {
   proofId: string;
   revision: number;
   orderReference: string;
+  updatedAt?:string;
+  customerName?:string;
+  latestKind?:string;
+  issue?:string;
+  fulfillmentStatus?:string;
 }
 export interface OrderDetail extends OrderSummary {
+  facilities?:string[];
+  integrity?:string;
+  originalArtifacts?:Record<string,unknown>[];
   lines: Record<string,unknown>[];
   events: Record<string,unknown>[];
   evidence: Record<string,unknown>[];
@@ -41,6 +52,10 @@ export interface OrderDetail extends OrderSummary {
 }
 export interface WorkspaceStatus {
   orders?: OrderSummary[];
+  totalOrders?:number|null;
+  nextBefore?:number|null;
+  updatedToday?:number|null;
+  updatedLast24Hours?:number|null;
   syncState?: string;
   canReadOrders?: boolean;
   viewKey?: string | null;
@@ -72,11 +87,41 @@ export interface DraftPreview {
   scannedFiles: number; unreadFiles: number; unresolved: number; limited: boolean;
 }
 export interface AttentionReport {
-  items:{sourceId?:string;fileName?:string;locator?:string;kind?:string;reason?:string}[];
+  orderIssueCount?:number;
+  orderIssues?:OrderSummary[];
+  nextIssuesBefore?:number|null;
+  items:{proofId?:string;revision?:number;orderReference?:string;sourceId?:string;fileName?:string;locator?:string;kind?:string;reason?:string}[];
   hasMore:boolean;
 }
+export interface WorkspaceSourceRecord {
+  kind:'original'|'derived_excerpt';
+  eventKey:string;
+  sourceId:string;
+  receiptId:string;
+  fileName:string;
+  originalSha256?:string;
+  fields?:Record<string,unknown>;
+  lines?:Record<string,unknown>[];
+  profileVersion?:string;
+  eventKind?:string;
+  fieldLineage?:Record<string,string>;
+  locator?:string;
+  observedAt?:string;
+  occurredAt?:string|null;
+  version?:string;
+  originalText?:string;
+  mediaType?:string;
+  reason?:string;
+  artifact?:{receiptId:string;fileName:string;mediaType:string;originalSha256:string;bytesBase64:string};
+}
+export interface WorkspaceFolderSuggestion {folder:string;kind:'selected'|'prepared'}
 export interface WorkspaceBridge {
-  workspaceAttention():Promise<AttentionReport>;
+  workspaceOrderPage?(before:number):Promise<{orders:OrderSummary[];nextBefore?:number|null}>;
+  workspaceSourceRecord?(proofId:string,revision:number,eventKey:string):Promise<WorkspaceSourceRecord>;
+  getWorkspaceFolderSuggestion?(role:SourceRole):Promise<WorkspaceFolderSuggestion|null>;
+  useWorkspaceFolderSuggestion?(role:SourceRole,expectedFolder:string):Promise<ConnectStatus>;
+  replaceWorkspaceFolder?(sourceId:string,expectedGeneration:number):Promise<ConnectStatus>;
+  workspaceAttention(before?:number):Promise<AttentionReport>;
   workspaceSearchOrders(query:string):Promise<OrderSummary[]>;
   chooseWorkspaceRelatedSource(sourceId:string,expectedGeneration:number,role:SourceRole,relatedId:string):Promise<ConnectStatus>;
   confirmWorkspaceOrderMap(sourceId:string, expectedGeneration:number, profileVersion:string):Promise<ConnectStatus>;

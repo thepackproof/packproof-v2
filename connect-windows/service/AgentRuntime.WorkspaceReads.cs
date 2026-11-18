@@ -14,7 +14,9 @@ public sealed partial class AgentRuntime
             !document.TryGetProperty("revision",out var version) || version.GetInt32() != revision) return;
         var index = Array.FindIndex(workspaceOrders,item=>item.GetProperty("proofId").GetString()==proofId);
         if (index < 0 || workspaceOrders[index].GetProperty("revision").GetInt32() >= revision) return;
-        workspaceOrders[index] = Json.Element(SmallFields(document,["proofId","revision","orderReference","updatedAt"]));
+        workspaceOrders[index] = SummaryForDesktop(document);
+        ordersCurrent=false;
+        nextOrderRefresh=DateTimeOffset.MinValue;
     }
 
     private async Task<object> WorkspaceSearchOrders(JsonElement payload,CancellationToken ct)
@@ -24,17 +26,37 @@ public sealed partial class AgentRuntime
         if (string.IsNullOrWhiteSpace(query) || query.Length>200 || query.Any(char.IsControl))
             throw new ConnectException("ORDER_QUERY_INVALID","Enter an order reference of up to 200 characters.");
         var result=await api.Request("GET","/v1/partner/agent/order-proofs?q="+Uri.EscapeDataString(query),null,state.Token,null,ct);
-        return result.GetProperty("orders").EnumerateArray().Take(20).Select(row=>new {
-            proofId=row.GetProperty("proofId"), revision=row.GetProperty("revision"), orderReference=row.GetProperty("orderReference")
-        }).ToArray();
+        return result.GetProperty("orders").EnumerateArray().Take(20).Select(SummaryForDesktop).ToArray();
     }
-    private async Task<object> WorkspaceAttention(CancellationToken ct)
+    private static long? OrderCursor(JsonElement result,string key="nextBefore") =>
+        Optional(result,key) is {ValueKind:JsonValueKind.Number} value && value.TryGetInt64(out var n)
+            && n is >0 and <=9007199254740991 ? n:null;
+    private async Task<object> WorkspaceOrderPage(JsonElement payload,CancellationToken ct)
     {
-        if (!WorkspaceGrantCurrent) throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to check records that need review.");
-        var result=await api.Request("GET","/v1/partner/agent/order-attention",null,state.Token,null,ct);
+        if(!WorkspaceGrantCurrent)throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to browse more orders.");
+        var before=payload.GetProperty("before").GetInt64();
+        if(before is <1 or >9007199254740991)throw new ConnectException("ORDER_QUERY_INVALID","Refresh the order list.");
+        var page=await api.Request("GET",$"/v1/partner/agent/order-proofs?before={before}",null,state.Token,null,ct);
+        return new{orders=page.GetProperty("orders").EnumerateArray().Take(20).Select(SummaryForDesktop).ToArray(),nextBefore=OrderCursor(page)};
+    }
+    private async Task<object> WorkspaceAttention(JsonElement request,CancellationToken ct)
+    {
+        if(!WorkspaceGrantCurrent)throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to check records that need review.");
+        var path="/v1/partner/agent/order-attention?includeOrderIssues=1";
+        if(Optional(request,"before") is {} cursor)
+        {
+            if(!cursor.TryGetInt64(out var before) || before is <1 or >9007199254740991)
+                throw new ConnectException("ORDER_QUERY_INVALID","Refresh the list of orders that need attention.");
+            path+=$"&before={before}";
+        }
+        var result=await api.Request("GET",path,null,state.Token,null,ct);
         var items=result.GetProperty("items");
         return new {
-            items=items.EnumerateArray().Take(20).Select(row=>SmallFields(row,["sourceId","fileName","locator","kind","reason"])),
+            items=items.EnumerateArray().Take(20).Select(row=>SmallFields(row,["sourceId","fileName","locator","kind","reason","proofId","revision","orderReference"])),
+            orderIssueCount=OptionalCount(result,"orderIssueCount"),
+            nextIssuesBefore=OrderCursor(result,"nextIssuesBefore"),
+            orderIssues=Optional(result,"orderIssues") is {ValueKind:JsonValueKind.Array} issues
+                ? issues.EnumerateArray().Take(20).Select(SummaryForDesktop).ToArray() : null,
             hasMore=items.GetArrayLength()>20 || (result.TryGetProperty("hasMore",out var more)&&more.ValueKind==JsonValueKind.True)
         };
     }
@@ -46,42 +68,100 @@ public sealed partial class AgentRuntime
                 output[key]=v.ValueKind==JsonValueKind.String&&v.GetString()!.Length>256?Json.Element(v.GetString()![..256]):v;
         return output;
     }
-    // The renderer needs the business view, not source payloads or binary
-    // attachments. Each lane gets a byte budget below the trusted pipe limit.
+    private static int? OptionalCount(JsonElement value,string key) =>
+        Optional(value,key) is {ValueKind:JsonValueKind.Number} number && number.TryGetInt32(out var n) && n>=0 ? n:null;
+    private static JsonElement SummaryForDesktop(JsonElement row)=>Json.Element(SmallFields(row,
+        ["proofId","revision","orderReference","updatedAt","customerName","latestKind","issue","fulfillmentStatus"]));
+    private (string id,int revision) RequireOrderRead(JsonElement request)
+    {
+        if(!WorkspaceGrantCurrent)throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to read this proof.");
+        var id=request.GetProperty("proofId").GetString();
+        var revision=request.GetProperty("revision").GetInt32();
+        if(!IsProofId(id)||revision<1)throw new ConnectException("ORDER_INVALID","Choose an order from the current list.");
+        return(id!,revision);
+    }
+    private static string RevisionPath(string id,int revision)=>$"/v1/partner/agent/order-proofs/{id}/revisions/{revision}";
+
+    // All allocations are retained across deliveries. Raw fields and original bytes
+    // require a separate per-event check against the effective source grant.
     internal static object OrderForDesktop(JsonElement proof)
     {
-        const int budget=42000;
-        var output=SmallFields(proof,["proofId","orderReference","revision","updatedAt"]);
+        var output=SmallFields(proof,["proofId","orderReference","revision","updatedAt","integrity","customerName","purchaseOrder","fulfillmentStatus"]);
         var totals=new Dictionary<string,int>();
         var packages=new HashSet<string>(StringComparer.Ordinal);
-        void Read(string property,string[] keys)
+        string[] eventFields=["kind","sourceId","fileName","eventKey","eventId","version","receiptId","profileVersion",
+            "sourceModifiedAt","originalSha256","locator","occurredAt","observedAt","associationScope","originalStatus","facilityId",
+            "entity","references","lines","eventKind"];
+        foreach(var lane in new[]{"lines","events","evidence"})
         {
-            var rows=new List<Dictionary<string,JsonElement>>();
-            var size=0;
-            var all=proof.GetProperty(property);
-            totals[property]=all.GetArrayLength();
-            foreach(var row in all.EnumerateArray())
+            var rows=proof.GetProperty(lane);
+            totals[lane]=rows.GetArrayLength();
+            if(lane=="lines"){output[lane]=rows;continue;}
+            var entries=new List<Dictionary<string,JsonElement>>();
+            foreach(var row in rows.EnumerateArray())
             {
-                var item=SmallFields(row,keys);
-                size+=Json.Bytes(item).Length+1;
-                if(size>budget||rows.Count>=100)break;
-                rows.Add(item);
-                if(property=="events"){
-                    IEnumerable<JsonElement> refs=row.TryGetProperty("references",out var values)&&values.ValueKind==JsonValueKind.Array?values.EnumerateArray():[];
-                    if(row.TryGetProperty("entity",out var entity))refs=refs.Prepend(entity);
-                    foreach(var r in refs)if(packages.Count<20 && r.ValueKind==JsonValueKind.Object && r.TryGetProperty("type",out var type)&&type.GetString()=="package"
-                        && r.TryGetProperty("id",out var id)&&id.GetString() is {Length:>0 and <=200} key)packages.Add(key);
+                var entry=SelectFields(row,eventFields);
+                if(row.TryGetProperty("fields",out var fields) && fields.ValueKind==JsonValueKind.Object &&
+                    (!row.TryGetProperty("associationScope",out var assoc)||assoc.GetString()!="shared"))
+                    entry["fields"]=Json.Element(SmallFields(fields,["customerName","CustomerName","customer","Customer","SoldToName","ShipToName",
+                        "purchaseOrder","purchaseOrderNumber","PurchaseOrderNumber","PONumber","skuDescription","description","ItemDescription",
+                        "plannedAt","scheduledAt","scheduledDeliveryAt","expectedDeliveryAt","status","deliveryStatus","orderReference",
+                        "facilityName","deliveryId","shipmentId","packageId","lineId","unit","sku","fulfillmentStatus","orderStatus",
+                        "plannedShipmentReference","plannedDeliveryDate","followUpStatus","followUpRequest","followUpOwner",
+                        "followUpRequestedAt","followUpEvidenceState","itemCounts","handoff","purchaseOrderReference"]));
+                if(lane=="events" && entry.TryGetValue("entity",out var entity))
+                {
+                    RememberPackage(entity);
+                    if(entry.TryGetValue("references",out var refs) && refs.ValueKind==JsonValueKind.Array)
+                        foreach(var reference in refs.EnumerateArray())RememberPackage(reference);
                 }
+                entries.Add(entry);
             }
-            output[property]=Json.Element(rows);
+            output[lane]=Json.Element(entries);
         }
-        Read("lines",["lineId","sku","unit","orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity","orderedMinusShippedQuantity","orderedShippedDiscrepancy"]);
-        Read("events",["kind","sourceId","fileName","occurredAt","observedAt","associationScope"]);
-        Read("evidence",["kind","sourceId","fileName","locator","originalStatus","originalSha256"]);
+        void RememberPackage(JsonElement reference)
+        {
+            if(Optional(reference,"type")?.GetString()=="package" && Optional(reference,"id")?.GetString() is {Length:>0} key)packages.Add(key);
+        }
         output["packages"]=Json.Element(packages.Select(id=>new{packageId=id}));
         output["totals"]=Json.Element(totals);
-        if(proof.TryGetProperty("conflicts",out var conflicts))output["conflicts"]=Json.Element(conflicts.EnumerateArray().Take(20).Select(c=>c.GetString()));
+        foreach(var key in new[]{"facilities","conflicts","originalArtifacts"})
+            if(Optional(proof,key) is {ValueKind:JsonValueKind.Array} list)output[key]=list;
         return output;
     }
-}
+    private static Dictionary<string,JsonElement> SelectFields(JsonElement row,string[] keys)
+    {
+        var selected=new Dictionary<string,JsonElement>(StringComparer.Ordinal);
+        foreach(var key in keys)
+            if(row.TryGetProperty(key,out var value))selected[key]=value;
+        return selected;
+    }
 
+    private async Task<object> WorkspaceSourceRecord(JsonElement request,CancellationToken ct)
+    {
+        var(id,revision)=RequireOrderRead(request);
+        var eventKey=request.GetProperty("eventKey").GetString();
+        if(!IsProofId(eventKey))throw new ConnectException("SOURCE_NOT_FOUND","Choose a record in this proof.");
+        var path=RevisionPath(id,revision);
+        var record=await api.Request("GET",$"{path}/sources/{eventKey}",null,state.Token,null,ct);
+        var kind=Optional(record,"kind")?.GetString();
+        if(kind is not ("derived_excerpt" or "original") || Optional(record,"eventKey")?.GetString()!=eventKey)throw InvalidFeed();
+        var result=SelectFields(record,["kind","eventKey","receiptId","originalSha256","fileName","fields","fieldLineage","locator","sourceId",
+            "observedAt","occurredAt","version","profileVersion","lines","eventKind","originalText","mediaType","reason"]);
+        if(Optional(record,"artifactReceiptId")?.GetString() is {} receipt)
+        {
+            if(!IsProofId(receipt))throw InvalidFeed();
+            var artifact=await api.Request("GET",$"{path}/artifacts/{receipt}",null,state.Token,null,ct);
+            if(Optional(artifact,"receiptId")?.GetString()!=receipt)throw InvalidFeed();
+            if(Optional(artifact,"kind")?.GetString()=="original")
+            {
+                var mediaType=Optional(artifact,"mediaType")?.GetString();
+                if(mediaType is not ("image/jpeg" or "image/png" or "application/zpl"))throw InvalidFeed();
+                var bytes=artifact.GetProperty("bytesBase64").GetBytesFromBase64();
+                if(bytes.Length>3*1024*1024 || HashBytes(bytes)!=Optional(artifact,"originalSha256")?.GetString())throw InvalidFeed();
+                result["artifact"]=Json.Element(SelectFields(artifact,["receiptId","fileName","originalSha256","mediaType","bytesBase64"]));
+            }
+        }
+        return result;
+    }
+}

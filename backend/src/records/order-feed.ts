@@ -60,29 +60,80 @@ export async function orderChanges(db: Database, f: Filter, after: unknown, limi
     hasMore: all.length > size
   };
 }
-export async function listOrders(db: Database, f: Filter, q: unknown, limit: unknown) {
+interface OrderCard {
+  proofId: string;
+  revision: number;
+  orderReference: string;
+  updatedAt: string;
+  customerName?: string;
+  latestKind?: string;
+  fulfillmentStatus?: string;
+  issue?: string;
+}
+// The projection orders events chronologically and records only unit-compatible
+// discrepancies. Customer identity must be explicitly reported by an order origin.
+const firstIssue = `COALESCE(
+ jsonb_path_query_first(v.view, '$.lines[*].loadedAcknowledgedDiscrepancy') #>> '{}',
+ jsonb_path_query_first(v.view, '$.lines[*].orderedShippedDiscrepancy') #>> '{}',
+ CASE WHEN jsonb_array_length(COALESCE(v.view->'conflicts','[]'::jsonb))>0 THEN 'Conflicting source values' END)`;
+const orderLabels = `(SELECT COALESCE(jsonb_object_agg(label,value),'{}'::jsonb) FROM (
+ SELECT label,left(min(name),200) AS value FROM (
+  SELECT CASE lower(replace(replace(f.key,'_',''),' ',''))
+   WHEN 'customer' THEN 'customerName' WHEN 'customername' THEN 'customerName' WHEN 'soldtoname' THEN 'customerName'
+   WHEN 'fulfillmentstatus' THEN 'fulfillmentStatus' WHEN 'fulfilmentstatus' THEN 'fulfillmentStatus' END AS label,
+   nullif(trim(f.value #>> '{}'),'') AS name
+  FROM jsonb_array_elements(v.view->'events') e
+  CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(e->'fields')='object' THEN e->'fields' ELSE '{}'::jsonb END) f
+  WHERE e->>'kind'='order' AND jsonb_typeof(f.value)='string') candidates
+ WHERE label IS NOT NULL AND name IS NOT NULL GROUP BY label HAVING min(name)=max(name)) unambiguous)`;
+const card = `(jsonb_strip_nulls(jsonb_build_object(
+ 'proofId',p.proof_id,'revision',p.revision,'orderReference',p.order_reference,'updatedAt',p.committed_at,
+ 'latestKind',v.view->'events'->-1->>'kind','issue',left(${firstIssue},200))) || ${orderLabels})`;
+function visibleOrders(f: Filter) {
+  return `SELECT last.sequence,last.revision,last.committed_at,r.proof_id,r.order_reference FROM record_order_roots r
+ JOIN LATERAL (SELECT v.sequence,v.revision,v.committed_at FROM record_order_revisions v WHERE v.proof_id=r.proof_id ORDER BY v.revision DESC LIMIT 1) last ON true WHERE ${f.where}`;
+}
+export async function listOrders(db: Database, f: Filter, q: unknown, limit: unknown, before?: unknown, dayStart?: unknown) {
   if (q != null && (typeof q !== 'string' || q.length > 200)) throw new DomainError('INVALID_SEARCH', 'Enter an exact order reference.', 400);
+  if (dayStart != null && (typeof dayStart !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(dayStart) || !Number.isFinite(Date.parse(dayStart)) || new Date(dayStart).toISOString().slice(0,19)!==dayStart.slice(0,19))) {
+    throw new DomainError('INVALID_DAY_START', 'Supply the local start of today as a UTC timestamp.', 400);
+  }
+  const boundary = before == null ? null : count(before, 1, Number.MAX_SAFE_INTEGER);
   f = currentOrderScope(f);
-  const j = f.params.length;
-  // Rows and boundary share a single MVCC statement snapshot. The high watermark
-  // includes all visible rows even when the caller only displays the latest 20.
-  const row = (await db.query<{
-    orders: {
-      proofId: string;
-      revision: number;
-      orderReference: string;
-      updatedAt: string;
-    }[];
-    cursor: string;
-  }>(`WITH visible AS (
- SELECT last.sequence,last.revision,last.committed_at,r.proof_id,r.order_reference FROM record_order_roots r
- JOIN LATERAL (SELECT v.sequence,v.revision,v.committed_at FROM record_order_revisions v WHERE v.proof_id=r.proof_id ORDER BY v.revision DESC LIMIT 1) last ON true WHERE ${f.where}
- ), page AS (SELECT * FROM visible WHERE ($${j + 1}::text='' OR order_reference=$${j + 1}) ORDER BY sequence DESC LIMIT $${j + 2})
- SELECT COALESCE((SELECT jsonb_agg(jsonb_build_object('proofId',proof_id,'revision',revision,'orderReference',order_reference,'updatedAt',committed_at) ORDER BY sequence DESC) FROM page),'[]'::jsonb) orders,COALESCE((SELECT max(sequence) FROM visible),0) cursor`, [...f.params, q ?? '', count(limit, 20)])).rows[0];
-  return {
-    orders: row.orders,
-    cursor: Number(row.cursor)
-  };
+  const j = f.params.length, size = count(limit, 20);
+  // Authorize and bound the page before reading proof documents for card details.
+  const row = (await db.query<{orders:OrderCard[];cursor:string;total:number;updated:number;today:number;next_before:string|null}>(`
+ WITH visible AS MATERIALIZED (${visibleOrders(f)}),
+ matches AS (SELECT * FROM visible WHERE ($${j+1}::text='' OR order_reference=$${j+1})
+ AND ($${j+3}::bigint IS NULL OR sequence<$${j+3}) ORDER BY sequence DESC LIMIT ($${j+2}::integer + 1)),
+ page AS (SELECT * FROM matches ORDER BY sequence DESC LIMIT $${j+2})
+ SELECT COALESCE((SELECT jsonb_agg(${card} ORDER BY p.sequence DESC) FROM page p
+ JOIN record_order_revisions v ON v.sequence=p.sequence),'[]'::jsonb) orders,
+ COALESCE(max(sequence),0) cursor,count(*)::integer total,
+ count(*) FILTER (WHERE committed_at>=now()-interval '24 hours')::integer updated,
+ count(*) FILTER (WHERE committed_at >= $${j+4}::timestamptz)::integer today,
+ CASE WHEN (SELECT count(*) FROM matches)>$${j+2} THEN (SELECT min(sequence) FROM page) END next_before
+ FROM visible`, [...f.params,q ?? '',size,boundary,dayStart ?? null])).rows[0];
+  return {orders:row.orders,cursor:Number(row.cursor),totalOrders:row.total,updatedLast24Hours:row.updated,
+    ...(dayStart == null ? {} : {updatedToday:row.today}),
+    nextBefore:row.next_before == null ? null : Number(row.next_before)};
+}
+export async function listOrderIssues(db: Database, filter: Filter, before?: unknown) {
+  const f=currentOrderScope(filter);
+  const boundary = before == null ? null : count(before, 1, Number.MAX_SAFE_INTEGER);
+  const arg = f.params.length + 1;
+  // Called explicitly for the review screen. The collector's frequent list and
+  // identity polling never inspects lines from orders outside its display page.
+  const row=(await db.query<{items:OrderCard[];total:number;next_before:string|null}>(`
+ WITH visible AS (${visibleOrders(f)}), issues AS MATERIALIZED (
+ SELECT s.* FROM visible s JOIN record_order_revisions v ON v.sequence=s.sequence WHERE ${firstIssue} IS NOT NULL),
+ matches AS (SELECT * FROM issues WHERE ($${arg}::bigint IS NULL OR sequence<$${arg}) ORDER BY sequence DESC LIMIT 21),
+ page AS (SELECT * FROM matches ORDER BY sequence DESC LIMIT 20)
+ SELECT COALESCE((SELECT jsonb_agg(${card} ORDER BY p.sequence DESC) FROM page p
+ JOIN record_order_revisions v ON v.sequence=p.sequence),'[]'::jsonb) items,
+ (SELECT count(*)::integer FROM issues) total,
+ CASE WHEN (SELECT count(*) FROM matches)>20 THEN (SELECT min(sequence) FROM page) END next_before`,[...f.params,boundary])).rows[0];
+  return {orderIssues:row.items,orderIssueCount:row.total,nextIssuesBefore:row.next_before==null?null:Number(row.next_before)};
 }
 export async function readOrder(db: Database, f: Filter, id: string, revision?: unknown) {
   f = currentOrderScope(f);

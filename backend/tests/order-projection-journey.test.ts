@@ -79,3 +79,17 @@ describe('source relationships and exact order allocations',()=>{
   const result=projectOrders(events,roots).projections[0];expect(result.lines[0].packedQuantity).toBeUndefined();expect(result.conflicts).toContain('20: packedQuantity units');
  });
 });
+
+it('links a loaded/acknowledged difference to exact source rows within the same fulfillment',()=>{
+  const load=row('WMS','load','handoff',S1,[A],[qty('20','loadedQuantity','8')]);
+  const receiving=row('RCV','receive','delivery',ref('delivery','D1'),[A,S1],[qty('20','acknowledgedQuantity','6')]);
+  const backorder=row('ERP','pending','order',A,[],[{...qty('30','backorderedQuantity','1'),title:'Circulation pump',shipmentReference:'SHP772',pickedQuantityState:'not_due'}]);
+  const proof=projectOrders([...origins,load,receiving,backorder],roots).projections[0];
+  expect(proof.lines.find(l=>l.lineId==='20')).toMatchObject({loadedMinusAcknowledgedQuantity:'2',loadedAcknowledgedDiscrepancy:'2 EA more loaded than acknowledged'});
+  expect(proof.lines.find(l=>l.lineId==='30')).toMatchObject({backorderedQuantity:'1',title:'Circulation pump',shipmentReference:'SHP772',pickedQuantityState:'not_due'});
+  expect(proof.evidence.find(e=>e.eventKey===receiving.id)).toMatchObject({lines:receiving.record.lines,eventKind:'delivery',references:[A,S1],associationScope:'order'});
+  const anotherShipment={...receiving,record:{...receiving.record,references:[A,S2]}};
+  expect(projectOrders([...origins,load,anotherShipment],roots).projections[0].lines[0].loadedAcknowledgedDiscrepancy).toBeUndefined();
+  const signature={...receiving,record:{...receiving.record,lines:[],fields:{signed:'yes'}}};
+  expect(projectOrders([...origins,load,signature],roots).projections[0].lines[0].acknowledgedQuantity).toBeUndefined();
+});

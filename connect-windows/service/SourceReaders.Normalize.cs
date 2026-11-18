@@ -12,7 +12,7 @@ public static partial class SourceReaders
         ["handoff"]="handoff", ["delivery"]="delivery", ["returns"]="return"
     };
     private static readonly string[] ReferenceTypes=["order","warehouse","shipment","package","tracking","load","return"];
-    private static readonly string[] AmountFields=["orderedQuantity","pickedQuantity","packedQuantity","shippedQuantity","returnedQuantity","cancelledQuantity"];
+    private static readonly string[] AmountFields=["orderedQuantity","pickedQuantity","packedQuantity","loadedQuantity","shippedQuantity","acknowledgedQuantity","backorderedQuantity","returnedQuantity","cancelledQuantity"];
     private static string? Scalar(IReadOnlyDictionary<string,JsonElement> fields,string key)
     {
         if(!fields.TryGetValue(key,out var value))return null;
@@ -129,9 +129,16 @@ public static partial class SourceReaders
         string? id=Scalar(fields,"lineId");
         Require(IdentityPart(id),"An order line requires its explicit line identity.");
         var output=new Dictionary<string,string?>{["lineId"]=id!};
-        foreach(var key in new[]{"sku","unit"})
+        foreach(var key in new[]{"sku","unit","title","description","shipmentReference"})
         {
             var value=Scalar(fields,key);if(value is not null){Require(IdentityPart(value),"The line has an invalid SKU or unit.");output[key]=value;}
+        }
+        foreach(var key in new[]{"pickedQuantityState","loadedQuantityState","acknowledgedQuantityState"})
+        {
+            var reported=Scalar(fields,key);
+            if(reported is null)continue;
+            Require(reported is "not_due" or "missing" or "unavailable" or "reported","The reported stage state is unsupported.");
+            output[key]=reported;
         }
         foreach(var key in AmountFields)
         {

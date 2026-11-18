@@ -20,9 +20,12 @@ export const RECONSTRUCTION_FLAGS={
 } as const;
 export type ReconstructionFeature=keyof typeof RECONSTRUCTION_FLAGS;
 export function reconstructionFeatureEnabled(feature:ReconstructionFeature){return process.env[RECONSTRUCTION_FLAGS[feature]]==='true';}
+export function supportsOrderWorkspace(version: string | null | undefined) {
+ return version === '0.5.0' || version === '0.6.0';
+}
 // These versions implement the v4 queue, historical jobs and exporter boundaries.
 export function supportsSourceBackfills(version: string | null | undefined) {
- return version === '0.4.0' || version === '0.4.1' || version === '0.5.0';
+ return version === '0.4.0' || version === '0.4.1' || supportsOrderWorkspace(version);
 }
 /** Explicit candidate compatibility; expanding this set requires parity and
  * migration qualification, not a guessed semver range. */

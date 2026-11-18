@@ -2,10 +2,15 @@ import {contextBridge,ipcRenderer} from 'electron';
 import type {ConnectBridge} from '../ui/types';
 const call=(method:string,...args:unknown[])=>ipcRenderer.invoke(`connect:${method}`,...args).then(result=>{if(!result?.ok)throw Error(result?.error||'The background service needs attention.');return result.value;});
 const bridge:ConnectBridge={
+ workspaceOrderPage:before=>call('workspaceOrderPage',before),
+ workspaceSourceRecord:(proofId,revision,eventKey)=>call('workspaceSourceRecord',proofId,revision,eventKey),
+ getWorkspaceFolderSuggestion:role=>call('getWorkspaceFolderSuggestion',role),
+ useWorkspaceFolderSuggestion:(role,folder)=>call('useWorkspaceFolderSuggestion',role,folder),
+ replaceWorkspaceFolder:(sourceId,expectedGeneration)=>call('replaceWorkspaceFolder',sourceId,expectedGeneration),
  chooseWorkspaceRelatedSource:(id,generation,role,related)=>call('chooseWorkspaceRelatedSource',id,generation,role,related),
  confirmWorkspaceOrderMap:(id,generation,profile)=>call('confirmWorkspaceOrderMap',id,generation,profile),
  workspaceSearchOrders:query=>call('workspaceSearchOrders',query),
- workspaceAttention:()=>call('workspaceAttention'),
+ workspaceAttention:before=>before===undefined?call('workspaceAttention'):call('workspaceAttention',before),
  openWorkspaceReview:()=>call('openWorkspaceReview'),
  openWorkspaceOrder:(id,revision)=>call('openWorkspaceOrder',id,revision),
  getWorkspaceStatus:()=>call('getWorkspaceStatus'),addWorkspaceDirectSource:name=>name ? call('addWorkspaceDirectSource',name) : call('addWorkspaceDirectSource'),copyWorkspaceDirectProfile:id=>call('copyWorkspaceDirectProfile',id),

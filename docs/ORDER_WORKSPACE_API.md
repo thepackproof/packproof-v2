@@ -1,6 +1,6 @@
 # Connect order workspace API
 
-Connect 0.5.0 uses the organization API and the versioned contract in `backend/partner-openapi.json`. Enable `PACKPROOF_ORDER_WORKSPACE_ENABLED` only on a backend with migration 123 and its reviewed API database privileges. The existing organization entitlement, credential scopes, enrollment, operator assignment, location permissions and source approvals still apply. Old clients retain their existing routes.
+Connect 0.6.0 uses the organization API and the versioned contract in `backend/partner-openapi.json`. Enable `PACKPROOF_ORDER_WORKSPACE_ENABLED` only on a backend with migrations through 124 and the reviewed API database privileges. The existing organization entitlement, credential scopes, enrollment, operator assignment, location permissions and source approvals still apply. Old clients retain their existing routes.
 
 ## Connect an order system
 
@@ -48,13 +48,19 @@ The HTTP receipt has `state: "pending"` when an original is retained before a us
 
 The human snapshot route is `GET /me/records/order-proofs` with `organizationId` and `environment`. A device uses `GET /v1/partner/agent/order-proofs`. The snapshot returns recent orders and a committed cursor from one database statement. Read the individual revision at `/order-proofs/{proofId}/revisions/{revision}` under the same route prefix.
 
+List results use descending commit sequence. Set `q` to an exact order reference, and pass the previous response’s `nextBefore` as `before` for the next page. A null `nextBefore` ends the list. `totalOrders` and `updatedLast24Hours` cover all currently visible orders. For a local-day count, send local midnight converted to UTC in `dayStart`. The response then includes `updatedToday`. Order cards include `updatedAt` and can include `latestKind`, an explicitly reported `customerName` or `fulfillmentStatus`, and an `issue` from the selected revision.
+
 Poll `GET /me/records/order-changes?after={cursor}` or `POST /v1/partner/agent/order-changes` with `{"after":0,"limit":50}`. Follow `nextCursor`, drain every page while `hasMore` is true, then resume polling. Commit order is serialized across publishers. Sequence numbers can skip when other operations publish revisions. After an organization, location or account change, discard the prior cursor and request a fresh snapshot. The desktop exporter persists its own cursor only after its destination has published the revision.
 
 Revision evidence includes scoped excerpts, original hashes and extraction locations. The artifact route returns bounded eligible original media only when the immutable revision explicitly linked it and the current installation still holds the exact source grant. Historical API backfill can recover the previously retained canonical transaction snapshot. Its profile identifies an unavailable original request body and keeps the existing Proof ID.
 
+Connect opens a revision’s source record with `GET /v1/partner/agent/order-proofs/{proofId}/revisions/{revision}/sources/{eventKey}`. The response identifies the receipt, source, filename, locator, original SHA-256 and profile version. `kind: "original"` includes verified UTF-8 `originalText` for eligible CSV, TSV or JSON records up to 64 KiB when all source fields are accounted for. `kind: "derived_excerpt"` describes the available evidence. Shared or reassigned records and unavailable original grants return limited metadata. Eligible explicitly linked attachments use the revision’s existing artifact route.
+
 ## Review and recovery
 
 The organization workspace lists unresolved observations at `/me/records/order-attention`. A current human workspace member with write access can submit `link` or `unlink` to `/me/records/order-proofs/{proofId}/associations`. Supply the immutable event key, expected target revision, an auditable reason and an idempotency key. A reviewed reassociation creates updated revisions for affected orders. Prior revisions continue to resolve.
+
+On the device, `GET /v1/partner/agent/order-attention?includeOrderIssues=1` also returns the projected orders that need review. `orderIssueCount` covers the current scope. `orderIssues` contains up to 20 orders, each with a proof ID and revision. Use `nextIssuesBefore` as `before` to continue the order list. The review includes compatible loaded-versus-acknowledged and ordered-versus-shipped quantity discrepancies and conflicting reported values. Pending record associations retain their own review workflow.
 
 Pause individual API sources through the installed service. Disabling the new rollout flag stops access through these routes while preserving accepted input and export work. Database restoration must restore canonical proofs, source sessions, original receipts, versioned original objects, order events, explicit references, association decisions, link state, API history cursors and immutable revisions together. A cold-copy restore of the isolated test database can be exercised with `PACKPROOF_ORDER_RECOVERY_PROBE=1` and the multi-source HTTP integration test. Production backup and object-version retention follow the deployment's operating controls.
 

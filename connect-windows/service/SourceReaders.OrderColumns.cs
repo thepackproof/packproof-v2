@@ -4,7 +4,9 @@ using System.Text.RegularExpressions;
 
 namespace PackProof.Connect;
 
-public sealed record OrderColumnMap(string Order,string Line,string Version,string Quantity,string Unit,string? Sku);
+public sealed record OrderColumnMap(string Order,string Line,string Version,string Quantity,string Unit,string? Sku,
+    [property:System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? BackorderedQuantity=null);
 
 public static partial class SourceReaders
 {
@@ -24,7 +26,8 @@ public static partial class SourceReaders
         var qty=Find("orderedquantity","orderedqty","qtyordered","quantityordered","quantity","qty");
         var unit=Find("unit","uom","unitofmeasure","quantityunit");
         return order!=null&&line!=null&&version!=null&&qty!=null&&unit!=null
-            ?new(order,line,version,qty,unit,Find("sku","itemsku","itemcode")):null;
+            ?new(order,line,version,qty,unit,Find("sku","itemsku","itemcode"),
+                Find("backorderedquantity","backorderedqty","qtybackordered","quantitybackordered")):null;
     }
     public static string OrderProfileVersion(OrderColumnMap map)=>"packproof.order-columns/v1/"+Convert.ToHexStringLower(
         SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(map)));
@@ -33,7 +36,8 @@ public static partial class SourceReaders
         if(input.State!="parsed"||!IdentityPart(sourceId))return Val(Array.Empty<object>());
         string[] required=[map.Order,map.Line,map.Version,map.Quantity,map.Unit];
         if(required.Distinct(StringComparer.Ordinal).Count()!=required.Length || required.Any(k=>!input.Headers.Contains(k,StringComparer.Ordinal)) ||
-            map.Sku!=null&&!input.Headers.Contains(map.Sku,StringComparer.Ordinal))return Val(Array.Empty<object>());
+            (map.Sku!=null&&!input.Headers.Contains(map.Sku,StringComparer.Ordinal)) ||
+            (map.BackorderedQuantity!=null&&!input.Headers.Contains(map.BackorderedQuantity,StringComparer.Ordinal)))return Val(Array.Empty<object>());
         var rows=new List<SourceReaderRow>();
         foreach(var raw in input.Rows)
         {
@@ -51,6 +55,11 @@ public static partial class SourceReaders
             var paths=new Dictionary<string,string>{{"orderReference",raw.Lineage[map.Order]},{"entityId",raw.Lineage[map.Order]},
                 {"version",raw.Lineage[map.Version]},{"lineId",raw.Lineage[map.Line]},{"orderedQuantity",raw.Lineage[map.Quantity]},{"unit",raw.Lineage[map.Unit]}};
             if(map.Sku!=null && raw.Fields.TryGetValue(map.Sku,out var sku)){fields["sku"]=sku;paths["sku"]=raw.Lineage[map.Sku];}
+            if(map.BackorderedQuantity!=null && raw.Fields.TryGetValue(map.BackorderedQuantity,out var deferred))
+            {
+                fields["backorderedQuantity"]=deferred;
+                paths["backorderedQuantity"]=raw.Lineage[map.BackorderedQuantity];
+            }
             CopyFacility(raw,fields,paths);
             rows.Add(new(raw.Location,fields,paths));
         }
