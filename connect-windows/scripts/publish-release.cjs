@@ -3,7 +3,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const { parseUpdateInfo } = require('electron-updater/out/providers/Provider');
-const { aws, digest, existingReleaseObject } = require('../../desktop/scripts/release-storage.cjs');
+const { aws, digest, existingReleaseObject } = require('./release-storage.cjs');
 const { context, trustedUrl } = require('./release-policy.cjs');
 
 const versionPattern = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;

@@ -85,6 +85,18 @@ test('optional existing execution-only role must have effective exact owner-secr
  assert.equal(ownerRegistration(i,now).executionRoleArn,existing);
  i.snapshot.ownerSecretSimulation[0].EvalDecision='implicitDeny';assert.throws(()=>ownerRegistration(i,now),/EXISTING_OWNER_SECRET_ACCESS/);
 });
+test('existing execution role admits only a full ECS service principal value in scalar or list trust',()=>{
+ const i=input('inspect'),existing=i.snapshot.api.taskDefinition.executionRoleArn;
+ i.review.ownerLaunch.executionRoleArn=existing;i.snapshot.ownerRole.Arn=existing;
+ i.snapshot.ownerSecretSimulation=[{EvalActionName:'secretsmanager:GetSecretValue',EvalResourceName:secret,EvalDecision:'allowed'}];
+ const trust=i.snapshot.ownerRole.AssumeRolePolicyDocument.Statement[0].Principal;
+ for(const value of ['ecs-tasks.amazonaws.com',['other.amazonaws.com','ecs-tasks.amazonaws.com']]){
+   trust.Service=value;assert.equal(ownerRegistration(i,now).executionRoleArn,existing);
+ }
+ for(const value of ['ecs-tasks.amazonaws.com.example.org',['untrusted-ecs-tasks.amazonaws.com'],{Service:'ecs-tasks.amazonaws.com'}]){
+   trust.Service=value;assert.throws(()=>ownerRegistration(i,now),/EXISTING_ECS_TRUST/);
+ }
+});
 test('apply binds source, ledger, actual rehearsal definition, task and zero exit status',()=>{
  const i=input('rehearse'),definition=asRegistered(ownerRegistration(i,now));
  i.mode='apply';i.rehearsal={taskDefinition:definition,report:{schema:'packproof.hosted-collector-owner-receipt/v1',mode:'rehearse',source,

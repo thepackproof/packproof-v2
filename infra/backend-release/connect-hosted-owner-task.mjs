@@ -111,7 +111,7 @@ const asArray=x=>Array.isArray(x)?x:[x];
 function validateExistingRole(iam,results,secret) {
   const trust=asArray(iam.AssumeRolePolicyDocument?.Statement);
   check(trust.some(s=>s?.Effect==='Allow'&&asArray(s.Action).includes('sts:AssumeRole')&&
-    asArray(s.Principal?.Service).includes('ecs-tasks.amazonaws.com')),'EXISTING_ECS_TRUST');
+    asArray(s.Principal?.Service).some(principal=>principal==='ecs-tasks.amazonaws.com')),'EXISTING_ECS_TRUST');
   check(results?.length===1&&results[0].EvalActionName?.toLowerCase()==='secretsmanager:getsecretvalue'&&
     results[0].EvalResourceName===secret&&results[0].EvalDecision==='allowed'&&!(results[0].MissingContextValues?.length),'EXISTING_OWNER_SECRET_ACCESS');
 }
