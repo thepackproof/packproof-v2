@@ -203,3 +203,26 @@ it("takes Riverside from split shipment to the original focused line and keeps t
   });
   expect(screen.getByText("No source records match this view.")).toBeVisible();
 });
+
+it.each([{ conflicts: [] as string[] }, { conflicts: ["30: sku"] }])(
+  "summarizes a multi-line order without attributing the first item's quantity to the whole proof (conflicts %j)",
+  ({ conflicts }) => {
+    const order: OrderDetail = {
+      ...detail,
+      lines: [
+        { lineId: "20", sku: "Valve", orderedQuantity: "2", unit: "each" },
+        { lineId: "30", sku: "Pump", orderedQuantity: "1", unit: "each" },
+      ],
+      conflicts,
+    };
+    render(<Proof detail={order} onBack={vi.fn()} />);
+    const counts = screen.getByLabelText("Whole proof overview counts");
+    expect(within(counts).getByRole("button", { name: /Line items 2 View items/ })).toBeVisible();
+    expect(within(counts).getByRole("button", { name: /Reported events 2 View journey/ })).toBeVisible();
+    expect(within(counts).getByRole("button", { name: /Source records 2 View evidence/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Ordered 2 each/ })).toBeNull();
+    fireEvent.click(within(counts).getByRole("button", { name: /Line items/ }));
+    expect(screen.getByRole("button", { name: "Valve: Ordered 2 each" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Pump: Ordered 1 each" })).toBeVisible();
+  }
+);

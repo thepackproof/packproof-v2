@@ -34,11 +34,13 @@ export function OrderRows({
           key={order.proofId}
           onClick={() => onProof(order.proofId, order.revision)}
         >
-          <strong>
-            {!compact && <Icon name="order" size={27} />}
-            <span>{order.orderReference}</span>
-          </strong>
-          <span className="xw-customer">{order.customerName || "Unreported"}</span>
+          <span className="xw-order-identity">
+            <strong>
+              {!compact && <Icon name="order" size={27} />}
+              <span>{order.orderReference}</span>
+            </strong>
+            <span className="xw-customer">{order.customerName || "Unreported"}</span>
+          </span>
           <span className="xw-update">{orderUpdate(order)}</span>
           <span className={"xw-badge " + (order.issue ? "xw-warn" : "xw-blue")}>
             {order.issue ? "Needs review" : order.fulfillmentStatus || "Recorded"}

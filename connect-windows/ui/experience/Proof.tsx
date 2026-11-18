@@ -160,7 +160,7 @@ function ProofRevision({
     if (sources.length === 1) openSource(sources[0], { id: item.id, quantityKey: stage });
     else push({ type: "claims", item, stage, records: sources });
   };
-  const first = differences[0] || items[0],
+  const comparedItem = differences[0],
     priority: QuantityKey[] = [
       "orderedQuantity",
       "loadedQuantity",
@@ -169,9 +169,9 @@ function ProofRevision({
       "pickedQuantity",
       "packedQuantity",
     ];
-  const cards = first
+  const cards = comparedItem
     ? stages
-        .filter(([k]) => quantity(model, first, k, scope).text)
+        .filter(([k]) => quantity(model, comparedItem, k, scope).text)
         .sort(
           (a, b) =>
             (priority.includes(a[0]) ? priority.indexOf(a[0]) : 99) -
@@ -179,6 +179,11 @@ function ProofRevision({
         )
         .slice(0, 3)
     : [];
+  const overviewCounts: { label: string; value: number; target: Section }[] = [
+    { label: "Line items", value: scope ? items.length : detail.totals?.lines ?? items.length, target: "Items" },
+    { label: "Reported events", value: scope ? events.length : detail.totals?.events ?? events.length, target: "Journey" },
+    { label: clipped.length ? "Visible source records" : "Source records", value: records.length, target: "Evidence" },
+  ];
   const matches = query.trim()
     ? {
         items: items.filter((i) => searchMatch(query, i.label, i.id, i.unit, text(i.row, "sku"))),
@@ -379,12 +384,12 @@ function ProofRevision({
                   </p>
                 </div>
               </div>
-              {first && cards.length ? (
+              {comparedItem && cards.length ? (
                 <div className="pf-quantities">
                   {cards.map(([k, label]) => {
-                    const q = quantity(model, first, k, scope);
+                    const q = quantity(model, comparedItem, k, scope);
                     return (
-                      <button key={k} onClick={() => claim(first, k)}>
+                      <button key={k} onClick={() => claim(comparedItem, k)}>
                         <small>{label}</small>
                         <strong>
                           {q.text} {q.unit}
@@ -404,10 +409,15 @@ function ProofRevision({
                   })}
                 </div>
               ) : (
-                <p>
-                  {count(items.length, "item")} · {count(events.length, "reported event")} ·{" "}
-                  {count(records.length, "source record")}
-                </p>
+                <div className="pf-quantities" aria-label={scopeTitle + " overview counts"}>
+                  {overviewCounts.map(({ label, value, target }) => (
+                    <button key={target} onClick={() => chooseTab(target)}>
+                      <small>{label}</small>
+                      <strong>{value}</strong>
+                      <span>View {target.toLowerCase()}　›</span>
+                    </button>
+                  ))}
+                </div>
               )}
               <button
                 className="pf-link"

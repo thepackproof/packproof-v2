@@ -26,7 +26,7 @@ const scenes = [
   {name:'activate',step:'activate',heading:'Connect your records.',contains:'Sales orders'},
   {name:'empty-source',step:'order',heading:'No order lists in this folder yet.',contains:'No records have arrived yet.'},
   {name:'ambiguous-source',step:'order',heading:'Check your records folder.',contains:'Which column identifies this order?'},
-  {name:'overview',heading:home,contains:summary.customerName},
+  {name:'overview',heading:home,contains:summary.orderReference},
   {name:'orders',nav:'Orders',heading:'Orders',contains:summary.orderReference},
   {name:'connections',nav:'Connections',heading:'Your connections',contains:'Carrier labels'},
   {name:'healthy-source',nav:'Connections',action:'detail',heading:'Sales orders',contains:sources[0].folder},
@@ -78,8 +78,13 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         if(scene.name==='ambiguous-source')localSources[0].recognition={state:'ambiguous',message:'Check the order reference.',question:'Which column identifies this order?',profileVersion:'fixture-v1',suggestedOrderColumn:'Order',sample:{Order:summary.orderReference}};
         if(scene.action==='repair'||scene.action==='restore')Object.assign(localSources[3],{state:'needs_attention',issue:'ACCESS_DENIED',recognition:{state:'unavailable',message:'This folder is currently unavailable.'}});
         const pending=scene.name==='pending-output';
-        publish({...state,workspace:{step:scene.step||'overview',phase:scene.step?'draft':'active',sources:localSources,orders:[summary],totalOrders:1,updatedToday:1,
-          canReadOrders:scene.name!=='disconnected',outputState:'ready',outputFolder:folder},proofOutput:{folder,pending:pending?1:0,state:pending?'pending':'ready'}});
+        const canReadOrders=!scene.step&&scene.name!=='disconnected';
+        if(!canReadOrders)for(const source of localSources)source.state='pending';
+        publish({...state,capabilities:{...state.capabilities,orderWorkspace:true},
+          workspace:{step:scene.step||'overview',phase:scene.step?'draft':'active',sources:localSources,
+            orders:canReadOrders?[summary]:[],totalOrders:canReadOrders?1:null,updatedToday:canReadOrders?1:null,
+            canReadOrders,viewKey:canReadOrders?'a'.repeat(64):null,outputState:'ready',outputFolder:folder},
+          proofOutput:{folder,pending:pending?1:0,state:pending?'pending':'ready'}});
         await page.loadURL(appUrl);
         await waitFor(page,`matchMedia('(prefers-color-scheme: ${theme})').matches && matchMedia('(prefers-reduced-motion: reduce)').matches`);
         if(scene.nav){
@@ -99,6 +104,11 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         if(scene.action==='proof')await press(visibleButton(summary.orderReference));
         await heading(scene.heading);
         if(scene.contains)await waitFor(page,`document.body.innerText.includes(${JSON.stringify(scene.contains)})`);
+        if(scene.name==='overview'||scene.name==='orders'){
+          const row=visibleButton(summary.orderReference);
+          await waitFor(page,`(${row})?.innerText.includes(${JSON.stringify(summary.orderReference)})`);
+          await waitFor(page,`(${row})?.innerText.includes(${JSON.stringify(summary.customerName)})`);
+        }
         if(scene.action==='restore')assert.ok(inspected,'Restore must inspect the affected source before reporting success');
         if(scene.name==='disconnected')assert.equal(await page.executeJavaScript(`document.body.innerText.includes(${JSON.stringify(summary.orderReference)})`),false);
         await page.executeJavaScript('document.fonts.ready.then(()=>true)');
