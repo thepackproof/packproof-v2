@@ -260,3 +260,19 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^packages/evidence-in-motion/tokens\.generated\.ts$''']
 regexes = ['''^\n?export const eimTokenDigest = "a4ea0bdb72812779f94a7905a48b45c8e17cb1120c98d9b41803c1a1bf2fa93b" as const;\r?$''']
+
+# Reviewed redacted CI artifact 14669627564 (November 20, 2026): all four
+# findings are this exact public Figma design FILE identifier, not an API key.
+# Matches occurred in the main-branch UX handoff and the branch's pinned design
+# contract / contract assertion. This does not allow other tokens, paths, or rules.
+[[allowlists]]
+description = "Founder-approved public PackProof Connect Figma file identifier; non-authenticating design reference."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^docs/APPROVED_WINDOWS_UX_AUTHORITY\\.md$''',
+  '''^connect-windows/design/windows-ux-contract\\.json$''',
+  '''^connect-windows/scripts/verify-windows-ux-contract\\.cjs$''',
+]
+regexes = ['''^PZ8dfCcXe2D8SMtmF497v3$''']
