@@ -227,6 +227,16 @@ jobs:
       - run: npm run publish:native
       - run: npm exec --offline -- electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never
       - run: npm run verify:artifacts
+      - name: Verify actual unified host renderer, Logistics entry and access recovery at Windows scales
+        timeout-minutes: 5
+        run: node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-windows-ux-evidence-${{ github.sha }}
+          path: connect-windows/build/unified-ux-screens/**
+          retention-days: 30
+          if-no-files-found: ignore
       - name: Launch and restart the packaged Commerce host with Windows protected storage
         run: node ../desktop/scripts/native-launch-smoke.cjs
       - name: Qualify the unified package's installed LocalService bridge and collection identity
