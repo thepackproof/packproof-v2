@@ -10,27 +10,33 @@ const profile=join(process.env.LOCALAPPDATA,'PackProof Dev');
 app.setName('PackProof Dev');
 app.setPath('userData',profile);
 const {SecureStore,EvidenceEngine,EvidenceStore}=require(bundle);
+const phase=stage=>fs.writeFile(join(root,'commerce-'+mode+'-progress.json'),JSON.stringify({stage}));
 async function run() {
   // The installed app must already have made its own DPAPI identity. This fixture
   // may open it but must never synthesize one in its place.
+  await phase('opening-protected-identity');
   await fs.access(join(profile,'Credentials','installation.vault'));
   const installation=await new SecureStore(join(profile,'Credentials')).installation();
   const account='upgrade-test-account';
   const directory=join(profile,'EvidenceQueue');
   const engine=new EvidenceEngine({rootDir:directory,encryptionKey:installation.key,automaticProcessing:false,
     api:{authorizeCapture:async()=>({id:'isolated-session',maxRecordingBytes:4096,maxRecordingSeconds:10})}});
+  await phase('opening-account-queue');
   await engine.initialize();
   await engine.setAccount(account);
   const fixture=join(root,'commerce-queue.json');
   if(mode==='seed') {
     if(engine.list().length) throw Error('The historical Commerce queue must start empty.');
     const bytes=randomBytes(256);
+    await phase('creating-staged-recording');
     const job=await engine.beginCapture({proofId:'proof_upgrade',label:'Upgrade fixture',camera:'Synthetic capture',mimeType:'video/webm',
       appVersion:'upgrade-qualified',installationId:installation.id});
+    await phase('writing-encrypted-original');
     await engine.appendChunk(job.id,0,bytes);
     await engine.stageCapture(job.id,{attestation:false,recordedDurationMs:1000});
     await fs.writeFile(fixture,JSON.stringify({id:job.id,installationId:installation.id,hash:createHash('sha256').update(bytes).digest('hex')}));
   } else {
+    await phase('opening-pending-original');
     const expected=JSON.parse(await fs.readFile(fixture,'utf8'));
     const job=engine.list().find(item=>item.id===expected.id);
     const original=await new EvidenceStore(directory,installation.key).readChunk(account,expected.id,0);
