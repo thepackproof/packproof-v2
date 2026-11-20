@@ -81,7 +81,8 @@ async function run() {
   await js("window.packproof.auth.signIn({email:'commerce-test@example.invalid',password:'isolated-synthetic-login'})");
   // Unified builds intentionally launch the approved Logistics workspace first.
   // Commerce acceptance must explicitly enter Commerce, not depend on an old default.
-  await button('^Open Commerce workspace
+  await button('^Open Commerce workspace$');
+  await until('signed-in Commerce home',()=>js("!!document.querySelector('.app-layout .sidebar nav')"));
   openProof();
   await button('^Record packing$');
   await button('^Start recording|^Record packing$');
