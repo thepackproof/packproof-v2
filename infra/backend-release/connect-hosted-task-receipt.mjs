@@ -17,9 +17,11 @@ export function collectTaskReceipt(taskArn,read=aws) {
     task.lastStatus==='STOPPED'&&task.containers?.length&&task.containers.every(c=>c.exitCode===0)&&!task.overrides?.taskRoleArn&&
     !task.overrides?.executionRoleArn&&(task.overrides?.containerOverrides??[]).every(c=>Object.keys(c).length===1&&c.name),'SUCCESSFUL_TASK_REQUIRED');
   const registered=read('ecs','describe-task-definition',['--task-definition',task.taskDefinitionArn]).taskDefinition;
-  const family=/^packproof-connect-(owner|probe)-([a-f0-9]{12})-(inspect|rehearse|apply|(?:previous-)?(?:api|worker))$/.exec(registered?.family);
+  const family=/^packproof-(connect-owner|connect-probe|logistics-owner)-([a-f0-9]{12})-(inspect|rehearse|apply|(?:previous-)?(?:api|worker))$/.exec(registered?.family);
   check(registered?.taskDefinitionArn===task.taskDefinitionArn&&family,'RELEASE_FAMILY_REQUIRED');
-  const owner=family[1]==='owner',label=family[3],kind=label.replace(/^previous-/,'');
+  const owner=family[1].endsWith('-owner'),label=family[3],kind=label.replace(/^previous-/,'');
+  check(owner?['inspect','rehearse','apply'].includes(label):['api','worker','previous-api','previous-worker'].includes(label),'MODE');
+  const receiptSchema=family[1]==='logistics-owner'?'packproof.hosted-logistics-owner-receipt/v1':'packproof.hosted-collector-owner-receipt/v1';
   const mains=registered.containerDefinitions.filter(c=>owner?c.name==='owner':c.environment?.some(e=>e.name==='PACKPROOF_PROCESS_ROLE'&&e.value===kind));
   check(mains.length===1&&registered.containerDefinitions.length===task.containers.length&&task.containers.every(c=>registered.containerDefinitions.some(
     d=>d.name===c.name&&d.image===target.repository+'@'+c.imageDigest)),'DEFINITION_IMAGE');
@@ -29,7 +31,7 @@ export function collectTaskReceipt(taskArn,read=aws) {
   const page=read('logs','get-log-events',['--log-group-name',options['awslogs-group'],'--log-stream-name',stream,'--start-from-head','--limit','1000','--no-paginate']);
   const records=(page.events??[]).flatMap(event=>{
     try{return [JSON.parse(event.message)];}catch{return [];}
-  }).filter(r=>owner?(r?.schema==='packproof.hosted-collector-owner-receipt/v1'&&r.actualTask===taskArn&&r.mode===label):
+  }).filter(r=>owner?(r?.schema===receiptSchema&&r.actualTask===taskArn&&r.mode===label):
     label.startsWith('previous-')?(r?.event==='shipment_rollback_reader'&&r.taskArn===taskArn&&r.kind===kind):
     (r?.schema?.startsWith('packproof.reconstruction-runtime-preflight/')&&r.taskIdentity?.taskArn===taskArn&&r.kind===kind));
   check(records.length===1,'ONE_COMPLETED_REPORT_REQUIRED');

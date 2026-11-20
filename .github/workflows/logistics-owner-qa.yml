@@ -1,0 +1,18 @@
+name: Logistics owner task requests
+on:
+  push:
+    branches: [qa/logistics-129-requests]
+permissions:
+  contents: read
+jobs:
+  requests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test infra/backend-release/connect-hosted-owner-task.test.mjs infra/backend-release/connect-hosted-task-receipt.test.mjs
