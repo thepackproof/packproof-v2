@@ -13,7 +13,7 @@ on:
       unified_windows:
         description: Build the qualified Commerce and Logistics workstation together
         type: boolean
-        default: false
+        default: true
       signed_run_id:
         description: For publication, the successful signed build run ID
       installer_sha256:
@@ -126,6 +126,17 @@ jobs:
       - run: npm run publish:native
       - run: npm run package:win
       - run: npm run verify:artifacts
+      - name: Verify approved unified Logistics and Commerce packaged UI/IPC at exact Windows scaling
+        if: inputs.unified_windows
+        timeout-minutes: 8
+        run: node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+      - uses: actions/upload-artifact@v4
+        if: inputs.unified_windows && always()
+        with:
+          name: signed-unified-windows-ux-${{ inputs.channel }}-${{ github.sha }}
+          path: connect-windows/build/unified-ux-screens/**
+          retention-days: 90
+          if-no-files-found: error
       - name: Verify screens from this signed packaged application
         timeout-minutes: 8
         run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs --packaged-workspace
