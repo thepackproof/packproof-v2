@@ -201,6 +201,14 @@ jobs:
           dotnet-version: '10.0.403'
       - run: npm ci --no-audit --no-fund
       - run: npm ci --prefix ../desktop --no-audit --no-fund
+      - name: Check synthetic Windows Electron fixture syntax before expensive runtime tests
+        run: |
+          node --check ../desktop/scripts/commerce-windows-journey.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --check ../desktop/scripts/check-unified-entry.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --check scripts/check-renderer-layout.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: npm run build
       - name: Install the backend video validator for the Windows camera journey
         run: |
