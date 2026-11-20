@@ -129,7 +129,7 @@ function acceptableIngress(group) {
     !p.IpRanges?.length&&!p.Ipv6Ranges?.length&&!p.PrefixListIds?.length&&peers?.length===1&&
     peers[0].GroupId==='sg-0803f8500e439f39b'&&peers[0].UserId===account;
 }
-function verifyObservation(input, now) {
+function verifyObservation(input, now, profile) {
   const {snapshot:s,review:r,mode}=input, launch=r.ownerLaunch;
   const age=now.getTime()-Date.parse(s?.observedAt);
   check(age>=0&&age<=300000&&s.account===account&&s.region===region,'FRESH_TARGET_REQUIRED');
@@ -151,7 +151,8 @@ function verifyObservation(input, now) {
       (iam.Arn===existingRole||o.taskDefinition.executionRoleArn!==iam.Arn),'OWNER_AS_APP_ROLE');
     const expectedRuntime=mode==='inspect'?launch[kind]:{image:r.bridgeImage,source:r.source};
     check(allowedImage(expectedRuntime?.image)&&/^[0-9a-f]{40}$/.test(expectedRuntime?.source),'RUNTIME_IDENTITY_PINS');
-    verifyService(o,kind,expectedRuntime,mode!=='inspect');
+    verifyService(o,kind,expectedRuntime,mode!=='inspect' && !profile.preserveLegacyWorkspace);
+    if (mode!=='inspect') profile.checkBridge?.(o,kind);
   }
   const vpc=s.database.DBSubnetGroup?.VpcId, net=launch.network;
   check(/^vpc-[0-9a-f]+$/.test(vpc)&&['DISABLED','ENABLED'].includes(net?.assignPublicIp)&&net.securityGroups?.length===1&&
@@ -176,25 +177,34 @@ function verifyObservation(input, now) {
   }
 }
 
-export function ownerRegistration(input, now=new Date()) {
-  verifyObservation(input,now);
-  if(input.mode==='apply')verifyRehearsal(input,now);
-  return expectedRegistration(input,now);
+const collectorOwner = Object.freeze({
+  familyPrefix:'packproof-connect-owner-', command:'/release/connect-hosted-migration.mjs',
+  receipt:'packproof.hosted-collector-owner-receipt/v1', validate:validateOwnerReview,
+});
+
+// The caller selects a code-owned release profile. No request field determines the executable.
+export function ownerRegistration(input, now=new Date(), profile=collectorOwner) {
+  verifyObservation(input,now,profile);
+  if (profile.requireInspection && input.mode!=='inspect') {
+    check(input.inspection && verifyOwnerInspection(input.inspection,input.review,now,profile)===input.review.expectedLedger,'INSPECTED_LEDGER_REQUIRED');
+  }
+  if(input.mode==='apply')verifyRehearsal(input,now,profile);
+  return expectedRegistration(input,now,profile);
 }
 
-function expectedRegistration(input, now) {
+function expectedRegistration(input, now, profile) {
   const {review:r,mode}=input, binding=reconstructionDigest(r), rehearsal=input.rehearsal?.report;
   const values={NODE_ENV:'production',PACKPROOF_RELEASE_SHA:r.source,PACKPROOF_RELEASE_IMAGE:r.candidateImage,
     PACKPROOF_ENVIRONMENT:'production',PACKPROOF_MIGRATE_ON_START:'false',PACKPROOF_ORDER_WORKSPACE_ENABLED:'false',
     PACKPROOF_DB_CA_FILE:'/app/backend/certs/rds-us-east-1-bundle.pem',PACKPROOF_HOSTED_MIGRATION_REVIEW_JSON:JSON.stringify(r),
     PACKPROOF_HOSTED_MIGRATION_REVIEW_SHA256:binding};
   if(mode==='apply')values.PACKPROOF_HOSTED_MIGRATION_REHEARSAL_JSON=JSON.stringify(rehearsal);
-  validateOwnerReview(r,binding,mode,values,now);
-  const family='packproof-connect-owner-'+r.source.slice(0,12)+'-'+mode;
+  profile.validate(r,binding,mode,values,now);
+  const family=profile.familyPrefix+r.source.slice(0,12)+'-'+mode;
   return {family,networkMode:'awsvpc',requiresCompatibilities:['FARGATE'],cpu:'512',memory:'1024',
     executionRoleArn:r.ownerLaunch.executionRoleArn,runtimePlatform:{cpuArchitecture:'X86_64',operatingSystemFamily:'LINUX'},
     containerDefinitions:[{name:'owner',image:r.candidateImage,essential:true,readonlyRootFilesystem:true,user:'1000:1000',
-      workingDirectory:'/app/backend',entryPoint:['node'],command:['/release/connect-hosted-migration.mjs',mode],
+      workingDirectory:'/app/backend',entryPoint:['node'],command:[profile.command,mode],
       environment:Object.entries(values).map(([name,value])=>({name,value})),
       secrets:[{name:'PACKPROOF_DB_PASSWORD',valueFrom:r.ownerLaunch.ownerSecretArn+':password::'+r.ownerLaunch.secretVersion}],
       logConfiguration:{logDriver:'awslogs',options:{'awslogs-region':region,'awslogs-group':logGroup,'awslogs-stream-prefix':stream,mode:'blocking'}}}]};
@@ -221,13 +231,13 @@ function verifyRegistration(td, expected) {
   return td.taskDefinitionArn;
 }
 
-function verifyRehearsal(input, now) {
+function verifyRehearsal(input, now, profile) {
   const {review,rehearsal:q}=input;
-  const expected=ownerRegistration({...input,mode:'rehearse',rehearsal:undefined},now);
+  const expected=ownerRegistration({...input,mode:'rehearse',rehearsal:undefined},now,profile);
   verifyCompletedTask(q,expected,review.candidateImage);
 }
 
-function verifyCompletedTask(q,expected,image) {
+export function verifyCompletedTask(q,expected,image) {
   const arn=verifyRegistration(q?.taskDefinition??q?.registered?.taskDefinition??q?.registered,expected), task=q.task, report=q.report;
   check(taskId(task?.taskArn)&&task.taskArn===report.actualTask&&task.clusterArn===cluster&&task.taskDefinitionArn===arn&&
     task.lastStatus==='STOPPED'&&task.containers?.length===1&&task.containers[0].name==='owner'&&
@@ -236,21 +246,25 @@ function verifyCompletedTask(q,expected,image) {
     (task.overrides?.containerOverrides??[]).every(c=>Object.keys(c).length===1&&c.name==='owner'),'REHEARSAL_TASK');
 }
 
-export function verifyOwnerInspection(inspection,review,now=new Date()) {
-  const {review:prior,report}=inspection;
+export function verifyOwnerInspection(inspection,review,now=new Date(),profile=collectorOwner) {
+  const {report}=inspection;
+  const registered=inspection.registered?.taskDefinition??inspection.registered??inspection.taskDefinition;
+  const value=registered?.containerDefinitions?.[0]?.environment?.find(item=>item.name==='PACKPROOF_HOSTED_MIGRATION_REVIEW_JSON')?.value;
+  const prior=inspection.review??(value && JSON.parse(value));
   const completed=Date.parse(report?.completedAt);
-  check(report?.schema==='packproof.hosted-collector-owner-receipt/v1'&&report.mode==='inspect'&&
+  check(report?.schema===profile.receipt&&report.mode==='inspect'&&prior?.schema===review.schema&&
+    (!profile.requireInspection || (prior.bridgeImage===review.bridgeImage && prior.inventorySha256===review.inventorySha256))&&
     prior?.source===review.source&&report.source===review.source&&prior.candidateImage===review.candidateImage&&
     report.image===review.candidateImage&&report.targetHost===review.target.host&&prior.ownerRole===review.ownerRole&&
     report.reviewSha256===reconstructionDigest(prior)&&report.rolledBack===false&&
     report.initialLedger===report.finalLedger&&same(report.applied,[])&&report.grantStatementCount===0&&
     completed<=now.getTime()&&completed>=now.getTime()-2*3600000,'INSPECTION_RECEIPT');
-  verifyCompletedTask(inspection,expectedRegistration({mode:'inspect',review:prior},new Date(completed)),review.candidateImage);
+  verifyCompletedTask(inspection,expectedRegistration({mode:'inspect',review:prior},new Date(completed),profile),review.candidateImage);
   return report.initialLedger;
 }
 
-export function ownerRunRequest(input, now=new Date()) {
-  const expected=ownerRegistration(input,now), td=verifyRegistration(input.registered?.taskDefinition??input.registered,expected);
+export function ownerRunRequest(input, now=new Date(), profile=collectorOwner) {
+  const expected=ownerRegistration(input,now,profile), td=verifyRegistration(input.registered?.taskDefinition??input.registered,expected);
   const {review:r,mode}=input;
   const retry=input.retryOf;
   if(retry)check(taskId(retry.taskArn)&&retry.clusterArn===cluster&&retry.taskDefinitionArn===td&&
