@@ -34,6 +34,7 @@
 .logistics-entry-pill{display:inline-flex;background:#e7f8f2;color:#087f6a;padding:8px 13px;border-radius:999px;font-size:11px;letter-spacing:.06em;font-weight:750}
 .logistics-entry-explainer h2{font-size:clamp(24px,2.2vw,32px);line-height:1.2;letter-spacing:-.025em;color:var(--lg-ink);margin:24px 0 10px}
 .logistics-entry-explainer>p{color:var(--lg-muted);font-size:15px;line-height:1.6;max-width:410px;margin:0 0 26px}
+.logistics-entry-status{display:inline-flex;padding:9px 14px;border-radius:999px;background:#e7f8f2;color:#087f6a;font-weight:700;font-size:13px;margin:1px 0 18px}
 .logistics-entry-steps{list-style:none;padding:0;margin:0;display:grid;gap:0}
 .logistics-entry-steps li{display:flex;align-items:center;gap:18px;min-height:83px;position:relative}
 .logistics-entry-steps li:not(:last-child):before{content:'';position:absolute;left:24px;top:61px;width:2px;height:26px;background:var(--lg-border)}
