@@ -59,7 +59,7 @@ async function measure(page,w,h){
 }
 async function shoot(page,name,w,h,scale=1){
  await page.executeJavaScript('document.fonts.ready.then(()=>true)');
- const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:w,height:h,scale}});
+ const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:w,height:h,scale:1}});
  const png=Buffer.from(shot.data,'base64');
  assert.ok(png.length>24,'Empty screenshot');
  const actual={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
