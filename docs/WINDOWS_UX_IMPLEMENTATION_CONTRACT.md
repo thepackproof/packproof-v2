@@ -21,6 +21,10 @@
 
 The detailed functional rules and acceptance examples are in Figma page `79:8804`: discovery `81:8900`, familiar-order validation `81:8949`, evolving Proof `81:8998`, operator workflow `81:9047`, and breakdown `89:9236`.
 
+## Approved UX acceptance charter
+
+The Figma design's **UX acceptance charter** (node `6:116`) is binding, not commentary. Implement and review these eight rules: ask one meaningful thing at a time; explain each user choice; confirm actual success rather than a selected folder; make errors recoverable; return after authorization to the exact task; reveal a familiar, genuinely reconstructed order before declaring setup complete; let automation continue without constant supervision; keep advanced controls optional. A new user must be able to connect records, verify an order, and know what happens next. A beautiful unactionable prototype fails this charter.
+
 ## Runtime boundaries and nonnegotiable invariants
 
 - **A single installed application may host multiple workflows, but not competing versions of the same workflow.** Connect's `experience/` tree owns Logistics. The desktop `App` owns Commerce. The unified entry owns selection and does not reproduce either application's internal screens.
