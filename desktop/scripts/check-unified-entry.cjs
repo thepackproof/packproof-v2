@@ -148,6 +148,6 @@ async function main(){
    calls
   },null,2));
   console.log('Unified Windows entry renderer layout and functional IPC routing verified (synthetic state).');
- }finally{if(page.debugger.isAttached())await page.debugger.detach().catch(()=>{});if(!win.isDestroyed())win.destroy();}
+ }finally{if(page.debugger.isAttached()){try{page.debugger.detach();}catch{/* Renderer may already be gone. */}}if(!win.isDestroyed())win.destroy();}
 }
 main().then(()=>app.exit(0),error=>{console.error(error);app.exit(1)});
