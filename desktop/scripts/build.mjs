@@ -1,6 +1,6 @@
 import {build as bundle} from 'esbuild';
 import {build as vite} from 'vite';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,copyFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -20,3 +20,7 @@ if(research && ![config.apiBaseUrl,config.webBaseUrl].every(value=>['localhost',
 await writeFile('dist/main/runtime-config.json',JSON.stringify(config,null,2));
 for(const name of ['index','preload'])await bundle({entryPoints:[`src/main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',define:{__PACKPROOF_UNIFIED__:String(unified)},external:unified?['electron','electron-updater']:['electron','electron-updater','@sentry/node'],sourcemap:false});
 await vite({configFile:path.join(root,'vite.config.ts')});
+// Use the approved official logo already versioned in the Connect web asset library.
+// Copy only into generated distribution files; do not dirty the checkout.
+await mkdir('dist/renderer/brand/connect',{recursive:true});
+await copyFile('../web/public/brand/connect/packproof.png','dist/renderer/brand/connect/packproof.png');
