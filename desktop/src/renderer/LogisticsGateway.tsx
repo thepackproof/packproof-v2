@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { PackProofDesktop } from '../shared/contracts';
-import { Brand } from './components';
 import './logistics-gateway.css';
 
 type Bridge = NonNullable<PackProofDesktop['workspace']>;
@@ -48,7 +47,7 @@ export function LogisticsGateway({ bridge, onCommerce }: { bridge: Bridge; onCom
 
   return <main className="logistics-entry" data-design-file="PZ8dfCcXe2D8SMtmF497v3" data-design-node="2:9">
     <header className="logistics-entry-header">
-      <Brand />
+      <div className="logistics-entry-brand" aria-label="PackProof Connect"><img src="/brand/connect/packproof.png" width={40} height={46} alt=""/><strong>PackProof</strong></div>
       <span className="logistics-entry-product">CONNECT</span>
       <button className="logistics-entry-secondary" onClick={onCommerce}>Open Commerce workspace</button>
     </header>
