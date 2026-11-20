@@ -39,6 +39,8 @@ def archive(source,destination,profile,verify=False):
         if b'connect-hosted-migration.mjs' in subprocess.check_output(['git','show',source+':backend/Dockerfile']):
             probes+=['backend/Dockerfile.collector-hosted-bridge','infra/backend-release/collector-workspace-forward-read.mjs','infra/backend-release/reconstruction-v11-hosted-runtime-preflight.mjs','infra/backend-release/connect-hosted-migration.mjs','infra/backend-release/order-workspace-restored-rehearsal.mjs']
         probes+=['infra/backend-release/reconstruction-v11-release-review.mjs','infra/backend-release/reconstruction-v11-runtime-preflight.mjs','infra/backend-release/collector-version-pair.mjs']
+    if logistics:
+        probes+=['infra/backend-release/logistics-hosted-migration.mjs']
     if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
