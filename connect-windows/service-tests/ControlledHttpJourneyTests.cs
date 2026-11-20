@@ -27,9 +27,16 @@ public sealed class ControlledHttpJourneyTests
         string? labelSource=null, deliverySource=null;
         foreach (var role in new[] {"order","packing","shipping","delivery"})
         {
-            var folder=Path.Combine(root,role);
+            // A runner's TEMP may contain an 8.3 account name. The service stores
+            // the normalized absolute folder and returns an opaque source ID.
+            var folder=Path.GetFullPath(Path.Combine(root,role));
             var status=Json.Element(await setup.Command("addWorkspaceSource", Json.Element(new {folder,role}),ct));
-            var source=status.GetProperty("workspace").GetProperty("sources").EnumerateArray().Single(x=>x.GetProperty("folder").GetString()==folder);
+            var sources=status.GetProperty("workspace").GetProperty("sources").EnumerateArray()
+                .Where(x=>x.GetProperty("roles").EnumerateArray().Any(r=>r.GetString()==role)).ToArray();
+            Assert.True(sources.Length==1,$"Expected one source for the {role} fixture, found {sources.Length}.");
+            var source=sources[0];
+            Assert.True(string.Equals(source.GetProperty("folder").GetString(),folder,StringComparison.OrdinalIgnoreCase),
+                $"The {role} source is outside its fixture directory.");
             var id=source.GetProperty("id").GetString();
             await setup.Command("confirmWorkspaceOrderMap",Json.Element(new {sourceId=id,
                 expectedGeneration=source.GetProperty("generation").GetInt32(),profileVersion=source.GetProperty("recognition").GetProperty("profileVersion").GetString()}),ct);

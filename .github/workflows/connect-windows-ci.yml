@@ -202,6 +202,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm ci --prefix ../desktop --no-audit --no-fund
       - run: npm run build
+      - name: Install the backend video validator for the Windows camera journey
+        run: |
+          if (-not (Get-Command ffprobe.exe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffprobe -version
       - name: Record a synthetic camera stream and verify the finalized Commerce Proof, original and share
         working-directory: backend
         timeout-minutes: 5

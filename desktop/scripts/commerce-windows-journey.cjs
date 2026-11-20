@@ -97,7 +97,13 @@ async function run() {
   Object.assign(state,{proofId:proof.proofId,evidenceId:evidence.evidenceId,sha256:evidence.sha256,byteSize:evidence.byteSize});
   assert.ok(state.byteSize>0 && /^[a-f0-9]{64}$/.test(state.sha256));
   openProof();
-  await until('recording history',()=>js("document.body.innerText.includes('Recording history') || Array.from(document.querySelectorAll('details summary')).some(s=>s.textContent.includes('Recording history'))"));
+  await until('recording history',()=>js(`(()=>{
+    const summary=Array.from(document.querySelectorAll('details summary')).find(s=>s.textContent.includes('Recording history'));
+    if(!summary)return false;
+    const history=summary.parentElement;
+    if(!history.open)summary.click();
+    return Array.from(history.querySelectorAll('article')).some(card=>card.getClientRects().length && card.innerText.includes('Committed'));
+  })()`));
   state.renderedHistory=true;
   await button('^Share$|^Share (this )?Proof$');
   await button('^Review original$');
