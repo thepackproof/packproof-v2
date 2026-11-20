@@ -204,3 +204,49 @@ test('staged publication consumes both content-addressed and reused source tags 
     const changed=structuredClone(i);mutate(changed);assert.throws(()=>createOwnerReview(changed,now));
   }
 });
+
+import {createLogisticsOwnerReview,registerLogisticsOwner,runLogisticsOwner,verifyLogisticsApplication} from './logistics-hosted-owner-requests.mjs';
+
+test('129 owner request ties the committed upgrade to independent ECS inspector, rehearsal, writer and post-apply inspector',()=>{
+  const i=reviewInput();
+  const inventory='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc';
+  const candidateTag='logistics-v1-'+source, fallbackTag='logistics-compat-'+source;
+  const catalog=(tag,im)=>({imageDetails:[{registryId:account,repositoryName:'packproof-v2-staging-api',imageTags:[tag],imageDigest:im.split('@')[1]}]});
+  i.release={images:{schema:'packproof.logistics-images/v1',source,predecessorImage:repository+'@sha256:'+'3'.repeat(64),
+    candidateTag,fallbackTag,inventorySha256:inventory,previousInventorySha256:collectorInventory},
+    candidate:catalog(candidateTag,image),fallback:catalog(fallbackTag,bridge),ci:{repository:{full_name:'thepackproof/packproof-v2'},
+      name:'CI',path:'.github/workflows/ci.yml',status:'completed',conclusion:'success',head_sha:source,head_branch:'main',event:'push'}};
+  const initial=createLogisticsOwnerReview(i,now);
+  function task(mode,review,ledger,taskDigit,extra={},other={}) {
+    const registered=asRegistered(registerLogisticsOwner({...i,mode,review,...other},now));
+    const arn=taskArn(taskDigit);
+    return {registered,task:{taskArn:arn,clusterArn:cluster,taskDefinitionArn:registered.taskDefinitionArn,lastStatus:'STOPPED',
+      containers:[{name:'owner',imageDigest:image.split('@')[1],exitCode:0}]},
+      report:{schema:'packproof.hosted-logistics-owner-receipt/v1',mode,source,actualTask:arn,
+        image,reviewSha256:reconstructionDigest(review),targetHost:target.host,initialLedger:ledger,finalLedger:ledger,
+        applied:[],grantStatementCount:0,rolledBack:mode==='rehearse',completedAt:now.toISOString(),...extra}};
+  }
+  i.inspection=task('inspect',initial,collectorInventory,'1');
+  const review=createLogisticsOwnerReview(i,now);
+  assert.equal(review.expectedLedger,collectorInventory);
+  const rehearsal=task('rehearse',review,collectorInventory,'2',{finalLedger:inventory});
+  const registration=registerLogisticsOwner({...i,review,mode:'apply',rehearsal},now);
+  assert.deepEqual(registration.containerDefinitions[0].command,['/release/logistics-hosted-migration.mjs','apply']);
+  assert.ok(registration.family.startsWith('packproof-logistics-owner-'));
+  assert.equal(runLogisticsOwner({...i,review,mode:'apply',rehearsal,registered:asRegistered(registration)},now).overrides,undefined);
+  const change=['125_order_logistics','126_facility_setup_requests','127_order_revision_packets','128_order_source_health','129_unified_collector_version'];
+  const confirmation=task('apply',review,collectorInventory,'3',{finalLedger:inventory,applied:change},{rehearsal});
+  const postInspection=task('inspect',initial,inventory,'4');
+  const all={...i,review,rehearsal,confirmation,postInspection};
+  assert.deepEqual(verifyLogisticsApplication(all,now).applied,change);
+  for(const mutate of [x=>delete x.inspection,x=>x.rehearsal.task.containers[0].exitCode=1,
+    x=>x.postInspection.report.initialLedger=collectorInventory,x=>x.confirmation.report.applied.pop(),
+    x=>x.snapshot.worker.taskDefinition.containerDefinitions[0].environment.push({name:'PACKPROOF_GUIDED_FACILITIES',value:'*'}),
+    x=>x.postInspection.task.taskArn=x.postInspection.report.actualTask=x.confirmation.task.taskArn]) {
+    const changed=structuredClone(all);mutate(changed);assert.throws(()=>verifyLogisticsApplication(changed,now));
+  }
+  for(const mutate of [x=>x.release.ci.head_branch='feature/candidate',x=>x.release.fallback=x.release.candidate,
+    x=>x.release.images.previousInventorySha256=inventory]) {
+    const changed=structuredClone(i);mutate(changed);assert.throws(()=>createLogisticsOwnerReview(changed,now));
+  }
+});
