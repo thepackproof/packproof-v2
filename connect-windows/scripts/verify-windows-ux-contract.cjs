@@ -52,7 +52,7 @@ if (compiled) {
   const assets = dir => fs.readdirSync(path.join(dir, 'assets')).filter(file => /\.(js|css)$/.test(file)).map(file => fs.readFileSync(path.join(dir, 'assets', file), 'utf8')).join('\n');
   const commerceBundle = assets(commerce);
   const logisticsBundle = assets(logistics);
-  for (const phrase of ['Your orders.', 'One clear story.', 'Set up this facility', 'Open my orders']) {
+  for (const phrase of ['Your orders.', 'One clear story.', 'Connect my records', 'Open my orders', 'ORDER PREVIEW']) {
     assert.ok(commerceBundle.includes(phrase), `Unified Commerce renderer does not include Logistics-first entry: ${phrase}`);
   }
   assert.ok(commerceBundle.includes('.logistics-entry'), 'Missing approved entry layout in unified CSS');
