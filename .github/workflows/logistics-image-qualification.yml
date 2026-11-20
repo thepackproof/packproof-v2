@@ -1,0 +1,83 @@
+name: Logistics schema 129 image qualification
+on:
+  push:
+    branches: [feature/logistics-129-compatibility, release/logistics-129-pilot]
+  pull_request:
+    paths:
+      - 'backend/Dockerfile*'
+      - 'backend/migrations/**'
+      - 'backend/scripts/logistics-forward-guard.mjs'
+      - 'backend/scripts/verify-logistics-images.mjs'
+      - 'infra/backend-release/logistics-*.mjs'
+      - '.github/workflows/logistics-image-qualification.yml'
+permissions:
+  contents: read
+concurrency:
+  group: logistics-image-pair-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Qualify source, tags, input pins and the five forward-compatible receipts
+        run: node --test infra/backend-release/logistics-image-builds.test.mjs
+      - name: Check out the immutable schema-124 CI application
+        if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
+        uses: actions/checkout@v4
+        with:
+          ref: 63843c5616dce4ce5824015f975fd0ac6327012d
+          path: logistics-previous
+          persist-credentials: false
+      - name: Build the previous, fallback and candidate images from exact source archives
+        if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
+        run: |
+          set -euo pipefail
+          make_context() {
+            root="$1"
+            git_source="$2"
+            profile="$3"
+            target="$4"
+            (cd "$root" && python3 infra/backend-release/backend-source-archive.py "$git_source" "$target.zip" "$profile" && python3 infra/backend-release/backend-source-archive.py "$git_source" "$target.zip" "$profile" --verify)
+            mkdir "$target"
+            unzip -q "$target.zip" -d "$target"
+          }
+          make_context logistics-previous 63843c5616dce4ce5824015f975fd0ac6327012d reconstruction-v11 "$RUNNER_TEMP/logistics-base"
+          make_context . "$(git rev-parse HEAD)" logistics-v1 "$RUNNER_TEMP/logistics-source"
+          # The previous application keeps its exact Git sources. The same build recipe supplies its vendored dependencies.
+          docker build -f backend/Dockerfile -t logistics-test-previous "$RUNNER_TEMP/logistics-base"
+          docker build -f backend/Dockerfile -t logistics-test-runtime "$RUNNER_TEMP/logistics-source"
+          docker build --build-arg CANDIDATE_BASE=logistics-test-runtime -f backend/Dockerfile.logistics-candidate -t logistics-test-candidate "$RUNNER_TEMP/logistics-source"
+          docker build --build-arg PREDECESSOR_IMAGE=logistics-test-previous -f backend/Dockerfile.logistics-fallback -t logistics-test-fallback "$RUNNER_TEMP/logistics-source"
+          node backend/scripts/verify-logistics-images.mjs logistics-test-previous logistics-test-candidate logistics-test-fallback
+      - name: Open the same migrated PostgreSQL database with both qualified readers
+        if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
+        run: |
+          set -euo pipefail
+          docker network create logistics-qualification
+          docker run -d --name logistics-pg --network logistics-qualification --network-alias db -e POSTGRES_PASSWORD=synthetic -e POSTGRES_DB=logistics postgres:16-alpine
+          timeout 45 sh -c 'until docker exec logistics-pg pg_isready -U postgres -d logistics; do sleep 1; done'
+          reader() {
+            docker run --rm -i --network logistics-qualification --entrypoint node "$1" --input-type=module - "$2" <<'JS'
+          import {createPgDatabase} from './dist/db/postgres.js';
+          import {assertSchemaCurrent,migrate} from './dist/db/migrate.js';
+          const {db,close}=createPgDatabase('postgres://postgres:synthetic@db:5432/logistics');
+          try {
+            if (process.argv[2]==='apply') await migrate(db);
+            await assertSchemaCurrent(db);
+            const rows=await db.query('SELECT count(*)::integer AS count FROM schema_migrations');
+            console.log(JSON.stringify(rows.rows[0]));
+          } finally {await close();}
+          JS
+          }
+          reader logistics-test-previous apply
+          reader logistics-test-fallback check
+          reader logistics-test-candidate apply
+          reader logistics-test-fallback check
+          reader logistics-test-candidate check

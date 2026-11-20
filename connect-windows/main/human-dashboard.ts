@@ -18,7 +18,7 @@ export function closeHumanDashboard(): void {
   if (previous && !previous.window.isDestroyed()) previous.window.destroy();
 }
 
-export async function openHumanDashboard(webBaseUrl: string, scope: DashboardScope, target: Target = {}, identity?: HumanDashboardIdentity): Promise<void> {
+export async function openHumanDashboard(webBaseUrl: string, scope: DashboardScope, target: Target = {}, identity?: HumanDashboardIdentity, parent?: BrowserWindow): Promise<void> {
   const origin = new URL(webBaseUrl);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
   if (!(origin.protocol === 'https:' || (local && origin.protocol === 'http:')) || origin.username || origin.password)
@@ -44,7 +44,7 @@ export async function openHumanDashboard(webBaseUrl: string, scope: DashboardSco
     const isolated = session.fromPartition('logistics-' + randomUUID(), { cache: false });
     isolated.setUserAgent(isolated.getUserAgent() + ' PackProofLogistics/1');
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-    const window = new BrowserWindow({ title: 'PackProof Logistics', width: 1240, height: 880, show: false,
+    const window = new BrowserWindow({ ...(parent && !parent.isDestroyed() ? {parent,modal:true} : {}), title: 'PackProof Logistics', width: 1240, height: 880, show: false,
       webPreferences: { session: isolated, ...(identity ? {preload: join(__dirname,'dashboard-preload.cjs')} : {}), sandbox: true, contextIsolation: true, nodeIntegration: false, devTools: false, webviewTag: false } });
     if (identity) {
       const handle = randomUUID();

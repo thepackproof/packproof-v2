@@ -2,6 +2,21 @@
 
 Connect 0.7.0 extends the catalogue-backed discovery branch at `63843c5616dce4ce5824015f975fd0ac6327012d`. That revision’s [Windows candidate](https://github.com/thepackproof/packproof-v2/actions/runs/44643697656) passed. The new installer requires its own qualification at the candidate commit. Pull-request builds record the checked-out merge SHA in their provenance.
 
+## Verified 0.7.0 development candidate
+
+The [Windows qualification run](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866) passed all four jobs at PR head `9a225c8a40008fd83b6df0f964e25e271993d998`. The checkout used to build the installer was GitHub's PR merge commit `4c15db6efb2b57105d92d713afec27a72189e6da`.
+
+| Evidence | Observed result |
+| --- | --- |
+| [Download the unified Windows x64 development package](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866/artifacts/14658018561) | Unsigned `PackProof-Connect-development-Setup-0.7.0.exe`. Executable SHA-256 `41014c96b4735bffb0057aa3c8ada9c1449bdf4fb8b106c437c8ebc182389019`. The archive includes the checksum manifest. |
+| [Carton and export journey](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866/artifacts/14658391547) | CTN-02 remained on the same Proof through a delayed dispatch receipt, replay and correction. The web and isolated Windows dashboard saved four revision-pinned packets to disk. Their projections and inclusion manifests matched, and the embedded PDFs matched the originals byte for byte. |
+| [Commerce capture](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866/artifacts/14658805576) | The protected Electron renderer captured a 256,295-byte synthetic camera recording, finalized its Proof, reopened it from visible Commerce history and created one reviewed share. |
+| [Clean install](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866/artifacts/14656934500) | The packaged service ran under LocalService. Two app launches retained the Windows-protected Commerce identity. |
+| [Upgrade](https://github.com/thepackproof/packproof-v2/actions/runs/44793908866/artifacts/14657119525) | The verified 0.6.0 Connect installation and standalone Commerce 1.0.3 preceded the upgrade. The 0.7.0 package retained the enrollment, source approval, destination, identities, pending recording and original bytes. The scoped rollback preserved the independently approved source. |
+| [Database release checks](https://github.com/thepackproof/packproof-v2/actions/runs/44793908848/artifacts/14658351509) | The PostgreSQL 16 migration and privilege rehearsal passed. The source archive records the exact candidate catalogue. |
+
+The clean and upgrade jobs used disposable Windows Server 2025 machines, the exact NSIS payload and the packaged service lifecycle. A signed-channel installer run on a disposable Windows 11 x64 workstation and an authorized facility's historical-order review remain open. The development package points to its configured development services. Guided collection requires the compatible backend and organization, environment and facility controls below.
+
 ## What to verify before enabling a facility
 
 | Milestone and operator | Implemented path and evidence | Remaining field qualification |
@@ -27,11 +42,11 @@ Connect 0.7.0 extends the catalogue-backed discovery branch at `63843c5616dce4ce
 
 The previous Windows candidate for upgrade testing is [the 0.6.0 development artifact](https://github.com/thepackproof/packproof-v2/actions/runs/44643697656/artifacts/14587903702). Its archive SHA-256 is `00279cff2fc00e14fdaba0126a1c9b7c356b93ed41ed982a60f34ea04dea001e`. Use its internal `SHA256SUMS` for the installer bytes. The workstation's downgrade guard compares installed versions. Preserve existing identities, grants, queues and exports when qualifying a 0.6.0 → 0.7.0 upgrade.
 
-In the isolated Windows reference run, `proof_01M7X10QDDKZA2HGW99B2P048M` reached revision 5 with CTN-02 still awaiting evidence, then revision 6 with its receipt. Two identical replays preserved revision 6 and both original PDFs. A distinct correction created revision 7. The receipt occurred at 14:19 Eastern and was first read locally and received by the server at 14:34. Removing and restoring the dispatch source produced a grouped outage while packing continued. The test used the Windows collector, protected staging, a named-pipe HTTP application and isolated embedded PostgreSQL. The separate physical Win11/LocalService field qualification is recorded against the target installer.
+In the isolated Windows reference run, `proof_01M7X10QDDKZA2HGW99B2P048M` reached revision 5 with CTN-02 still awaiting evidence, then revision 6 with its receipt. Two identical replays preserved revision 6 and both original PDFs. A distinct correction created revision 7. The receipt occurred at 14:19 Eastern and was first read locally and received by the server at 14:34. Removing and restoring the dispatch source produced a grouped outage while packing continued. The test used the Windows collector, protected staging, a named-pipe HTTP application and isolated embedded PostgreSQL. Physical Windows 11 qualification remains pending.
 
 The portable HTTP access test cold-copied the persisted database and matching versioned object store to a fresh root, reopened the older pinned Proof unchanged, recovered the exact PDF bytes, and preserved the reviewer's original-access revocation.
 
-An isolated Edge browser rendered the production order view with captured responses from that Windows HTTP run. The CTN-02 lookup matched the expected namespace, revision 7 showed one allocated unit and POD-7791.pdf, and the browser opened revision 5 with its awaiting-evidence state and historical packet. In the separate Commerce fixture, Edge encoded a 1,713-byte VP8 recording. The compiled Commerce main handlers and evidence engine finalized `proof_01M7X1MYKCG9F8YNGFJHPEVTS1`, reopened identical original bytes (SHA-256 `aeb4295eef9004bf3eb21fbae36ef5ba7e599591db1a90417224ee83d52d40d9`), and created one share. The packaged-Electron and physical-camera checks have their own execution receipts.
+An isolated Edge browser rendered the production order view with captured responses from that Windows HTTP run. The CTN-02 lookup matched the expected namespace, revision 7 showed one allocated unit and POD-7791.pdf, and the browser opened revision 5 with its awaiting-evidence state and historical packet. In the separate Commerce fixture, Edge encoded a 1,713-byte VP8 recording. The compiled Commerce main handlers and evidence engine finalized `proof_01M7X1MYKCG9F8YNGFJHPEVTS1`, reopened identical original bytes (SHA-256 `aeb4295eef9004bf3eb21fbae36ef5ba7e599591db1a90417224ee83d52d40d9`), and created one share. The hosted packaged-Electron capture receipt appears above. A physical-camera facility check remains pending.
 
 Run the following commands from the repository root with dependencies installed. The native workflow pins Node 24 and .NET SDK 10.0.403. Set `PACKPROOF_TEST_DATABASE_URL` only to an isolated PostgreSQL 16 instance for the role and schema rehearsal. The Windows HTTP fixture uses its own database and synthetic records.
 
@@ -54,6 +69,12 @@ The `Unified Windows installer / Clean` and `Upgrade` jobs use fresh runners. Th
 Download `packproof-unified-DEVELOPMENT-win32-x64-<SHA>` from a successful candidate run. The executable name is shared with the standalone build, so identify the variant by the artifact name and `unifiedWindows: true` in `build-provenance.json`. Verify the executable against `SHA256SUMS`. A development candidate is unsigned. For a signed candidate, use `Connect signed Windows release` on the reviewed main commit with `operation=build` and `unified_windows=true`. Promotion uses the existing accepted signed run, digest and acceptance receipt.
 
 The PostgreSQL CI artifact `logistics-backend-candidate-<SHA>` contains the exact Git-blob backend archive and source receipt for profile `logistics-v1`. The complete migration catalogue contains 128 files through migration 129. The ordered inventory SHA-256 is `8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc`. Earlier deployment profiles enforce their original catalogues. A hosted migration and compatibility-image rollout for this inventory require their own approved deployment through the release process.
+
+### Preparing the hosted migration and rollback
+
+Use `node infra/backend-release/logistics-image-builds.mjs SOURCE ARCHIVE_SHA S3_VERSION PREDECESSOR_ECR_IMAGE` to generate the image build request and review receipt. Supply the reviewed Git commit, verified source archive digest, its immutable S3 version and the inspected predecessor image digest. Preserve the 124-compatible predecessor and qualify its schema-129 fallback before applying the owner migration.
+
+The owner request tool, `node infra/backend-release/logistics-hosted-owner-requests.mjs review|register|run|verify-apply INPUT OUTPUT`, generates and verifies requests bound to the reviewed immutable images, task definitions and deployment scope. Capture separate receipts for inspection, a rolled-back rehearsal, application and independent post-application inspection. Select the real deployment topology and enable only the facility that approved its coverage. The [PostgreSQL 16 owner rehearsal](https://github.com/thepackproof/packproof-v2/actions/runs/44795282596/job/136493101505) and [ECS request and receipt tests](https://github.com/thepackproof/packproof-v2/actions/runs/44795421593/job/136493583347) cover this path before live deployment.
 
 ## Facility acceptance record
 

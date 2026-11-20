@@ -21,6 +21,9 @@ if (!embedded) {
   app.enableSandbox();
 }
 let win:BrowserWindow|null=null;
+// Hosted Logistics setup belongs to the same unified application window. The
+// standalone Connect installer still owns its own top-level window.
+let parentWindow: (()=>BrowserWindow|null)|null=null;
 const bridge=new ServiceBridge(process.resourcesPath);
 let config:{channel:string;webBaseUrl:string;updateUrl:string;publisher:string};
 async function status():Promise<ConnectStatus>{return rendererSafe(await bridge.request('status')) as ConnectStatus;}
@@ -236,14 +239,16 @@ async function initialize(){
 }
 async function showSetup(){
   if (win && !win.isDestroyed()) { win.show(); win.focus(); return; }
-  win=new BrowserWindow({width:1180,height:820,minWidth:560,minHeight:600,title:'PackProof Connect',show:false,backgroundColor:'#f7f9fc',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
+  const parent=embedded?parentWindow?.()??null:null;
+  win=new BrowserWindow({...(parent?{parent,modal:true}:{}),width:1180,height:820,minWidth:560,minHeight:600,title:'PackProof Connect',show:false,backgroundColor:'#f7f9fc',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.webContents.on('will-attach-webview',event=>event.preventDefault());win.once('ready-to-show',()=>win?.show());win.on('closed',()=>{win=null;});
   await win.loadURL(APP_ORIGIN+'/index.html'+(embedded?'?facilitySetup=1':''));
   if (!embedded) startUpdates(win,bridge,config);
 }
-export async function attachHumanSession(human: ConstructorParameters<typeof HostedSession>[0]) {
+export async function attachHumanSession(human: ConstructorParameters<typeof HostedSession>[0], parent?:()=>BrowserWindow|null) {
+  parentWindow=parent??null;
   await initialize();
-  const current = new HostedSession(human, op => bridge.request(op), config.webBaseUrl);
+  const current = new HostedSession(human, op => bridge.request(op), config.webBaseUrl, parent);
   host = current;
   current.bindAssistant(() => win);
   return {

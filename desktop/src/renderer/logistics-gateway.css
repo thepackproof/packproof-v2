@@ -1,0 +1,50 @@
+/* PackProof Connect: functional Logistics entry.
+   Visual authority: Figma PZ8dfCcXe2D8SMtmF497v3 / 2:9.
+   This scope intentionally does not restyle the separately retained Commerce UI. */
+.logistics-entry{--lg-bg:#f6f8fc;--lg-surface:#fff;--lg-ink:#13243b;--lg-muted:#63758d;--lg-border:#dde5ef;--lg-action:#3265f5;--lg-green:#13a88b;min-height:100vh;background:var(--lg-bg);color:var(--lg-ink);color-scheme:light;font-family:Inter,'Segoe UI',sans-serif}
+.logistics-entry *{box-sizing:border-box}
+.logistics-entry button{font-family:inherit;cursor:pointer;min-height:48px;border-radius:12px;padding:12px 22px;font-size:15px;font-weight:650;display:inline-flex;gap:12px;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
+.logistics-entry button:focus-visible{outline:3px solid var(--lg-action);outline-offset:3px}
+.logistics-entry button:disabled{cursor:not-allowed;opacity:.65}
+.logistics-entry-header{height:76px;border-bottom:1px solid var(--lg-border);background:var(--lg-surface);padding:0 clamp(24px,4vw,64px);display:flex;align-items:center;gap:20px}
+.logistics-entry-brand{display:flex;align-items:center;gap:12px;color:var(--lg-ink);font-size:23px;letter-spacing:-.7px;white-space:nowrap}
+.logistics-entry-brand img{width:40px;height:46px;object-fit:contain;flex:none}
+.logistics-entry-brand strong{font-weight:770}
+.logistics-entry-product{border-left:1px solid var(--lg-border);padding-left:22px;color:#718098;font-size:12px;letter-spacing:.13em;font-weight:700}
+.logistics-entry-header .logistics-entry-secondary{margin-left:auto}
+.logistics-entry-content{max-width:1470px;margin:0 auto;padding:clamp(40px,4.4vw,76px) clamp(28px,5.5vw,94px);display:grid;grid-template-columns:minmax(0,1.22fr) minmax(370px,.96fr);align-items:start;column-gap:clamp(32px,5vw,78px)}
+.logistics-entry-intro{min-width:0;padding-top:34px}
+.logistics-entry-accent{display:block;width:54px;height:6px;background:var(--lg-green);border-radius:4px;margin-bottom:44px}
+.logistics-entry-eyebrow{display:block;font-size:12px;font-weight:750;letter-spacing:.12em;color:#087f6a;margin-bottom:16px}
+.logistics-entry h1{font-size:clamp(40px,4vw,58px);line-height:1.16;letter-spacing:-.045em;font-weight:760;margin:0 0 28px;color:var(--lg-ink)}
+.logistics-entry-intro>p:not(.logistics-entry-state):not(.logistics-entry-footnote){font-size:19px;line-height:1.6;color:var(--lg-muted);max-width:630px;margin:0 0 34px}
+.logistics-entry-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px;align-items:center}
+.logistics-entry-primary{background:var(--lg-action);border:1px solid var(--lg-action);color:white;min-width:210px}
+.logistics-entry-primary:hover:enabled{background:#2453ce}
+.logistics-entry-primary>span{margin-left:10px}
+.logistics-entry-secondary{background:var(--lg-surface);border:1px solid var(--lg-border);color:var(--lg-ink)}
+.logistics-entry-secondary:hover:enabled{background:#eaf0ff;border-color:#b5c8f8}
+.logistics-entry-state{font-size:14px;color:var(--lg-muted);margin-top:20px;line-height:1.5}
+.logistics-entry-footnote{font-size:14px;line-height:1.6;color:#475e78;max-width:550px;margin-top:40px}
+.logistics-entry-error{background:#fff5f3;border:1px solid #f2b6a9;border-radius:12px;color:#8d3929;padding:16px 20px;margin:20px 0;max-width:610px}
+.logistics-entry-error strong{font-size:15px}
+.logistics-entry-error p{font-size:14px;line-height:1.5;color:#743428;margin:8px 0 12px}
+.logistics-entry-error button{background:#fff;border:1px solid #df998a;color:#813123;min-height:42px}
+.logistics-entry-explainer{background:var(--lg-surface);border:1px solid var(--lg-border);border-radius:26px;padding:clamp(25px,3vw,40px);min-width:0;box-shadow:0 14px 40px rgba(19,36,59,.035)}
+.logistics-entry-pill{display:inline-flex;background:#e7f8f2;color:#087f6a;padding:8px 13px;border-radius:999px;font-size:11px;letter-spacing:.06em;font-weight:750}
+.logistics-entry-explainer h2{font-size:clamp(24px,2.2vw,32px);line-height:1.2;letter-spacing:-.025em;color:var(--lg-ink);margin:24px 0 10px}
+.logistics-entry-explainer>p{color:var(--lg-muted);font-size:15px;line-height:1.6;max-width:410px;margin:0 0 26px}
+.logistics-entry-status{display:inline-flex;padding:9px 14px;border-radius:999px;background:#e7f8f2;color:#087f6a;font-weight:700;font-size:13px;margin:1px 0 18px}
+.logistics-entry-steps{list-style:none;padding:0;margin:0;display:grid;gap:0}
+.logistics-entry-steps li{display:flex;align-items:center;gap:18px;min-height:83px;position:relative}
+.logistics-entry-steps li:not(:last-child):before{content:'';position:absolute;left:24px;top:61px;width:2px;height:26px;background:var(--lg-border)}
+.logistics-entry-step-icon{width:49px;height:49px;flex:none;border-radius:13px;display:grid;place-items:center;font-size:18px;font-weight:750;color:#345ca5;background:#e9f0fe}
+.logistics-entry-step-icon.packing{background:#fff1dd;color:#946416}
+.logistics-entry-step-icon.shipping{background:#e2f5f0;color:#057e6b}
+.logistics-entry-step-icon.delivery{background:#f2ecfb;color:#7256ad}
+.logistics-entry-steps strong{display:block;color:var(--lg-ink);font-weight:680;font-size:16px;margin-bottom:4px}
+.logistics-entry-steps small{display:block;color:var(--lg-muted);font-size:13px;line-height:1.45}
+.logistics-entry-result{border-radius:13px;padding:15px 18px;background:#eaf0ff;color:#173dad;font-size:14px;font-weight:650;margin-top:24px}
+@media(max-width:1080px){.logistics-entry-content{grid-template-columns:minmax(0,1fr) minmax(310px,.9fr);gap:28px;padding:40px 34px}.logistics-entry-intro{padding-top:14px}.logistics-entry-accent{margin-bottom:26px}.logistics-entry h1{font-size:43px}.logistics-entry-intro>p:not(.logistics-entry-state):not(.logistics-entry-footnote){font-size:17px}}
+@media(max-width:790px){.logistics-entry-content{grid-template-columns:1fr;gap:32px}.logistics-entry-explainer{max-width:650px}.logistics-entry-header{padding-inline:22px}.logistics-entry-header .logistics-entry-secondary{font-size:12px;padding:8px 12px}.logistics-entry h1{font-size:clamp(33px,7vw,46px)}}
+@media(prefers-reduced-motion:reduce){.logistics-entry *{transition:none!important}}

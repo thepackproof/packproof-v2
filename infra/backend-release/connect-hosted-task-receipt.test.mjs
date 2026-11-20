@@ -40,3 +40,14 @@ test('rejects task overrides and a substituted container digest before reading a
   delete f.task.overrides;f.task.containers[0].imageDigest='sha256:'+'f'.repeat(64);
   assert.throws(()=>collectTaskReceipt(f.taskArn,f.read),/DEFINITION_IMAGE/);
 });
+
+test('the Logistics task family accepts only the corresponding schema 129 owner receipt',()=>{
+  const fixture=data('inspect');
+  const original=fixture.registered.family;
+  fixture.registered.family=original.replace('connect-owner','logistics-owner');
+  fixture.task.taskDefinitionArn=fixture.registered.taskDefinitionArn=fixture.registered.taskDefinitionArn.replace(original,fixture.registered.family);
+  assert.throws(()=>collectTaskReceipt(fixture.taskArn,fixture.read),/ONE_COMPLETED_REPORT/);
+  fixture.report.schema='packproof.hosted-logistics-owner-receipt/v1';
+  fixture.messages[1]={message:JSON.stringify(fixture.report)};
+  assert.deepEqual(collectTaskReceipt(fixture.taskArn,fixture.read).report,fixture.report);
+});

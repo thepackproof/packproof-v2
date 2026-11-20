@@ -25,6 +25,9 @@ if (unified) {
   await cp('../desktop/dist/main','dist/commerce/main',{recursive:true});
   await cp('../desktop/dist/renderer','dist/commerce/renderer',{recursive:true});
 }
+// Fail packaging if the unified launcher, approved route, or Connect setup is missing.
+// The separately required on-device Figma visual receipt is documented in the contract.
+execFileSync(process.execPath,['scripts/verify-windows-ux-contract.cjs',unified?'--unified':'--connect'],{stdio:'inherit'});
 const appPackage=JSON.parse(await readFile('package.json','utf8'));
 const rules=JSON.parse(await readFile('../backend/src/records/connect-csv-rules.json','utf8'));
 const serviceProject=await readFile('service/PackProof.Connect.Service.csproj','utf8');
