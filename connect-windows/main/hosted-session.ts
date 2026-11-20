@@ -21,7 +21,7 @@ const enrollment = new Set(['getStatus','beginEnrollment','pollEnrollment','refr
 export class HostedSession {
   private lease=new FacilityDraftLease();
   private sessionEpoch=0;
-  constructor(private human: HumanSession, private read: LocalRead, private portal: string) {}
+  constructor(private human: HumanSession, private read: LocalRead, private portal: string, private parentWindow?:()=>BrowserWindow|null) {}
   private signedIn() {
     const user = this.human.user();
     if (!user) {this.lease.clear();throw Error('Sign in to PackProof to open Logistics.');}
@@ -93,7 +93,7 @@ export class HostedSession {
     const user = this.signedIn(), scope = await this.scope();
     if (!scope) throw Error('Connect this computer to a facility first.');
     const access = await this.verify(scope, user,'daily');
-    return openHumanDashboard(this.portal, { ...scope, locationId: access.locationId, expectedUserId: user }, target, this.human.dashboardIdentity());
+    return openHumanDashboard(this.portal, { ...scope, locationId: access.locationId, expectedUserId: user }, target, this.human.dashboardIdentity(), this.parentWindow?.()??undefined);
   }
   bindAssistant(window: () => BrowserWindow | null) {
     for (const action of ['suggest','review'] as const) ipcMain.handle('host:'+action, async (event, input: { draftId?: unknown; revision?: unknown }) => {
