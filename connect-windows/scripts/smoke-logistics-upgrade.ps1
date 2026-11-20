@@ -1,6 +1,7 @@
 param(
  [Parameter(Mandatory)][ValidateSet('Clean','Upgrade')][string]$Mode,
  [Parameter(Mandatory)][string]$CandidateDirectory,
+ [ValidatePattern('^[a-fA-F0-9]{40}$')][string]$CandidateCommit=$env:GITHUB_SHA,
  [string]$PriorConnectArchive,
  [string]$PriorCommerceDirectory,
  [string]$PriorCommerceSource
@@ -30,7 +31,7 @@ $sequence=0
 $fixture=$null
 $cert=$null
 $firewall=$null
-$receipt=[ordered]@{schemaVersion=1;mode=$Mode;candidateCommit=$env:GITHUB_SHA;osBuild=[Environment]::OSVersion.Version.ToString();
+$receipt=[ordered]@{schemaVersion=1;mode=$Mode;candidateCommit=$CandidateCommit;rehearsalCommit=$env:GITHUB_SHA;osBuild=[Environment]::OSVersion.Version.ToString();
  connectInstallation=if($isWorkstation){'Windows 11 NSIS'}else{'hosted Server NSIS payload and packaged service lifecycle'};
  checks=@();result='failed'}
 function Passed([string]$test) { $receipt.checks+=@($test) }
@@ -104,9 +105,13 @@ function Commerce-Queue([string]$action,[string]$src) {
  if ($LASTEXITCODE) {throw 'Unable to prepare historical/current Commerce queue code.'}
  # Electron is a GUI subsystem binary. Wait for the old/current writer and its
  # exit status before asserting facts about the encrypted queue.
- $run='const {spawnSync}=require("node:child_process");const [exe,...args]=process.argv.slice(1);const p=spawnSync(exe,args,{stdio:"inherit",windowsHide:true,timeout:60000});process.exitCode=p.status??1'
- & node -e $run (Join-Path $PriorCommerceSource 'node_modules\electron\dist\electron.exe') (Join-Path $PSScriptRoot 'upgrade-commerce-queue.cjs') $action $bundle $scratch
- if ($LASTEXITCODE) {throw 'Commerce queue preservation check failed.'}
+ $run='const {spawnSync}=require("node:child_process");const path=require("node:path");const [src,...args]=process.argv.slice(1);const exe=require(path.join(src,"node_modules/electron"));const p=spawnSync(exe,args,{stdio:"inherit",windowsHide:true,timeout:60000});if(p.error)console.error("Electron launch failed:",p.error.code);process.exitCode=p.status??1'
+ & node -e $run $PriorCommerceSource (Join-Path $PSScriptRoot 'upgrade-commerce-queue.cjs') $action $bundle $scratch
+ if ($LASTEXITCODE) {
+   $progressFile=Join-Path $scratch ('commerce-'+$action+'-progress.json')
+   $stage=if (Test-Path -LiteralPath $progressFile) {(Get-Content $progressFile -Raw|ConvertFrom-Json).stage} else {'starting-electron'}
+   throw ('Commerce queue '+$action+' failed at '+$stage+'.')
+ }
 }
 function Wait-Fixture([string]$file) {
  $target=Join-Path $scratch $file
@@ -140,11 +145,11 @@ try {
  }
  if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {throw 'A service already exists on the test machine.'}
  [void][IO.Directory]::CreateDirectory($scratch)
- $candidate=Release $CandidateDirectory 'PackProof-Connect-development-Setup-0.7.0.exe' $env:GITHUB_SHA
+ $candidate=Release $CandidateDirectory 'PackProof-Connect-development-Setup-0.7.0.exe' $CandidateCommit
  $manifest=Get-Content -LiteralPath (Join-Path $CandidateDirectory 'release-evidence.json') -Raw | ConvertFrom-Json
  if (!$manifest.application.unifiedWindows) {throw 'The upgrade candidate must include the unified Commerce and Logistics host.'}
  if ($Mode -eq 'Clean') {
-   Install-Connect $candidate '0.7.0' $env:GITHUB_SHA
+   Install-Connect $candidate '0.7.0' $CandidateCommit
    $status=Bridge status
    if (!$status.health.serviceOnline -or ($status.PSObject.Properties['installationId'] -and $status.installationId) -or $status.workspace.canReadOrders) {throw 'Clean installation has unexpected enrollment or collection permissions.'}
    Launch-Commerce $ui
@@ -221,7 +226,7 @@ try {
    $original=(Get-FileHash -LiteralPath $orderFile).Hash
    $operatorBefore=(Get-ItemProperty 'HKLM:\SOFTWARE\PackProofConnect\development').OperatorsSid
    Passed 'Verified PR 175 LocalService enrolled, redeemed and acknowledged its credential against a loopback backend; a separate human approval enabled the exact source scope.'
-   Install-Connect $candidate '0.7.0' $env:GITHUB_SHA
+   Install-Connect $candidate '0.7.0' $CandidateCommit
    Bind-Fixture $origin
    $upgraded=Bridge refresh
    if ($upgraded.installationId -ne $decision.installationId -or $upgraded.binding.locationId -ne 'upgrade' -or
