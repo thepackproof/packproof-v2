@@ -104,6 +104,9 @@ export function App() {
   },[]);
   useEffect(()=>{
     sessionRef.current=session;
+    // New sign-ins always return to the approved Logistics entry. Explicit
+    // Commerce navigation lasts only for the current signed-in session.
+    setWorkspaceMode(window.packproof?.workspace?'logistics':'commerce');
     ++taskEpoch.current;setTaskSelection(undefined);setTaskInteractions({});setTaskBusy(false);
     setProofs([]);setOrders([]);setUploads([]);setSelectedJob(null);setReviewJob(null);
     setWorkspaceReconciled(false);setExperienceState(null);
