@@ -263,3 +263,11 @@
     outline: 2px solid Highlight;
   }
 }
+
+/* No automatic legacy fallback: show readable, deliberate recovery actions. */
+.pp-system-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
+.pp-system-actions button{border:1px solid var(--border);background:var(--surface);color:var(--ink);min-height:48px;border-radius:10px;padding:10px 18px;font-weight:650}
+.pp-system-actions button:first-child{color:#fff;border-color:var(--brand);background:var(--brand)}
+.pp-system-actions button:hover{border-color:var(--brand)}
+.pp-legacy-return{display:block;width:auto;margin:12px 16px;padding:12px 18px;border:1px solid #b5c8f8;background:#eaf0ff;color:#204dbf;border-radius:10px;font-weight:650}
+.pp-legacy-return:focus-visible{outline:3px solid #3564f4;outline-offset:3px}
