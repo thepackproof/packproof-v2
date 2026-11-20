@@ -22,6 +22,7 @@ const shaPattern = /^[a-f0-9]{64}$/;
 const maxBytes = 3 * 1024 * 1024;
 const notFound = () => new DomainError('ARTIFACT_NOT_FOUND', 'This artifact is unavailable for the selected order revision.', 404);
 function artifactType(name: string, contentType: string, kind: string): string | null {
+  if (kind === 'delivery' && /\.pdf$/i.test(name) && contentType === 'application/pdf') return 'application/pdf';
   if (kind === 'evidence' && /\.jpe?g$/i.test(name) && contentType === 'image/jpeg') return 'image/jpeg';
   if (kind === 'evidence' && /\.png$/i.test(name) && contentType === 'image/png') return 'image/png';
   if (kind === 'label' && /\.zpl$/i.test(name) && ['application/octet-stream', 'application/zpl', 'text/plain'].includes(contentType)) return 'application/zpl';
@@ -35,8 +36,9 @@ export async function attachMedia(db: Database, operation: string, proof: Projec
     const hash = event.fields.artifactSha256;
     const source = event.fields.artifactSourceId ?? event.sourceId;
     return typeof hash === 'string' && shaPattern.test(hash) && typeof source === 'string' &&
-      ['label','evidence'].includes(event.kind) && event.associationScope === 'order' &&
-      event.references.some(ref => ['order','shipment','package','tracking'].includes(ref.type))
+      ['label','evidence','delivery'].includes(event.kind) && event.associationScope === 'order' &&
+      [event.entity,...event.references].some(ref => ['order','shipment','package','tracking'].includes(ref.type)) &&
+      (event.kind !== 'delivery' || [event.entity,...event.references].some(ref => ['package','shipment'].includes(ref.type)))
       ? [{ hash, source, event }] : [];
   });
   const originalArtifacts: Artifact[] = [];
@@ -71,6 +73,10 @@ export async function affectedMediaReferences(db: Database, operation: string, s
 
 export function qualifiedArtifactBytes(bytes: Buffer, type: string) {
   if (bytes.length < 4 || bytes.length > maxBytes) return false;
+  if (type === 'application/pdf') {
+    return /^%PDF-(?:1\.[0-7]|2\.0)[\r\n]/.test(bytes.subarray(0,10).toString('latin1')) &&
+      /%%EOF[\t\n\f\r ]*$/.test(bytes.toString('latin1'));
+  }
   if (type === 'image/jpeg') return bytes[0]===255 && bytes[1]===216 && bytes[2]===255 &&
     bytes[bytes.length-2]===255 && bytes[bytes.length-1]===217;
   if (type === 'image/png') return bytes.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')) &&
@@ -89,6 +95,21 @@ export async function readOrderArtifact(deps: Pick<AppDependencies,'objectStore'
   if (!item || !shaPattern.test(item.originalSha256)) throw notFound();
   if (!scope.scope.sources.some(s=>s.id===item.sourceId && s.generation===item.generation))
     return {kind:'derived_excerpt',reason:'original_scope_unavailable',receiptId};
+  if (item.mediaType === 'application/pdf') {
+    // A dedicated POD sidecar identifies the applicable subject. An ambiguous,
+    // revoked or reassigned cross-order attachment must stay out of the packet.
+    const links = (await db.query<{source_id:string;generation:number;receipt_id:string;exclusive:boolean}>(`
+      SELECT side.source_id,side.generation,e.receipt_id,
+      COALESCE(l.proof_ids=ARRAY[$4]::text[] AND NOT l.unresolved,false) AS exclusive
+      FROM record_order_events e JOIN record_order_receipts side ON side.id=e.receipt_id
+      LEFT JOIN record_order_link_state l ON l.event_id=e.id AND l.operation_key=e.operation_key
+      WHERE e.operation_key=$1 AND e.record->'fields'->>'artifactSha256'=$2
+      AND COALESCE(e.record->'fields'->>'artifactSourceId',e.source_id)=$3 LIMIT 513`,
+      [installationOperation(installation),item.originalSha256,item.sourceId,proofId])).rows;
+    if (links.length > 512 || !links.some(link=>link.receipt_id===item.linkedByReceiptId) ||
+        links.some(link=>!link.exclusive || !scope.scope.sources.some(s=>s.id===link.source_id && s.generation===link.generation)))
+      return {kind:'derived_excerpt',reason:'original_scope_unavailable',receiptId};
+  }
   const r=(await db.query<{object_key:string;object_version:string}>(`SELECT object_key,object_version FROM record_order_receipts
     WHERE id=$1 AND operation_key=$2 AND source_id=$3 AND generation=$4 AND original_sha256=$5`,
     [receiptId,installationOperation(installation),item.sourceId,item.generation,item.originalSha256])).rows[0];

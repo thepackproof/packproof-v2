@@ -24,7 +24,11 @@ import {ShareReviews} from './share-review';
 import {ShutdownCoordinator} from './shutdown';
 import type {DesktopEvent,DesktopSettings,SessionView,SystemView} from '../shared/contracts';
 
-protocol.registerSchemesAsPrivileged([{scheme:'packproof-app',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}},{scheme:'packproof-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
+declare const __PACKPROOF_UNIFIED__: boolean;
+const unified = typeof __PACKPROOF_UNIFIED__ !== 'undefined' && __PACKPROOF_UNIFIED__;
+type LogisticsHost = {choices(): Promise<{setup:boolean;orders:boolean}>; orders():Promise<void>; setup():Promise<void>; close():void};
+let logistics: LogisticsHost | undefined;
+protocol.registerSchemesAsPrivileged([...(unified ? [{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}] : []),{scheme:'packproof-app',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}},{scheme:'packproof-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 app.enableSandbox();
 let win:BrowserWindow|null=null,tray:Tray|null=null,engine:EvidenceEngine|null=null,auth:AuthService|null=null,api:DesktopApi|null=null;
 let config:DesktopConfig|null=null,environment='development',closePrompt=false,blocker:number|null=null,online=true;
@@ -64,6 +68,13 @@ function handle(name:string,schema:ZodType,fn:(...args:any[])=>unknown){ipcMain.
 });}
 async function state():Promise<SystemView>{return {version:app.getVersion(),platform:process.platform,environment,online,configured:!!config,secureStorage:secureStorageAvailable(),pendingOtherAccounts:await engine?.hasOtherAccountEvidence()??false,settings,reporting:reporting?.state,update:updates.state};}
 function setupIpc(){
+ if (unified) {
+  handle('workspace.choices', schemas.empty, () => { requireApi(); return logistics!.choices(); });
+  for (const action of ['orders','setup'] as const) handle('workspace.'+action, schemas.empty, () => {
+    requireApi(); if (engine?.activeCapture) throw Error('Finish recording before switching workspaces.');
+    return logistics![action]();
+  });
+ }
  handle('rnd.capabilities',schemas.empty,()=>requireApi().rndCapabilities());
  handle('rnd.source',schemas.rndSource,async(proofId,evidenceId)=>{const client=requireApi(),accountId=auth!.getAccountId()!,epoch=sessionEpoch;const view=await client.rndList(proofId);const source=view.sources.find(s=>s.sourceId===evidenceId||s.evidenceId===evidenceId);if(!source||epoch!==sessionEpoch||accountId!==auth?.getAccountId())throw new Error('Source unavailable.');const grantId=randomUUID();const sidecar=source.relationship==='CONCURRENT_SIDECAR';mediaGrants.set(grantId,{accountId,proofId,evidenceId,...(sidecar?{sidecarId:evidenceId}:{}),stageId:source.legId&&source.legId!=='OUTBOUND'?source.legId:undefined,expires:Date.now()+3600000});return {url:`packproof-media://evidence/${grantId}`,mimeType:sidecar?'image/png':source.mimeType,...(sidecar?{notice:'Lossless PNG preview of the native grayscale sidecar; the committed original remains unchanged.'}:{})};});
  handle('rnd.list',schemas.id,id=>requireApi().rndList(id));
@@ -168,7 +179,7 @@ async function ready(){
  logs.record('SYSTEM',secureStorageAvailable()?'SECURE_STORAGE_READY':'SECURE_STORAGE_UNAVAILABLE');
  if(secureStorageAvailable()){
   try{const saved=await vault.read('settings');if(saved)settings=settingsSchema.parse(JSON.parse(saved));const install=await vault.installation();installationId=install.id;
-   if(config){auth=new AuthService({config,store:{read:()=>vault.read('session'),write:v=>vault.write('session',v),clear:()=>vault.clear('session')},onSession:s=>{sessionEpoch++;shareReviews.clear();workspaceNotifications.setAccount(s?.userId??null);if(!s){revokeMedia();void engine?.setAccount(null);}emit({type:'session'});}});api=new DesktopApi({config,getToken:force=>auth!.getAccessToken(force),getAccountId:()=>auth!.getAccountId()});
+   if(config){auth=new AuthService({config,store:{read:()=>vault.read('session'),write:v=>vault.write('session',v),clear:()=>vault.clear('session')},onSession:s=>{logistics?.close();sessionEpoch++;shareReviews.clear();workspaceNotifications.setAccount(s?.userId??null);if(!s){revokeMedia();void engine?.setAccount(null);}emit({type:'session'});}});api=new DesktopApi({config,getToken:force=>auth!.getAccessToken(force),getAccountId:()=>auth!.getAccountId()});
     engine=new EvidenceEngine({rootDir:join(app.getPath('userData'),'EvidenceQueue'),encryptionKey:install.key,api:new DesktopEvidenceTransport(api),onChange:jobs=>{emit({type:'queue'});for(const job of jobs)if(['FAILED','WAITING_FOR_AUTH'].includes(job.state)){logs.record('UPLOAD',job.state==='FAILED'?'UPLOAD_FAILED':'UPLOAD_AUTH_REQUIRED');const key=job.id+':'+job.state;if(!notifiedFailures.has(key)){notifiedFailures.add(key);notify('PackProof upload needs attention','Your original recording is retained on this computer. Open Uploads to review it.');}}},onComplete:()=>notify('PackProof','Evidence has been secured by PackProof.')});await engine.initialize();engine.setRetentionHours(settings.retentionHours);await auth.restore();await engine.setAccount(auth.getAccountId());}
   }catch{logs.record('SYSTEM','SECURE_STORAGE_OR_QUEUE_UNAVAILABLE');}
  }
@@ -180,6 +191,27 @@ async function ready(){
  session.defaultSession.setPermissionRequestHandler((contents,permission,callback,details)=>callback(!!win&&contents===win.webContents&&permission==='media'&&isTrustedRenderer(details.requestingUrl)));
  session.defaultSession.setPermissionCheckHandler((contents,permission,origin)=>!!win&&contents===win.webContents&&permission==='media'&&isTrustedRenderer(origin));
  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,callback)=>callback({cancel:true}));
+ if (unified) {
+   const factory = require(join(__dirname,'../../main/host.cjs'));
+   type Scope = Parameters<DesktopApi['facilityAccess']>[0];
+   logistics = await factory.attachHumanSession({
+     user: () => auth?.getAccountId() ?? null,
+     dashboardIdentity: () => {
+       const signed = auth?.getSession();
+       if (!signed || !config) throw Error('Sign in to open Logistics.');
+       const owner = signed.userId;
+       return {apiBaseUrl:config.apiBaseUrl,userId:owner,username:signed.username,displayName:signed.displayName,
+         token: async () => {
+           if (auth?.getAccountId() !== owner) throw Error('Your account changed.');
+           const token = await auth.getAccessToken();
+           if (auth.getAccountId() !== owner) throw Error('Your account changed.');
+           return token;
+         }};
+     },
+     access: (scope: Scope) => requireApi().facilityAccess(scope),
+     suggest: (scope: Scope, input: unknown) => requireApi().facilitySuggestions(scope,input)
+   });
+ }
  setupIpc();await createWindow();
  let icon=nativeImage.createFromPath((app.isPackaged?join(process.resourcesPath,'icon.png'):join(__dirname,'../../build/icon.png')));if(icon.isEmpty())icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
  tray=new Tray(icon.resize({width:18,height:18}));tray.setToolTip('PackProof');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open PackProof',click:()=>{win?.show();win?.focus();}},{label:'Quit and resume next time',click:()=>{if(engine?.activeCapture)win?.show();else void quitSafely();}}]));tray.on('click',()=>win?.show());

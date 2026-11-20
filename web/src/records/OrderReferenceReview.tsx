@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { PackProofApi } from '../api/client';
-import { displayState } from './model';
+import { displayState, recordsPath } from './model';
+import { OrderSourceHealth } from './OrderSourceHealth';
 import { useWorkflowCommand, useWorkflowData } from './workflow';
 
 type SourceRef = { namespace: string; type: string; id: string };
@@ -49,8 +50,16 @@ function ChooseOrder({ api, scope, item, onSaved }: {api:PackProofApi;scope:stri
 }
 export function OrderReferenceReview({api,scope,canManage}: {api:PackProofApi;scope:string;canManage:boolean}) {
   const [refresh,setRefresh]=useState(0), [message,setMessage]=useState('');
-  const result=useWorkflowData<{items:WaitingEvent[];hasMore:boolean}>(api,'/order-attention?'+scope,refresh);
-  return <section className="records-panel"><h2>Reports waiting for an order</h2>
+  const [before,setBefore] = useState<number|null>(null);
+  const result=useWorkflowData<{items:WaitingEvent[];hasMore:boolean;orderIssues?:(Match & {issue?:string})[];nextIssuesBefore?:number|null}>(api,
+    '/order-attention?'+scope+'&includeOrderIssues=1'+(before ? '&before='+before : ''),refresh);
+  return <><OrderSourceHealth api={api} scope={scope}/>
+    {!!result.data?.orderIssues?.length && <section className="records-panel"><h2>Order discrepancies</h2><ul>
+      {result.data.orderIssues.map(o=><li key={o.proofId}><a href={recordsPath('order-proofs',new URLSearchParams(scope),{},o.proofId)}>{o.orderReference}</a> · {o.issue}</li>)}</ul>
+      {result.data.nextIssuesBefore && <button type="button" onClick={()=>setBefore(result.data!.nextIssuesBefore!)}>Next discrepancies</button>}
+      {before && <button type="button" onClick={()=>setBefore(null)}>First page</button>}
+    </section>}
+    <section className="records-panel"><h2>Reports waiting for an order</h2>
     {message && <p role="status">{message}</p>}
     {result.error ? <div role="alert"><p>{result.error}</p><button className="records-button secondary" onClick={()=>setRefresh(v=>v+1)}>Try again</button></div>
       : result.loading ? <p role="status">Checking reports…</p>
@@ -62,5 +71,5 @@ export function OrderReferenceReview({api,scope,canManage}: {api:PackProofApi;sc
         {canManage && <ChooseOrder api={api} scope={scope} item={item} onSaved={()=>{setMessage('The link was recorded.');setRefresh(v=>v+1);}}/>}
       </article>)}
     {result.data?.hasMore && <p>More reports are waiting. Review these to see the next group.</p>}
-  </section>;
+  </section></>;
 }

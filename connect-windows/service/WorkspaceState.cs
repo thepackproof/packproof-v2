@@ -6,7 +6,10 @@ public sealed partial class LocalState
 {
     public OrderWorkspaceState? Workspace { get; set; }
     public bool LegacyWorkspaceMigrationChecked { get; set; }
+    public string? FacilityContextKey { get; set; }
+    public Dictionary<string,FacilityLocalContext> OtherFacilities { get; set; } = [];
 }
+public sealed record FacilityLocalContext(OrderWorkspaceState? Workspace,ProofOutputConfiguration? Output);
 
 public sealed class OrderWorkspaceState
 {
@@ -15,6 +18,8 @@ public sealed class OrderWorkspaceState
     public bool ContinueAfterEnrollment { get; set; }
     public bool AllowPendingOutput { get; set; }
     public WorkspaceGrant? ActiveGrant { get; set; }
+    public Dictionary<string,FacilityProfile> FacilityDrafts { get; set; } = [];
+    public string? SubmittedProfileDigest { get; set; }
     public string Step { get; set; } = "order";
     public string Phase { get; set; } = "draft";
     public string? InstallationId { get; set; }
@@ -76,6 +81,7 @@ public sealed class OrderWorkspaceState
         ApprovalPath = null;
         ScopeDigest = null;
         ApprovedOutputDigest = null;
+        SubmittedProfileDigest = null;
         CheckedAt = null;
         OfflineWindowSeconds = 0;
         ExpiresAt = null;
@@ -99,6 +105,22 @@ public sealed class WorkspaceSource
     public Dictionary<string,int> ConfirmedDependencies { get; set; } = [];
     public string? ObservedNamespace { get; set; }
     public string? InspectRole { get; set; }
+    public string? ShippedAtMeaning { get; set; }
+    public int? ExpectedCheckIntervalSeconds { get; set; }
+    public int? ExpectedDeliveryAfterLabelSeconds { get; set; }
+    // Preview copies only change configuration fields; live inventory and checkpoints are never mutated.
+    public FacilityPackingReader? PackingReader { get; set; }
+    public WorkspaceSource WithRules(string? meaning,FacilityTiming? timing,FacilityPackingReader? packing=null)
+    {
+        var copy = (WorkspaceSource)MemberwiseClone();
+        if (meaning != ShippedAtMeaning || PackingReader!=packing || ExpectedCheckIntervalSeconds!=timing?.ExpectedCheckIntervalSeconds ||
+            ExpectedDeliveryAfterLabelSeconds!=timing?.ExpectedDeliveryAfterLabelSeconds) copy.Generation = checked(Generation + 1);
+        copy.ShippedAtMeaning = meaning;
+        copy.PackingReader=packing;
+        copy.ExpectedCheckIntervalSeconds=timing?.ExpectedCheckIntervalSeconds;
+        copy.ExpectedDeliveryAfterLabelSeconds=timing?.ExpectedDeliveryAfterLabelSeconds;
+        return copy;
+    }
     public List<WorkflowColumnMap> Workflows { get; set; } = [];
     public WorkflowColumnMap? ProposedWorkflow { get; set; }
     public WorkflowColumnMap? ConfirmedWorkflow { get; set; }
@@ -114,6 +136,9 @@ public sealed class WorkspaceSource
         {
             if (Transport == "api") return "packproof.partner-order/v1";
             var versions=ApprovedWorkflows().Select(SourceReaders.WorkflowProfileVersion).ToList();
+            if(PackingReader!=null) versions.Add("packproof.facility-packing/v1/"+Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(Json.Bytes(PackingReader))));
+            if (ShippedAtMeaning is not null) versions.Add(FacilityProfile.Compiler + "/shipped-at/" + ShippedAtMeaning);
             if (ConfirmedMap != null && Roles.Contains("order")) versions.Add(SourceReaders.OrderProfileVersion(ConfirmedMap));
             if (versions.Count == 0) return SourceReaders.ProfileId;
             if (versions.Count == 1) return versions[0];
@@ -124,6 +149,9 @@ public sealed class WorkspaceSource
     public bool Paused { get; set; }
     public string? Cursor { get; set; }
     public DateTimeOffset? LastScanAt { get; set; }
+    public DateTimeOffset? LastVerifiedReadAt { get; set; }
+    public DateTimeOffset? LastCheckAttemptAt { get; set; }
+    public bool LastReadFailed { get; set; }
     public DateTimeOffset? RetryAt { get; set; }
     public string? Issue { get; set; }
     public List<string> MediaJobs { get; set; } = [];
@@ -136,7 +164,7 @@ public sealed class WorkspaceSource
 }
 
 public sealed record WorkspaceGrant(string InstallationId, string ScopeDigest, string OutputDigest, Dictionary<string,int> Generations,
-    DateTimeOffset CheckedAt, int OfflineWindowSeconds);
+    DateTimeOffset CheckedAt, int OfflineWindowSeconds,string? TestedProfileDigest=null);
 
 public sealed record WorkspaceFileVersion(string Digest, long Sequence, int Generation, string Name, bool Missing = false);
 

@@ -1,10 +1,10 @@
 name: Connect Windows candidate
 on:
   pull_request:
-    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'desktop/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   push:
     branches: [main]
-    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'desktop/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -77,6 +77,18 @@ jobs:
           PACKPROOF_JOURNEY_PERF_N: "20"
           PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/http-journey-result.json
         run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
+      - name: Qualify guided setup, two cartons, dispatch recovery and pinned PDF exports
+        working-directory: backend
+        timeout-minutes: 5
+        env:
+          PACKPROOF_JOURNEY_REAL_HTTP: "1"
+          PACKPROOF_JOURNEY_CARTONS: "1"
+          PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/carton-journey-result.json
+        run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guided-carton-journey-${{ github.sha }}
+          path: connect-windows/build/carton-journey-result.json
       - name: Compare the real local package to the Windows reader and backend projection
         env:
           PACKPROOF_JOURNEY_PROJECTED: ${{ github.workspace }}/connect-windows/build/order-journey-projection.json
@@ -149,3 +161,55 @@ jobs:
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
             connect-windows/release/development/win32-x64/legacy-queue-input.json
             connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json
+
+  unified:
+    name: Unified Windows workstation
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: connect-windows
+        shell: pwsh
+    env:
+      APP_ENV: development
+      PACKPROOF_UNIFIED_WINDOWS: '1'
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_CONNECT_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
+      PACKPROOF_WEB_BASE_URL: https://dvpmnwc27i8tw.cloudfront.net
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID || '34pnucunllka2jcs8hsq762m5e' }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID || 'us-east-1_GdgTeYaOO' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            connect-windows/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.403'
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix ../desktop --no-audit --no-fund
+      - run: npm run build
+      - run: npm run publish:native
+      - run: npm exec --offline -- electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never
+      - run: npm run verify:artifacts
+      - name: Launch and restart the packaged Commerce host with Windows protected storage
+        run: node ../desktop/scripts/native-launch-smoke.cjs
+      - name: Qualify the unified package's installed LocalService bridge and collection identity
+        run: ./scripts/smoke-native-foundation.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-unified-DEVELOPMENT-win32-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            connect-windows/release/development/win32-x64/*.exe
+            connect-windows/release/development/win32-x64/SHA256SUMS
+            connect-windows/release/development/win32-x64/release-evidence.json
+            connect-windows/release/development/win32-x64/build-provenance.json
+            connect-windows/release/development/win32-x64/native-launch-smoke.json
+            connect-windows/release/development/win32-x64/native-foundation-smoke.json

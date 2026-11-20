@@ -55,8 +55,20 @@ public static partial class SourceReaders
         return "tracking/"+Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]{source,carrier!.ToUpperInvariant(),account,basis})));
     }
 
-    public static JsonElement NormalizeWorkflow(SourceReadResult input,string sourceId,WorkflowColumnMap map)
+    public static JsonElement NormalizeWorkflow(SourceReadResult input,string sourceId,WorkflowColumnMap map,string? shippedAtMeaning=null)
     {
+        if (shippedAtMeaning is "label" or "handoff" &&
+            map.Role == (shippedAtMeaning=="label"?"shipping":"handoff"))
+        {
+            var headings=input.Headers.Where(h=>WorkflowKey(h)=="shippedat").ToArray();
+            if (headings.Length>1) return Val(Array.Empty<object>());
+            if (headings.Length==1)
+            {
+                var key=shippedAtMeaning=="label"?"labelAt":"handoffAt";
+                if (map.Columns.ContainsKey(key)) return Val(Array.Empty<object>());
+                map=map with {Columns=new Dictionary<string,string>(map.Columns){[key]=headings[0]}};
+            }
+        }
         if(input.State!="parsed"||!IdentityPart(sourceId)||!OperationalRoles.TryGetValue(map.Role,out var rule)||
             map.Columns.Values.Any(c=>!input.Headers.Contains(c,StringComparer.Ordinal)))return Val(Array.Empty<object>());
         var records=new List<JsonElement>();

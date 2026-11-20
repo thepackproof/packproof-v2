@@ -46,7 +46,10 @@ export async function preserveOrderOriginal(deps: Deps, organization: string, sh
   };
 }
 function capture(input: unknown) {
-  const b = strictBody(input, ['scopeDigest', 'sourceId', 'generation', 'profileVersion', 'observationId', 'fileName', 'mediaType', 'originalSha256', 'originalBase64', 'records', 'issues']);
+  const b = strictBody(input, ['scopeDigest', 'sourceId', 'generation', 'profileVersion', 'observationId', 'fileName', 'mediaType', 'originalSha256', 'originalBase64', 'records', 'issues', 'firstSeenAt']);
+  const firstSeenAt = b.firstSeenAt == null ? null : boundedText(b.firstSeenAt, 'collector first-seen time', 64);
+  if (firstSeenAt && (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,7})?(?:Z|[+-]\d\d:\d\d)$/.test(firstSeenAt) || !Number.isFinite(Date.parse(firstSeenAt))))
+    throw new DomainError('INVALID_REQUEST', 'The collector first-seen time needs an explicit time zone.', 400);
   if (typeof b.originalBase64 !== 'string' || b.originalBase64.length > 4 * 1024 * 1024 || !Array.isArray(b.records) || b.records.length > 512) throw new DomainError('SOURCE_LIMIT', 'Use a bounded source file and record batch.', 413);
   const bytes = Buffer.from(b.originalBase64, 'base64'),
     sha = digest(b.originalSha256);
@@ -65,6 +68,7 @@ function capture(input: unknown) {
     mediaType: boundedText(b.mediaType, 'media type', 128),
     sha,
     bytes,
+    firstSeenAt,
     records: b.records.map(normalizedRecord),
     issues: issues.map(s => boundedText(s, 'issue', 512))
   };
@@ -131,7 +135,7 @@ export async function orderComponent(db: Database, operation: string, initialKey
     WHERE x.operation_key=$1 AND x.ref_key=ANY($2::text[])
     UNION SELECT e.source_id,e.event_id FROM record_order_roots root JOIN record_order_decisions d ON d.proof_id=root.proof_id
     JOIN record_order_events e ON e.id=d.event_id WHERE root.operation_key=$1 AND root.root_key=ANY($2::text[])
-   ) SELECT e.id,e.source_id,e.record,e.receipt_id,r.original_sha256,r.file_name,r.profile_version,r.received_at,
+   ) SELECT e.id,e.source_id,e.record,e.receipt_id,r.original_sha256,r.file_name,r.profile_version,r.received_at,r.first_seen_at,
      d.id decision_id,d.proof_id decision_proof,ARRAY(SELECT root.root_key FROM record_order_decisions previous JOIN record_order_roots root ON root.proof_id=previous.proof_id WHERE previous.event_id=e.id) decision_keys FROM touched t JOIN record_order_events e ON e.operation_key=$1 AND e.source_id=t.source_id AND e.event_id=t.event_id
      JOIN record_order_receipts r ON r.id=e.receipt_id LEFT JOIN LATERAL (SELECT id,proof_id FROM record_order_decisions d
      WHERE d.event_id=e.id AND NOT EXISTS(SELECT 1 FROM record_order_decisions x WHERE x.supersedes_id=d.id) LIMIT 1) d ON true LIMIT 4001`, [operation, frontier])).rows;
@@ -265,8 +269,8 @@ export async function ingestOrderFile(deps: Deps, db: Database, a: PartnerActor,
   const receiptId = old?.id ?? newId('order_receipt');
   if (!old) {
     const stored = await preserveOrderOriginal(deps, o.organization, x.sha, x.bytes, x.mediaType);
-    await db.query(`INSERT INTO record_order_receipts(id,operation_key,source_id,generation,observation_id,payload_digest,original_sha256,object_key,object_version,file_name,media_type,profile_version,issues,received_at,session_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15)`, [receiptId, o.operation, x.sourceId, x.generation, x.observationId, hash, x.sha, stored.key, stored.version, x.fileName, x.mediaType, x.profileVersion, JSON.stringify(x.issues), deps.clock.now().toISOString(), session.id]);
+    await db.query(`INSERT INTO record_order_receipts(id,operation_key,source_id,generation,observation_id,payload_digest,original_sha256,object_key,object_version,file_name,media_type,profile_version,issues,received_at,session_id,first_seen_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)`, [receiptId, o.operation, x.sourceId, x.generation, x.observationId, hash, x.sha, stored.key, stored.version, x.fileName, x.mediaType, x.profileVersion, JSON.stringify(x.issues), deps.clock.now().toISOString(), session.id, x.firstSeenAt]);
   }
   const ids: string[] = [];
   for (const r of x.records) {

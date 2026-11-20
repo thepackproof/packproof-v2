@@ -7,6 +7,11 @@ using Xunit;
 
 public sealed class WorkspaceServiceTests
 {
+    private sealed class ReceiptClock(DateTimeOffset seen) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = seen;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
     [Fact]
     public void Shared_location_has_one_subscription_and_changed_roles_invalidate_the_submitted_generation()
     {
@@ -81,7 +86,9 @@ public sealed class WorkspaceServiceTests
         var api = new WorkspaceServer();
         var host = new HostConfiguration("development","https://api.example","https://portal.example","S-1-5-32-545");
         var initial = new LocalState { InstallationId = "test-device", Token = "test-token", CredentialExpiresAt = DateTimeOffset.UtcNow.AddDays(40) };
-        AgentRuntime Open(LocalState s) => new(host,store,new PackProofClient(host,api),s);
+        var firstSeen=DateTimeOffset.Parse("2026-11-19T19:34:00Z",System.Globalization.CultureInfo.InvariantCulture);
+        var clock=new ReceiptClock(firstSeen);
+        AgentRuntime Open(LocalState s) => new(host,store,new PackProofClient(host,api),s,receiptClock:clock);
         static JsonElement Data(object? data) => Json.Element(data);
         try
         {
@@ -115,11 +122,13 @@ public sealed class WorkspaceServiceTests
             {
                 await app.Tick(default); // confirmed grant; stage the pre-existing order
             }
+            clock.Now=firstSeen.AddHours(1);
             using (var app = Open(store.Read<LocalState>("state.bin")!))
             {
                 await app.Tick(default); // reconnect, same scope, durable request survives restart
                 Assert.Single(api.Uploads);
                 var body = api.Uploads.Single();
+                Assert.Equal(firstSeen,body.GetProperty("firstSeenAt").GetDateTimeOffset());
                 Assert.Equal("SO10482", body.GetProperty("records")[0].GetProperty("entity").GetProperty("id").GetString());
                 Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(folder,"order.json")),Convert.FromBase64String(body.GetProperty("originalBase64").GetString()!));
                 await app.Tick(default);

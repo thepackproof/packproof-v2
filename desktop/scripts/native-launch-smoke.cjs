@@ -125,20 +125,27 @@ async function launchCycle(target, logFile, result, { env = process.env } = {}) 
 async function main() {
   if (process.env.CI !== 'true' || process.env.APP_ENV !== 'development') throw new Error('Native launch smoke is restricted to isolated development CI.');
   if (!['win32', 'darwin'].includes(process.platform)) throw new Error('Native launch smoke requires Windows or macOS.');
-  const release = releaseContext();
+  const desktop = releaseContext();
+  const unifiedWindows = process.env.PACKPROOF_UNIFIED_WINDOWS === '1';
+  let release = desktop;
+  if (unifiedWindows) {
+    if (process.platform !== 'win32') throw new Error('Unified workstation smoke requires Windows.');
+    const connect = require('../../connect-windows/scripts/release-policy.cjs').context();
+    release = { ...desktop, productName: connect.productName, outputDirectory: connect.output };
+  }
   if (release.platform !== process.platform || release.arch !== process.arch) throw new Error('Launch smoke must run the native architecture.');
   const runtime = JSON.parse(fs.readFileSync(path.resolve('dist/main/runtime-config.json'), 'utf8'));
   if (runtime.channel !== 'development') throw new Error('Refusing to launch a production/staging profile in this smoke test.');
   const profileBase = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.join(os.homedir(), 'Library', 'Application Support');
   if (!profileBase) throw new Error('Native application-data location is unavailable.');
-  const profile = path.join(profileBase, release.productName);
+  const profile = path.join(profileBase, desktop.productName);
   if (fs.existsSync(profile)) throw new Error('A development profile already exists. Preserve it; this CI smoke requires a clean runner.');
   const output = path.resolve(release.outputDirectory);
   const target = await launchTarget(release, output, launchArguments(process.argv.slice(2)).installedExecutable);
   const logFile = path.join(profile, 'Logs', 'desktop.log');
   const report = {
     schemaVersion: 2, sourceCommit: process.env.GITHUB_SHA || null,
-    platform: process.platform, arch: process.arch, channel: 'development', executionLocation: target.executionLocation,
+    platform: process.platform, arch: process.arch, channel: 'development', unifiedWindows, executionLocation: target.executionLocation,
     started: false, rendererReady: false, secureStorage: 'not-reported', protectedInstallation: 'not-tested',
     authentication: 'not-tested', signedPublisherVerification: 'not-tested', captureHardware: 'not-tested',
     evidenceQueueRecovery: 'not-tested', shutdown: 'not-started', checks: [], launches: [],

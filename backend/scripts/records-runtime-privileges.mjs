@@ -164,10 +164,23 @@ const policy123 = {
  record_order_api_progress:{api:{...select,insert:'*',update:['cursor_proof_id','history_finished','paused']},worker:{}},
 };
 
+const policy125 = {...policy123,
+ record_order_original_access:{api:{...select,insert:'*',update:['allowed','reason','decided_by','decided_at']},worker:{}},
+ record_order_case_actions:orderAppend,
+};
+const policy126 = {...policy125,
+ record_setup_drafts:{api:{...select,insert:'*',update:['latest_revision']},worker:{}},
+ record_setup_requests:{api:{...select,insert:'*',update:['result','tokens','duration_ms','outcome']},worker:{}},
+};
+const policy127 = {...policy126,record_order_packet_exports:orderAppend};
+const policy128 = {...policy127,
+ record_order_source_health:{api:{...select,insert:'*',update:['checked_at','verified_read_at','received_at','state']},worker:{}},
+};
 //119 adds only an index: its catalog columns and effective grants remain118.
 const policiesByMigration=new Map([
  [108,policy108],[109,policy],[113,policy113],[116,policy116],[117,policy117],
  [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],[123,policy123],[124,policy123],
+ [125,policy125],[126,policy126],[127,policy127],[128,policy128],
 ]);
 function selectPolicy(throughMigration){
  const result=policiesByMigration.get(throughMigration);

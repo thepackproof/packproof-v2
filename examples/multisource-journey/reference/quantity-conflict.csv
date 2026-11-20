@@ -1,0 +1,2 @@
+CartonNumber,OrderID,LineID,PackedUnits,UOM,RecordVersion,PackedAt,EventID
+CTN-02,export.order482,export.line482,8,EA,1,2026-11-19T08:39:00-05:00,INDEPENDENT-COUNT

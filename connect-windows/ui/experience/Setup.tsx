@@ -5,7 +5,6 @@ import type {
   OrderSummary,
   SourceRole,
   WorkspaceBridge,
-  WorkspaceSource,
   WorkspaceStep,
 } from "../workspace-types";
 import {
@@ -21,6 +20,8 @@ import {
   sourceName,
 } from "./SetupParts";
 import { FolderSuggestions } from "./FolderSuggestions";
+import { Clarify } from "./SourceClarification";
+import { GuidedSetup } from "./GuidedSetup";
 import "./Setup.css";
 
 type Stage =
@@ -36,7 +37,7 @@ type Stage =
   | "activate"
   | "done";
 type Example = DraftPreview["examples"][number];
-interface Props {
+export interface SetupProps {
   status: ConnectStatus;
   bridge: WorkspaceBridge;
   onStatus: (s: ConnectStatus) => void;
@@ -73,7 +74,17 @@ function stamp(value?: string) {
     : t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export function Setup({
+export function Setup(props: SetupProps) {
+  if (props.status.workspace?.guidedSetupAvailable) {
+    const { installationId, environment, binding, locationId, operatorMembershipId, integrationAccountId } = props.status;
+    const scope = JSON.stringify([installationId, environment, binding?.organizationId, binding?.operatorMembershipId ?? operatorMembershipId,
+      binding?.integrationAccountId ?? integrationAccountId, binding?.locationId ?? locationId, props.status.workspace.viewKey]);
+    return <GuidedSetup key={scope} {...props} />;
+  }
+  return <StandardSetup {...props} />;
+}
+
+function StandardSetup({
   status,
   bridge,
   onStatus,
@@ -82,7 +93,7 @@ export function Setup({
   onOpenDraftProof,
   onBusyChange,
   onLegacy,
-}: Props) {
+}: SetupProps) {
   const ws = status.workspace!;
   const [stage, setStage] = useState<Stage>(() => resume(status, bridge));
   const [role, setRole] = useState<SourceRole>(() => (ws.step in roles ? (ws.step as SourceRole) : "order"));
@@ -1180,59 +1191,5 @@ export function Setup({
         </SetupDialog>
       )}
     </main>
-  );
-}
-
-function Clarify({
-  source,
-  bridge,
-  apply,
-  busy,
-}: {
-  source: WorkspaceSource;
-  bridge: WorkspaceBridge;
-  apply: (f: () => Promise<ConnectStatus>) => void;
-  busy: boolean;
-}) {
-  const r = source.recognition;
-  if (r.state !== "ambiguous") return null;
-  const choice = r.relatedChoices?.[0];
-  if (choice)
-    return (
-      <fieldset className="setup-clarify">
-        <legend>{r.question || "Which source supplies this reference?"}</legend>
-        {choice.options.map((o) => (
-          <button
-            key={o.id}
-            className="setup-secondary"
-            disabled={busy}
-            onClick={() =>
-              apply(() =>
-                bridge.chooseWorkspaceRelatedSource(source.id, source.generation, choice.role, o.id),
-              )
-            }
-          >
-            {o.displayName}
-          </button>
-        ))}
-      </fieldset>
-    );
-  if (!r.question || !r.profileVersion) return null;
-  return (
-    <div className="setup-clarify">
-      <p>{r.question}</p>
-      {r.suggestedOrderColumn && r.sample?.[r.suggestedOrderColumn] && (
-        <p>Example · {r.sample[r.suggestedOrderColumn]}</p>
-      )}
-      <button
-        className="setup-secondary"
-        disabled={busy}
-        onClick={() =>
-          apply(() => bridge.confirmWorkspaceOrderMap(source.id, source.generation, r.profileVersion!))
-        }
-      >
-        Confirm this reference
-      </button>
-    </div>
   );
 }

@@ -143,7 +143,7 @@ export function OrdersView({
               <input
                 type="search"
                 aria-label="Order reference"
-                placeholder="Search by exact order reference"
+                placeholder="Order, pick ticket, carton, shipment or tracking number"
                 maxLength={200}
                 value={input}
                 onChange={(e) => {
@@ -175,6 +175,11 @@ export function OrdersView({
           )}
           <section className="xw-card xw-table">
             <OrderRows orders={display} onProof={onProof} />
+            {query && display.flatMap(order => (order.matchedSubjects || []).map(subject =>
+              <p key={JSON.stringify([order.proofId,subject])}><button type="button" className="xw-link"
+                onClick={() => void bridge.openWorkspaceOrder(order.proofId,order.revision,subject.id)
+                  .catch(e => setError(reportError(e,"Could not open this matched subject.")))}>
+                {subject.id} on {order.orderReference}</button> · {subject.namespace} · Revision {order.revision}</p>))}
             {!display.length && !error && (
               <p className="xw-empty" role="status">
                 {pending

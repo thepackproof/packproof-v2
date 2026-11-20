@@ -5,6 +5,19 @@ import { pathToFileURL } from 'node:url';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifestPath = 'dist/main/build-provenance.json';
+const commerceMain = 'dist/commerce/main/index.cjs';
+
+async function applicationAssets(root, unifiedWindows) {
+  const assets = [...await inventory(root, 'dist/main'), ...await inventory(root, 'dist/renderer')];
+  if (unifiedWindows) {
+    const commerce = await inventory(root, 'dist/commerce');
+    for (const required of [commerceMain, 'dist/commerce/renderer/index.html', 'dist/main/host.cjs']) {
+      if (![...assets, ...commerce].some(asset => asset.file === required)) throw Error('Missing unified application asset: ' + required);
+    }
+    assets.push(...commerce);
+  }
+  return assets;
+}
 
 async function inventory(root, directory) {
   const entries = await readdir(resolve(root, directory), { withFileTypes: true });
@@ -24,10 +37,12 @@ async function inventory(root, directory) {
 /** Records the actual built application bytes; the manifest never contains source rows or credentials. */
 export async function createBuildProvenance(root, metadata) {
   if (!/^[a-f0-9]{40}$/.test(metadata.sourceCommit)) throw Error('Full source commit required');
+  const unifiedWindows = metadata.unifiedWindows ?? process.env.PACKPROOF_UNIFIED_WINDOWS === '1';
   return {
     schema: 'packproof.connect-build/v1',
     ...metadata,
-    assets: [...await inventory(root, 'dist/main'), ...await inventory(root, 'dist/renderer')],
+    unifiedWindows,
+    assets: await applicationAssets(root, unifiedWindows),
   };
 }
 
@@ -42,7 +57,8 @@ export async function verifyBuildProvenance(root, expected) {
   const manifest = JSON.parse(await readFile(resolve(root, manifestPath), 'utf8'));
   if (manifest.schema !== 'packproof.connect-build/v1' || manifest.sourceCommit !== expected.sourceCommit || manifest.channel !== expected.channel) throw Error('Build provenance does not match the candidate');
   if (expected.requireClean && manifest.sourceDirty !== false) throw Error('Release provenance requires clean committed source');
-  const actual = [...await inventory(root, 'dist/main'), ...await inventory(root, 'dist/renderer')];
+  if (expected.unifiedWindows !== undefined && Boolean(manifest.unifiedWindows) !== expected.unifiedWindows) throw Error('Application variant differs from the requested build');
+  const actual = await applicationAssets(root, manifest.unifiedWindows);
   if (JSON.stringify(actual) !== JSON.stringify(manifest.assets)) throw Error('Built application assets differ from their provenance');
   return manifest;
 }
@@ -55,12 +71,14 @@ export async function verifyPackagedProvenance(archive, expected) {
   const manifest = JSON.parse(asar.extractFile(archive, normalize(manifestPath)).toString('utf8'));
   const appPackage = JSON.parse(asar.extractFile(archive, normalize('package.json')).toString('utf8'));
   if (appPackage.version !== manifest.appVersion) throw Error('Packaged application version differs from its provenance');
+  if (expected.unifiedWindows !== undefined && Boolean(manifest.unifiedWindows) !== expected.unifiedWindows) throw Error('Packaged variant differs from the requested build');
+  if (manifest.unifiedWindows && appPackage.main !== commerceMain) throw Error('Unified package must start its signed-in workspace host');
   if (manifest.schema !== 'packproof.connect-build/v1' || manifest.sourceCommit !== expected.sourceCommit || manifest.channel !== expected.channel) throw Error('Packaged provenance does not match the candidate');
   if (expected.requireClean && manifest.sourceDirty !== false) throw Error('Release provenance requires clean committed source');
   const assets = [];
   for (const raw of asar.listPackage(archive)) {
     const file = raw.replaceAll('\\', '/').replace(/^\//, '');
-    if (!file.startsWith('dist/main/') && !file.startsWith('dist/renderer/')) continue;
+    if (!['dist/main/', 'dist/renderer/', 'dist/commerce/'].some(prefix => file.startsWith(prefix))) continue;
     const member = normalize(file);
     const info = asar.statFile(archive, member, false);
     if ('link' in info) throw Error('Packaged application assets cannot be symbolic links');
@@ -76,7 +94,7 @@ export async function verifyPackagedProvenance(archive, expected) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const [command, root, sourceCommit, channel, archive] = process.argv.slice(2);
   if (command !== 'verify' || !root || !sourceCommit || !channel || !archive) throw Error('Usage: build-provenance.mjs verify ROOT SOURCE_COMMIT CHANNEL APP_ASAR');
-  const expected = { sourceCommit, channel, requireClean: channel !== 'development' };
+  const expected = { sourceCommit, channel, requireClean: channel !== 'development', unifiedWindows: process.env.PACKPROOF_UNIFIED_WINDOWS === '1' };
   const local = await verifyBuildProvenance(root, expected);
   const packaged = await verifyPackagedProvenance(archive, expected);
   if (JSON.stringify(local) !== JSON.stringify(packaged)) throw Error('Packaged provenance differs from the candidate manifest');

@@ -11,6 +11,7 @@ internal sealed record ExportProfile(string Id, string Label, string Role, strin
 
 internal static class ExportCatalogue
 {
+    internal static string Digest { get; private set; } = "";
     private sealed record Catalogue(int Version, ExportProfile[] Profiles);
     private static readonly ExportProfile[] Profiles = Load();
 
@@ -18,6 +19,8 @@ internal static class ExportCatalogue
     {
         using var stream = typeof(ExportCatalogue).Assembly.GetManifestResourceStream("PackProof.Connect.ExportCatalogue.json")
             ?? throw new InvalidDataException("The export catalogue is missing.");
+        Digest=Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(stream));
+        stream.Position=0;
         var catalogue = JsonSerializer.Deserialize<Catalogue>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         if (catalogue?.Version != 1 || catalogue.Profiles.Length == 0)
             throw new InvalidDataException("The export catalogue version is unsupported.");

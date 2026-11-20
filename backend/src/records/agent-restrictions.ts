@@ -176,7 +176,7 @@ export async function authorizeAgentRoute(db: Database, clock: Clock, actor: Par
   // A separately approved versioned source grant is necessary for typed routes.
   // Scope strings and issuing a replacement credential cannot confer it.
   const orderWorkspaceRoute = method==='GET' && (path==='/agent/order-workspace' || path==='/agent/order-proofs' || path==='/agent/order-attention' || /^\/agent\/order-proofs\/[A-Za-z0-9_-]+\/revisions\/[0-9]+(?:\/(?:artifacts|sources)\/[A-Za-z0-9_-]+)?$/.test(path))
-    || method==='POST' && ['/agent/order-workspace/proposals','/agent/order-workspace/observations','/agent/order-workspace/reconcile-api-source','/agent/order-workspace/api-source-pause','/agent/order-workspace/derivatives','/agent/order-changes'].includes(path);
+    || method==='POST' && ['/agent/order-workspace/proposals','/agent/order-workspace/withdraw','/agent/order-workspace/source-health','/agent/order-workspace/observations','/agent/order-workspace/reconcile-api-source','/agent/order-workspace/api-source-pause','/agent/order-workspace/derivatives','/agent/order-changes'].includes(path);
   if(orderWorkspaceRoute && reconstructionFeatureEnabled('orderWorkspace'))return; // Domain checks exact current installation scope.
   const sourceCapabilities=method==='GET'&&path==='/source-profiles';
   if(sourceCapabilities&&reconstructionFeatureEnabled('multiSourceAgent')&&reconstructionFeatureEnabled('typedIntake'))return;
