@@ -29,6 +29,11 @@ const entry = source(contract.runtime.unifiedEntry);
 const menu = source(contract.runtime.commerceMenu);
 const host = source(contract.runtime.authorizedService);
 const build = source(contract.runtime.unifiedBuild);
+const connectShell = source('connect-windows/ui/WorkspaceApp.tsx');
+assert.doesNotMatch(connectShell, /legacy\s*\|\|\s*\(status\s*&&\s*!status\.workspace\)/,
+  'A missing Logistics workspace must never silently activate classic Connect');
+assert.match(connectShell, /Open earlier connection tools/,
+  'Classic tools must be an explicit, recoverable user choice');
 assert.match(desktop, /workspaceMode==='logistics'/, 'Unified App must open Logistics by default');
 assert.match(desktop, /<LogisticsGateway\b/, 'Unified App must render the Logistics entry');
 assert.match(desktop, /onCommerce=\{\(\)=>setWorkspaceMode\('commerce'\)\}/, 'Commerce access must be an explicit action');
