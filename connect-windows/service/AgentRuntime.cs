@@ -7,10 +7,11 @@ namespace PackProof.Connect;
 
 public sealed partial class AgentRuntime : IDisposable
 {
-    internal const string InstalledVersion="0.6.0";
+    internal const string InstalledVersion="0.7.0";
     private readonly HostConfiguration host; private readonly ProtectedStore store; private readonly DurableQueue queue = null!; private readonly PackProofClient api; private LocalState state; private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Func<string,string,byte[]> setupSnapshot=FolderSource.Snapshot;
     private readonly Func<ISourceAdapter> sourceAdapterFactory=()=>new LocalNtfsSourceAdapter();
+    private readonly TimeProvider receiptClock = TimeProvider.System;
     private ConnectException? startupError;
     private readonly bool localInitialized;
     private bool networkOnline = true; private bool checkpointed; private JsonElement? localPreview; private DateTimeOffset lastRefresh = DateTimeOffset.MinValue; private DateTimeOffset lastScan = DateTimeOffset.MinValue; private DateTimeOffset lastCleanup = DateTimeOffset.MinValue;
@@ -28,7 +29,7 @@ public sealed partial class AgentRuntime : IDisposable
         catch(Exception error)when(error is IOException or UnauthorizedAccessException){startupError=new("LOCAL_STORAGE_UNAVAILABLE","The service cannot safely access its local protected storage. Ask IT to repair permissions or disk space; queued work is preserved.");state=new(){LastErrorCode=startupError.Code};}
     }
     // Internal transport seam exercises crash/retry orchestration without simulating Windows service identity checks.
-    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null, int queueFileLimit = DurableQueue.MaxFiles) { sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store, queueFileLimit); api = transport; InitializeSourceState(); localInitialized=true; }
+    internal AgentRuntime(HostConfiguration configuration, ProtectedStore storage, PackProofClient transport, LocalState initialState, Func<string,string,byte[]>? snapshot = null, Func<ISourceAdapter>? sourceAdapter = null, int queueFileLimit = DurableQueue.MaxFiles, TimeProvider? receiptClock = null) { this.receiptClock=receiptClock??TimeProvider.System; sourceAdapterFactory=sourceAdapter??(()=>new LocalNtfsSourceAdapter()); setupSnapshot=snapshot??FolderSource.Snapshot; host = configuration; host.Validate(); store = storage; state = initialState; SourceStateMigration.Validate(state); queue = new(store, queueFileLimit); api = transport; InitializeSourceState(); localInitialized=true; }
     private void Save() { SourceStateMigration.SynchronizeLegacy(state); store.Write("state.bin", state); }
     // Constructor-owned local admission only. Installer attestation must never
     // wait for the command gate held by authenticated cloud work or enumerate
@@ -121,6 +122,7 @@ public sealed partial class AgentRuntime : IDisposable
             if(startupError is not null&&command is not("status" or "preflight" or "diagnostics"))throw startupError;
             if(startupError is not null&&command=="diagnostics")return new{schema="packproof.connect-diagnostics/v1",version=InstalledVersion,environment=host.Environment,serviceOnline=true,lastErrorCode=startupError.Code};
             var p = payload ?? Json.Element(new { });
+            if(startupError is null) SelectFacilityContext();
             switch (command)
             {
                 case "inspectBackfill":case "proposeBackfill":case "pauseBackfill":case "resumeBackfill":case "refreshBackfills":await BackfillCommand(command,p,ct);break;
@@ -129,7 +131,9 @@ public sealed partial class AgentRuntime : IDisposable
                 case "workspaceDirectConnection": return WorkspaceDirectConnection(p);
                 case "workspaceAttention": return await WorkspaceAttention(p,ct);
                 case "workspaceSearchOrders": return await WorkspaceSearchOrders(p,ct);
-                case "workspaceDraftPreview": return WorkspaceDraftPreview(ct);
+                case "workspaceDraftPreview": return FacilityComparisonPreview(p,ct);
+                case "getFacilityDraft": case "saveFacilityDraft": case "saveFacilityNotes": case "replayFacilityDraft":
+                    return await FacilityCommand(command,p,ct);
                 case "workspaceOrderPage": return await WorkspaceOrderPage(p,ct);
                 case "workspaceSourceRecord": return await WorkspaceSourceRecord(p,ct);
                 case "workspaceOrderDetail": return await WorkspaceOrderDetail(p,ct);
@@ -259,7 +263,7 @@ public sealed partial class AgentRuntime : IDisposable
         // Clear only the resolved clock warning after a fresh, successful server
         // observation. Do not clear other errors, erase a pause or resume collection.
         if (state.LastErrorCode == "CLOCK_UNCERTAIN" && api.LastResponseHadServerDate) state.LastErrorCode = null;
-        state.ServerConfig = result; if (result.TryGetProperty("credentialExpiresAt", out var expires) && expires.ValueKind == JsonValueKind.String) state.CredentialExpiresAt = expires.GetDateTimeOffset(); state.LastPolicyCheckAt = DateTimeOffset.UtcNow; lastRefresh = DateTimeOffset.UtcNow; networkOnline = true; if (state.EnrollmentState == "credential") state.RedeemSecret = null;
+        ApplyServerConfig(result); if (result.TryGetProperty("credentialExpiresAt", out var expires) && expires.ValueKind == JsonValueKind.String) state.CredentialExpiresAt = expires.GetDateTimeOffset(); state.LastPolicyCheckAt = DateTimeOffset.UtcNow; lastRefresh = DateTimeOffset.UtcNow; networkOnline = true; if (state.EnrollmentState == "credential") state.RedeemSecret = null;
         if (before != "none" && (before != ConfigDigest || beforeRevision != ConfigRevision)) { state.SetupQueueId = null; state.VerifiedRecordId = null; state.VerifiedSetupImportId = null; state.LocalPaused = true; }
         if (ServerState == "revoked") state.LocalPaused = true;
         else if (state.LastErrorCode=="SOURCE_ADMISSION_PAUSED" && MappingSupported) state.LastErrorCode=null;
@@ -383,6 +387,7 @@ public sealed partial class AgentRuntime : IDisposable
                 await ProposeWorkspace(pending, pending.AllowPendingOutput, ct);
                 pending.ContinueAfterEnrollment = false; Save();
             }
+            SelectFacilityContext();
             await TickWorkspace(ct);
             if (WorkspaceAllowsProofOutput) await TickProofOutput(ct);
             var next = queue.NextDue(SourceSubscriptionState.LegacyId,Generation,QueueConfigIdentity,DateTimeOffset.UtcNow,receiptsOnly:!MappingSupported);
@@ -428,7 +433,7 @@ public sealed partial class AgentRuntime : IDisposable
     }
     private async Task CompleteRenewal(CancellationToken ct)
     {
-        var r = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = InstalledVersion, renewalAcknowledged = true, queueCount = CurrentPendingCount(), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastReceiptReconciledAt = state.LastReceiptReconciledAt, lastErrorCode = state.LastErrorCode }, state.PendingToken, null, ct); state.Token = state.PendingToken; state.PendingToken = null; state.PendingCredentialId = null; state.RenewalKey = null;state.RenewalAttempts=0;state.NextRenewalAttemptAt=null; RequireReasonableClock(DateTimeOffset.UtcNow); state.ServerConfig = r; state.LastPolicyCheckAt = DateTimeOffset.UtcNow; await RefreshSubscriptions(ct); Save();
+        var r = await api.Request("POST", "/v1/partner/agent/heartbeat", new { version = InstalledVersion, renewalAcknowledged = true, queueCount = CurrentPendingCount(), lastScanAt = state.LastScanAt, lastExportAt = state.LastExportAt, lastReceiptReconciledAt = state.LastReceiptReconciledAt, lastErrorCode = state.LastErrorCode }, state.PendingToken, null, ct); state.Token = state.PendingToken; state.PendingToken = null; state.PendingCredentialId = null; state.RenewalKey = null;state.RenewalAttempts=0;state.NextRenewalAttemptAt=null; RequireReasonableClock(DateTimeOffset.UtcNow); ApplyServerConfig(r); state.LastPolicyCheckAt = DateTimeOffset.UtcNow; await RefreshSubscriptions(ct); Save();
     }
     public void Dispose()
     {

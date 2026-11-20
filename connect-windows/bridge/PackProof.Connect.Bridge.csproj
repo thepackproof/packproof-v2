@@ -1,1 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><AssemblyName>PackProof.Connect.Bridge</AssemblyName><Version>0.6.0</Version><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><AssemblyName>PackProof.Connect.Bridge</AssemblyName><Version>0.7.0</Version><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../service/FolderSource.WorkspaceAccess.cs" />
+    <Compile Include="../service/ConnectException.cs" />
+    <Compile Include="../service/ProofOutputPaths.cs" />
+    <Compile Include="../service/ExportCatalogue.cs" />
+    <Compile Include="../service/SourceReaders.WorkflowHeadings.cs" />
+    <EmbeddedResource Include="../intelligence/export-catalogue.json" LogicalName="PackProof.Connect.ExportCatalogue.json" />
+  </ItemGroup>
+</Project>

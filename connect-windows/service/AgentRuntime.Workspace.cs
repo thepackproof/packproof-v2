@@ -22,6 +22,7 @@ public sealed partial class AgentRuntime
         {
             var grant = state.Workspace?.ActiveGrant;
             if (grant is null || !CurrentInstallation || state.InstallationId != grant.InstallationId) return false;
+            if (grant.TestedProfileDigest is not null && !GuidedSetupAvailable) return false;
             var elapsed = DateTimeOffset.UtcNow - grant.CheckedAt;
             var duration = networkOnline ? Math.Max(15, grant.OfflineWindowSeconds) : grant.OfflineWindowSeconds;
             return elapsed >= TimeSpan.Zero && elapsed <= TimeSpan.FromSeconds(duration);
@@ -78,7 +79,7 @@ public sealed partial class AgentRuntime
         bool currentOrders=WorkspaceGrantCurrent && ordersScope==w?.ActiveGrant?.ScopeDigest;
         return new
         {
-            step = w?.Step ?? "order", phase = w?.Phase ?? "draft",
+            step = w?.Step ?? "order", phase = w?.Phase ?? "draft", guidedSetupAvailable=GuidedSetupAvailable,
             approvalPath = w?.ContinueAfterEnrollment == true && state.Token is null && state.EnrollmentState == "pending" ? state.ApprovalPath : w?.ApprovalPath, expiresAt = w?.ExpiresAt, attention = w?.Attention,
             outputFolder = ProofOutputFolder, outputState = ProofOutputState switch {
                 "ready" or "pending" or "current" => "ready", "access_denied" => "denied", "unavailable" => "unavailable", _ => "unselected"
@@ -95,7 +96,7 @@ public sealed partial class AgentRuntime
                 state = s.Paused ? "paused" : s.Issue is not null ? "needs_attention"
                     : s.PreviousCollectorId is { } priorId && !s.ReplacesPreviousCollector ? state.SourceSubscriptions.FirstOrDefault(p => p.Id == priorId)?.ServerState ?? "needs_approval"
                     : WorkspaceGrantCurrent && w!.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation ? "active" : "pending",
-                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, pendingMedia = s.MediaJobs.Count, historyState = s.ApiHistoryState,
+                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, s.LastVerifiedReadAt, pendingMedia = s.MediaJobs.Count, historyState = s.ApiHistoryState,
                 queued = queue.Counts(DurableQueue.WorkspaceLane(s.Id)).Where(p => p.Key != "complete").Sum(p => p.Value)
             }).ToArray()
         };
@@ -109,6 +110,7 @@ public sealed partial class AgentRuntime
         if (ServerState == "revoked" || state.CredentialRecoveryConfirmedAt is not null || state.Token is not null && !CurrentInstallation)
             throw new ConnectException("AUTH_REQUIRED", "Reconnect this computer to its approved PackProof workspace.");
         var w = Draft();
+        if(operation is not ("saveWorkspaceStep" or "activateWorkspace" or "inspectWorkspaceSource")) await WithdrawPendingProfile(w,ct);
         switch (operation)
         {
             case "saveWorkspaceStep":
@@ -146,7 +148,8 @@ public sealed partial class AgentRuntime
                     source.ObservedNamespace=null; source.ConfirmedMap=null; source.ProposedMap=null;
                     source.ConfirmedWorkflow=null; source.ProposedWorkflow=null; source.Workflows.Clear();
                     source.ConfirmedDependencies.Clear(); source.RelatedSources.Clear();
-                    source.Inventory.Clear(); source.Cursor=null; source.LastScanAt=null; source.RetryAt=null;
+                    source.Inventory.Clear(); source.Cursor=null; source.LastScanAt=null; source.LastVerifiedReadAt=null;
+                    source.LastCheckAttemptAt=null; source.LastReadFailed=false; source.RetryAt=null;
                     source.CoverageGap=false; source.Issue=null;
                     w.Invalidate(); w.Step=source.InspectRole ?? source.Roles[0];
                 }
@@ -180,7 +183,7 @@ public sealed partial class AgentRuntime
                     // work remains owned by its original grant throughout the cutover.
                     picked.Recognition = null;
                 }
-                InspectWorkspaceSource(picked);
+                InspectWorkspaceSource(picked, Optional(p, "sampleFile")?.GetString());
                 break;
             }
             case "chooseWorkspaceRelatedSource":
@@ -287,15 +290,24 @@ public sealed partial class AgentRuntime
         if (w.Phase == "awaiting_approval" && w.ExpiresAt > DateTimeOffset.UtcNow) { await PollWorkspace(w, ct); return; }
         if (ProofOutputFolder is not { } output || ProofOutputState is not ("ready" or "current" or "pending") && !(allowPendingOutput && ProofOutputState == "unavailable"))
             throw new ConnectException("OUTPUT_UNAVAILABLE", "Choose a proof folder the background service can write.");
-        var sources = w.Sources.Where(Eligible).OrderBy(s => s.Id, StringComparer.Ordinal).ToArray();
+        var profile=GuidedSetupAvailable ? FacilityDraft(w) : null;
+        var sources = profile?.Candidates(w) ?? w.Sources.Where(Eligible).OrderBy(s => s.Id, StringComparer.Ordinal).ToArray();
+        if(profile is not null)
+        {
+            EnsureTested(profile,sources);
+            if(w.ActiveGrant is not null && w.Sources.Any(s=>s.MediaJobs.Count>0 || queue.Counts(DurableQueue.WorkspaceLane(s.Id)).Any(e=>e.Key!="complete" && e.Value>0)))
+                throw new ConnectException("SOURCE_WORK_PENDING","Let the collector finish its pending uploads before switching the facility rules.");
+        }
         if (sources.Length == 0) throw new ConnectException("SOURCE_REQUIRED", "Choose a recognized source or an empty folder that will receive supported records.");
         var outputDigest = SourceFolderDigest(output);
         var proposal = new
         {
             sources = sources.Select(s => new { id = s.Id, generation = s.Generation, folderDigest = s.Transport == "api" ? Hash(JsonSerializer.Serialize(new { provider = "partner-api", account = Optional(state.ServerConfig,"integrationAccountId"), s.SourceNamespace })) : SourceFolderDigest(s.Folder),
-                transport = s.Transport, sourceNamespace = s.SourceNamespace,
+                transport = s.Transport, sourceNamespace = s.SourceNamespace, s.ExpectedCheckIntervalSeconds,s.ExpectedDeliveryAfterLabelSeconds,
                 roles = s.Roles.Order(StringComparer.Ordinal).ToArray(), profileVersion = s.ProfileVersion, displayName = s.Transport == "api" ? s.DisplayName + " (" + s.SourceNamespace + ")" : s.Folder }).ToArray(),
-            outputDigest, outputName = output, history = OrderWorkspaceState.History
+            outputDigest, outputName = output, history = OrderWorkspaceState.History,
+            testedProfile=profile==null?null:new {schema="packproof.facility-replay/v1",digest=profile.Replay!.Digest,draftId=profile.Id,
+                revision=profile.Revision,examples=profile.Replay.Checks.Length}
         };
         JsonElement result;
         try
@@ -312,6 +324,7 @@ public sealed partial class AgentRuntime
         w.InstallationId = state.InstallationId;
         w.SubmittedGenerations = sources.ToDictionary(s => s.Id, s => s.Generation);
         w.ApprovedOutputDigest = outputDigest;
+        w.SubmittedProfileDigest = profile?.Replay?.Digest;
         w.ScopeDigest = digest;
         w.Phase = "awaiting_approval";
         w.Step = "activate";
@@ -322,6 +335,18 @@ public sealed partial class AgentRuntime
     private void ApplyWorkspaceResponse(OrderWorkspaceState w, JsonElement response)
     {
         var remoteState = response.GetProperty("state").GetString();
+        FacilityProfile? profile=null;
+        if(w.SubmittedProfileDigest is { } tested && w.Phase!="active" && remoteState is "pending" or "active")
+        {
+            profile=GuidedSetupAvailable ? FacilityDraft(w) : null;
+            if(profile?.Replay is not {Passed:true} replay || replay.Digest!=tested || ProfileDigest(profile,profile.Candidates(w))!=tested ||
+                Optional(Optional(Optional(response,"scope"),"testedProfile"),"digest")?.GetString()!=tested)
+            {
+                w.Invalidate();
+                w.Attention="The facility configuration changed. Test the known orders and request a fresh approval.";
+                return;
+            }
+        }
         if (Optional(response, "scopeDigest")?.GetString() != w.ScopeDigest || w.InstallationId != state.InstallationId
             || remoteState is not ("pending" or "active"))
         {
@@ -342,8 +367,20 @@ public sealed partial class AgentRuntime
         w.Attention = null;
         if (remoteState == "active")
         {
+            if(profile!=null)
+            {
+                ApplyFacilityRules(w,profile);
+                w.ApprovedFacilityProfiles.TryAdd(w.ScopeDigest!,Json.Element(new {
+                    schema="packproof.approved-facility-profile/v1",profile.Id,profile.Revision,profile.ScopeKey,w.ScopeDigest,
+                    approvalSession=Optional(response,"id"),approvedBy=Optional(response,"approvedBy"),approvedAt=Optional(response,"approvedAt"),
+                    profile.Inputs,profile.Replay,compiler=FacilityProfile.Compiler,reader=SourceReaders.Version,catalogue=ExportCatalogue.Digest,
+                    outputDigest=w.ApprovedOutputDigest,sources=w.Sources.Where(s=>w.SubmittedGenerations.ContainsKey(s.Id)).Select(s=>new {
+                        s.Id,s.Generation,s.Roles,s.Transport,s.SourceNamespace,s.ProfileVersion,s.ConfirmedMap,s.ConfirmedDependencies,
+                        mappings=s.ApprovedWorkflows(),s.ShippedAtMeaning,s.PackingReader,s.ExpectedCheckIntervalSeconds,s.ExpectedDeliveryAfterLabelSeconds})
+                }));
+            }
             w.ActiveGrant = new(w.InstallationId!, w.ScopeDigest!, w.ApprovedOutputDigest!,
-                new(w.SubmittedGenerations), w.CheckedAt.Value, w.OfflineWindowSeconds);
+                new(w.SubmittedGenerations), w.CheckedAt.Value, w.OfflineWindowSeconds,w.SubmittedProfileDigest);
             foreach (var source in w.Sources.Where(s => s.PreviousCollectorId != null && w.SubmittedGenerations.GetValueOrDefault(s.Id) == s.Generation))
                 source.ReplacesPreviousCollector = true;
             if (becomesActive) { w.Step = "overview"; ordersCurrent = false; nextOrderRefresh = DateTimeOffset.MinValue; }
@@ -352,7 +389,8 @@ public sealed partial class AgentRuntime
 
     private async Task PollWorkspace(OrderWorkspaceState w, CancellationToken ct)
     {
-        var result = await api.Request("GET", WorkspaceApi, null, state.Token, null, ct);
+        var path=w.ScopeDigest is { } digest?WorkspaceApi+"?scopeDigest="+digest:WorkspaceApi;
+        var result = await api.Request("GET", path, null, state.Token, null, ct);
         ApplyWorkspaceResponse(w, result);
         Save();
     }

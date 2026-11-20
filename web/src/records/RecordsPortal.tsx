@@ -1,3 +1,4 @@
+import { desktopLogisticsContext } from '../auth/desktop-logistics';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PackProofApi } from '../api/client';
 import { ApiError } from '../api/types';
@@ -189,6 +190,11 @@ const TOUR = [
 export default function RecordsPortal({ api, session, href, onGo, onSignOut, adminAllowed = false, developerAllowed = false }: { api: PackProofApi; session: WebSession; href: string; onGo: Go; onSignOut: () => void; adminAllowed?: boolean; developerAllowed?: boolean }) {
   const connectApproval = /^\/app\/records\/connect(?:\/approve)?\/?$/.test(new URL(href, 'https://packproof.local').pathname);
   const { section, id, params } = recordsRoute(href), { scheme, setPreference } = useTheme();
+  const desktopScope = desktopLogisticsContext();
+  if (desktopScope) {
+    params.set('organizationId',desktopScope.organizationId); params.set('environment',desktopScope.environment);
+    if (desktopScope.locationId) params.set('locationId',desktopScope.locationId);
+  }
   const [revision, setRevision] = useState(0), [tour, setTour] = useState<number | null>(null), [tourDone, setTourDone] = useState(false);
   const tourKey = `packproof.records.tour.${session.apiBaseUrl}.${session.userId}`;
   const contextParams = new URLSearchParams(); for (const key of ['organizationId', 'environment']) { const value = params.get(key); if (value) contextParams.set(key, value); }
@@ -201,7 +207,35 @@ export default function RecordsPortal({ api, session, href, onGo, onSignOut, adm
   const refresh = () => setRevision(value => value + 1);
   const nav: Array<[RecordsSection, string, string]> = [['records', 'Records', 'file'], ...(context.data?.capabilities.orderProofs ? [['order-proofs', 'Orders', 'box'] as [RecordsSection, string, string]] : []), ...(context.data?.capabilities.reconstruction ? [['cases', 'Operational cases', 'grid'] as [RecordsSection, string, string]] : []), ['attention', 'Needs attention', 'alert'], ['connections', 'Connections', 'link'], ['exports', 'Exports', 'download'], ['settings', 'Settings', 'settings']];
   const leaveTour = () => { setTour(null); setTourDone(true); try { localStorage.setItem(tourKey, 'done'); } catch { /* Optional preference. */ } };
-  const goSection = (target: RecordsSection) => recordsPath(target, scopedParams, { cursor: null });
+  const goSection = (target: RecordsSection) => recordsPath(target, scopedParams, { cursor: null, revision: null, subject: null, subjectType: null, namespace: null });
+  if (desktopScope) {
+    const attention = section === 'attention';
+    const permitted = organization?.enabled && context.data?.capabilities.orderProofs && locationAllowed && desktopScope.userId === session.userId;
+    return <div className="records-shell">
+      <a href="#records-main" className="records-skip-link">Skip to Logistics</a>
+      <aside className="records-sidebar">
+        <LocalLink className="records-brand" href={goSection('order-proofs')} onGo={onGo}>
+          <img src="/brand/packproof-symbol.svg" width="35" height="35" alt=""/><span>PackProof<small>LOGISTICS</small></span>
+        </LocalLink>
+        <nav aria-label="Logistics workspace">
+          <LocalLink href={goSection('order-proofs')} onGo={onGo} aria-current={attention ? undefined : 'page'}><Glyph name="box" size={19}/>Orders</LocalLink>
+          <LocalLink href={goSection('attention')} onGo={onGo} aria-current={attention ? 'page' : undefined}><Glyph name="alert" size={19}/>Needs attention</LocalLink>
+        </nav>
+        <div className="records-sidebar-bottom"><strong>{session.displayName || session.username}</strong><button onClick={onSignOut}>Sign out</button></div>
+      </aside>
+      <div className="records-workspace"><header className="records-topbar"><span>{organization?.name} {selectedLocation && (organization?.locations.find(l=>l.id===selectedLocation)?.name || selectedLocation)}</span>
+        <span>{desktopScope.environment === 'live' ? 'Production' : 'Sandbox'}</span>
+        <button className="records-button secondary" onClick={refresh}>Refresh</button></header>
+        <main id="records-main" className="records-main" tabIndex={-1}>
+          {context.error ? <Failure error={context.error} onRetry={refresh}/> : context.loading && !context.data ? <Loading>Opening your authorized workspace.</Loading>
+            : !permitted || !organization ? <p role="alert">This account cannot open Logistics for the selected facility.</p>
+            : attention ? <><h1>Needs attention</h1><OrderReferenceReview key={revision} api={api} scope={scopeQuery(organization,selectedLocation).toString()} canManage={['ADMIN','OWNER'].includes(organization.role)}/></>
+            : <OrderProofs key={[session.userId,organization.id,selectedLocation,id].join('.')} api={api} organization={organization} locationId={selectedLocation}
+                id={section === 'order-proofs' ? id : null} revision={revision} routeParams={scopedParams}/>}
+        </main>
+      </div>
+    </div>;
+  }
   const exactWorkspaceApproval = connectApproval && params.has("workspaceSession");
   const enrolledHere = connectApproval && params.has("enrollmentId") && organization?.enabled &&
     context.data?.capabilities.records && locationAllowed && !context.error;
@@ -244,7 +278,7 @@ export default function RecordsPortal({ api, session, href, onGo, onSignOut, adm
           {!connectApproval && !tourDone && section === 'records' && !id && <div className="records-welcome"><div><strong>New to your evidence workspace?</strong><p>Take a short tour, then connect or import your first shipment.</p></div><div className="records-actions"><button className="records-button secondary" onClick={() => setTour(0)}>Show me around</button><button className="records-text-button" onClick={leaveTour}>Dismiss</button></div></div>}
           {connectApproval && <AgentApproval key={`${organization.id}.${organization.environment}.${params.get('enrollmentId') || params.get('installationId')}`} api={api} organizationId={organization.id} environment={organization.environment} params={params.has('workspaceSession') ? params : scopedParams} canManage={['OWNER', 'ADMIN'].includes(organization.role)}/>}
           {!connectApproval && section === 'records' && (id ? <RecordDetailScreen key={`${organization.id}.${organization.environment}.${id}`} api={api} organization={organization} params={scopedParams} id={id} revision={revision} onRefresh={refresh} onGo={onGo} storageScope={`${session.apiBaseUrl}.${session.userId}`}/> : <RecordsListScreen api={api} organization={organization} params={scopedParams} revision={revision} onGo={onGo} onRefresh={refresh}/>)}
-          {section === 'order-proofs' && (context.data.capabilities.orderProofs ? <OrderProofs key={[session.userId, organization.id, organization.environment, selectedLocation, id].join('.')} api={api} organization={organization} locationId={selectedLocation} id={id} revision={revision}/> : <p role="status">Order proofs are unavailable in this workspace.</p>)}
+          {section === 'order-proofs' && (context.data.capabilities.orderProofs ? <OrderProofs key={[session.userId, organization.id, organization.environment, selectedLocation, id].join('.')} api={api} organization={organization} locationId={selectedLocation} id={id} revision={revision} routeParams={scopedParams}/> : <p role="status">Order proofs are unavailable in this workspace.</p>)}
           {section === 'cases' && <OperationalCases api={api} organization={organization} params={scopedParams} id={id} revision={revision} onGo={onGo} onRefresh={refresh} enabled={context.data.capabilities.reconstruction === true} exportsEnabled={context.data.capabilities.reconstructionExports === true} crossCaseEnabled={context.data.capabilities.crossCase === true} signedExportsEnabled={context.data.capabilities.signedCaseExports === true} retentionEnabled={context.data.capabilities.sourceDisposition === true}/>}
           {section === 'attention' && context.data.capabilities.orderProofs && <OrderReferenceReview key={scopeQuery(organization,selectedLocation).toString()} api={api} scope={scopeQuery(organization,selectedLocation).toString()} canManage={['ADMIN','OWNER'].includes(organization.role)}/>}
           {section === 'attention' && <AttentionScreen api={api} organization={organization} params={scopedParams} revision={revision} onRefresh={refresh} onGo={onGo}/>}

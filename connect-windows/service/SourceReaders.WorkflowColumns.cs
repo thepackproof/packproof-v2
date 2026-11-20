@@ -9,59 +9,12 @@ public sealed record WorkflowColumnMap(string Role,Dictionary<string,string> Col
 
 public static partial class SourceReaders
 {
-    private static readonly Dictionary<string,string[]> OperationalHeadings=new(StringComparer.Ordinal)
-    {
-        ["orderId"]=["SalesOrderID","SalesOrderNumber","OrderNumber","OrderID"],
-        ["warehouseId"]=["WarehouseOrder","WarehouseOrderID","WarehouseOrderNumber","WorkOrderNumber","PickTicket","PickTicketNumber"],
-        ["shipmentId"]=["ShipmentID","ShipmentNumber","OutboundShipmentNumber"],
-        ["packageId"]=["PackageID","PackageNumber","SSCC","CartonID","CartonNumber","LicensePlateNumber","LPN"],
-        ["trackingId"]=["TrackingNumber","TrackingID","CarrierTrackingNumber"],
-        ["trackingCarrier"]=["CarrierCode","Carrier","SCAC"],["trackingAccount"]=["CarrierAccount","CarrierAccountNumber","CarrierAccountID"],
-        ["trackingPeriod"]=["TrackingPeriod","ShipmentPeriod","ShipDate","ShipmentDate","OriginalShipDate"],
-        ["handoffId"]=["HandoffID","DispatchEventID","HandoffEventID"],["deliveryId"]=["DeliveryEventID","PODID","ProofOfDeliveryID","DeliveryID"],
-        ["returnId"]=["ReturnID","ReturnNumber","RMANumber","RMAID"],["eventId"]=["EventID","SourceEventID","TransactionEventID"],
-        ["lineId"]=["SalesOrderLineID","SalesOrderLineNumber","OrderLineID","OrderLineNumber","LineID","LineNumber"],
-        ["sku"]=["SKU","ItemSKU","ItemCode"],["unit"]=["UOM","Unit","UnitOfMeasure","QuantityUnit"],
-        ["version"]=["RecordVersion","SourceRevision","RowVersion","RecordRevision","Version","Revision"],
-        ["asOf"]=["SourceModifiedAt","LastModifiedAt","UpdatedAt","LastUpdated","ModifiedAt","ReportAsOf","SnapshotAt"],
-        ["packedAt"]=["PackedAt","PackingCompletedAt"],["pickedAt"]=["PickedAt","PickCompletedAt"],
-        ["labelAt"]=["LabelCreatedAt","LabelPrintedAt"],["handoffAt"]=["HandedOffAt","DepartedAt","DispatchTime","HandoffAt"],
-        ["deliveryAt"]=["DeliveredAt","DeliveryConfirmedAt","PODSignedAt"],["returnAt"]=["ReturnReceivedAt","InspectionCompletedAt"],
-        ["eventAt"]=["OccurredAt","EventTime","EventTimestamp"],
-        ["pickedQuantity"]=["PickedQuantity","PickedQty","QuantityPicked","QtyPicked"],
-        ["packedQuantity"]=["PackedQuantity","PackedQty","QuantityPacked","QtyPacked","PackedUnits"],
-        ["loadedQuantity"]=["LoadedQuantity","LoadedQty","QtyLoaded","QuantityLoaded"],
-        ["acknowledgedQuantity"]=["AcknowledgedQuantity","AcknowledgedQty","QtyAcknowledged","QuantityAcknowledged","ReceivedQuantity","QtyReceived"],
-        ["shippedQuantity"]=["ShippedQuantity","ShippedQty","QuantityShipped","QtyShipped"],
-        ["returnedQuantity"]=["ReceivedReturnQuantity","ReturnedQuantity","ReturnReceivedQty","QtyReturned"],
-        ["state"]=["EventStatus","ShipmentStatus","DeliveryStatus","HandoffStatus","ReturnStatus","LabelStatus","Status"],
-        ["loadId"]=["LoadID","LoadNumber"],["weight"]=["Weight","MeasuredWeight","PackageWeight"],["weightUnit"]=["WeightUnit","WeightUOM"]
-    };
-    private static readonly Dictionary<string,string> ReferenceRole=new(StringComparer.Ordinal){
-        ["order"]="order",["warehouse"]="picking",["package"]="packing",["shipment"]="shipping",["tracking"]="shipping"};
-    private static readonly Dictionary<string,(string subject,string quantity,string time)> OperationalRoles=new(StringComparer.Ordinal){
-        ["picking"]=("warehouse","pickedQuantity","pickedAt"),["packing"]=("package","packedQuantity","packedAt"),
-        ["shipping"]=("shipment","","labelAt"),["handoff"]=("handoff","shippedQuantity","handoffAt"),
-        ["delivery"]=("delivery","","deliveryAt"),["returns"]=("return","returnedQuantity","returnAt")};
-
     public static WorkflowColumnMap? ProposeWorkflowMap(SourceReadResult input,string role,string sourceId,IReadOnlyDictionary<string,string> relatedSources)
     {
-        if(input.State!="parsed"||input.Rows.Count==0||!IdentityPart(sourceId)||!OperationalRoles.TryGetValue(role,out var rule))return null;
-        var columns=new Dictionary<string,string>(StringComparer.Ordinal);
-        foreach(var (semantic,aliases) in OperationalHeadings)
-        {
-            var matches=input.Headers.Where(h=>aliases.Any(a=>Heading(a)==Heading(h))).ToArray();
-            if(matches.Length>1)return null;
-            if(matches.Length==1)columns.Add(semantic,matches[0]);
-        }
-        if(!columns.ContainsKey("version")&&!columns.ContainsKey("asOf")&&
-            !((columns.ContainsKey("eventId")||role is "handoff" or "delivery" && columns.ContainsKey(rule.subject+"Id"))&&(columns.ContainsKey(rule.time)||columns.ContainsKey("eventAt"))))return null;
-        bool fullTracking=TrackingColumns(columns);
-        bool hasSubject=columns.ContainsKey(rule.subject+"Id");
-        if(role=="shipping")hasSubject=hasSubject || fullTracking;
-        if(role is "handoff" or "delivery")hasSubject=hasSubject || columns.ContainsKey("eventId");
-        if(!hasSubject)return null;
-        if(WorkflowAmounts(role,rule.quantity).Any(columns.ContainsKey)&&(!columns.ContainsKey("lineId")||!columns.ContainsKey("unit")))return null;
+        if(input.State!="parsed"||input.Rows.Count==0||!IdentityPart(sourceId))return null;
+        var columns = WorkflowHeaders(input.Headers);
+        if (columns == null || !FitsWorkflow(role,columns)) return null;
+        bool fullTracking = TrackingColumns(columns);
         var references=new Dictionary<string,string>(StringComparer.Ordinal);
         foreach(var (entity,targetRole) in ReferenceRole)
         {
@@ -72,15 +25,6 @@ public static partial class SourceReaders
         if(references.Count==0)return null;
         return new(role,columns,references);
     }
-    private static IEnumerable<string> WorkflowAmounts(string role,string primary)
-    {
-        if(primary!="")yield return primary;
-        if(role is "shipping" or "handoff")yield return "loadedQuantity";
-        if(role=="delivery")yield return "acknowledgedQuantity";
-    }
-    private static bool TrackingColumns(Dictionary<string,string> columns) =>
-        new[]{"trackingId","trackingCarrier","trackingAccount","trackingPeriod"}.All(columns.ContainsKey);
-
     public static string WorkflowProfileVersion(WorkflowColumnMap map)
     {
         var identity=new {map.Role,columns=map.Columns.OrderBy(p=>p.Key,StringComparer.Ordinal),relations=map.ReferenceSources.OrderBy(p=>p.Key,StringComparer.Ordinal)};
@@ -111,8 +55,20 @@ public static partial class SourceReaders
         return "tracking/"+Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]{source,carrier!.ToUpperInvariant(),account,basis})));
     }
 
-    public static JsonElement NormalizeWorkflow(SourceReadResult input,string sourceId,WorkflowColumnMap map)
+    public static JsonElement NormalizeWorkflow(SourceReadResult input,string sourceId,WorkflowColumnMap map,string? shippedAtMeaning=null)
     {
+        if (shippedAtMeaning is "label" or "handoff" &&
+            map.Role == (shippedAtMeaning=="label"?"shipping":"handoff"))
+        {
+            var headings=input.Headers.Where(h=>WorkflowKey(h)=="shippedat").ToArray();
+            if (headings.Length>1) return Val(Array.Empty<object>());
+            if (headings.Length==1)
+            {
+                var key=shippedAtMeaning=="label"?"labelAt":"handoffAt";
+                if (map.Columns.ContainsKey(key)) return Val(Array.Empty<object>());
+                map=map with {Columns=new Dictionary<string,string>(map.Columns){[key]=headings[0]}};
+            }
+        }
         if(input.State!="parsed"||!IdentityPart(sourceId)||!OperationalRoles.TryGetValue(map.Role,out var rule)||
             map.Columns.Values.Any(c=>!input.Headers.Contains(c,StringComparer.Ordinal)))return Val(Array.Empty<object>());
         var records=new List<JsonElement>();

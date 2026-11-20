@@ -5,7 +5,6 @@ import type {
   OrderSummary,
   SourceRole,
   WorkspaceBridge,
-  WorkspaceSource,
   WorkspaceStep,
 } from "../workspace-types";
 import {
@@ -20,7 +19,11 @@ import {
   shortFolder,
   sourceName,
 } from "./SetupParts";
+import { FolderSuggestions } from "./FolderSuggestions";
+import { Clarify } from "./SourceClarification";
+import { GuidedSetup } from "./GuidedSetup";
 import "./Setup.css";
+import "./GuidedSetup.css";
 
 type Stage =
   | "welcome"
@@ -35,7 +38,7 @@ type Stage =
   | "activate"
   | "done";
 type Example = DraftPreview["examples"][number];
-interface Props {
+export interface SetupProps {
   status: ConnectStatus;
   bridge: WorkspaceBridge;
   onStatus: (s: ConnectStatus) => void;
@@ -52,13 +55,13 @@ const providers = [
   ["NetSuite", "Order management", "records"],
   ["SAP", "Enterprise system", "layers"],
 ] as const;
-function resume(s: ConnectStatus): Stage {
+function resume(s: ConnectStatus, bridge: WorkspaceBridge): Stage {
   const w = s.workspace!;
   if (w.phase === "awaiting_approval" || w.step === "activate") return "activate";
   if (w.step === "output") return "output";
   if (w.step === "review") return "first";
   if (w.phase === "active" && w.step === "overview") return "done";
-  if (w.step !== "order") return "files";
+  if (w.step !== "order") return bridge.discoverWorkspaceFolders ? "discover" : "files";
   return w.sources.some((v) => v.roles.includes("order")) ? "checked" : "welcome";
 }
 function message(e: unknown) {
@@ -72,7 +75,18 @@ function stamp(value?: string) {
     : t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-export function Setup({
+export function Setup(props: SetupProps) {
+  if (props.status.workspace?.guidedSetupAvailable || props.status.workspace?.offlineDraftOnly) {
+    const { installationId, environment, binding, locationId, operatorMembershipId, integrationAccountId } = props.status;
+    const scope = JSON.stringify([installationId, environment, binding?.organizationId, binding?.operatorMembershipId ?? operatorMembershipId,
+      binding?.integrationAccountId ?? integrationAccountId, binding?.locationId ?? locationId, props.status.workspace.viewKey,
+      !!props.status.workspace.offlineDraftOnly]);
+    return <GuidedSetup key={scope} {...props} />;
+  }
+  return <StandardSetup {...props} />;
+}
+
+function StandardSetup({
   status,
   bridge,
   onStatus,
@@ -81,9 +95,9 @@ export function Setup({
   onOpenDraftProof,
   onBusyChange,
   onLegacy,
-}: Props) {
+}: SetupProps) {
   const ws = status.workspace!;
-  const [stage, setStage] = useState<Stage>(() => resume(status));
+  const [stage, setStage] = useState<Stage>(() => resume(status, bridge));
   const [role, setRole] = useState<SourceRole>(() => (ws.step in roles ? (ws.step as SourceRole) : "order"));
   const [provider, setProvider] = useState(""),
     [partnerSystem, setPartnerSystem] = useState("");
@@ -95,9 +109,6 @@ export function Setup({
   const [preview, setPreview] = useState<DraftPreview | null>(null),
     [previewError, setPreviewError] = useState("");
   const [attempt, retry] = useState(0);
-  const [suggestion, setSuggestion] = useState<{ folder: string; kind: "prepared" | "selected" } | null>(
-    null,
-  );
   const pending = useRef(false),
     alive = useRef(true),
     heading = useRef<HTMLHeadingElement>(null);
@@ -186,12 +197,12 @@ export function Setup({
       },
     );
   }
-  function choose(suggested = false) {
+  function choose(folder?: string) {
     void run(
       "Checking your folder",
       () =>
-        suggested && suggestion && bridge.useWorkspaceFolderSuggestion
-          ? bridge.useWorkspaceFolderSuggestion(role, suggestion.folder)
+        folder && bridge.useWorkspaceFolderSuggestion
+          ? bridge.useWorkspaceFolderSuggestion(role, folder)
           : bridge.chooseWorkspaceFolder(role),
       (s) => {
         accept(s);
@@ -199,16 +210,6 @@ export function Setup({
           retry((i) => i + 1);
           setStage("checked");
         }
-      },
-    );
-  }
-  function discover() {
-    void run(
-      "Looking for a records folder",
-      async () => bridge.getWorkspaceFolderSuggestion?.(role) ?? null,
-      (s) => {
-        setSuggestion(s);
-        setStage("discover");
       },
     );
   }
@@ -221,7 +222,7 @@ export function Setup({
         setRole(r);
         setProvider("");
         setOverlay(null);
-        setStage("files");
+        setStage(bridge.discoverWorkspaceFolders ? "discover" : "files");
       },
     );
   }
@@ -289,13 +290,25 @@ export function Setup({
     );
     eyebrow = <span className="setup-accent" />;
     intro =
-      "Bring the order, packing list, and shipment together. Start with the records your team already uses. We’ll look for a matched order before you turn on updates.";
+      bridge.discoverWorkspaceFolders
+        ? "Bring the order, packing list, and shipment together. Start by checking common export folders on this computer. You choose which records to preview."
+        : "Bring the order, packing list, and shipment together. Start with the records your team already uses. We’ll look for a matched order before you turn on updates.";
     left = (
       <>
         <div className="setup-actions">
-          {act("Connect my records", () => setStage("start"))}
+          {act("Connect my records", () => setStage(bridge.discoverWorkspaceFolders ? "discover" : "start"))}
           {act("Try a sample order", onSample, true)}
         </div>
+        {!status.installationId && bridge.beginEnrollment && (
+          <section className="setup-card">
+            <h3>{enrolling ? "Finish connecting this computer" : "Set up a warehouse facility"}</h3>
+            <p>{enrolling ? "Complete the sign-in request in your browser. This window will reopen the connected facility."
+              : "Sign in to the facility before choosing records. PackProof will open the setup available to your organization."}</p>
+            {enrolling && status.enrollment?.comparisonCode && <p>Match this code in your browser · <strong>{status.enrollment.comparisonCode}</strong></p>}
+            {act(enrolling ? "Reopen facility sign-in" : "Connect this computer to a facility", () =>
+              void run("Opening facility sign-in", () => enrolling ? bridge.openWorkspaceApproval().then(() => status) : bridge.beginEnrollment!(), accept),true)}
+          </section>
+        )}
         <p className="setup-hint">The sample opens immediately. You can start setup whenever you’re ready.</p>
       </>
     );
@@ -329,7 +342,7 @@ export function Setup({
             icon="search"
             title="Help me find my records"
             detail="Look for an order export on this computer."
-            onClick={discover}
+            onClick={() => setStage("discover")}
             disabled={!!busy}
           />
         </div>
@@ -471,31 +484,33 @@ export function Setup({
       </Context>
     );
   } else if (stage === "discover") {
-    eyebrow = <Progress n={2} label="Folder discovery" />;
-    title = suggestion ? "Is this your order folder?" : "Where do you save your exports?";
-    intro = suggestion
-      ? "Check the location before PackProof reads its records."
-      : "There’s no suggested folder on this computer. Pick the location where you save exported order lists.";
+    eyebrow = <Progress n={2} label="Find your records" />;
+    title = `Find your ${roles[role].title.toLowerCase()}.`;
+    intro = "Choose a folder dedicated to the records you want to connect. Selecting it opens a local preview.";
     left = (
       <>
-        {suggestion && (
-          <Row icon="folder" title={shortFolder(suggestion.folder)} detail={suggestion.folder} />
-        )}
+        <FolderSuggestions key={role} role={role} bridge={bridge} busy={!!busy} onChoose={choose} />
         <div className="setup-actions">
-          {suggestion && act("Check this folder", () => choose(true))}
-          {act(suggestion ? "Choose another folder" : "Choose a folder", () => choose(), !!suggestion)}
+          {act("Choose a folder myself", () => choose(), true)}
+          {role === "order" && act("Choose my software", () => setStage("software"), true)}
         </div>
-        {back("files")}
+        {role !== "order" && (
+          <button className="setup-link" disabled={!!busy} onClick={goPreview}>
+            Skip for now
+          </button>
+        )}
+        {back("files", "More ways to choose a source")}
       </>
     );
     right = (
       <Context
-        label="Folder check"
-        title="Choose the source you recognize."
-        intro="Use the folder containing the actual order list, such as an export from your order system."
-        footer="You can add other record folders later."
+        label="Source preview"
+        title="Check a record before you connect."
+        intro="PackProof uses order and shipment references to bring related records into the same proof."
+        footer="You can add more sources before turning on automatic updates."
       >
-        <Row icon="file" title="Order export" detail="Look for order numbers, items, and quantities." />
+        <Row icon={roles[role].icon} title={roles[role].title} detail="Select the folder your team uses." />
+        <Row icon="search" title="Preview the records" detail="See what PackProof can read from that folder." />
       </Context>
     );
   } else if (stage === "files") {
@@ -520,8 +535,8 @@ export function Setup({
           <Row
             icon="search"
             title={`Find my ${roleName} folder`}
-            detail="Check the suggested location before choosing."
-            onClick={discover}
+            detail="Look for matching exports on this computer."
+            onClick={() => setStage("discover")}
             disabled={!!busy}
           />
           <Row
@@ -614,7 +629,9 @@ export function Setup({
     title = empty
       ? "No order lists in this folder yet."
       : selected
-        ? "Your order files are ready to review."
+        ? role === "order"
+          ? "Your order files are ready to review."
+          : "Review the matched order."
         : current.some((s) => s.transport === "api")
           ? "Your order connection is ready to review."
           : "Check your records folder.";
@@ -626,14 +643,15 @@ export function Setup({
     left = (
       <>
         <div className="setup-card">
-          <span className="setup-tag">Source check</span>
+          <span className="setup-tag">{roles[role].title}</span>
           {current.map((s) => (
             <div key={s.id}>
               <Row
                 icon={s.transport === "api" ? "connection" : "folder"}
                 title={sourceName(s)}
-                detail={s.recognition.message}
+                detail={s.transport === "api" ? s.recognition.message : s.folder}
               />
+              {s.transport !== "api" && <p>{s.recognition.message}</p>}
               <Clarify
                 source={s}
                 bridge={bridge}
@@ -730,7 +748,9 @@ export function Setup({
               ? "Once your connection is approved, your integration can submit order records to this workspace."
               : "Save an order export in your chosen folder and check again. An empty folder can also be connected for future records."
         }
-        footer="Updates start only when you turn them on."
+        footer={current.some((s) => s.transport !== "api")
+          ? "This preview shows a sample. Approval covers the original files in your chosen folder."
+          : "Updates start only when you turn them on."}
       >
         {selected ? (
           <Row
@@ -875,7 +895,7 @@ export function Setup({
                 key={s.id}
                 icon={roles[s.roles[0]].icon}
                 title={sourceName(s)}
-                detail={s.roles.map((r) => roles[r].title).join(" · ")}
+                detail={[...s.roles.map((r) => roles[r].title), s.folder].filter(Boolean).join(" · ")}
               />
             ))}
           <Row
@@ -902,8 +922,9 @@ export function Setup({
         {approval && (
           <>
             <p className="setup-hint">
-              PackProof will retain approved originals from these sources. Folder connections read existing
-              and future eligible files in the selected folders.
+              {ready.some((s) => s.transport !== "api")
+                ? "Approval lets PackProof upload and retain original files in each source folder, including existing files, new files, and files it can’t match to an order."
+                : "PackProof will retain approved originals from these sources."}
             </p>
             {sources.length > ready.length && (
               <p>
@@ -1182,59 +1203,5 @@ export function Setup({
         </SetupDialog>
       )}
     </main>
-  );
-}
-
-function Clarify({
-  source,
-  bridge,
-  apply,
-  busy,
-}: {
-  source: WorkspaceSource;
-  bridge: WorkspaceBridge;
-  apply: (f: () => Promise<ConnectStatus>) => void;
-  busy: boolean;
-}) {
-  const r = source.recognition;
-  if (r.state !== "ambiguous") return null;
-  const choice = r.relatedChoices?.[0];
-  if (choice)
-    return (
-      <fieldset className="setup-clarify">
-        <legend>{r.question || "Which source supplies this reference?"}</legend>
-        {choice.options.map((o) => (
-          <button
-            key={o.id}
-            className="setup-secondary"
-            disabled={busy}
-            onClick={() =>
-              apply(() =>
-                bridge.chooseWorkspaceRelatedSource(source.id, source.generation, choice.role, o.id),
-              )
-            }
-          >
-            {o.displayName}
-          </button>
-        ))}
-      </fieldset>
-    );
-  if (!r.question || !r.profileVersion) return null;
-  return (
-    <div className="setup-clarify">
-      <p>{r.question}</p>
-      {r.suggestedOrderColumn && r.sample?.[r.suggestedOrderColumn] && (
-        <p>Example · {r.sample[r.suggestedOrderColumn]}</p>
-      )}
-      <button
-        className="setup-secondary"
-        disabled={busy}
-        onClick={() =>
-          apply(() => bridge.confirmWorkspaceOrderMap(source.id, source.generation, r.profileVersion!))
-        }
-      >
-        Confirm this reference
-      </button>
-    </div>
   );
 }

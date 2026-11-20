@@ -1,10 +1,22 @@
 import {contextBridge,ipcRenderer} from 'electron';
 import type {ConnectBridge} from '../ui/types';
 const call=(method:string,...args:unknown[])=>ipcRenderer.invoke(`connect:${method}`,...args).then(result=>{if(!result?.ok)throw Error(result?.error||'The background service needs attention.');return result.value;});
+declare const __PACKPROOF_HOSTED__: boolean;
+if (typeof __PACKPROOF_HOSTED__ !== 'undefined' && __PACKPROOF_HOSTED__) {
+ contextBridge.exposeInMainWorld('packproofSetupAssistant', {
+   suggest: (input: unknown) => ipcRenderer.invoke('host:suggest',input),
+   review: (input: unknown) => ipcRenderer.invoke('host:review',input)
+ });
+}
 const bridge:ConnectBridge={
+ getFacilityDraft:()=>call('getFacilityDraft'),
+ saveFacilityDraft:(revision,changes)=>call('saveFacilityDraft',revision,changes),
+ saveFacilityNotes:(revision,changes)=>call('saveFacilityNotes',revision,changes),
+ replayFacilityDraft:revision=>call('replayFacilityDraft',revision),
  workspaceOrderPage:before=>call('workspaceOrderPage',before),
  workspaceSourceRecord:(proofId,revision,eventKey)=>call('workspaceSourceRecord',proofId,revision,eventKey),
  getWorkspaceFolderSuggestion:role=>call('getWorkspaceFolderSuggestion',role),
+ discoverWorkspaceFolders:role=>call('discoverWorkspaceFolders',role),
  useWorkspaceFolderSuggestion:(role,folder)=>call('useWorkspaceFolderSuggestion',role,folder),
  replaceWorkspaceFolder:(sourceId,expectedGeneration)=>call('replaceWorkspaceFolder',sourceId,expectedGeneration),
  chooseWorkspaceRelatedSource:(id,generation,role,related)=>call('chooseWorkspaceRelatedSource',id,generation,role,related),
@@ -12,9 +24,9 @@ const bridge:ConnectBridge={
  workspaceSearchOrders:query=>call('workspaceSearchOrders',query),
  workspaceAttention:before=>before===undefined?call('workspaceAttention'):call('workspaceAttention',before),
  openWorkspaceReview:()=>call('openWorkspaceReview'),
- openWorkspaceOrder:(id,revision)=>call('openWorkspaceOrder',id,revision),
+ openWorkspaceOrder:(id,revision,subject)=>subject === undefined ? call('openWorkspaceOrder',id,revision) : call('openWorkspaceOrder',id,revision,subject),
  getWorkspaceStatus:()=>call('getWorkspaceStatus'),addWorkspaceDirectSource:name=>name ? call('addWorkspaceDirectSource',name) : call('addWorkspaceDirectSource'),copyWorkspaceDirectProfile:id=>call('copyWorkspaceDirectProfile',id),
- workspaceDraftPreview:()=>call('workspaceDraftPreview'),
+ workspaceDraftPreview:compare=>compare ? call('workspaceDraftPreview',compare) : call('workspaceDraftPreview'),
  workspaceOrderDetail:(id,revision)=>call('workspaceOrderDetail',id,revision),
  chooseWorkspaceFolder:role=>call('chooseWorkspaceFolder',role),
  reuseWorkspaceFolder:(id,role)=>call('reuseWorkspaceFolder',id,role),

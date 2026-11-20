@@ -47,7 +47,7 @@ test('candidate provenance detects a stale packaged renderer, changed assets and
   await mkdir(join(app,'dist/main'),{recursive:true});await mkdir(join(app,'dist/renderer/assets'),{recursive:true});
   await writeFile(join(app,'package.json'),JSON.stringify({version:'0.1.2'}));
   await writeFile(join(app,'dist/main/index.cjs'),'main fixture');await writeFile(join(app,'dist/renderer/assets/ui.js'),'review fixture');
-  const manifest=await writeBuildProvenance(app,{sourceCommit,channel,sourceDirty:false,appVersion:'0.1.2'});
+  const manifest=await writeBuildProvenance(app,{sourceCommit,channel,sourceDirty:false,appVersion:'0.1.2',unifiedWindows:false});
   await asar.createPackage(app,archive);
   assert.equal((await verifyPackagedProvenance(archive,{sourceCommit,channel})).assets.length,2);
   await assert.rejects(()=>verifyPackagedProvenance(archive,{sourceCommit:'b'.repeat(40),channel}),/does not match/);
@@ -61,6 +61,25 @@ test('candidate provenance detects a stale packaged renderer, changed assets and
   await rm(join(app,'dist/renderer/assets/extra.js'));
   await writeFile(join(app,'dist/main/build-provenance.json'),JSON.stringify({...manifest,sourceDirty:true}));
   await assert.rejects(()=>verifyBuildProvenance(app,{sourceCommit,channel,requireClean:true}),/clean committed source/);
+  const commerceMain='dist/commerce/main/index.cjs';
+  await mkdir(join(app,'dist/commerce/main'),{recursive:true});
+  await mkdir(join(app,'dist/commerce/renderer'),{recursive:true});
+  await writeFile(join(app,commerceMain),'commerce host');
+  await writeFile(join(app,'dist/commerce/renderer/index.html'),'commerce renderer');
+  await writeFile(join(app,'dist/main/host.cjs'),'logistics host');
+  await writeBuildProvenance(app,{sourceCommit,channel,sourceDirty:false,appVersion:'0.1.2',unifiedWindows:true});
+  const wrongHost=join(root,'wrong-host.asar');
+  await asar.createPackage(app,wrongHost);
+  await assert.rejects(()=>verifyPackagedProvenance(wrongHost,{sourceCommit,channel,unifiedWindows:true}),/signed-in workspace host/);
+  await writeFile(join(app,'package.json'),JSON.stringify({version:'0.1.2',main:commerceMain}));
+  const unified=join(root,'unified.asar');
+  await asar.createPackage(app,unified);
+  assert.equal((await verifyPackagedProvenance(unified,{sourceCommit,channel,unifiedWindows:true})).assets.length,5);
+  await assert.rejects(()=>verifyPackagedProvenance(unified,{sourceCommit,channel,unifiedWindows:false}),/variant differs/);
+  await writeFile(join(app,commerceMain),'changed commerce host');
+  const changedHost=join(root,'changed.asar');
+  await asar.createPackage(app,changedHost);
+  await assert.rejects(()=>verifyPackagedProvenance(changedHost,{sourceCommit,channel,unifiedWindows:true}),/assets differ/);
  }finally{asar.uncacheAll();await rm(root,{recursive:true,force:true});}
 });
 

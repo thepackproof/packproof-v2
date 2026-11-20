@@ -245,7 +245,7 @@ export async function sampleOriginal(
 }
 export function draftProof(d: DraftPreview["examples"][number]): OrderDetail {
   const events = d.events.map((e) => ({
-    kind: e.kind,
+    ...e,
     sourceName: e.source,
     fileName: e.fileName,
     occurredAt: e.occurredAt,
@@ -254,9 +254,9 @@ export function draftProof(d: DraftPreview["examples"][number]): OrderDetail {
   return {
     proofId: d.orderReference,
     revision: 0,
-    orderReference: d.orderReference,
+    orderReference: d.displayReference || d.orderReference,
     lines: d.lines.map((l) => ({ lineId: l.lineId, sku: l.sku, unit: l.unit, orderedQuantity: l.quantity })),
-    packages: d.packages.map((id) => ({ packageId: id })),
+    packages: d.cartons?.map(carton => ({ packageId: carton.id, ...carton })) ?? d.packages.map((id) => ({ packageId: id })),
     events,
     evidence: [],
   };

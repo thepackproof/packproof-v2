@@ -1,6 +1,6 @@
 import {build as bundle} from 'esbuild';
 import {build as vite} from 'vite';
-import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile,cp} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -9,6 +9,8 @@ await mkdir('dist/main',{recursive:true});
 const marker=JSON.parse(await readFile(path.join(root,'../config/rnd/research-build.json'),'utf8'));
 const research=marker.researchOnly===true;
 const channel=process.env.APP_ENV??'development';
+const unified=process.env.PACKPROOF_UNIFIED_WINDOWS==='1';
+if(unified && research)throw Error('Choose a supported Commerce distribution for the unified Windows application.');
 if(research && channel!=='development')throw new Error('Experimental source cannot create a distribution build.');
 if(research){process.env.VITE_PACKPROOF_RND='1';for(const key of ['PACKPROOF_COGNITO_CLIENT_ID','PACKPROOF_COGNITO_USER_POOL_ID','PACKPROOF_UPDATES_URL','PACKPROOF_SENTRY_DSN','SENTRY_DSN'])if(process.env[key])throw new Error('Research build cannot inherit remote identity, updates or telemetry.');}
 if(!['development','staging','production'].includes(channel))throw new Error('APP_ENV must be development, staging or production');
@@ -16,5 +18,10 @@ const config={channel,research,apiBaseUrl:process.env.PACKPROOF_API_BASE_URL??(r
 if(channel!=='development'&&(!config.apiBaseUrl||!config.cognito.clientId||!config.cognito.userPoolId))throw new Error('Signed builds require explicit API and Cognito configuration.');
 if(research && ![config.apiBaseUrl,config.webBaseUrl].every(value=>['localhost','127.0.0.1','[::1]'].includes(new URL(value).hostname)))throw new Error('Research endpoints must be loopback.');
 await writeFile('dist/main/runtime-config.json',JSON.stringify(config,null,2));
-for(const name of ['index','preload'])await bundle({entryPoints:[`src/main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',external:['electron','electron-updater','@sentry/node'],sourcemap:false});
+for(const name of ['index','preload'])await bundle({entryPoints:[`src/main/${name}.ts`],outfile:`dist/main/${name}.cjs`,bundle:true,platform:'node',target:'node24',format:'cjs',define:{__PACKPROOF_UNIFIED__:String(unified)},external:unified?['electron','electron-updater']:['electron','electron-updater','@sentry/node'],sourcemap:false});
 await vite({configFile:path.join(root,'vite.config.ts')});
+// Copy the exact official logo and approved full-color icon assets into the
+// unified renderer; do not redraw icons or store time-limited Figma URLs.
+// This only mutates generated distribution files, not source.
+await mkdir('dist/renderer/brand/connect',{recursive:true});
+await cp('../web/public/brand/connect','dist/renderer/brand/connect',{recursive:true});

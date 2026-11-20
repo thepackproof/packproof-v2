@@ -1,6 +1,6 @@
 # Approved PackProof Windows design authority
 
-**Approved by PackProof's founder on November 20, 2026.** This file is intentionally committed to the repository's **default `main` branch** so that agents starting fresh conversations encounter the approved design even when the current Windows release work is on a different branch.
+**Approved by PackProof's founder on November 20, 2026.** The approved design authority is committed to the repository's default `main` branch and to the qualified Logistics release, so new agents inherit the source-of-truth design in either workflow.
 
 ## Canonical Figma design
 
@@ -23,7 +23,7 @@ The design is approved. Do **not** ask the founder to re-approve it or invent an
 
 Active Logistics-enabled Windows release baseline: `release/logistics-129-pilot`. The default `main` branch **is not by itself evidence of the most recent Logistics Windows implementation**. Identify the current release/source commit before any changes.
 
-- Implementation reconciliation PR: https://github.com/thepackproof/packproof-v2/pull/178
+- Implementation reconciliation: [PR #178](https://github.com/thepackproof/packproof-v2/pull/178), merged into `release/logistics-129-pilot` after Windows clean-install and upgrade checks.
 - Canonical implementation contract in that PR: `docs/WINDOWS_UX_IMPLEMENTATION_CONTRACT.md`
 - Machine-readable Figma-frame / component / functional-operation map in that PR: `connect-windows/design/windows-ux-contract.json`
 

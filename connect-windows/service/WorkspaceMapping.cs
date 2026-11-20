@@ -32,7 +32,9 @@ public sealed partial class AgentRuntime
                 continue;
             }
             source.RelatedSources[targetRole]=selected.Id;
-            targets[targetRole]=selected.SourceNamespace ?? selected.ObservedNamespace ?? selected.Id;
+            targets[targetRole] = targetRole == "order" && selected.ConfirmedMap?.Catalogue is { } scope
+                ? SourceReaders.CompanyOrderNamespace(selected.Id, scope)
+                : selected.SourceNamespace ?? selected.ObservedNamespace ?? selected.Id;
             names.Add(selected.Transport == "api" ? selected.DisplayName : Path.GetFileName(selected.Folder));
         }
         if (choices.Count > 0)
@@ -46,7 +48,8 @@ public sealed partial class AgentRuntime
         source.ProposedWorkflow=proposal;
         source.Recognition = Json.Element(new {state="ambiguous",message=$"Found matching references in {fileName}.",
             question="Do those references come from "+string.Join(", ",names)+"?",profileVersion=SourceReaders.WorkflowProfileVersion(proposal),
-            fields=proposal.Columns.Values,sample=preview,fileName});
+            fields=parsed.Headers.Take(32),sample=preview,fileName,
+            packingSchema=source.Roles.SequenceEqual(["packing"]) && SourceReaders.RecognizeExport(parsed)==null ? SourceReaders.PackingSchema(parsed) : null});
         return true;
     }
 }

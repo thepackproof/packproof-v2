@@ -1,11 +1,17 @@
 name: Connect Windows candidate
 on:
   pull_request:
-    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'desktop/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/tests/commerce-windows-journey.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   push:
     branches: [main]
-    paths: ['connect-windows/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
+    paths: ['connect-windows/**', 'desktop/**', 'examples/multisource-journey/**', 'backend/src/records/order-*.ts', 'backend/tests/order-journey-*.test.ts', 'backend/tests/commerce-windows-journey.test.ts', 'backend/src/records/connect-csv-rules.json', 'backend/src/records/typed-source-rules.json', 'backend/src/records/source-contracts.ts', 'backend/src/records/source-profiles.ts', 'backend/tests/fixtures/connect-csv-corpus.json', 'backend/tests/fixtures/reconstruction/**', '.github/workflows/connect-windows*.yml']
   workflow_dispatch:
+    inputs:
+      disposable_windows11:
+        description: Run installer rehearsals on the preprovisioned disposable Windows 11 x64 runner
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -77,6 +83,19 @@ jobs:
           PACKPROOF_JOURNEY_PERF_N: "20"
           PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/http-journey-result.json
         run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
+      - name: Qualify guided setup, two cartons, dispatch recovery and pinned PDF exports
+        working-directory: backend
+        timeout-minutes: 5
+        env:
+          PACKPROOF_JOURNEY_REAL_HTTP: "1"
+          PACKPROOF_JOURNEY_CARTONS: "1"
+          PACKPROOF_JOURNEY_BROWSER: "1"
+          PACKPROOF_JOURNEY_RESULT: ${{ github.workspace }}/connect-windows/build/carton-journey-result.json
+        run: npm exec --offline -- vitest run tests/order-journey-http.test.ts --maxWorkers=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: guided-carton-journey-${{ github.sha }}
+          path: connect-windows/build/carton-journey-result.json
       - name: Compare the real local package to the Windows reader and backend projection
         env:
           PACKPROOF_JOURNEY_PROJECTED: ${{ github.workspace }}/connect-windows/build/order-journey-projection.json
@@ -149,3 +168,195 @@ jobs:
             connect-windows/release/development/win32-x64/storage-repair-smoke.json
             connect-windows/release/development/win32-x64/legacy-queue-input.json
             connect-windows/release/development/win32-x64/legacy-queue-upgrade-smoke.json
+
+  unified:
+    name: Unified Windows workstation
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: connect-windows
+        shell: pwsh
+    env:
+      APP_ENV: development
+      PACKPROOF_UNIFIED_WINDOWS: '1'
+      PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_CONNECT_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
+      PACKPROOF_WEB_BASE_URL: https://dvpmnwc27i8tw.cloudfront.net
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID || '34pnucunllka2jcs8hsq762m5e' }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID || 'us-east-1_GdgTeYaOO' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            backend/package-lock.json
+            connect-windows/package-lock.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.403'
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix ../desktop --no-audit --no-fund
+      - name: Check synthetic Windows Electron fixture syntax before expensive runtime tests
+        run: |
+          node --check ../desktop/scripts/commerce-windows-journey.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --check ../desktop/scripts/check-unified-entry.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --check scripts/check-renderer-layout.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run: npm run build
+      - name: Install the backend video validator for the Windows camera journey
+        run: |
+          if (-not (Get-Command ffprobe.exe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffprobe -version
+      - name: Record a synthetic camera stream and verify the finalized Commerce Proof, original and share
+        working-directory: backend
+        timeout-minutes: 5
+        env:
+          PACKPROOF_JOURNEY_COMMERCE: '1'
+          PACKPROOF_COMMERCE_RESULT: ${{ github.workspace }}/connect-windows/build/commerce-journey.json
+        run: |
+          npm ci --no-audit --no-fund --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm exec --offline -- vitest run tests/commerce-windows-journey.test.ts --maxWorkers=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: commerce-camera-journey-${{ github.sha }}
+          path: connect-windows/build/commerce-journey.json
+          if-no-files-found: error
+      - run: npm run publish:native
+      - run: npm exec --offline -- electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never
+      - run: npm run verify:artifacts
+      - name: Verify actual unified host renderer, Logistics entry and access recovery at Windows scales
+        timeout-minutes: 5
+        run: node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-windows-ux-evidence-${{ github.sha }}
+          path: connect-windows/build/unified-ux-screens/**
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Launch and restart the packaged Commerce host with Windows protected storage
+        run: node ../desktop/scripts/native-launch-smoke.cjs
+      - name: Qualify the unified package's installed LocalService bridge and collection identity
+        run: ./scripts/smoke-native-foundation.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packproof-unified-DEVELOPMENT-win32-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            connect-windows/release/development/win32-x64/*.exe
+            connect-windows/release/development/win32-x64/SHA256SUMS
+            connect-windows/release/development/win32-x64/release-evidence.json
+            connect-windows/release/development/win32-x64/build-provenance.json
+            connect-windows/release/development/win32-x64/native-launch-smoke.json
+            connect-windows/release/development/win32-x64/native-foundation-smoke.json
+      - name: Preserve startup and LocalService diagnostics after a failed package check
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unified-windows-diagnostics-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            connect-windows/release/development/win32-x64/native-launch-smoke.json
+            connect-windows/release/development/win32-x64/native-foundation-smoke.json
+            connect-windows/build/commerce-journey.json
+
+  installed:
+    name: Unified Windows installer / ${{ matrix.mode }}
+    needs: unified
+    permissions:
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [Clean, Upgrade]
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.disposable_windows11 && fromJSON('["self-hosted","windows","x64","packproof-disposable-windows11"]') || 'windows-2025' }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      APP_ENV: development
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      PACKPROOF_DISPOSABLE_WINDOWS11: ${{ github.event_name == 'workflow_dispatch' && inputs.disposable_windows11 && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packproof-unified-DEVELOPMENT-win32-x64-${{ github.sha }}
+          path: candidate
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Obtain the frozen Commerce source for the upgrade input
+        if: matrix.mode == 'Upgrade'
+        uses: actions/checkout@v4
+        with:
+          ref: 63843c5616dce4ce5824015f975fd0ac6327012d
+          path: previous
+      - name: Build the previous standalone Commerce installer
+        if: matrix.mode == 'Upgrade'
+        working-directory: previous/desktop
+        env:
+          PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_DESKTOP_DEV_API_BASE_URL || 'https://pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws' }}
+          PACKPROOF_WEB_BASE_URL: https://thepackproof.com
+          PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_REGION || 'us-east-1' }}
+          PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_CLIENT_ID || '34pnucunllka2jcs8hsq762m5e' }}
+          PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_DESKTOP_DEV_COGNITO_USER_POOL_ID || 'us-east-1_GdgTeYaOO' }}
+        run: |
+          $env:GITHUB_SHA = (git rev-parse HEAD).Trim()
+          npm ci --no-fund --no-audit
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run package:win
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run verify:artifacts
+      - name: Verify the previous Connect installer archive and prepare the enrollment fixture
+        if: matrix.mode == 'Upgrade'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVED_BASELINE: ${{ vars.PACKPROOF_CONNECT_060_QUALIFICATION_ARCHIVE_URL }}
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'packproof-connect-pr175.zip'
+          if ($env:ARCHIVED_BASELINE) {
+            $uri = [uri]$env:ARCHIVED_BASELINE
+            if ($uri.Scheme -ne 'https' -or $uri.UserInfo) { throw 'Expected an HTTPS release archive location.' }
+            Invoke-WebRequest -Uri $uri -OutFile $archive
+          } else {
+            Invoke-WebRequest -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/actions/artifacts/14587903702/zip" -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } -OutFile $archive
+          }
+          if ((Get-FileHash -Algorithm SHA256 $archive).Hash -ne '00279cff2fc00e14fdaba0126a1c9b7c356b93ed41ed982a60f34ea04dea001e') { throw 'Previous Connect release archive checksum mismatch.' }
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Rehearse the verified installers
+        env:
+          REHEARSAL_MODE: ${{ matrix.mode }}
+        run: |
+          $arguments = @{ Mode = $env:REHEARSAL_MODE; CandidateDirectory = (Resolve-Path 'candidate').Path }
+          if ($env:REHEARSAL_MODE -eq 'Upgrade') {
+            $arguments.PriorConnectArchive = Join-Path $env:RUNNER_TEMP 'packproof-connect-pr175.zip'
+            $arguments.PriorCommerceDirectory = (Resolve-Path 'previous/desktop/release/development/win32-x64').Path
+            $arguments.PriorCommerceSource = (Resolve-Path 'previous/desktop').Path
+          }
+          ./connect-windows/scripts/smoke-logistics-upgrade.ps1 @arguments
+      - name: Preserve installed qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logistics-installed-${{ matrix.mode }}-${{ github.sha }}
+          if-no-files-found: ignore
+          retention-days: 30
+          path: candidate/logistics-install-${{ matrix.mode }}.json

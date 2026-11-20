@@ -25,7 +25,7 @@ public sealed partial class AgentRuntime
         var query=payload.GetProperty("query").GetString();
         if (string.IsNullOrWhiteSpace(query) || query.Length>200 || query.Any(char.IsControl))
             throw new ConnectException("ORDER_QUERY_INVALID","Enter an order reference of up to 200 characters.");
-        var result=await api.Request("GET","/v1/partner/agent/order-proofs?q="+Uri.EscapeDataString(query),null,state.Token,null,ct);
+        var result=await api.Request("GET","/v1/partner/agent/order-proofs?q="+Uri.EscapeDataString(query)+"&referenceType=any",null,state.Token,null,ct);
         return result.GetProperty("orders").EnumerateArray().Take(20).Select(SummaryForDesktop).ToArray();
     }
     private static long? OrderCursor(JsonElement result,string key="nextBefore") =>
@@ -70,8 +70,13 @@ public sealed partial class AgentRuntime
     }
     private static int? OptionalCount(JsonElement value,string key) =>
         Optional(value,key) is {ValueKind:JsonValueKind.Number} number && number.TryGetInt32(out var n) && n>=0 ? n:null;
-    private static JsonElement SummaryForDesktop(JsonElement row)=>Json.Element(SmallFields(row,
-        ["proofId","revision","orderReference","updatedAt","customerName","latestKind","issue","fulfillmentStatus"]));
+    private static JsonElement SummaryForDesktop(JsonElement row)
+    {
+        var summary=SmallFields(row,["proofId","revision","orderReference","updatedAt","customerName","latestKind","issue","fulfillmentStatus","locationId"]);
+        if (Optional(row,"matchedSubjects") is {ValueKind:JsonValueKind.Array} subjects)
+            summary["matchedSubjects"]=Json.Element(subjects.EnumerateArray().Take(64).Select(s=>SmallFields(s,["id","type","namespace"])));
+        return Json.Element(summary);
+    }
     private (string id,int revision) RequireOrderRead(JsonElement request)
     {
         if(!WorkspaceGrantCurrent)throw new ConnectException("AUTH_REQUIRED","Reconnect this workspace to read this proof.");

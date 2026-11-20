@@ -37,6 +37,10 @@ export function isProfileComplete(session: Pick<WebSession, "username" | "displa
 
 export function loadSession(): WebSession | null {
   try {
+    const hosted = (window as Window & {packproofDashboardSession?:WebSession}).packproofDashboardSession;
+    if (hosted && navigator.userAgent.includes('PackProofLogistics/1')) {
+      return hosted.accessExpiresAt && hosted.accessExpiresAt > Date.now() ? {...hosted} : null;
+    }
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) {
       return null;
@@ -67,5 +71,6 @@ export function saveSession(session: WebSession): void {
 }
 
 export function clearSession(): void {
+  (window as Window & {closePackProofDashboard?:()=>void}).closePackProofDashboard?.();
   try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Sign-out must still clear the active in-memory session. */ }
 }

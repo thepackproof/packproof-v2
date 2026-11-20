@@ -4,10 +4,11 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Win32.SafeHandles;
+using PackProof.Connect;
 
 internal static class Program
 {
-    private static readonly HashSet<string> Operations = ["status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "analyzeLocal", "startSetup", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint", "beginSubscriptionSource", "inspectSubscriptionDraft", "proposeSubscription", "selectSubscriptionSource", "inspectSubscriptionFile", "previewSubscription", "commitSubscription", "verifySubscription", "pauseSubscription", "resumeSubscription", "inspectBackfill", "proposeBackfill", "pauseBackfill", "resumeBackfill", "saveWorkspaceStep", "addWorkspaceSource", "removeWorkspaceRole", "inspectWorkspaceSource", "setWorkspaceOutput", "activateWorkspace", "pauseWorkspaceSource", "resumeWorkspaceSource", "workspaceOrderDetail", "workspaceSourceRecord", "workspaceOrderPage", "replaceWorkspaceFolder", "workspaceDraftPreview", "confirmWorkspaceOrderMap", "workspaceSearchOrders", "workspaceAttention", "addWorkspaceDirectSource", "workspaceDirectConnection", "chooseWorkspaceRelatedSource"];
+    private static readonly HashSet<string> Operations = ["getFacilityDraft", "saveFacilityDraft", "saveFacilityNotes", "replayFacilityDraft", "discoverWorkspaceFolders", "status", "preflight", "beginEnrollment", "recoverEnrollment", "pollEnrollment", "selectFolder", "localPreview", "analyzeLocal", "startSetup", "proposeConfiguration", "preview", "commit", "verify", "proposeActivation", "activate", "pause", "resume", "refresh", "diagnostics", "checkpoint", "beginSubscriptionSource", "inspectSubscriptionDraft", "proposeSubscription", "selectSubscriptionSource", "inspectSubscriptionFile", "previewSubscription", "commitSubscription", "verifySubscription", "pauseSubscription", "resumeSubscription", "inspectBackfill", "proposeBackfill", "pauseBackfill", "resumeBackfill", "saveWorkspaceStep", "addWorkspaceSource", "removeWorkspaceRole", "inspectWorkspaceSource", "setWorkspaceOutput", "activateWorkspace", "pauseWorkspaceSource", "resumeWorkspaceSource", "workspaceOrderDetail", "workspaceSourceRecord", "workspaceOrderPage", "replaceWorkspaceFolder", "workspaceDraftPreview", "confirmWorkspaceOrderMap", "workspaceSearchOrders", "workspaceAttention", "addWorkspaceDirectSource", "workspaceDirectConnection", "chooseWorkspaceRelatedSource"];
     public static async Task<int> Main()
     {
         string id = "unknown";
@@ -22,6 +23,12 @@ internal static class Program
             var config = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "bridge-config.json"))).RootElement;
             var channel = config.GetProperty("channel").GetString();
             if (channel is not ("development" or "staging" or "production")) throw new InvalidOperationException();
+            if (root.GetProperty("operation").GetString() == "discoverWorkspaceFolders")
+            {
+                var matches = WorkspaceDiscovery.Discover(root.GetProperty("payload"), channel);
+                await Console.Out.WriteLineAsync(JsonSerializer.Serialize(new { version = 1, id, ok = true, result = matches }));
+                return 0;
+            }
             var serviceName = "PackProofConnect" + char.ToUpperInvariant(channel[0]) + channel[1..];
             var pipeName = "PackProofConnect-" + channel + "-v1";
             var expected = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "service", "PackProof.Connect.Service.exe"));

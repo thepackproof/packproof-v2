@@ -4,6 +4,7 @@ import type { PackProofApi } from '../api/client';
 import { connectApprovalReturnPath } from '../auth/connect-approval-return';
 import { AgentApproval } from '../records/AgentConnections';
 import { OrderProofs } from '../records/OrderProofs';
+import { OrderSourceHealth } from '../records/OrderSourceHealth';
 import { OrderReferenceReview } from '../records/OrderReferenceReview';
 import { canonicalWorkspacePath } from '../proof-list-state';
 
@@ -13,6 +14,55 @@ const pending = { id: 'request1', state: 'pending', scopeDigest: 'bound1', expir
   scope: { history: 'existing_and_future', sources: [{ id: 'one', displayName: 'Orders', roles: ['order'] }], outputName: 'Saved records' } };
 const org = { id: 'org', environment: 'sandbox', name: 'Demo', locations: [], role: 'ADMIN', enabled: true };
 afterEach(cleanup);
+
+it('looks up a carton and links the exact subject and namespace on its authorized proof', async () => {
+  const matched = {proofId:'proof1',orderReference:'SO-10482',updatedAt:pending.expiresAt,revision:5,
+    locationId:'dock',matchedSubjects:[{type:'package',namespace:'pack',id:'CTN-02'}]};
+  const recordsRequest = vi.fn(async (path:string) => ({orders:path.includes('q=') ? [matched] : [],cursor:5}));
+  render(<OrderProofs api={{recordsRequest} as unknown as PackProofApi} organization={org} id={null} locationId="dock" revision={0}/>);
+  fireEvent.change(screen.getByLabelText('Reference type'),{target:{value:'package'}});
+  fireEvent.change(screen.getByLabelText('Exact reference'),{target:{value:'CTN-02'}});
+  fireEvent.click(screen.getByRole('button',{name:'Find order'}));
+  const link = await screen.findByRole('link',{name:'Carton CTN-02'});
+  expect(new URL(link.getAttribute('href')!,'https://test').searchParams.get('namespace')).toBe('pack');
+  expect(recordsRequest.mock.calls.some(([path])=>path.includes('q=CTN-02') && path.includes('referenceType=package') && path.includes('locationId=dock'))).toBe(true);
+});
+
+it('opens the selected carton at a pinned revision and rechecks original access', async () => {
+  const subject = {id:'CTN-02',namespace:'pack',type:'package'};
+  const event = {kind:'label',eventKey:'label2',entity:subject,references:[],sourceId:'dispatch',fields:{},
+    occurredAt:'2026-11-19T13:42:00Z',observedAt:'2026-11-19T13:44:00Z'};
+  const recordsRequest = vi.fn(async (path:string) => {
+    if (path.includes('/sources/')) throw Error('Original access denied for this account.');
+    if (path.startsWith('/order-proofs?')) return {orders:[],cursor:6};
+    if (!path.startsWith('/order-proofs/p/revisions/5?')) throw Error('Unexpected mutable revision lookup');
+    return {proofId:'p',orderReference:'SO-10482',revision:5,events:[event],evidence:[],lines:[],
+      cartons:[{...subject,lastEventKind:'label',lastEventKey:'label2',occurredAt:event.occurredAt,deliveryStatus:'awaiting_evidence'}]};
+  });
+  render(<OrderProofs api={{recordsRequest} as unknown as PackProofApi} organization={org} id="p" locationId="dock" revision={0}
+    routeParams={new URLSearchParams({revision:'5',subject:'CTN-02',subjectType:'package',namespace:'pack'})}/>);
+  expect(await screen.findByText('Awaiting delivery evidence')).toBeVisible();
+  expect(screen.getByText(/Received by PackProof/)).toBeVisible();
+  expect(screen.getByRole('button',{name:'Download revision 5'})).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'Inspect source record'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Original access denied');
+  expect(recordsRequest.mock.calls.at(-1)![0]).toContain('/revisions/5/sources/label2?organizationId=org&environment=sandbox&locationId=dock');
+});
+
+it('groups a missed dispatch check once and keeps healthy-feed evidence deadlines separate', async () => {
+  let recovered = false;
+  const recordsRequest = vi.fn(async () => ({incidents:recovered ? [] : [{installationId:'PC',sourceId:'dispatch',generation:1,displayName:'Dispatch',
+    state:'delayed',lastVerifiedReadAt:'2026-11-19T19:18:00Z',nextCheckAt:'2026-11-19T19:23:00Z',
+    affectedOrders:[{proofId:'p',orderReference:'SO-10482'},{proofId:'q',orderReference:'SO-22'}]}],
+    overdue:[{proofId:'q',orderReference:'SO-22',id:'CTN-03',namespace:'pack',deadline:'2026-11-19T19:20:00Z'}],limited:false}));
+  render(<OrderSourceHealth api={{recordsRequest} as unknown as PackProofApi} scope="organizationId=org&environment=sandbox"/>);
+  expect(await screen.findByRole('heading',{name:'Dispatch · Source check overdue'})).toBeVisible();
+  expect(screen.getByText('Orders linked to this source (2)')).toBeVisible();
+  recovered=true;
+  fireEvent.click(screen.getByRole('button',{name:'Refresh feed checks'}));
+  await waitFor(()=>expect(screen.queryByText('Dispatch · Source check overdue')).toBeNull());
+  expect(screen.getByText('Delivery evidence overdue · CTN-03')).toBeVisible();
+});
 
 it('restores the exact workspace approval after sign-in and rejects mixed or incomplete requests', () => {
   expect(connectApprovalReturnPath(locator + '&private=value')).toBe(locator);

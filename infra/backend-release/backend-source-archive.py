@@ -3,6 +3,10 @@ import hashlib,json,subprocess,sys,zipfile
 from pathlib import Path
 def archive(source,destination,profile,verify=False):
     import re
+    # Logistics uses the hosted collector image layout and its own exact schema inventory.
+    logistics = profile == 'logistics-v1'
+    if logistics:
+        profile = 'reconstruction-v11'
     if not re.fullmatch('[a-f0-9]{40}',source) or profile not in ('bridge','capture-receipts-v1','records-v1','connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):
         raise ValueError('INVALID_SOURCE_PROFILE')
     if subprocess.check_output(['git','cat-file','-t',source]).decode().strip()!='commit':
@@ -35,6 +39,8 @@ def archive(source,destination,profile,verify=False):
         if b'connect-hosted-migration.mjs' in subprocess.check_output(['git','show',source+':backend/Dockerfile']):
             probes+=['backend/Dockerfile.collector-hosted-bridge','infra/backend-release/collector-workspace-forward-read.mjs','infra/backend-release/reconstruction-v11-hosted-runtime-preflight.mjs','infra/backend-release/connect-hosted-migration.mjs','infra/backend-release/order-workspace-restored-rehearsal.mjs']
         probes+=['infra/backend-release/reconstruction-v11-release-review.mjs','infra/backend-release/reconstruction-v11-runtime-preflight.mjs','infra/backend-release/collector-version-pair.mjs']
+    if logistics:
+        probes+=['infra/backend-release/logistics-hosted-migration.mjs']
     if profile in ('connect-v1','zero-touch-v1','reconstruction-v1','reconstruction-v2','reconstruction-v3','reconstruction-v4','reconstruction-v5','reconstruction-v6','reconstruction-v7','reconstruction-v8','reconstruction-v9','reconstruction-v10','reconstruction-v11'):paths+=probes
     tree=subprocess.check_output(['git','ls-tree','-rz',source,'--',*paths])
     entries=[]
@@ -135,9 +141,12 @@ def archive(source,destination,profile,verify=False):
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
     if profile=='reconstruction-v11':
         digest=lambda rows:hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()
-        if (len(inventory)!=123 or digest(inventory)!='d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60'
-            or digest(inventory[:-1])!='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d'):
+        collector=inventory[:123] if logistics else inventory
+        if (len(collector)!=123 or digest(collector)!='d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60'
+            or digest(collector[:-1])!='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d'):
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
+        if logistics and (len(inventory)!=128 or digest(inventory)!='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc'):
+            raise ValueError('EXACT_LOGISTICS_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':
     try: print(json.dumps(archive(*sys.argv[1:4],verify='--verify' in sys.argv[4:])))

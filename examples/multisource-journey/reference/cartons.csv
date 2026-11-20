@@ -1,0 +1,5 @@
+CartonNumber,OrderID,LineID,PackedUnits,UOM,RecordVersion,PackedAt
+CTN-01,export.order482,export.line482,1,EA,1,2026-11-19T08:38:00-05:00
+CTN-02,export.order482,export.line482,1,EA,1,2026-11-19T08:39:00-05:00
+CTN-03,export.order481,export.line481,1,EA,1,2026-11-19T08:30:00-05:00
+CTN-04,export.order483,export.line483,1,EA,1,2026-11-19T08:32:00-05:00

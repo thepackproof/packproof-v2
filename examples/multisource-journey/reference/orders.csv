@@ -1,0 +1,4 @@
+id,order_id/id,company_id/id,product_uom_qty,product_uom/name,product_id/default_code,state,ReportAsOf,order_id/name,partner_id/name
+export.line482,export.order482,base.main_company,2,EA,BOLT-10,sale,2026-11-19T08:00:00-05:00,SO-10482,North Ridge Supply
+export.line481,export.order481,base.main_company,1,EA,NUT-4,sale,2026-11-19T08:00:00-05:00,SO-10481,North Ridge Supply
+export.line483,export.order483,base.main_company,1,EA,WASHER-4,sale,2026-11-19T08:00:00-05:00,SO-10483,North Ridge Supply

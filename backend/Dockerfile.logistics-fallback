@@ -1,0 +1,13 @@
+# PREDECESSOR_IMAGE is the inspected, digest-pinned running 124 image.
+ARG PREDECESSOR_IMAGE
+FROM ${PREDECESSOR_IMAGE} AS reviewed
+COPY backend/migrations /tmp/logistics-candidate-sql/
+COPY backend/scripts/logistics-forward-guard.mjs /tmp/logistics-forward-guard.mjs
+RUN node /tmp/logistics-forward-guard.mjs /app/backend/migrations /tmp/logistics-candidate-sql /tmp/logistics-guard.js
+
+FROM ${PREDECESSOR_IMAGE}
+USER root
+RUN test ! -e /app/backend/dist/db/forward-compatible-migrations.logistics124.js && \
+    mv /app/backend/dist/db/forward-compatible-migrations.js /app/backend/dist/db/forward-compatible-migrations.logistics124.js
+COPY --from=reviewed /tmp/logistics-guard.js /app/backend/dist/db/forward-compatible-migrations.js
+USER node

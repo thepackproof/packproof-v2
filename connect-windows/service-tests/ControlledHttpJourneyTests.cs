@@ -10,6 +10,49 @@ using Xunit;
 // and the loopback transport endpoint are specific to this fixture.
 public sealed class ControlledHttpJourneyTests
 {
+    private sealed class DispatchClock(string root) : TimeProvider
+    {
+        private readonly JsonElement times=Json.Read<JsonElement>(File.ReadAllBytes(Path.Combine(root,"expectations.json"))).GetProperty("clock");
+        public override DateTimeOffset GetUtcNow()
+        {
+            var key=File.Exists(Path.Combine(root,"dispatch-restored"))?"recovery":
+                File.Exists(Path.Combine(root,"inspect-outage"))?"inspect":"lastDispatchRead";
+            return times.GetProperty(key).GetDateTimeOffset().ToUniversalTime();
+        }
+    }
+
+    private static async Task ConfigureReference(AgentRuntime setup, string root, CancellationToken ct)
+    {
+        await setup.Command("refresh",null,ct);
+        string? labelSource=null, deliverySource=null;
+        foreach (var role in new[] {"order","packing","shipping","delivery"})
+        {
+            // A runner's TEMP may contain an 8.3 account name. The service stores
+            // the normalized absolute folder and returns an opaque source ID.
+            var folder=Path.GetFullPath(Path.Combine(root,role));
+            var status=Json.Element(await setup.Command("addWorkspaceSource", Json.Element(new {folder,role}),ct));
+            var sources=status.GetProperty("workspace").GetProperty("sources").EnumerateArray()
+                .Where(x=>x.GetProperty("roles").EnumerateArray().Any(r=>r.GetString()==role)).ToArray();
+            Assert.True(sources.Length==1,$"Expected one source for the {role} fixture, found {sources.Length}.");
+            var source=sources[0];
+            Assert.True(string.Equals(source.GetProperty("folder").GetString(),folder,StringComparison.OrdinalIgnoreCase),
+                $"The {role} source is outside its fixture directory.");
+            var id=source.GetProperty("id").GetString();
+            await setup.Command("confirmWorkspaceOrderMap",Json.Element(new {sourceId=id,
+                expectedGeneration=source.GetProperty("generation").GetInt32(),profileVersion=source.GetProperty("recognition").GetProperty("profileVersion").GetString()}),ct);
+            if(role=="shipping")labelSource=id;
+            if(role=="delivery")deliverySource=id;
+        }
+        var draft=Json.Element(await setup.Command("getFacilityDraft",Json.Element(new {}),ct));
+        var expected=Json.Read<JsonElement>(File.ReadAllBytes(Path.Combine(root,"expectations.json")));
+        var examples=new[]{"ordinary","split","reprint"}.Select(kind=>new {kind,reference=expected.GetProperty(kind).GetProperty("reference"),
+            cartons=expected.GetProperty(kind).GetProperty("cartons"),labelCount=expected.GetProperty(kind).GetProperty("labels")}).ToArray();
+        var saved=Json.Element(await setup.Command("saveFacilityDraft",Json.Element(new {expectedRevision=draft.GetProperty("revision"),
+            changes=new {steps=draft.GetProperty("steps"),examples,rules=new[]{new {sourceId=labelSource,shippedAt="label"}},
+                timing=new[]{new {sourceId=deliverySource,expectedCheckIntervalSeconds=300,expectedDeliveryAfterLabelSeconds=20700}},excludedSourceIds=Array.Empty<string>()}}),ct));
+        var replay=Json.Element(await setup.Command("replayFacilityDraft",Json.Element(new {expectedRevision=saved.GetProperty("revision")}),ct));
+        Assert.True(replay.GetProperty("replay").GetProperty("passed").GetBoolean(),replay.GetRawText());
+    }
     private sealed class FixtureProtector : ISecretProtector
     {
         private readonly byte[] key=RandomNumberGenerator.GetBytes(32);
@@ -76,21 +119,23 @@ public sealed class ControlledHttpJourneyTests
         store.Initialize();
         var host=new HostConfiguration("development","https://local-api.example","https://local-web.example","S-1-5-32-545");
         var state=new LocalState{Token=token,InstallationId=installation,CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(30)};
-        AgentRuntime Open()=>new(host,store,new PackProofClient(host,Connect(api,pipe)),state);
+        bool reference=Environment.GetEnvironmentVariable("PACKPROOF_JOURNEY_CARTONS")=="1";
+        AgentRuntime Open()=>new(host,store,new PackProofClient(host,Connect(api,pipe)),state,receiptClock:reference?new DispatchClock(root):null);
         using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var ct=timeout.Token;
         using(var setup=Open())
         {
-            foreach(var role in new[]{"order","picking","packing","shipping","handoff","delivery","evidence","returns"})
+            if (!reference) foreach(var role in new[]{"order","picking","packing","shipping","handoff","delivery","evidence","returns"})
             {
                 var folder=Path.Combine(root,role);
                 if(role is "returns" or "evidence" && !Directory.Exists(folder))continue;
                 Directory.CreateDirectory(folder);
                 await setup.Command("addWorkspaceSource",Json.Element(new{folder,role}),ct);
             }
-            await setup.Command("addWorkspaceDirectSource",Json.Element(new {role="order",sourceNamespace="HTTP_FIXTURE_API"}),ct);
+            if (!reference) await setup.Command("addWorkspaceDirectSource",Json.Element(new {role="order",sourceNamespace="HTTP_FIXTURE_API"}),ct);
             var output=Directory.CreateDirectory(Path.Combine(root,"output")).FullName;
             await setup.Command("setWorkspaceOutput",Json.Element(new{folder=output}),ct);
+            if (reference) await ConfigureReference(setup,root,ct);
             await setup.Command("saveWorkspaceStep",Json.Element(new{step="activate"}),ct);
         }
         state=store.Read<LocalState>("state.bin")!;

@@ -96,7 +96,8 @@ function Experience({
   serviceUnavailable: boolean;
 }) {
   const ws = status.workspace!;
-  const [setup, setSetup] = useState(() => ws.step !== "overview" || ws.phase !== "active");
+  const facilitySetup = new URLSearchParams(window.location.search).get("facilitySetup") === "1";
+  const [setup, setSetup] = useState(() => facilitySetup || ws.step !== "overview" || ws.phase !== "active");
   const [section, setSection] = useState<Section>("home");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [tour, setTour] = useState(false);
@@ -126,6 +127,10 @@ function Experience({
     ]),
   );
   const open = (id: string, rev: number) => {
+    if (facilitySetup) {
+      void bridge.openWorkspaceOrder(id,rev).catch(e => setError(e instanceof Error ? e.message : "Could not open the signed-in order."));
+      return;
+    }
     setSelection({ id, revision: rev, scope });
     setError("");
   };
@@ -206,6 +211,11 @@ function Experience({
             onOpenDraftProof={(data) => setDraft({ data, identity })}
             onOpenProof={(o) => open(o.proofId, o.revision)}
             onComplete={() => {
+              if (facilitySetup) {
+                void bridge.openWorkspaceReview().then(() => window.close())
+                  .catch(e => setError(e instanceof Error ? e.message : "Could not open your signed-in workspace."));
+                return;
+              }
               setSetup(false);
               nav("home");
             }}
@@ -373,16 +383,15 @@ export function WorkspaceApp({ bridge = getBridge() }: { bridge?: ConnectBridge 
         const current = displayed.current;
         const pending =
           current?.workspace?.phase === "awaiting_approval" || current?.enrollment?.state === "pending";
-        if (!current || current.workspace)
-          schedule(
-            generation !== epoch.current
-              ? 100
-              : pending
-                ? 1800
-                : current?.workspace?.phase === "active"
-                  ? 3000
-                  : 10000,
-          );
+        schedule(
+          generation !== epoch.current
+            ? 100
+            : pending
+              ? 1800
+              : current?.workspace?.phase === "active"
+                ? 3000
+                : 10000,
+        );
       }
     }
     refresh.current = () => void poll();
@@ -401,14 +410,14 @@ export function WorkspaceApp({ bridge = getBridge() }: { bridge?: ConnectBridge 
       document.removeEventListener("visibilitychange", focus);
     };
   }, [bridge, legacy, accept]);
-  if (bridge && (legacy || (status && !status.workspace)))
+  // Earlier connection tools remain available on request; a malformed or old
+  // service state must never silently replace the approved Logistics UI.
+  if (bridge && legacy)
     return (
       <>
-        {legacy && (
-          <button className="secondary" onClick={() => setLegacy(false)}>
-            Return to workspace
-          </button>
-        )}
+        <button className="pp-legacy-return" onClick={() => { setLegacy(false); refresh.current(); }}>
+          ← Return to Logistics
+        </button>
         <ConnectApp bridge={bridge} />
       </>
     );
@@ -435,12 +444,20 @@ export function WorkspaceApp({ bridge = getBridge() }: { bridge?: ConnectBridge 
         <>
           <Header />
           <main className="pp-system-state">
-            <h1>{bridge ? "Opening your workspace" : "Open PackProof Connect on Windows"}</h1>
+            <h1>{!bridge ? "Open PackProof Connect on Windows" : status && !status.workspace ? "Your Logistics workspace needs attention" : "Opening your workspace"}</h1>
             <p role="status">
-              {bridge
-                ? "Connecting to the background service…"
-                : "Use the installed application to connect your sources."}
+              {!bridge
+                ? "Use the installed application to connect your sources."
+                : status && !status.workspace
+                  ? "The background service did not return a usable Logistics workspace. Your existing records have not been changed. Check the connection or open earlier tools explicitly while this is resolved."
+                  : "Connecting to the background service…"}
             </p>
+            {bridge && status && !status.workspace && (
+              <div className="pp-system-actions">
+                <button onClick={() => refresh.current()}>Check connection</button>
+                <button onClick={() => setLegacy(true)}>Open earlier connection tools</button>
+              </div>
+            )}
           </main>
         </>
       )}

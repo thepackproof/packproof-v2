@@ -10,6 +10,10 @@ on:
       reviewed_sha:
         description: Full reviewed main commit used by the hosted release and installer
         required: true
+      unified_windows:
+        description: Build the qualified Commerce and Logistics workstation together
+        type: boolean
+        default: true
       signed_run_id:
         description: For publication, the successful signed build run ID
       installer_sha256:
@@ -73,6 +77,10 @@ jobs:
         shell: pwsh
     env:
       APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_UNIFIED_WINDOWS: ${{ inputs.unified_windows && '1' || '0' }}
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_COGNITO_REGION }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_COGNITO_CLIENT_ID }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_COGNITO_USER_POOL_ID }}
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
       PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_WEB_BASE_URL }}
       PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
@@ -106,6 +114,9 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: npm ci
+      - name: Install the signed Commerce host dependencies
+        if: inputs.unified_windows
+        run: npm ci --prefix ../desktop --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:release
@@ -115,6 +126,17 @@ jobs:
       - run: npm run publish:native
       - run: npm run package:win
       - run: npm run verify:artifacts
+      - name: Verify approved unified Logistics and Commerce packaged UI/IPC at exact Windows scaling
+        if: inputs.unified_windows
+        timeout-minutes: 8
+        run: node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+      - uses: actions/upload-artifact@v4
+        if: inputs.unified_windows && always()
+        with:
+          name: signed-unified-windows-ux-${{ inputs.channel }}-${{ github.sha }}
+          path: connect-windows/build/unified-ux-screens/**
+          retention-days: 90
+          if-no-files-found: error
       - name: Verify screens from this signed packaged application
         timeout-minutes: 8
         run: node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs --packaged-workspace
@@ -155,6 +177,7 @@ jobs:
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
       PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
       CONNECT_INSTALLER_SHA256: ${{ inputs.installer_sha256 }}
+      PACKPROOF_UNIFIED_WINDOWS: ${{ inputs.unified_windows && '1' || '0' }}
       PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
     steps:
       - uses: actions/checkout@v4
