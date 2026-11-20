@@ -19,6 +19,12 @@
       "proofAfterLateReceipt": "83:9112",
       "operatorException": "83:9262",
       "functionalPillars": "89:9236"
+    },
+    "approval": {
+      "approvedBy": "PackProof founder / product owner",
+      "approvedOn": "2026-11-20",
+      "status": "approved",
+      "note": "Approved in the user conversation; no further visual concept sign-off required. Pixel/functional verification of the packaged Windows application is still required."
     }
   },
   "runtime": {
