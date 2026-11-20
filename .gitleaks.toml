@@ -271,8 +271,8 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "secret"
 paths = [
-  '''^docs/APPROVED_WINDOWS_UX_AUTHORITY\\.md$''',
-  '''^connect-windows/design/windows-ux-contract\\.json$''',
-  '''^connect-windows/scripts/verify-windows-ux-contract\\.cjs$''',
+  '''^docs/APPROVED_WINDOWS_UX_AUTHORITY\.md$''',
+  '''^connect-windows/design/windows-ux-contract\.json$''',
+  '''^connect-windows/scripts/verify-windows-ux-contract\.cjs$''',
 ]
 regexes = ['''^PZ8dfCcXe2D8SMtmF497v3$''']
