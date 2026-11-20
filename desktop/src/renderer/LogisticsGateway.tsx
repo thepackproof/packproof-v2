@@ -71,10 +71,10 @@ export function LogisticsGateway({ bridge, onCommerce }: { bridge: Bridge; onCom
         <h2>One order, across every system.</h2>
         <p>PackProof connects the evidence that already exists, from the first order to delivery.</p>
         <ol className="logistics-entry-steps">
-          <li><span className="logistics-entry-step-icon order">1</span><div><strong>Order received</strong><small>Order system and line items</small></div></li>
-          <li><span className="logistics-entry-step-icon packing">2</span><div><strong>Packed and verified</strong><small>Picking, scans, scales and photos</small></div></li>
-          <li><span className="logistics-entry-step-icon shipping">3</span><div><strong>Handed to the carrier</strong><small>Labels, dispatch and tracking</small></div></li>
-          <li><span className="logistics-entry-step-icon delivery">4</span><div><strong>Delivery recorded</strong><small>Arrival and exceptions</small></div></li>
+          <li><span className="logistics-entry-step-icon order"><img src="/brand/connect/order.svg" width={34} height={34} alt="" aria-hidden="true"/></span><div><strong>Order received</strong><small>Order system and line items</small></div></li>
+          <li><span className="logistics-entry-step-icon packing"><img src="/brand/connect/packing.svg" width={34} height={34} alt="" aria-hidden="true"/></span><div><strong>Packed and verified</strong><small>Picking, scans, scales and photos</small></div></li>
+          <li><span className="logistics-entry-step-icon shipping"><img src="/brand/connect/shipping.svg" width={34} height={34} alt="" aria-hidden="true"/></span><div><strong>Handed to the carrier</strong><small>Labels, dispatch and tracking</small></div></li>
+          <li><span className="logistics-entry-step-icon delivery"><img src="/brand/connect/delivery.svg" width={34} height={34} alt="" aria-hidden="true"/></span><div><strong>Delivery recorded</strong><small>Arrival and exceptions</small></div></li>
         </ol>
         <div className="logistics-entry-result">Multiple sources. One evolving Proof.</div>
       </section>
