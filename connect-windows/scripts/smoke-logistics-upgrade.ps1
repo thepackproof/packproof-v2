@@ -38,7 +38,7 @@ function Release([string]$dir,[string]$pattern,[string]$commit) {
  $manifest=Get-Content -LiteralPath (Join-Path $dir 'release-evidence.json') -Raw | ConvertFrom-Json
  if ($manifest.channel -ne 'development' -or $manifest.signed -or $manifest.sourceCommit -ne $commit) {throw 'Development package provenance failed.'}
  $files=@(Get-ChildItem -LiteralPath $dir -File -Filter $pattern)
- if ($files.Count -ne 1) {throw 'Exactly one matching installer is required.'}
+ if ($files.Count -ne 1) {throw ('Expected one verified installer named '+$pattern+', found '+$files.Count+'.')}
  $file=$files[0]
  $record=@($manifest.artifacts | Where-Object file -eq $file.Name)
  $sum=(Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant()
@@ -102,7 +102,10 @@ function Commerce-Queue([string]$action,[string]$src) {
  $build='const path=require("node:path");const [base,src,out]=process.argv.slice(1);const content=["./src/main/secure-store.ts","./src/main/evidence/engine.ts","./src/main/evidence/store.ts"].map(p=>"export * from "+JSON.stringify(p)).join("\n");require(path.join(base,"node_modules/esbuild")).buildSync({stdin:{contents:content,resolveDir:src,loader:"ts"},outfile:out,bundle:true,platform:"node",target:"node22",format:"cjs",external:["electron"]})'
  & node -e $build $PriorCommerceSource $src $bundle
  if ($LASTEXITCODE) {throw 'Unable to prepare historical/current Commerce queue code.'}
- & (Join-Path $PriorCommerceSource 'node_modules\electron\dist\electron.exe') (Join-Path $PSScriptRoot 'upgrade-commerce-queue.cjs') $action $bundle $scratch
+ # Electron is a GUI subsystem binary. Wait for the old/current writer and its
+ # exit status before asserting facts about the encrypted queue.
+ $run='const {spawnSync}=require("node:child_process");const [exe,...args]=process.argv.slice(1);const p=spawnSync(exe,args,{stdio:"inherit",windowsHide:true,timeout:60000});process.exitCode=p.status??1'
+ & node -e $run (Join-Path $PriorCommerceSource 'node_modules\electron\dist\electron.exe') (Join-Path $PSScriptRoot 'upgrade-commerce-queue.cjs') $action $bundle $scratch
  if ($LASTEXITCODE) {throw 'Commerce queue preservation check failed.'}
 }
 function Wait-Fixture([string]$file) {
@@ -128,6 +131,8 @@ function Bind-Fixture([string]$origin) {
  $settings.apiOrigin=$origin
  [IO.File]::WriteAllText($config,($settings|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
  Start-Service $serviceName
+ . (Join-Path $program 'resources\installer\storage-health.ps1')
+ [void](Wait-ConnectReadiness $serviceName 'PackProofConnect-development-v1' $native)
 }
 try {
  foreach ($entry in @($program,$data,$profile,'HKLM:\SOFTWARE\PackProofConnect\development')) {
@@ -141,7 +146,7 @@ try {
  if ($Mode -eq 'Clean') {
    Install-Connect $candidate '0.7.0' $env:GITHUB_SHA
    $status=Bridge status
-   if (!$status.health.serviceOnline -or $status.installationId -or $status.workspace.canReadOrders) {throw 'Clean installation has unexpected enrollment or collection permissions.'}
+   if (!$status.health.serviceOnline -or ($status.PSObject.Properties['installationId'] -and $status.installationId) -or $status.workspace.canReadOrders) {throw 'Clean installation has unexpected enrollment or collection permissions.'}
    Launch-Commerce $ui
    $vault=Join-Path $profile 'Credentials\installation.vault'
    $before=(Get-FileHash -LiteralPath $vault).Hash
@@ -155,10 +160,11 @@ try {
    Expand-Archive -LiteralPath $PriorConnectArchive -DestinationPath (Join-Path $scratch 'previous')
    $prior=Release (Join-Path $scratch 'previous') 'PackProof-Connect-development-Setup-0.6.0.exe' $priorMerge
    if ((& git -C $PriorCommerceSource rev-parse HEAD).Trim() -ne $base) {throw 'Commerce baseline writer source differs from the verified revision.'}
-   $commerce=Release $PriorCommerceDirectory 'PackProof-Dev-Setup*.exe' $base
+   $commerceVersion=(Get-Content -LiteralPath (Join-Path $PriorCommerceSource 'package.json') -Raw | ConvertFrom-Json).version
+   $commerce=Release $PriorCommerceDirectory ('PackProof-Dev-Setup-'+$commerceVersion+'.exe') $base
    Run-Installer $commerce @('/S','/currentuser')
    $items=@(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | ForEach-Object {Get-ItemProperty $_.PSPath} |
-     Where-Object {$_.PSObject.Properties['DisplayName'] -and $_.DisplayName -like 'PackProof Dev*'})
+     Where-Object {$_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq ('PackProof Dev '+$commerceVersion) -and $_.DisplayVersion -eq $commerceVersion})
    if ($items.Count -ne 1 -or $items[0].PSChildName -notmatch '^[{]?[a-fA-F0-9-]{36}[}]?$') {throw 'Prior Commerce install registration missing.'}
    $commercePath=(Get-ItemProperty -LiteralPath ('HKCU:\Software\'+$items[0].PSChildName)).InstallLocation
    $oldUi=Join-Path $commercePath 'PackProof Dev.exe'
