@@ -7,8 +7,9 @@
 .logistics-entry button:focus-visible{outline:3px solid var(--lg-action);outline-offset:3px}
 .logistics-entry button:disabled{cursor:not-allowed;opacity:.65}
 .logistics-entry-header{height:76px;border-bottom:1px solid var(--lg-border);background:var(--lg-surface);padding:0 clamp(24px,4vw,64px);display:flex;align-items:center;gap:20px}
-.logistics-entry-header .brand{font-size:23px;letter-spacing:-.7px;color:var(--lg-ink);margin:0}
-.logistics-entry-header .brand img{width:38px;height:38px}
+.logistics-entry-brand{display:flex;align-items:center;gap:12px;color:var(--lg-ink);font-size:23px;letter-spacing:-.7px;white-space:nowrap}
+.logistics-entry-brand img{width:40px;height:46px;object-fit:contain;flex:none}
+.logistics-entry-brand strong{font-weight:770}
 .logistics-entry-product{border-left:1px solid var(--lg-border);padding-left:22px;color:#718098;font-size:12px;letter-spacing:.13em;font-weight:700}
 .logistics-entry-header .logistics-entry-secondary{margin-left:auto}
 .logistics-entry-content{max-width:1470px;margin:0 auto;padding:clamp(40px,4.4vw,76px) clamp(28px,5.5vw,94px);display:grid;grid-template-columns:minmax(0,1.22fr) minmax(370px,.96fr);align-items:start;column-gap:clamp(32px,5vw,78px)}
