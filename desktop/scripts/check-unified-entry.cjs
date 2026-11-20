@@ -39,22 +39,34 @@ async function until(page,expression){
   }
   throw Error('Unified screen failed to show expected content: '+expression);
 }
-async function measure(page){
- const value=await page.executeJavaScript(`({
-  width:innerWidth,scroll:document.documentElement.scrollWidth,
+async function viewport(page,w,h,scale=1){
+ await page.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:w,height:h,screenWidth:w,screenHeight:h,deviceScaleFactor:scale,mobile:false});
+ const actual=await page.executeJavaScript('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})');
+ assert.deepEqual(actual,{width:w,height:h,dpr:scale},'Incorrect emulated viewport');
+}
+async function measure(page,w,h){
+ const measured=await page.executeJavaScript(`({
+  width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,
   headline:document.querySelector('h1')?.textContent?.trim(),
   primary:[...document.querySelectorAll('.logistics-entry-primary')].map(el=>({text:el.textContent.trim(),disabled:el.disabled})),
-  bad:[...document.querySelectorAll('button')].filter(el=>{const r=el.getBoundingClientRect();return el.checkVisibility()&&(r.left<-1||r.right>innerWidth+1)}).map(el=>el.textContent.trim())
+  clipped:[...document.querySelectorAll('button')].filter(el=>{const r=el.getBoundingClientRect();return el.checkVisibility()&&(r.left<-1||r.right>innerWidth+1)}).map(el=>el.textContent.trim())
  })`);
- assert.ok(value.scroll<=value.width+1,'Unexpected horizontal scroll: '+JSON.stringify(value));
- assert.deepEqual(value.bad,[],'Clipped buttons: '+JSON.stringify(value));
- return value;
+ assert.equal(measured.width,w,'Screenshot viewport width is not the requested width');
+ assert.equal(measured.height,h,'Screenshot viewport height is not the requested height');
+ assert.ok(measured.scroll<=w+1,'Unexpected horizontal scroll: '+JSON.stringify(measured));
+ assert.deepEqual(measured.clipped,[],'Clipped buttons: '+JSON.stringify(measured));
+ return measured;
 }
-async function shoot(page,name){
+async function shoot(page,name,w,h,scale=1){
  await page.executeJavaScript('document.fonts.ready.then(()=>true)');
- const img=await page.capturePage();
+ const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:w,height:h,scale}});
+ const png=Buffer.from(shot.data,'base64');
+ assert.ok(png.length>24,'Empty screenshot');
+ const actual={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
  fs.mkdirSync(out,{recursive:true});
- fs.writeFileSync(path.join(out,name+'.png'),img.toPNG());
+ fs.writeFileSync(path.join(out,name+'.png'),png);
+ assert.deepEqual(actual,{width:Math.round(w*scale),height:Math.round(h*scale)},'Mislabelled packaged screenshot '+name);
+ return {...actual,cssWidth:w,cssHeight:h,scale};
 }
 async function main(){
  assert.ok(fs.existsSync(packagedAsar),'Packaged unified app.asar missing');
@@ -90,11 +102,14 @@ async function main(){
  for(const [channel,value] of Object.entries(sample))ipcMain.handle('packproof:'+channel,async()=>({ok:true,value}));
  ipcMain.handle('packproof:study.scope',async()=>({ok:false,error:'Fixture does not enable analytics.'}));
  try{
+  await page.loadURL('about:blank');
+  page.debugger.attach('1.3');
+  await viewport(page,1440,900,1);
   await page.loadURL(uri);
   await until(page,"document.querySelector('.logistics-entry h1')?.textContent?.includes('One clear story.')");
   await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>!e.disabled)");
-  await measure(page);
-  await shoot(page,'logistics-entry-1440x900');
+  await measure(page,1440,900);
+  const entryImage=await shoot(page,'logistics-entry-1440x900',1440,900,1);
   const active=await page.executeJavaScript("document.querySelector('.logistics-entry-brand img')?.complete && document.querySelector('.logistics-entry-brand img')?.naturalWidth>0");
   assert.equal(active,true,'Official logo failed to render');
   await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.includes('Open my orders'))?.click()");
@@ -104,10 +119,10 @@ async function main(){
   for(let i=0;i<30&&calls.setup<1;i++)await wait(50);
   assert.equal(calls.setup,1,'Facility setup action was not sent through actual IPC bridge');
 
-  page.debugger.attach('1.3');
-  await page.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:1024,height:640,deviceScaleFactor:1.25,mobile:false});
-  await measure(page);await shoot(page,'logistics-entry-1280x800-125pct');
-  await page.debugger.detach();
+  await viewport(page,1024,640,1.25);
+  await measure(page,1024,640);
+  const scaledImage=await shoot(page,'logistics-entry-1280x800-125pct',1024,640,1.25);
+  await viewport(page,1440,900,1);
 
   // A rejected facility response must not collapse into an unexplained Commerce fallback.
   failChoices=true;
@@ -116,7 +131,8 @@ async function main(){
   const diagnostic=await page.executeJavaScript("document.querySelector('.logistics-entry-error')?.textContent");
   assert.ok(diagnostic.includes('Reconnect this computer'));
   assert.ok(!diagnostic.includes('Logistics is unavailable'));
-  await shoot(page,'logistics-access-recovery');
+  await measure(page,1440,900);
+  const recoveryImage=await shoot(page,'logistics-access-recovery',1440,900,1);
   failChoices=false;
   await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.includes('Check access again'))?.click()");
   await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>!e.disabled)");
@@ -127,11 +143,11 @@ async function main(){
   fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({
    scope:'packaged unified renderer and production preload; synthetic IPC only',
    designFile:'PZ8dfCcXe2D8SMtmF497v3',entryNode:'2:9',
-   screens:['logistics-entry-1440x900.png','logistics-entry-1280x800-125pct.png','logistics-access-recovery.png'],
-   verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics'],
+   screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage},
+   verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions'],
    calls
   },null,2));
   console.log('Unified Windows entry renderer layout and functional IPC routing verified (synthetic state).');
- }finally{if(!win.isDestroyed())win.destroy();}
+ }finally{if(page.debugger.isAttached())await page.debugger.detach().catch(()=>{});if(!win.isDestroyed())win.destroy();}
 }
 main().then(()=>app.exit(0),error=>{console.error(error);app.exit(1)});
