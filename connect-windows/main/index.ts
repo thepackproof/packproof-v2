@@ -248,7 +248,7 @@ async function showSetup(){
 export async function attachHumanSession(human: ConstructorParameters<typeof HostedSession>[0], parent?:()=>BrowserWindow|null) {
   parentWindow=parent??null;
   await initialize();
-  const current = new HostedSession(human, op => bridge.request(op), config.webBaseUrl);
+  const current = new HostedSession(human, op => bridge.request(op), config.webBaseUrl, parent);
   host = current;
   current.bindAssistant(() => win);
   return {
