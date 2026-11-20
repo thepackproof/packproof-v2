@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { distinctLocations, WorkspaceFolderOffers, type FolderOption } from '../main/workspace-folder-offers';
+import { discoverWorkspaceFolders } from '../main/workspace-discovery';
 import { argumentsByMethod } from '../main/security';
 import type { WorkspaceFolderSuggestion } from '../ui/workspace-types';
 
@@ -39,4 +40,14 @@ it('takes only a workflow role from the renderer when scanning', () => {
   expect(argumentsByMethod.discoverWorkspaceFolders.safeParse(['packing']).success).toBe(true);
   expect(argumentsByMethod.discoverWorkspaceFolders.safeParse(['packing', 'C:\\']).success).toBe(false);
   expect(argumentsByMethod.discoverWorkspaceFolders.safeParse(['directory']).success).toBe(false);
+});
+
+
+it('accepts a local media sample only for evidence and rejects relative paths in samples', async () => {
+  const sample = { ...sales, evidence: 'An order link is needed.', sampleFile: 'packing.jpeg' };
+  const bridge = { request: vi.fn(async () => [sample]) };
+  await expect(discoverWorkspaceFolders('evidence', {exclude: []}, bridge)).resolves.toEqual([sample]);
+  await expect(discoverWorkspaceFolders('order', {exclude: []}, bridge)).rejects.toThrow();
+  bridge.request.mockResolvedValue([{...sample, sampleFile: '../other/packing.jpeg'}]);
+  await expect(discoverWorkspaceFolders('evidence', {exclude: []}, bridge)).rejects.toThrow();
 });

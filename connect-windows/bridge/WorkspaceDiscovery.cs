@@ -11,7 +11,7 @@ internal static class WorkspaceDiscovery
     private const int EntryLimit = 256, DirectoryLimit = 24, FileLimit = 48, HeaderLimit = 8192;
     private static readonly StringComparer IgnoreCase = StringComparer.OrdinalIgnoreCase;
     private static readonly HashSet<string> Roles = new(["order","picking","packing","shipping","handoff","delivery","returns","evidence"], IgnoreCase);
-    private static readonly Regex ExportName = new(@"\b(exports?|reports?|orders?|picking|packing|shipping|shipments?|handoffs?|deliveries|delivery|returns?|fulfillment|dispatch)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ExportName = new(@"\b(exports?|reports?|orders?|picks?|picking|packing|shipping|labels?|shipments?|handoffs?|deliveries|delivery|returns?|rma|pod|fulfillment|dispatch)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> SystemNames = new(["Shopify","Microsoft Dynamics 365","Dynamics 365","NetSuite","SAP","Odoo","Warehouse","WMS","ERP","TMS"], IgnoreCase);
     private const string DailyShippingProfile = "enterprise-shipper-daily-shipping/v1";
     private static readonly Regex DailyShippingFile = new(@"^DailyShipping-[0-9]{8}\.(csv|pdf)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -93,51 +93,64 @@ internal static class WorkspaceDiscovery
                     foreach (var sub in ordinary.OfType<DirectoryInfo>())
                     {
                         if (roots.Contains(sub.FullName,IgnoreCase)) continue;
-                        bool dedicated = ExportName.IsMatch(sub.Name.Replace('_',' ').Replace('-',' ')) ||
+                        bool dedicated = IsReportDirectory(sub.Name) ||
                             role == "evidence" && WorkspaceEvidenceDiscovery.IsEvidenceFolder(sub.Name);
                         if (dedicated || SystemNames.Contains(sub.Name))
                             pending.Enqueue((sub.FullName,next.Depth+1,dedicated || next.CanSample));
                     }
                 }
                 if (!next.CanSample || exclude.Any(p=>ProofOutputPaths.Overlaps(path,p))) continue;
-                bool evidenceSource = role == "evidence" && WorkspaceEvidenceDiscovery.IsEvidenceFolder(Path.GetFileName(path));
-                if (role=="evidence" && !evidenceSource) continue;
-                var layouts = new List<(Layout Layout,string File)>();
-                var samples = ordinary.OfType<FileInfo>().Where(f=>evidenceSource ?
-                    WorkspaceEvidenceDiscovery.CanInspect(f.Extension) : IsDelimited(f.Extension));
-                foreach (var file in samples.Take(12))
-                {
-                    if (files >= FileLimit) break;
-                    files++;
-                    try
-                    {
-                        using var stream = FolderSource.OpenVerifiedFile(file.FullName);
-                        if (stream.Length is 0 or > FolderSource.MaxCsvBytes) continue;
-                        if (evidenceSource)
-                        {
-                            if (WorkspaceEvidenceDiscovery.Match(stream,file.Extension))
-                                layouts.Add((new("Packing or shipping evidence",false),file.Name));
-                            continue;
-                        }
-                        var fields = Header(stream,file.Extension);
-                        if (vendorFolder && ExportCatalogue.Match(fields)?.Id != DailyShippingProfile) continue;
-                        if (fields.Length > 0 && Classify(role,fields) is { } layout) layouts.Add((layout,file.Name));
-                    }
-                    catch (Exception e) when (Skippable(e)) { }
-                }
-                if (layouts.Count == 0) continue;
-                var vendors = layouts.Where(v=>v.Layout.Vendor).Select(v=>v.Layout.Label).Distinct(IgnoreCase).ToArray();
-                bool oneVendor = vendors.Length == 1;
-                var label = evidenceSource ? layouts[0].Layout.Label : oneVendor ? vendors[0] : RoleLabel(role);
-                var evidence = evidenceSource ? "Found a supported file. An explicit order link is needed." :
-                    layouts.Count == 1 ? "Column names match in one sampled report." : $"Column names match in {layouts.Count} sampled reports.";
-                var sample = oneVendor ? layouts.First(v=>v.Layout.Vendor).File : layouts[0].File;
-                hits.Add((new(path,"discovered",label,evidence,sample),oneVendor));
+                var match = Suggest(role,path,ordinary.OfType<FileInfo>(),vendorFolder,ref files);
+                if (match.HasValue) hits.Add(match.Value);
             }
             catch (Exception e) when (Skippable(e)) { }
         }
         return hits.OrderByDescending(h=>h.Vendor).ThenBy(h=>h.Suggestion.Folder,IgnoreCase)
             .Take(8).Select(h=>h.Suggestion).ToArray();
+    }
+
+    private static (Suggestion Suggestion,bool Vendor)? Suggest(string role,string path,IEnumerable<FileInfo> candidates,
+        bool vendorFolder,ref int files)
+    {
+        bool evidenceSource = role == "evidence" && WorkspaceEvidenceDiscovery.IsEvidenceFolder(Path.GetFileName(path));
+        if (role=="evidence" && !evidenceSource) return null;
+        var layouts = new List<(Layout Layout,string File)>();
+        var samples = candidates.Where(f=>evidenceSource ?
+            WorkspaceEvidenceDiscovery.CanInspect(f.Extension) : IsDelimited(f.Extension));
+        foreach (var file in samples.Take(12))
+        {
+            if (files >= FileLimit) break;
+            files++;
+            try
+            {
+                using var stream = FolderSource.OpenVerifiedFile(file.FullName);
+                if (stream.Length is 0 or > FolderSource.MaxCsvBytes) continue;
+                if (evidenceSource)
+                {
+                    if (WorkspaceEvidenceDiscovery.Match(stream,file.Extension))
+                        layouts.Add((new("Packing or shipping evidence",false),file.Name));
+                    continue;
+                }
+                var fields = Header(stream,file.Extension);
+                if (vendorFolder && ExportCatalogue.Match(fields)?.Id != DailyShippingProfile) continue;
+                if (fields.Length > 0 && Classify(role,fields) is { } layout) layouts.Add((layout,file.Name));
+            }
+            catch (Exception e) when (Skippable(e)) { }
+        }
+        if (layouts.Count == 0) return null;
+        var vendors = layouts.Where(v=>v.Layout.Vendor).Select(v=>v.Layout.Label).Distinct(IgnoreCase).ToArray();
+        bool oneVendor = vendors.Length == 1;
+        var label = evidenceSource ? layouts[0].Layout.Label : oneVendor ? vendors[0] : RoleLabel(role);
+        var evidence = evidenceSource ? "Found a supported file. An explicit order link is needed." :
+            layouts.Count == 1 ? "Column names match in one sampled report." : $"Column names match in {layouts.Count} sampled reports.";
+        var sample = oneVendor ? layouts.First(v=>v.Layout.Vendor).File : layouts[0].File;
+        return (new(path,"discovered",label,evidence,sample),oneVendor);
+    }
+
+    private static bool IsReportDirectory(string name)
+    {
+        var words = Regex.Replace(name,@"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"," ");
+        return ExportName.IsMatch(words.Replace('_',' ').Replace('-',' '));
     }
 
     private static bool IsOutput(string path,string[] excluded)

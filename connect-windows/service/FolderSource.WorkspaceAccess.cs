@@ -21,6 +21,7 @@ public static partial class FolderSource
     {
         if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(input) || input.Length > 260 || (input.StartsWith(@"\\") && (!allowShare || input.StartsWith(@"\\?\") || input.StartsWith(@"\\.\"))) || input.IndexOf(':', 2) >= 0 || !Path.IsPathFullyQualified(input)) throw Error();
         var path = Path.GetFullPath(input).TrimEnd(Path.DirectorySeparatorChar); var root = Path.GetPathRoot(path)!; var share = path.StartsWith(@"\\", StringComparison.Ordinal);
+        if (!allowShare && share) throw Error();
         if (path.Equals(root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) || share && root.TrimEnd(Path.DirectorySeparatorChar).EndsWith('$')) throw Error();
         var drive = share ? null : new DriveInfo(root);
         if (drive is not null && (drive.DriveType != DriveType.Fixed || !drive.DriveFormat.Equals("NTFS", StringComparison.OrdinalIgnoreCase))) throw Error();

@@ -65,11 +65,15 @@ public sealed class WorkspaceDiscoveryTests
             var docs = root.CreateSubdirectory("Documents");
             var downloads = root.CreateSubdirectory("Downloads");
             var shopify = docs.CreateSubdirectory("Shopify").CreateSubdirectory("Exports");
-            var orders = downloads.CreateSubdirectory("Order exports");
+            var orders = downloads.CreateSubdirectory("OrderExports");
             var output = docs.CreateSubdirectory("Order reports");
             var formerOutput = downloads.CreateSubdirectory("Exports");
             var unrelated = docs.CreateSubdirectory("Family");
             var prepared = root.CreateSubdirectory("Prepared");
+            var linked = Path.Combine(docs.FullName,"Shipping reports");
+            Directory.CreateSymbolicLink(linked,unrelated.FullName);
+            var linkedFile = docs.CreateSubdirectory("Other reports");
+            File.CreateSymbolicLink(Path.Combine(linkedFile.FullName,"order.csv"),Path.Combine(unrelated.FullName,"orders.csv"));
             foreach (var folder in new[]{docs,orders,output,formerOutput,unrelated,prepared})
                 File.WriteAllText(Path.Combine(folder.FullName,"orders.csv"),Order+"\n");
             for (int i=0;i<8;i++) File.WriteAllText(Path.Combine(shopify.FullName,$"a{i}.csv"),"Unrelated,Column\n");
