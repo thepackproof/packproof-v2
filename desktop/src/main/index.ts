@@ -213,7 +213,7 @@ async function ready(){
      access: (scope: Scope) => requireApi().facilityAccess(scope),
      suggest: (scope: Scope, input: unknown) => requireApi().facilitySuggestions(scope,input),
      review: (scope: Scope, input: unknown) => requireApi().reviewFacilitySuggestion(scope,input)
-   });
+   }, () => win);
    logs.record('SYSTEM','LOGISTICS_HOST_READY');
  }
  setupIpc();await createWindow();

@@ -89,7 +89,12 @@ async function exercise(page, width, height, scale, theme) {
   await page.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name:"prefers-color-scheme", value:theme }, { name:"prefers-reduced-motion", value:"reduce" }] });
   stage("load built renderer");
   await page.loadURL(appUrl);
-  stage("wait for shipment preview");
+  stage("verify Logistics recovery has explicit legacy choice");
+  await waitFor(page, 'document.querySelector("h1")?.textContent === "Your Logistics workspace needs attention"');
+  await checkPage(page, cssWidth);
+  await reach(page, button("Open earlier connection tools"));
+  await keyboard(page, "Enter", 13);
+  stage("wait for explicitly selected earlier Connect workflow");
   await waitFor(page, 'document.querySelector("h1")?.textContent === "We found your shipments."');
   stage("wait for fonts and measure preview");
   await page.executeJavaScript("document.fonts.ready.then(() => true)");
