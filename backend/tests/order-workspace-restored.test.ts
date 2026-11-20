@@ -1,12 +1,13 @@
 import {randomBytes} from 'node:crypto';
 import {describe,expect,it} from 'vitest';
 import {migrateTestDatabaseThrough,openIsolatedTestDatabase} from './isolated-test-database.js';
-import {migrate,migrationInventory} from '../src/db/migrate.js';
+import {migrationInventory} from '../src/db/migrate.js';
 import {collectorInventory,collectorMigration,inspectCollectorPredecessor,inspectReconstructionInventory,verifyBackfillScopeGuard} from '../../infra/backend-release/reconstruction-v11-release-review.mjs';
 import {splitSqlStatements} from '../src/db/sql.js';
-import {planRecordsRuntimePrivileges,recordsMigrationInventory,verifyRecordsRuntimePrivileges} from '../scripts/records-runtime-privileges.mjs';
+import {planRecordsRuntimePrivileges,recordsMigrationInventory,verifyRecordsRuntimePrivileges,verifyPlannedRecordsPrivileges} from '../scripts/records-runtime-privileges.mjs';
 import {createPgDatabase} from '../src/db/postgres.js';
 import {runOwnerTransaction} from '../../infra/backend-release/connect-hosted-migration.mjs';
+import {runLogisticsOwnerTransaction,logisticsInventory} from '../../infra/backend-release/logistics-hosted-migration.mjs';
 import {backfillMigrationInventorySha256} from '../../infra/backend-release/reconstruction-v8-release-review.mjs';
 import {workspaceInventory} from '../../infra/backend-release/reconstruction-v10-release-review.mjs';
 import {applyRestoredDelta} from '../../infra/backend-release/order-workspace-restored-rehearsal.mjs';
@@ -112,33 +113,35 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       const latest=129;
       expect(additions.at(-1)?.id).toBe("129_unified_collector_version");
       const logisticsPolicy=options(latest,(await recordsMigrationInventory(latest)).migrationSha256);
-      // Exercise the DDL and table privileges in the same restored schema. A failed
-      // rehearsal must leave both the old receipts and the old role policy usable.
+      const deps129={migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges,verifyPlannedRecordsPrivileges};
+      const reviewed129={...params,target:{database:identity.database},inventorySha256:logisticsInventory,expectedLedger:collectorInventory};
+      const upgrade=(mode:string)=>opened.db.transaction(tx=>runLogisticsOwnerTransaction(tx,reviewed129,mode,deps129,schema));
+      expect(await upgrade('inspect')).toMatchObject({through:124,finalLedger:collectorInventory,applied:[],grantStatementCount:0});
+      await expect(opened.db.transaction(tx=>runLogisticsOwnerTransaction(tx,{...reviewed129,expectedLedger:workspaceInventory},'apply',deps129,schema))).rejects.toThrow('PREDECESSOR_CHANGED');
+      await expect(opened.db.transaction(tx=>runLogisticsOwnerTransaction(tx,reviewed129,'apply',{...deps129,
+        migrationInventory:async()=>inventory.map((m,i)=>i===inventory.length-1?{...m,sql:m.sql+' '}:m)},schema))).rejects.toThrow('SOURCE_INVENTORY');
       await expect(opened.db.transaction(async tx=>{
-        for(const migration of additions){
-          for(const statement of splitSqlStatements(migration.sql))await tx.query(statement);
-          await tx.query("INSERT INTO schema_migrations(id,applied_at,checksum,checksum_provenance) VALUES($1,now(),$2,'EXECUTED_BYTES')",[migration.id,migration.checksum]);
-        }
-        const grants=await planRecordsRuntimePrivileges(tx,logisticsPolicy);
-        for(const statement of grants.statements)await tx.query(statement);
+        const result=await runLogisticsOwnerTransaction(tx,reviewed129,'rehearse',deps129,schema);
+        expect(result).toMatchObject({through:124,finalLedger:logisticsInventory,applied:additions.map(m=>m.id)});
+        expect(result.grantStatementCount).toBeGreaterThan(0);
         throw rollback;
       })).rejects.toBe(rollback);
       expect(await ledger()).toEqual(after);
       expect((await opened.db.query("SELECT to_regclass('record_order_packet_exports') IS NULL AS rolled_back")).rows[0]).toEqual({rolled_back:true});
       for(const login of logins)await verifyRecordsRuntimePrivileges(login.db,policy124);
 
-      await migrate(opened.db);
+      const applied129=await upgrade('apply');
+      expect(applied129).toMatchObject({through:124,finalLedger:logisticsInventory,applied:additions.map(m=>m.id)});
       const upgraded=await ledger();
       expect(upgraded.slice(0,after.length)).toEqual(after);
       expect(upgraded.slice(after.length).map(row=>({id:row.id,checksum:row.checksum}))).toEqual(additions.map(({id,checksum})=>({id,checksum})));
-      const grants=await planRecordsRuntimePrivileges(opened.db,logisticsPolicy);
-      await opened.db.transaction(async tx=>{for(const statement of grants.statements)await tx.query(statement);});
       for(const [index,login] of logins.entries()) {
         expect((await verifyRecordsRuntimePrivileges(login.db,logisticsPolicy)).caller).toBe(roles[index]);
       }
       expect((await logins[0].db.query("SELECT convert_from(original,'UTF8') AS original FROM preserved_sample")).rows).toEqual([{original:'kept original'}]);
       await expect(logins[1].db.query('SELECT * FROM record_order_packet_exports')).rejects.toMatchObject({code:'42501'});
-      await migrate(opened.db);
+      expect(await upgrade('apply')).toMatchObject({through:129,finalLedger:logisticsInventory,applied:[],grantStatementCount:0});
+      expect(await upgrade('inspect')).toMatchObject({policySha256:applied129.policySha256,through:129});
       expect(await ledger()).toEqual(upgraded);
     }finally{
       if(oldSource===undefined)delete process.env.PACKPROOF_RELEASE_SHA;else process.env.PACKPROOF_RELEASE_SHA=oldSource;

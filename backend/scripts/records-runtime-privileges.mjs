@@ -311,6 +311,14 @@ export async function verifyRecordsRuntimePrivileges(db,input){
  return {schema:'packproof.records-runtime-privileges/v1',sourceCommit:o.reviewedSourceCommit,databaseSchema:o.schema,caller:state.identity.caller,
   runtimeRole:o.runtimeRole,workerRole:o.workerRole,migrations:o.migrations,migrationSha256:o.migrationSha256,policySha256:policyDigest(o.policy),effectivePrivilegesSha256:sha({tables:state.tables,fields:state.fields,sequences:state.sequences,functions:state.functions})};
 }
+/** Read effective privileges for both established roles inside an owner migration.
+ * Actual-login probes still independently verify runtime identity after deployment. */
+export async function verifyPlannedRecordsPrivileges(db,input){
+ const o=await options(input);
+ const state=await inspect(db,o,false);
+ verify(state,o);
+ return {policySha256:policyDigest(o.policy),migrationSha256:o.migrationSha256};
+}
 /** Owner-operated planning only. Caller must execute the reviewed statements in
  * one transaction, rerun actual-role preflight, and separately verify baseline
  * domain permissions. Excess inherited/PUBLIC grants must be fixed by their owner. */

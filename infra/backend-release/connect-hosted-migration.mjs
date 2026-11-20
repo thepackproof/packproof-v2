@@ -84,11 +84,11 @@ export async function runOwnerTransaction(db, review, mode, deps, schema='public
   return {...receipt,finalLedger:digest(after)};
 }
 
-async function main() {
+export async function executeHostedOwner({validateReview, transaction, receiptSchema}) {
   const env=process.env, mode=process.argv[2];
   const review=JSON.parse(env.PACKPROOF_HOSTED_MIGRATION_REVIEW_JSON||'null');
   const hash=env.PACKPROOF_HOSTED_MIGRATION_REVIEW_SHA256;
-  validateOwnerReview(review,hash,mode,env);
+  validateReview(review,hash,mode,env);
   const uri=env.ECS_CONTAINER_METADATA_URI_V4;
   check(/^http:\/\/169\.254\.170\.2\/v4\/[A-Za-z0-9_-]+$/.test(uri),'METADATA_URI');
   const metadata=async path=>{
@@ -97,7 +97,7 @@ async function main() {
   };
   const [container,task]=await Promise.all([metadata(''),metadata('/task')]);
   const identity=validateReconstructionTaskMetadata(container,task,review);
-  const [{createPgDatabase},{migrationInventory},{splitSqlStatements},{planRecordsRuntimePrivileges}]=await Promise.all([
+  const [{createPgDatabase},{migrationInventory},{splitSqlStatements},privileges]=await Promise.all([
     import('/app/backend/dist/db/postgres.js'),import('/app/backend/dist/db/migrate.js'),
     import('/app/backend/dist/db/sql.js'),import('/app/backend/scripts/records-runtime-privileges.mjs')]);
   check(env.PACKPROOF_DB_PASSWORD && env.PACKPROOF_DB_CA_FILE==='/app/backend/certs/rds-us-east-1-bundle.pem','INJECTED_OWNER_CONNECTION_REQUIRED');
@@ -108,16 +108,19 @@ async function main() {
   let result;
   try {
     await opened.db.transaction(async tx=>{
-      result=await runOwnerTransaction(tx,review,mode,{migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges});
+      result=await transaction(tx,review,mode,{migrationInventory,splitSqlStatements,
+        planRecordsRuntimePrivileges:privileges.planRecordsRuntimePrivileges,verifyPlannedRecordsPrivileges:privileges.verifyPlannedRecordsPrivileges});
       check((await tx.query('SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()')).rows[0]?.ssl===true,'VERIFIED_TLS');
       if(mode==='rehearse')throw rollback;
     });
   }catch(error){if(error!==rollback)throw error;}
   finally{await opened.close();}
-  console.log(JSON.stringify({schema:'packproof.hosted-collector-owner-receipt/v1',mode,source:review.source,reviewSha256:hash,
+  console.log(JSON.stringify({schema:receiptSchema,mode,source:review.source,reviewSha256:hash,
     image:identity.image,actualTask:identity.taskArn,targetHost:target.host,...result,rolledBack:mode==='rehearse',completedAt:new Date().toISOString()}));
 }
 
-if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(error=>{
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)executeHostedOwner({
+  validateReview:validateOwnerReview,transaction:runOwnerTransaction,receiptSchema:'packproof.hosted-collector-owner-receipt/v1'
+}).catch(error=>{
   console.error(/^[A-Z0-9_]+$/.test(error?.message) ? error.message : 'HOSTED_COLLECTOR_OWNER_OPERATION_FAILED');process.exitCode=1;
 });
