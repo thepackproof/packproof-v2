@@ -16,7 +16,28 @@ const identityPolicy=z.object({schema:z.literal('packproof.source-identity-polic
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
 const reviewedSource = {id, configurationRevision:z.number().int().nonnegative(), grantRevision:z.number().int().nonnegative(), originalSha256:sha256};
 const role = z.enum(sourceRoles);
+const localText = z.string().trim().max(160).regex(/^[^\u0000-\u001f]*$/);
+const expectedCount = z.number().int().min(0).max(1000).nullable();
+const facilityInputs = z.object({
+ steps:z.array(z.object({id,name:localText.min(1),scope:z.enum(['order','line','carton','shipment']),
+  system:localText,device:localText,optional:z.boolean(),after:z.array(id).max(32),
+  record:z.object({identifier:localText,timeField:localText,unit:localText,format:localText}).strict().optional()}).strict()).min(1).max(32),
+ examples:z.array(z.object({kind:z.enum(['ordinary','split','reprint']),reference:localText,cartons:expectedCount,labelCount:expectedCount}).strict()).max(3),
+ rules:z.array(z.object({sourceId:id,shippedAt:z.enum(['label','handoff','unknown'])}).strict()).max(24),
+ excludedSourceIds:z.array(id).max(24),
+ timing:z.array(z.object({sourceId:id,expectedCheckIntervalSeconds:z.number().int().min(60).max(86400).optional(),
+  expectedDeliveryAfterLabelSeconds:z.number().int().min(60).max(31536000).optional()}).strict()).max(24).optional(),
+ packing:z.array(z.object({sourceId:id,orderSourceId:id,schema:sha256,cartonField:localText.min(1),
+  weightField:localText.min(1).optional(),unitField:localText.min(1).optional(),unitValue:localText.min(1).optional(),
+  unit:z.enum(["kg","g","lb","oz"]).optional()}).strict()).max(24).optional(),
+ recordEdits:z.array(z.object({sourceId:id,recordHash:sha256,fromSpace:localText.min(1),fromId:localText.min(1),
+  toSpace:localText.min(1),toId:localText.min(1)}).strict()).max(24).optional()
+}).strict();
 export const argumentsByMethod={
+ getFacilityDraft:z.tuple([]),
+ saveFacilityDraft:z.tuple([z.number().int().positive(),facilityInputs]),
+ saveFacilityNotes:z.tuple([z.number().int().positive(),facilityInputs.pick({steps:true,examples:true})]),
+ replayFacilityDraft:z.tuple([z.number().int().positive()]),
  workspaceOrderPage:z.tuple([z.number().int().positive().safe()]),
  workspaceSourceRecord:z.tuple([id,z.number().int().positive().safe(),id]),
  getWorkspaceFolderSuggestion:z.tuple([role]),discoverWorkspaceFolders:z.tuple([role]),useWorkspaceFolderSuggestion:z.tuple([role,z.string().min(1).max(32767)]),
@@ -25,9 +46,10 @@ export const argumentsByMethod={
  confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
  workspaceSearchOrders: z.tuple([z.string().min(1).max(200)]),
  workspaceAttention:z.union([z.tuple([]),z.tuple([z.number().int().positive().safe()])]),
- openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.tuple([id,z.number().int().positive().safe()]),
+ openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.union([z.tuple([id,z.number().int().positive().safe()]),z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(200)])]),
  getWorkspaceStatus:z.tuple([]),addWorkspaceDirectSource:z.union([z.tuple([]),z.tuple([z.string().regex(/^[A-Za-z0-9._-]{1,100}$/)])]),copyWorkspaceDirectProfile:z.tuple([id]),
- workspaceDraftPreview: z.tuple([]),
+ workspaceDraftPreview:z.union([z.tuple([]),z.tuple([z.object({draftId:z.string().uuid(),expectedRevision:z.number().int().positive(),
+   previous:facilityInputs.pick({rules:true,packing:true}).required().strict().optional()}).strict()])]),
  workspaceOrderDetail: z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceFolder: z.tuple([role]),
  reuseWorkspaceFolder: z.tuple([id, role]),

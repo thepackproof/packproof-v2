@@ -34,6 +34,7 @@ type ApprovalSession = {
   scope: {
     history: string;
     outputName?: string;
+    testedProfile?: {revision:number; examples:number; digest:string};
     sources: { id: string; displayName?: string; roles: string[]; transport?: 'folder' | 'api'; sourceNamespace?: string }[];
   };
 };
@@ -83,6 +84,7 @@ export function OrderWorkspaceApproval({ api, organizationId, environment, param
             <small>Records included · {source.roles.join(', ')}</small>
           </Info>)}<Info name="approval" title="Read access"><p>PackProof reads the selected records and keeps the originals in your source system.</p></Info></div>
         <dl className="pp-approval-facts"><div><dt>Collection period</dt><dd>{session.scope.history==='existing_and_future'?'Existing records and future changes':session.scope.history}</dd></div>
+          {session.scope.testedProfile && <div><dt>Tested facility workflow</dt><dd>Revision {session.scope.testedProfile.revision}, checked on {session.scope.testedProfile.examples} known orders.<details><summary>Configuration fingerprint</summary><code>{session.scope.testedProfile.digest}</code></details></dd></div>}
           <div><dt>Offline collection</dt><dd>Up to one hour after the last successful access check</dd></div>
           <div><dt>Saved proofs</dt><dd>{session.scope.outputName||'The folder selected on this computer'}</dd></div></dl>
         {notice ? <p role="status" className="pp-approval-notice">{notice}</p>:session.state==='active'?<p role="status" className="pp-approval-notice">Access approved. PackProof Connect will continue automatically.</p>:

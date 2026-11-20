@@ -10,6 +10,10 @@ on:
       reviewed_sha:
         description: Full reviewed main commit used by the hosted release and installer
         required: true
+      unified_windows:
+        description: Build the qualified Commerce and Logistics workstation together
+        type: boolean
+        default: false
       signed_run_id:
         description: For publication, the successful signed build run ID
       installer_sha256:
@@ -73,6 +77,10 @@ jobs:
         shell: pwsh
     env:
       APP_ENV: ${{ inputs.channel }}
+      PACKPROOF_UNIFIED_WINDOWS: ${{ inputs.unified_windows && '1' || '0' }}
+      PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_COGNITO_REGION }}
+      PACKPROOF_COGNITO_CLIENT_ID: ${{ vars.PACKPROOF_COGNITO_CLIENT_ID }}
+      PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_COGNITO_USER_POOL_ID }}
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
       PACKPROOF_WEB_BASE_URL: ${{ vars.PACKPROOF_WEB_BASE_URL }}
       PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
@@ -106,6 +114,9 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - run: npm ci
+      - name: Install the signed Commerce host dependencies
+        if: inputs.unified_windows
+        run: npm ci --prefix ../desktop --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:release
@@ -155,6 +166,7 @@ jobs:
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
       PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
       CONNECT_INSTALLER_SHA256: ${{ inputs.installer_sha256 }}
+      PACKPROOF_UNIFIED_WINDOWS: ${{ inputs.unified_windows && '1' || '0' }}
       PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
     steps:
       - uses: actions/checkout@v4

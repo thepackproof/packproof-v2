@@ -6,7 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { releaseContext } = require('./release-policy.cjs');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const fatalCodes = new Set(['UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE', 'QUIT_FAILED']);
+const fatalCodes = new Set(['STARTUP_FAILED', 'UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE', 'QUIT_FAILED']);
 const shutdownCodes = new Set(['WINDOW_CLOSE_REQUESTED','WINDOW_CLOSE_ALLOWED','WINDOW_CLOSE_WAITING_FOR_DRAIN','WINDOW_CLOSE_CAPTURE_BLOCKED','WINDOW_CLOSE_QUEUE_PROMPT','WINDOW_CLOSE_CANCELED','QUIT_REQUESTED','QUIT_EVIDENCE_DRAINED','QUIT_REPORTING_CLOSED','QUIT_CLOSE_ALLOWED','QUIT_NATIVE_REQUESTED','QUIT_CANCELED','QUIT_FAILED','APP_BEFORE_QUIT','APP_WILL_QUIT']);
 function shutdownDiagnostics(rows) {
   return rows.filter(row => row.category === 'SYSTEM' && shutdownCodes.has(row.code)).slice(-32).map(row => ({ code: row.code, at: Number.isFinite(Date.parse(row.at)) ? new Date(row.at).toISOString() : null }));
@@ -115,7 +115,9 @@ async function launchCycle(target, logFile, result, { env = process.env } = {}) 
   } catch (error) { failure = error; }
   finally {
     if (child?.pid) result.shutdown = await stopOwnedChild(child, target, result);
-    result.shutdownDiagnostics = shutdownDiagnostics(diagnosticRows(logFile).slice(previousRows));
+    const rows = diagnosticRows(logFile).slice(previousRows);
+    result.startupCodes = [...new Set(rows.filter(row => row.category === 'SYSTEM' && /^[A-Z_]{1,60}$/.test(row.code)).map(row => row.code))].slice(0,32);
+    result.shutdownDiagnostics = shutdownDiagnostics(rows);
   }
   if (failure) throw failure;
   // Quit may fail after readiness: include shutdown diagnostics and require a clean owned-process exit.
@@ -125,20 +127,27 @@ async function launchCycle(target, logFile, result, { env = process.env } = {}) 
 async function main() {
   if (process.env.CI !== 'true' || process.env.APP_ENV !== 'development') throw new Error('Native launch smoke is restricted to isolated development CI.');
   if (!['win32', 'darwin'].includes(process.platform)) throw new Error('Native launch smoke requires Windows or macOS.');
-  const release = releaseContext();
+  const desktop = releaseContext();
+  const unifiedWindows = process.env.PACKPROOF_UNIFIED_WINDOWS === '1';
+  let release = desktop;
+  if (unifiedWindows) {
+    if (process.platform !== 'win32') throw new Error('Unified workstation smoke requires Windows.');
+    const connect = require('../../connect-windows/scripts/release-policy.cjs').context();
+    release = { ...desktop, productName: connect.productName, outputDirectory: connect.output };
+  }
   if (release.platform !== process.platform || release.arch !== process.arch) throw new Error('Launch smoke must run the native architecture.');
   const runtime = JSON.parse(fs.readFileSync(path.resolve('dist/main/runtime-config.json'), 'utf8'));
   if (runtime.channel !== 'development') throw new Error('Refusing to launch a production/staging profile in this smoke test.');
   const profileBase = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.join(os.homedir(), 'Library', 'Application Support');
   if (!profileBase) throw new Error('Native application-data location is unavailable.');
-  const profile = path.join(profileBase, release.productName);
+  const profile = path.join(profileBase, desktop.productName);
   if (fs.existsSync(profile)) throw new Error('A development profile already exists. Preserve it; this CI smoke requires a clean runner.');
   const output = path.resolve(release.outputDirectory);
   const target = await launchTarget(release, output, launchArguments(process.argv.slice(2)).installedExecutable);
   const logFile = path.join(profile, 'Logs', 'desktop.log');
   const report = {
     schemaVersion: 2, sourceCommit: process.env.GITHUB_SHA || null,
-    platform: process.platform, arch: process.arch, channel: 'development', executionLocation: target.executionLocation,
+    platform: process.platform, arch: process.arch, channel: 'development', unifiedWindows, executionLocation: target.executionLocation,
     started: false, rendererReady: false, secureStorage: 'not-reported', protectedInstallation: 'not-tested',
     authentication: 'not-tested', signedPublisherVerification: 'not-tested', captureHardware: 'not-tested',
     evidenceQueueRecovery: 'not-tested', shutdown: 'not-started', checks: [], launches: [],

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { PackProofApi } from '../api/client';
-import { displayState } from './model';
+import { displayState, recordsPath } from './model';
+import { OrderSourceHealth } from './OrderSourceHealth';
 import { useWorkflowCommand, useWorkflowData } from './workflow';
 
 type SourceRef = { namespace: string; type: string; id: string };
 interface WaitingEvent { eventKey: string; sourceId: string; fileName: string; locator: string; entity: SourceRef; references: SourceRef[]; kind: string; reason: string }
-interface Match { proofId: string; revision: number; orderReference: string; updatedAt: string }
+interface Match { proofId: string; revision: number; orderReference: string; displayOrderReference?:string; updatedAt: string }
 interface LinkProps { api: PackProofApi; scope: string; eventKey: string; revision: number; proofId: string; onSaved: () => void }
 
 function LinkDecision({ api, scope, eventKey, revision, proofId, onSaved, action }: LinkProps & {action:'link'|'unlink'}) {
@@ -42,15 +43,23 @@ function ChooseOrder({ api, scope, item, onSaved }: {api:PackProofApi;scope:stri
     {result.error && <p role="alert">{result.error}</p>}
     {result.data && !result.loading && !result.error && (result.data.orders.length ? <fieldset><legend>Compare the order with the report</legend>
       {result.data.orders.map(o=><label key={o.proofId} className="agent-check"><input type="radio" name={item.eventKey} checked={o.proofId===choice} onChange={()=>setChoice(o.proofId)}/>
-        {o.orderReference} · Updated {new Date(o.updatedAt).toLocaleString()} · <a href={'/app/order-proofs/'+encodeURIComponent(o.proofId)+'?'+scope} target="_blank" rel="noreferrer">Open order</a>
+        {o.displayOrderReference || o.orderReference} · Updated {new Date(o.updatedAt).toLocaleString()} · <a href={'/app/order-proofs/'+encodeURIComponent(o.proofId)+'?'+scope}>Open order</a>
       </label>)}</fieldset> : <p>No matching order was found.</p>)}
     {order && <LinkDecision key={order.proofId+':'+order.revision} api={api} scope={scope} eventKey={item.eventKey} revision={order.revision} proofId={order.proofId} action="link" onSaved={onSaved}/>}
   </details>;
 }
 export function OrderReferenceReview({api,scope,canManage}: {api:PackProofApi;scope:string;canManage:boolean}) {
   const [refresh,setRefresh]=useState(0), [message,setMessage]=useState('');
-  const result=useWorkflowData<{items:WaitingEvent[];hasMore:boolean}>(api,'/order-attention?'+scope,refresh);
-  return <section className="records-panel"><h2>Reports waiting for an order</h2>
+  const [before,setBefore] = useState<number|null>(null);
+  const result=useWorkflowData<{items:WaitingEvent[];hasMore:boolean;orderIssues?:(Match & {issue?:string})[];nextIssuesBefore?:number|null}>(api,
+    '/order-attention?'+scope+'&includeOrderIssues=1'+(before ? '&before='+before : ''),refresh);
+  return <><OrderSourceHealth api={api} scope={scope}/>
+    {!!result.data?.orderIssues?.length && <section className="records-panel"><h2>Order discrepancies</h2><ul>
+      {result.data.orderIssues.map(o=><li key={o.proofId}><a href={recordsPath('order-proofs',new URLSearchParams(scope),{},o.proofId)}>{o.displayOrderReference || o.orderReference}</a> · {o.issue}</li>)}</ul>
+      {result.data.nextIssuesBefore && <button type="button" onClick={()=>setBefore(result.data!.nextIssuesBefore!)}>Next discrepancies</button>}
+      {before && <button type="button" onClick={()=>setBefore(null)}>First page</button>}
+    </section>}
+    <section className="records-panel"><h2>Reports waiting for an order</h2>
     {message && <p role="status">{message}</p>}
     {result.error ? <div role="alert"><p>{result.error}</p><button className="records-button secondary" onClick={()=>setRefresh(v=>v+1)}>Try again</button></div>
       : result.loading ? <p role="status">Checking reports…</p>
@@ -62,5 +71,5 @@ export function OrderReferenceReview({api,scope,canManage}: {api:PackProofApi;sc
         {canManage && <ChooseOrder api={api} scope={scope} item={item} onSaved={()=>{setMessage('The link was recorded.');setRefresh(v=>v+1);}}/>}
       </article>)}
     {result.data?.hasMore && <p>More reports are waiting. Review these to see the next group.</p>}
-  </section>;
+  </section></>;
 }

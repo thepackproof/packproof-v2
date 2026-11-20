@@ -96,7 +96,8 @@ function Experience({
   serviceUnavailable: boolean;
 }) {
   const ws = status.workspace!;
-  const [setup, setSetup] = useState(() => ws.step !== "overview" || ws.phase !== "active");
+  const facilitySetup = new URLSearchParams(window.location.search).get("facilitySetup") === "1";
+  const [setup, setSetup] = useState(() => facilitySetup || ws.step !== "overview" || ws.phase !== "active");
   const [section, setSection] = useState<Section>("home");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [tour, setTour] = useState(false);
@@ -126,6 +127,10 @@ function Experience({
     ]),
   );
   const open = (id: string, rev: number) => {
+    if (facilitySetup) {
+      void bridge.openWorkspaceOrder(id,rev).catch(e => setError(e instanceof Error ? e.message : "Could not open the signed-in order."));
+      return;
+    }
     setSelection({ id, revision: rev, scope });
     setError("");
   };
@@ -206,6 +211,11 @@ function Experience({
             onOpenDraftProof={(data) => setDraft({ data, identity })}
             onOpenProof={(o) => open(o.proofId, o.revision)}
             onComplete={() => {
+              if (facilitySetup) {
+                void bridge.openWorkspaceReview().then(() => window.close())
+                  .catch(e => setError(e instanceof Error ? e.message : "Could not open your signed-in workspace."));
+                return;
+              }
               setSetup(false);
               nav("home");
             }}

@@ -106,6 +106,7 @@ export interface StoredEvent {
   file_name: string;
   profile_version: string;
   received_at: string | Date;
+  first_seen_at?: string | Date | null;
   override?: string | null;
 }
 export interface Root {
@@ -175,6 +176,7 @@ function lineage(e: StoredEvent) {
     fileName: e.file_name,
     profileVersion: e.profile_version,
     locator: e.record.locator,
+    ...(e.first_seen_at ? {firstSeenAt: new Date(e.first_seen_at).toISOString()} : {}),
     observedAt: new Date(e.received_at).toISOString()
   };
 }

@@ -14,6 +14,18 @@ public static partial class SourceReaders
 {
     public static bool IsMedia(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() is
         ".pdf" or ".jpeg" or ".jpg" or ".tif" or ".tiff" or ".png" or ".heic" or ".webp";
+    // A signature-matched original is eligible for download only. Any extracted
+    // text remains separate and never establishes delivery or carton identity.
+    internal static bool QualifiedReceiptPdf(byte[] bytes)
+    {
+        ReadOnlySpan<byte> data = bytes;
+        if (data.Length < 14 || !data.StartsWith("%PDF-"u8) || data[6] != '.' ||
+            data[8] is not (10 or 13) ||
+            !(data[5] == '1' && data[7] >= '0' && data[7] <= '7' || data[5] == '2' && data[7] == '0'))
+            return false;
+        while (data.Length > 0 && data[^1] is 9 or 10 or 12 or 13 or 32) data = data[..^1];
+        return data.EndsWith("%%EOF"u8);
+    }
     private static string InspectDocument(byte[] bytes,string format,List<SourceReaderRow> rows,List<string> issues)
     {
         var b=bytes.AsSpan();

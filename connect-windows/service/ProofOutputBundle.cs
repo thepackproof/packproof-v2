@@ -177,9 +177,10 @@ internal sealed class ProofOutputBundle : IDisposable
         {
             if(kind!="original" || Field(response,"originalSha256")!=sha || Field(response,"sourceId")!=source ||
                 Field(binding,"mediaType")!=Field(response,"mediaType")) throw Invalid();
-            extension=Field(response,"mediaType") switch { "image/jpeg"=>".jpg","image/png"=>".png","application/zpl"=>".zpl",_=>throw Invalid() };
+            extension=Field(response,"mediaType") switch { "image/jpeg"=>".jpg","image/png"=>".png","application/zpl"=>".zpl","application/pdf"=>".pdf",_=>throw Invalid() };
             bytes=response.GetProperty("bytesBase64").GetBytesFromBase64();
             if(bytes.Length>3*1024*1024 || Digest(bytes)!=sha) throw Invalid();
+            if (extension == ".pdf" && !SourceReaders.QualifiedReceiptPdf(bytes)) throw Invalid();
         }
         var folder=ProofFolder(proofId,Field(doc,"orderReference")??proofId);
         using var proofPin=new ProofOutputPaths.DirectoryPin(folder);

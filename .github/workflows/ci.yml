@@ -304,6 +304,16 @@ jobs:
         with:
           name: postgres-release-evidence-${{ github.sha }}
           path: ${{ runner.temp }}/postgres-release-tests.xml
+      - name: Prepare the exact Logistics backend source tested with PostgreSQL
+        run: |
+          python3 infra/backend-release/backend-source-archive.py "$GITHUB_SHA" "$RUNNER_TEMP/logistics-backend.zip" logistics-v1
+          python3 infra/backend-release/backend-source-archive.py "$GITHUB_SHA" "$RUNNER_TEMP/logistics-backend.zip" logistics-v1 --verify > "$RUNNER_TEMP/logistics-source.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logistics-backend-candidate-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/logistics-backend.zip
+            ${{ runner.temp }}/logistics-source.json
 
   dependency-audit:
     name: Dependency audit (${{ matrix.project }})

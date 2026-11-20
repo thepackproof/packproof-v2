@@ -48,7 +48,8 @@ public sealed partial class AgentRuntime
         source.ProposedWorkflow=proposal;
         source.Recognition = Json.Element(new {state="ambiguous",message=$"Found matching references in {fileName}.",
             question="Do those references come from "+string.Join(", ",names)+"?",profileVersion=SourceReaders.WorkflowProfileVersion(proposal),
-            fields=proposal.Columns.Values,sample=preview,fileName});
+            fields=parsed.Headers.Take(32),sample=preview,fileName,
+            packingSchema=source.Roles.SequenceEqual(["packing"]) && SourceReaders.RecognizeExport(parsed)==null ? SourceReaders.PackingSchema(parsed) : null});
         return true;
     }
 }

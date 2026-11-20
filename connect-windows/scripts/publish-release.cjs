@@ -27,7 +27,7 @@ function parseFeed(text, url) {
   }
 }
 
-async function inspect(directory, { channel, commit, installerHash, apiOrigin, webOrigin }) {
+async function inspect(directory, { channel, commit, installerHash, apiOrigin, webOrigin, unifiedWindows = false }) {
   if (!['production', 'staging'].includes(channel) || !/^[a-f0-9]{40}$/.test(commit) || !shaPattern.test(installerHash)) {
     throw Error('Select a signed channel, reviewed commit, and accepted installer SHA-256.');
   }
@@ -36,6 +36,7 @@ async function inspect(directory, { channel, commit, installerHash, apiOrigin, w
   if (report.product !== 'PackProof Connect' || report.channel !== channel || report.signed !== true ||
       report.sourceDirty !== false || report.sourceCommit !== commit || !versionPattern.test(report.version) ||
       report.application?.schema !== 'packproof.connect-build/v1' || report.application.sourceDirty !== false ||
+      (report.application.unifiedWindows ?? false) !== unifiedWindows ||
       report.application.sourceCommit !== commit || report.application.channel !== channel || report.application.appVersion !== report.version ||
       report.feed?.url !== updateUrl || !report.feed.publisher || !trustedUrl(webOrigin) || !trustedUrl(apiOrigin) ||
       report.feed.webOrigin !== webOrigin || report.feed.apiOrigin !== apiOrigin) {
@@ -74,7 +75,8 @@ function base64Hash(hex) { return Buffer.from(hex, 'hex').toString('base64'); }
 
 async function publish(directory, env, execute = aws, fetchImpl = fetch) {
   const verified = await inspect(directory, { channel: env.APP_ENV, commit: env.GITHUB_SHA,
-    installerHash: env.CONNECT_INSTALLER_SHA256, webOrigin: env.PACKPROOF_WEB_BASE_URL, apiOrigin: env.PACKPROOF_API_BASE_URL });
+    installerHash: env.CONNECT_INSTALLER_SHA256, webOrigin: env.PACKPROOF_WEB_BASE_URL, apiOrigin: env.PACKPROOF_API_BASE_URL,
+    unifiedWindows: env.PACKPROOF_UNIFIED_WINDOWS === '1' });
   const bucket = env.PACKPROOF_RELEASE_BUCKET;
   if (!bucketPattern.test(bucket || '')) throw Error('The downloads bucket is required.');
   const { files, prefix, updateUrl, version } = verified;

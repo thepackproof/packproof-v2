@@ -47727,6 +47727,21 @@
               "minimum": 1,
               "maximum": 100
             }
+          },
+          {
+            "name": "referenceType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "any",
+                "order",
+                "pick",
+                "package",
+                "shipment",
+                "tracking"
+              ]
+            }
           }
         ],
         "responses": {
@@ -47847,6 +47862,25 @@
               "minLength": 1,
               "maxLength": 200
             }
+          },
+          {
+            "name": "includeOrderIssues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         ],
         "responses": {
@@ -47950,6 +47984,21 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "referenceType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "any",
+                "order",
+                "pick",
+                "package",
+                "shipment",
+                "tracking"
+              ]
             }
           }
         ],
@@ -48587,6 +48636,1611 @@
                 "schema": {
                   "$ref": "#/components/schemas/Problem"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/revisions/{revision}/sources/{eventKey}": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs_proofId_revisions_revision_sources_eventKey",
+        "summary": "Open authorized evidence from this pinned revision",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "eventKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/revisions/{revision}/artifacts/{receiptId}": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs_proofId_revisions_revision_artifacts_receiptId",
+        "summary": "Open authorized evidence from this pinned revision",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/revisions/{revision}/packet": {
+      "post": {
+        "operationId": "connect_post_me_records_order_proofs_proofId_revisions_revision_packet",
+        "summary": "Download and audit this authorized revision",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "schema": {
+                      "const": "packproof.order-packet/v1"
+                    },
+                    "exportId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "proofId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "exportedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "destination": {
+                      "const": "user_download"
+                    },
+                    "projection": {
+                      "$ref": "#/components/schemas/ConnectProofRevision"
+                    },
+                    "manifest": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "source",
+                              "artifact"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "disposition": {
+                            "enum": [
+                              "original",
+                              "excerpt",
+                              "omitted"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "id",
+                          "disposition"
+                        ]
+                      }
+                    },
+                    "contents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "source",
+                              "artifact"
+                            ]
+                          },
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "record": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "id",
+                          "record"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "schema",
+                    "exportId",
+                    "proofId",
+                    "revision",
+                    "exportedAt",
+                    "destination",
+                    "projection",
+                    "manifest",
+                    "contents"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/order-original-access": {
+      "put": {
+        "operationId": "connect_put_me_records_agent_installations_installationId_order_original_access",
+        "summary": "Set a member’s original access for an installation",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "installationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "membershipId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "allowed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "installationId",
+                    "membershipId",
+                    "allowed"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "membershipId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "membershipId",
+                  "allowed",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-proofs/{proofId}/case-actions": {
+      "get": {
+        "operationId": "connect_get_me_records_order_proofs_proofId_case_actions",
+        "summary": "Read the last 100 review actions on this order",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "caseKey": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "proofRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "action": {
+                            "enum": [
+                              "assign",
+                              "request_receipt",
+                              "clarify_mapping",
+                              "resolve"
+                            ]
+                          },
+                          "ownerMembershipId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "actorUserId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1024
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "caseKey",
+                          "version",
+                          "proofRevision",
+                          "action",
+                          "ownerMembershipId",
+                          "actorUserId",
+                          "reason",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "connect_post_me_records_order_proofs_proofId_case_actions",
+        "summary": "Record a version-checked review action",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "caseKey": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "proofRevision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "action": {
+                      "enum": [
+                        "assign",
+                        "request_receipt",
+                        "clarify_mapping",
+                        "resolve"
+                      ]
+                    },
+                    "ownerMembershipId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "actorUserId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1024
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "caseKey",
+                    "version",
+                    "proofRevision",
+                    "action",
+                    "ownerMembershipId",
+                    "actorUserId",
+                    "reason",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "environment": {
+                    "enum": [
+                      "sandbox",
+                      "live"
+                    ]
+                  },
+                  "caseKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "action": {
+                    "enum": [
+                      "assign",
+                      "request_receipt",
+                      "clarify_mapping",
+                      "resolve"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ownerMembershipId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "environment",
+                  "caseKey",
+                  "action",
+                  "reason",
+                  "expectedRevision",
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/workspace-access": {
+      "get": {
+        "operationId": "connect_get_me_records_agent_installations_installationId_workspace_access",
+        "summary": "Check the signed-in person’s guided workspace access",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "canConfigure": {
+                      "type": "boolean"
+                    },
+                    "organizationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "environment": {
+                      "enum": [
+                        "sandbox",
+                        "live"
+                      ]
+                    },
+                    "locationId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "userId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "canConfigure",
+                    "organizationId",
+                    "environment",
+                    "locationId",
+                    "userId"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/facility-setup/suggestions/v1": {
+      "post": {
+        "operationId": "connect_post_me_records_agent_installations_installationId_facility_setup_suggestions_v1",
+        "summary": "Request bounded setup suggestions with consent",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "operation": {
+                            "enum": [
+                              "ask_question",
+                              "map_field",
+                              "suggest_step",
+                              "mark_unknown"
+                            ]
+                          },
+                          "step": {
+                            "enum": [
+                              "release",
+                              "pick",
+                              "pack",
+                              "weigh",
+                              "label",
+                              "handoff",
+                              "delivery",
+                              "return"
+                            ]
+                          },
+                          "field": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "meaning": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          }
+                        },
+                        "required": [
+                          "operation",
+                          "step",
+                          "field",
+                          "meaning",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "revision",
+                    "requestId",
+                    "suggestions"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "draftId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "consent": {
+                    "const": true
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "release",
+                        "pick",
+                        "pack",
+                        "weigh",
+                        "label",
+                        "handoff",
+                        "delivery",
+                        "return"
+                      ]
+                    },
+                    "maxItems": 8,
+                    "minItems": 1,
+                    "uniqueItems": true
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "handle": {
+                          "type": "string",
+                          "pattern": "^f(?:[1-9]|[1-5][0-9]|6[0-4])$"
+                        },
+                        "label": {
+                          "enum": [
+                            "Shipped At",
+                            "Carton",
+                            "Weight",
+                            "Unit",
+                            "Order",
+                            "Tracking",
+                            "Delivered At",
+                            "Other"
+                          ]
+                        },
+                        "type": {
+                          "enum": [
+                            "text",
+                            "number",
+                            "datetime"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "handle",
+                        "label",
+                        "type"
+                      ]
+                    },
+                    "maxItems": 64,
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "draftId",
+                  "revision",
+                  "consent",
+                  "steps",
+                  "fields"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/withdraw": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_withdraw",
+        "summary": "Withdraw the matching pending setup approval",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "withdrawn": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "withdrawn"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "scopeDigest"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/partner/agent/order-workspace/source-health": {
+      "post": {
+        "operationId": "connect_post_v1_partner_agent_order_workspace_source_health",
+        "summary": "Record an installed collector source check",
+        "security": [
+          {
+            "PartnerCredential": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scopeDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "checkedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "lastVerifiedReadAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "state": {
+                    "enum": [
+                      "current",
+                      "unreadable"
+                    ]
+                  }
+                },
+                "required": [
+                  "scopeDigest",
+                  "sourceId",
+                  "generation",
+                  "checkedAt",
+                  "lastVerifiedReadAt",
+                  "state"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/order-source-health": {
+      "get": {
+        "operationId": "connect_get_me_records_order_source_health",
+        "summary": "Read delayed sources and overdue cartons within the authorized scope",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "limited": {
+                      "type": "boolean"
+                    },
+                    "incidents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "installationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "sourceId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "generation": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "displayName": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "state": {
+                            "enum": [
+                              "unreadable",
+                              "delayed"
+                            ]
+                          },
+                          "lastVerifiedReadAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "nextCheckAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "affectedOrders": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "proofId": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                },
+                                "orderReference": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 200
+                                }
+                              },
+                              "required": [
+                                "proofId",
+                                "orderReference"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "installationId",
+                          "sourceId",
+                          "generation",
+                          "displayName",
+                          "state",
+                          "lastVerifiedReadAt",
+                          "nextCheckAt",
+                          "affectedOrders"
+                        ]
+                      }
+                    },
+                    "overdue": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "proofId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "orderReference": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "deadline": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "proofId",
+                          "orderReference",
+                          "id",
+                          "namespace",
+                          "deadline"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "limited",
+                    "incidents",
+                    "overdue"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/facility-setup/reviews/v1": {
+      "post": {
+        "operationId": "connect_post_me_records_agent_installations_installationId_facility_setup_reviews_v1",
+        "summary": "Record a setup suggestion decision without transmitting sample values",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Review recorded."
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "draftId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "requestId": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5
+                  },
+                  "decision": {
+                    "enum": [
+                      "accepted",
+                      "edited",
+                      "rejected"
+                    ]
+                  }
+                },
+                "required": [
+                  "draftId",
+                  "revision",
+                  "requestId",
+                  "index",
+                  "decision"
+                ]
               }
             }
           }
@@ -60177,6 +61831,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "expectedCheckIntervalSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          },
+          "expectedDeliveryAfterLabelSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 31536000
           }
         },
         "required": [
@@ -60208,6 +61872,37 @@
           "outputName": {
             "type": "string",
             "maxLength": 1024
+          },
+          "testedProfile": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "schema": {
+                "const": "packproof.facility-replay/v1"
+              },
+              "digest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "draftId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "examples": {
+                "const": 3
+              }
+            },
+            "required": [
+              "schema",
+              "digest",
+              "draftId",
+              "revision",
+              "examples"
+            ]
           }
         },
         "required": [
@@ -60288,6 +61983,10 @@
               "maxLength": 200
             },
             "maxItems": 64
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -60359,6 +62058,10 @@
               "maxLength": 200
             },
             "maxItems": 64
+          },
+          "firstSeenAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -60449,6 +62152,144 @@
           },
           "integrity": {
             "const": "source_reported"
+          },
+          "displayOrderReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "deliveryCoverage": {
+            "enum": [
+              "configured",
+              "outside_approved_sources",
+              "unreported"
+            ]
+          },
+          "cartons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "lastEventKind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "lastEventKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "occurredAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deliveryStatus": {
+                  "enum": [
+                    "delivered",
+                    "awaiting_evidence"
+                  ]
+                }
+              },
+              "required": [
+                "namespace",
+                "id",
+                "lastEventKind",
+                "lastEventKey",
+                "occurredAt",
+                "observedAt",
+                "deliveryStatus"
+              ]
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "sourceId"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "added",
+                    "updated",
+                    "unlinked",
+                    "original_attached",
+                    "historical_evidence_received"
+                  ]
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "eventKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "previousEventKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "profileVersion": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "receiptId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "field": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "previous": {},
+                      "current": {}
+                    },
+                    "required": [
+                      "scope",
+                      "field"
+                    ]
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -60497,6 +62338,52 @@
                 },
                 "issue": {
                   "type": "string"
+                },
+                "locationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayOrderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "matchedSubjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "namespace": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "sourceId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "namespace",
+                      "sourceId"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -60751,6 +62638,52 @@
                 },
                 "issue": {
                   "type": "string"
+                },
+                "locationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayOrderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "matchedSubjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "namespace": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "sourceId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "namespace",
+                      "sourceId"
+                    ]
+                  }
                 }
               },
               "required": [

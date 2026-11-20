@@ -4,6 +4,7 @@ import { requireRecordLocation, type RecordWorkspace } from './access.js';
 import { activeScope, installationOperation } from './order-workspace.js';
 import type { Installation } from './agent-enrollments.js';
 import { requireReconstructionFeature } from './reconstruction-features.js';
+import { presentOrderSnapshot } from './order-subjects.js';
 interface Filter {
   where: string;
   params: unknown[];
@@ -80,20 +81,23 @@ const orderLabels = `(SELECT COALESCE(jsonb_object_agg(label,value),'{}'::jsonb)
  SELECT label,left(min(name),200) AS value FROM (
   SELECT CASE lower(replace(replace(f.key,'_',''),' ',''))
    WHEN 'customer' THEN 'customerName' WHEN 'customername' THEN 'customerName' WHEN 'soldtoname' THEN 'customerName'
+   WHEN 'sourceordername' THEN CASE WHEN e->'fieldLineage' ? 'sourceOrderName' THEN 'displayOrderReference' END
    WHEN 'fulfillmentstatus' THEN 'fulfillmentStatus' WHEN 'fulfilmentstatus' THEN 'fulfillmentStatus' END AS label,
    nullif(trim(f.value #>> '{}'),'') AS name
   FROM jsonb_array_elements(v.view->'events') e
   CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(e->'fields')='object' THEN e->'fields' ELSE '{}'::jsonb END) f
-  WHERE e->>'kind'='order' AND jsonb_typeof(f.value)='string') candidates
+  WHERE e->>'kind'='order' AND e->>'associationScope' IS DISTINCT FROM 'shared' AND jsonb_typeof(f.value)='string') candidates
  WHERE label IS NOT NULL AND name IS NOT NULL GROUP BY label HAVING min(name)=max(name)) unambiguous)`;
 const card = `(jsonb_strip_nulls(jsonb_build_object(
  'proofId',p.proof_id,'revision',p.revision,'orderReference',p.order_reference,'updatedAt',p.committed_at,
- 'latestKind',v.view->'events'->-1->>'kind','issue',left(${firstIssue},200))) || ${orderLabels})`;
+ 'latestKind',(SELECT event->>'kind' FROM jsonb_array_elements(v.view->'events') WITH ORDINALITY AS events(event,position)
+   ORDER BY COALESCE(event->>'occurredAt',event->>'observedAt')::timestamptz DESC NULLS LAST,
+     (event->>'observedAt')::timestamptz DESC NULLS LAST,event->>'eventKey' DESC NULLS LAST,position DESC LIMIT 1),'issue',left(${firstIssue},200))) || ${orderLabels})`;
 function visibleOrders(f: Filter) {
-  return `SELECT last.sequence,last.revision,last.committed_at,r.proof_id,r.order_reference FROM record_order_roots r
+  return `SELECT last.sequence,last.revision,last.committed_at,r.proof_id,r.order_reference,r.location_id FROM record_order_roots r
  JOIN LATERAL (SELECT v.sequence,v.revision,v.committed_at FROM record_order_revisions v WHERE v.proof_id=r.proof_id ORDER BY v.revision DESC LIMIT 1) last ON true WHERE ${f.where}`;
 }
-export async function listOrders(db: Database, f: Filter, q: unknown, limit: unknown, before?: unknown, dayStart?: unknown) {
+export async function listOrders(db: Database, f: Filter, q: unknown, limit: unknown, before?: unknown, dayStart?: unknown, referenceType?: unknown) {
   if (q != null && (typeof q !== 'string' || q.length > 200)) throw new DomainError('INVALID_SEARCH', 'Enter an exact order reference.', 400);
   if (dayStart != null && (typeof dayStart !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(dayStart) || !Number.isFinite(Date.parse(dayStart)) || new Date(dayStart).toISOString().slice(0,19)!==dayStart.slice(0,19))) {
     throw new DomainError('INVALID_DAY_START', 'Supply the local start of today as a UTC timestamp.', 400);
@@ -101,19 +105,33 @@ export async function listOrders(db: Database, f: Filter, q: unknown, limit: unk
   const boundary = before == null ? null : count(before, 1, Number.MAX_SAFE_INTEGER);
   f = currentOrderScope(f);
   const j = f.params.length, size = count(limit, 20);
+  const lookup = referenceType !== undefined;
+  if (lookup && (!['any','order','pick','package','shipment','tracking'].includes(String(referenceType)) || typeof q !== 'string' || !q.trim()))
+    throw new DomainError('INVALID_SEARCH', 'Choose a supported identifier and enter its exact value.', 400);
+  const requested = referenceType === 'any' ? {id:q} : {id:q,type:referenceType};
+  // The query for historic exact-order search retains its cursor and SQL plan.
+  // Typed lookup uses indexed revision members, then intersects their current
+  // revision with visible roots before computing candidate details.
+  const matchQuery = lookup ? `SELECT s.*,(
+    SELECT jsonb_agg(m ORDER BY m->>'type',m->>'namespace',m->>'sourceId') FROM jsonb_array_elements(record_order_subjects(hit.view)) m
+    WHERE m @> $${j+5}::jsonb OR ($${j+6}::boolean AND m @> jsonb_build_object('type','warehouse_order','id',$${j+1}::text))
+  ) AS subjects FROM visible s JOIN record_order_revisions hit ON hit.sequence=s.sequence
+  WHERE (record_order_subjects(hit.view) @> jsonb_build_array($${j+5}::jsonb)
+    OR ($${j+6}::boolean AND record_order_subjects(hit.view) @> jsonb_build_array(jsonb_build_object('type','warehouse_order','id',$${j+1}::text))))` :
+    `SELECT * FROM visible s WHERE ($${j+1}::text='' OR order_reference=$${j+1})`;
+  const matchedCard = lookup ? `(${card} || jsonb_build_object('matchedSubjects',p.subjects,'locationId',p.location_id))` : card;
   // Authorize and bound the page before reading proof documents for card details.
   const row = (await db.query<{orders:OrderCard[];cursor:string;total:number;updated:number;today:number;next_before:string|null}>(`
  WITH visible AS MATERIALIZED (${visibleOrders(f)}),
- matches AS (SELECT * FROM visible WHERE ($${j+1}::text='' OR order_reference=$${j+1})
- AND ($${j+3}::bigint IS NULL OR sequence<$${j+3}) ORDER BY sequence DESC LIMIT ($${j+2}::integer + 1)),
+ matches AS (${matchQuery} AND ($${j+3}::bigint IS NULL OR s.sequence<$${j+3}) ORDER BY s.sequence DESC LIMIT ($${j+2}::integer + 1)),
  page AS (SELECT * FROM matches ORDER BY sequence DESC LIMIT $${j+2})
- SELECT COALESCE((SELECT jsonb_agg(${card} ORDER BY p.sequence DESC) FROM page p
+ SELECT COALESCE((SELECT jsonb_agg(${matchedCard} ORDER BY p.sequence DESC) FROM page p
  JOIN record_order_revisions v ON v.sequence=p.sequence),'[]'::jsonb) orders,
  COALESCE(max(sequence),0) cursor,count(*)::integer total,
  count(*) FILTER (WHERE committed_at>=now()-interval '24 hours')::integer updated,
  count(*) FILTER (WHERE committed_at >= $${j+4}::timestamptz)::integer today,
  CASE WHEN (SELECT count(*) FROM matches)>$${j+2} THEN (SELECT min(sequence) FROM page) END next_before
- FROM visible`, [...f.params,q ?? '',size,boundary,dayStart ?? null])).rows[0];
+ FROM visible`, [...f.params,q ?? '',size,boundary,dayStart ?? null,...(lookup ? [JSON.stringify(requested),referenceType === 'pick'] : [])])).rows[0];
   return {orders:row.orders,cursor:Number(row.cursor),totalOrders:row.total,updatedLast24Hours:row.updated,
     ...(dayStart == null ? {} : {updatedToday:row.today}),
     nextBefore:row.next_before == null ? null : Number(row.next_before)};
@@ -143,5 +161,5 @@ export async function readOrder(db: Database, f: Filter, id: string, revision?: 
     view: unknown;
   }>(`SELECT v.view FROM record_order_roots r JOIN record_order_revisions v ON v.proof_id=r.proof_id WHERE ${f.where} AND r.proof_id=$${j + 1} AND ($${j + 2}::integer IS NULL OR v.revision=$${j + 2}) ORDER BY v.revision DESC LIMIT 1`, [...f.params, id, v])).rows[0];
   if (!row) throw new DomainError('PROOF_NOT_FOUND', 'This order revision could not be found in your workspace.', 404);
-  return row.view;
+  return presentOrderSnapshot(row.view) as unknown;
 }

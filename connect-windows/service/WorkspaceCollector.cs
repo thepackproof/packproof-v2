@@ -32,6 +32,7 @@ public sealed partial class AgentRuntime
         }
     }
     private readonly ConcurrentDictionary<string,FolderNotifications> workspaceChanges = new();
+    private readonly Dictionary<string,(string Scope, int Generation, bool Failed, DateTimeOffset RetryAt)> reportedChecks = [];
     private const int SourceDirectoryLimit = 10000;
     private static string[] WorkspaceFiles(string folder)
     {
@@ -68,6 +69,7 @@ public sealed partial class AgentRuntime
     {
         var export = SourceReaders.RecognizeExport(parsed, out bool ambiguous);
         if (ambiguous) return [];
+        if (source.PackingReader is { } packingReader) return SourceReaders.NormalizeFacilityPacking(parsed,packingReader);
         var candidates = new List<JsonElement[]>();
         if (source.ConfirmedMap != null && source.Roles.Contains("order"))
         {
@@ -80,7 +82,7 @@ public sealed partial class AgentRuntime
             return [];
         foreach (var workflow in source.ApprovedWorkflows())
         {
-            var matches = SourceReaders.NormalizeWorkflow(parsed,source.Id,workflow).EnumerateArray().ToArray();
+            var matches = SourceReaders.NormalizeWorkflow(parsed,source.Id,workflow,source.ShippedAtMeaning).EnumerateArray().ToArray();
             if (matches.Length > 0) candidates.Add(matches);
         }
         // An ambiguous file may not be applied independently to two workflow stages.
@@ -154,7 +156,8 @@ public sealed partial class AgentRuntime
                             recognized ? $"Found evidence in {name}. An explicit link is needed to attach it to an order." :
                             parsed.State is "parsed" or "ambiguous" ? $"Read {name}. Its order or event references need a confirmed profile." :
                             parsed.Issues.FirstOrDefault() ?? "This file needs a supported reader.",
-                        fields = detected, sample = preview, fileName = name, checkedFilesLimit = 6 });
+                        fields = detected, sample = preview, fileName = name, checkedFilesLimit = 6,
+                        packingSchema = source.Roles.SequenceEqual(["packing"]) && parsed.State=="parsed" && vendor==null ? SourceReaders.PackingSchema(parsed) : null });
                     if (recognized)
                     {
                         var namespaces = mapped.Select(m => Optional(Optional(m,"entity"),"namespace")?.GetString()).OfType<string>().Distinct().ToArray();
@@ -194,7 +197,7 @@ public sealed partial class AgentRuntime
                 if (w.ScopeDigest is not null) await PollWorkspace(w, ct);
                 else if (w.ActiveGrant is { } grant)
                 {
-                    var result = await api.Request("GET", WorkspaceApi, null, state.Token, null, ct);
+                    var result = await api.Request("GET", WorkspaceApi+"?scopeDigest="+grant.ScopeDigest, null, state.Token, null, ct);
                     if (Optional(result,"scopeDigest")?.GetString() == grant.ScopeDigest && Optional(result,"state")?.GetString() == "active")
                         w.ActiveGrant = grant with { CheckedAt = DateTimeOffset.UtcNow };
                     else if (Optional(result,"state")?.GetString() != "pending") w.ActiveGrant = null;
@@ -219,6 +222,9 @@ public sealed partial class AgentRuntime
             }
         }
         if (!WorkspaceGrantCurrent) { StopWorkspaceWatchers(); return; }
+        // All prior uploads drained before submission. Leave source checkpoints intact until
+        // the browser chooses which scope may admit newly arrived files.
+        if(w.SubmittedProfileDigest is not null && w.Phase=="awaiting_approval") return;
         if (networkOnline) await ReconcilePartnerHistory(w, ct);
         var active = w.Sources.Where(s => s.Transport == "folder" && !s.Paused && w.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation).ToArray();
         foreach (var id in workspaceWatchers.Keys.Where(id => !active.Any(s => s.Id == id)).ToArray()) DropWatcher(id);
@@ -239,10 +245,17 @@ public sealed partial class AgentRuntime
             catch (Exception e) when (e is IOException or ConnectException or UnauthorizedAccessException)
             {
                 source.Issue = e is ConnectException ce ? ce.Code : "SOURCE_UNREADABLE";
+                if (source.Issue is "SOURCE_UNREADABLE" or "SOURCE_REPLACED" or "SOURCE_ACCESS_DENIED" or "SOURCE_READ_FAILED" or "SOURCE_BUSY")
+                {
+                    source.LastCheckAttemptAt = receiptClock.GetUtcNow();
+                    source.LastReadFailed = true;
+                }
                 source.CoverageGap = true;
                 source.RetryAt = now.AddSeconds(10);
                 DropWatcher(source.Id);
             }
+            if(networkOnline && w.ActiveGrant?.TestedProfileDigest!=null && GuidedSetupAvailable && WorkspaceGrantCurrent)
+                await ReportSourceCheck(w.ActiveGrant!,source,now,ct);
         }
         if (!WorkspaceGrantCurrent) return;
         await RefreshWorkspaceOrders(w,ct);
@@ -253,6 +266,27 @@ public sealed partial class AgentRuntime
             nextWorkspaceCheckpoint = now.AddSeconds(10);
             Save();
         }
+    }
+
+    private async Task ReportSourceCheck(WorkspaceGrant grant, WorkspaceSource source, DateTimeOffset now, CancellationToken ct)
+    {
+        if (source.LastCheckAttemptAt is not { } checkedAt) return;
+        if (reportedChecks.TryGetValue(source.Id, out var prior) && prior.Scope==grant.ScopeDigest &&
+            prior.Generation==source.Generation && prior.Failed==source.LastReadFailed && prior.RetryAt>now) return;
+        // Send outages and recoveries immediately. Coalesce routine reads to stay
+        // within the installation's request budget, including after an API failure.
+        var interval=TimeSpan.FromSeconds(45);
+        try
+        {
+            await api.Request("POST",WorkspaceApi+"/source-health",new {scopeDigest=grant.ScopeDigest,sourceId=source.Id,
+                generation=source.Generation,checkedAt,lastVerifiedReadAt=Json.Element(source.LastVerifiedReadAt),
+                state=source.LastReadFailed?"unreadable":"current"},state.Token,null,ct);
+        }
+        catch(Exception ex) when(ex is ApiException or HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            interval=ex is ApiException {RetryAfter: { } delay} && delay>interval?delay:interval;
+        }
+        reportedChecks[source.Id]=(grant.ScopeDigest,source.Generation,source.LastReadFailed,now.Add(interval));
     }
 
     private DateTimeOffset earliestReceiptRefresh;
@@ -351,21 +385,34 @@ public sealed partial class AgentRuntime
         var batch = names.Where(n => string.Compare(n, s.Cursor, StringComparison.OrdinalIgnoreCase) > 0).Take(4).ToArray();
         if (batch.Length == 0) batch = names.Take(4).ToArray();
         var prioritized = changed.Where(n=>present.Contains(n)).Concat(batch).Distinct(StringComparer.OrdinalIgnoreCase);
+        bool readSucceeded = true;
         foreach (var name in prioritized)
         {
             // A single bad report cannot starve the folder: advance the traversal
             // cursor, not the durable file version, when a particular file is busy.
             try { CaptureWorkspaceFile(w,s,folder,name); }
             catch (ConnectException e) when (e.Code is "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_SIZE_UNSUPPORTED" or "SOURCE_ACCESS_DENIED")
-            { s.Issue = e.Code; }
+            { s.Issue = e.Code; readSucceeded = false; }
         }
         if (batch.Length > 0) s.Cursor = batch[^1];
         s.LastScanAt = batch.Length == 0 || names[^1] == batch[^1] ? now : null;
+        s.LastCheckAttemptAt = receiptClock.GetUtcNow();
+        s.LastReadFailed = !readSucceeded;
+        if (readSucceeded)
+        {
+            s.LastVerifiedReadAt = s.LastCheckAttemptAt;
+            s.RetryAt = null;
+            // Only clear a read incident after reopening the source and completing a read.
+            // File interpretations and pending receipts have independent recovery conditions.
+            if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_ACCESS_DENIED" or "SOURCE_READ_FAILED" or "SOURCE_BUSY")
+                s.Issue = null;
+        }
     }
 
     private void CaptureWorkspaceFile(OrderWorkspaceState w, WorkspaceSource s, string folder, string name)
     {
         var bytes = FolderSource.WorkspaceSnapshot(folder, name);
+        var firstSeenAt = receiptClock.GetUtcNow();
         var digest = HashBytes(bytes);
         var key = name.ToUpperInvariant();
         var previous = s.Inventory.GetValueOrDefault(key);
@@ -374,7 +421,8 @@ public sealed partial class AgentRuntime
         var sequence = checked((previous?.Sequence ?? 0) + 1);
         var obs = Hash(JsonSerializer.Serialize(new { installation = w.ActiveGrant!.InstallationId, s.Id, s.Generation, key, sequence, digest }));
         var parsed = SourceReaders.Read(name, bytes);
-        var dependenciesCurrent = s.ConfirmedDependencies.All(d => w.Sources.Any(t => t.Id == d.Key && t.Roles.Count > 0 && t.Generation == d.Value));
+        var dependenciesCurrent = s.ConfirmedDependencies.All(d => w.Sources.Any(t => t.Id == d.Key && t.Roles.Count > 0 && t.Generation == d.Value))
+            && (s.PackingReader is not { } custom || w.Sources.Any(t=>t.Id==custom.Rule.OrderSourceId && t.Roles.Contains("order") && t.Generation==custom.OrderGeneration));
         var records = dependenciesCurrent ? WorkspaceRecords(s, parsed) : [];
         if (!dependenciesCurrent) s.Issue = "RELATED_SOURCE_CHANGED";
         var issues = parsed.Issues.Take(8).ToList();
@@ -384,17 +432,20 @@ public sealed partial class AgentRuntime
         if (!awaitingSidecar && records.Length == 0 && issues.Count == 0) issues.Add("This report needs a confirmed order or package reference.");
         var body = Json.Element(new { sourceId = s.Id, generation = s.Generation, scopeDigest = w.ActiveGrant!.ScopeDigest,
             fileName = name, originalSha256 = digest, originalBase64 = Convert.ToBase64String(bytes), mediaType = WorkspaceMediaType(name),
-            profileVersion = s.ProfileVersion, observationId = obs, records, issues });
+            profileVersion = s.ProfileVersion, observationId = obs, firstSeenAt, records, issues });
         if (records.Length > 512 || Json.Bytes(body).Length > 6 * 1024 * 1024)
             body = Json.Element(new { sourceId = s.Id, generation = s.Generation, scopeDigest = w.ActiveGrant!.ScopeDigest, fileName = name,
                 originalSha256 = digest, originalBase64 = Convert.ToBase64String(bytes), mediaType = WorkspaceMediaType(name),
-                profileVersion = s.ProfileVersion, observationId = obs, records = Array.Empty<object>(), issues = new[]{"Interpretation exceeds the bounded request size. The original needs review."} });
+                profileVersion = s.ProfileVersion, observationId = obs, firstSeenAt, records = Array.Empty<object>(), issues = new[]{"Interpretation exceeds the bounded request size. The original needs review."} });
         var staged = queue.StageWorkspace(bytes, name, body, w.ActiveGrant!.InstallationId, obs, s);
-        if (SourceReaders.IsMedia(name) && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
+        // Delivery indices bind their signed receipt by hash. Reading its pixels
+        // or text adds no delivery claim and must not hold the dispatch feed.
+        var indexedReceipt = s.Roles.Contains("delivery") && !s.Roles.Contains("evidence") &&
+            parsed.Format=="pdf" && SourceReaders.QualifiedReceiptPdf(bytes);
+        if (SourceReaders.IsMedia(name) && !indexedReceipt && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
         s.Inventory[key] = new(digest, sequence, s.Generation, name);
         WakeService();
         if (!awaitingSidecar && records.Length == 0) s.Issue = "PROFILE_NEEDS_REVIEW";
-        else if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_ACCESS_DENIED") s.Issue = null;
         if (records.Length > 0 && Optional(s.Recognition, "state")?.GetString() == "empty")
         {
             s.Recognition = Json.Element(new {state="recognized",message=$"Found {records.Length} record(s) in {name}.",

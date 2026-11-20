@@ -1,0 +1,38 @@
+{
+  "ordinary": {
+    "reference": "SO-10481",
+    "cartons": 1,
+    "labels": 0
+  },
+  "split": {
+    "reference": "SO-10482",
+    "stableId": "export.order482",
+    "cartons": 2,
+    "labels": 1,
+    "deliveredBefore": [
+      "CTN-01"
+    ],
+    "awaitingBefore": [
+      "CTN-02"
+    ],
+    "deliveredAfter": [
+      "CTN-01",
+      "CTN-02"
+    ]
+  },
+  "reprint": {
+    "reference": "SO-10483",
+    "cartons": 1,
+    "labels": 2
+  },
+  "clock": {
+    "lastDispatchRead": "2026-11-19T14:18:00-05:00",
+    "nextExpectedCheck": "2026-11-19T14:23:00-05:00",
+    "receiptDeadline": "2026-11-19T14:27:00-05:00",
+    "inspect": "2026-11-19T14:30:00-05:00",
+    "receipt2Event": "2026-11-19T14:19:00-05:00",
+    "recovery": "2026-11-19T14:34:00-05:00"
+  },
+  "replayRevisionDelta": 0,
+  "recoveryRevisionDelta": 1
+}

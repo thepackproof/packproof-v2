@@ -1,0 +1,2 @@
+id,order_id/id,company_id/id,product_uom_qty,product_uom/name,product_id/default_code,state,ReportAsOf,order_id/name
+export.line482,export.order482,base.other_company,99,EA,BOLT-10,sale,2026-11-19T08:00:00-05:00,SO-10482

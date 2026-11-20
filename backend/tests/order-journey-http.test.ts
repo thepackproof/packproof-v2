@@ -1,4 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {spawn,type ChildProcess} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {randomBytes,randomUUID} from 'node:crypto';
@@ -21,10 +22,15 @@ afterEach(()=>vi.unstubAllEnvs());
 
 it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='win32')('drives the Windows collector, scoped operator HTTP approval, order view and exported revisions together',async()=>{
   const repo=path.resolve('..'),fixture=path.join(repo,'examples/multisource-journey/fixtures');
+  const reference=process.env.PACKPROOF_JOURNEY_CARTONS==='1';
+  const referenceRoot=path.join(repo,'examples/multisource-journey/reference');
+  const expected=reference?JSON.parse(await readFile(path.join(referenceRoot,'expectations.json'),'utf8')):null;
   const root=await mkdtemp(path.join(tmpdir(),'pp-controlled-http-'));
   const pipeName='packproof-journey-'+randomUUID();
   const socketPath='\\\\.\\pipe\\'+pipeName;
-  const clock={now:()=>new Date()};
+  const observationClock=new AsyncLocalStorage<string>();
+  let dispatchTime:string|undefined=expected?.clock.lastDispatchRead;
+  const clock={now:()=>{const time=observationClock.getStore();return time?new Date(time):new Date();}};
   for(const flag of ['ORGANIZATIONS','ORDER_WORKSPACE']) vi.stubEnv('PACKPROOF_'+flag+'_ENABLED','true');
   vi.stubEnv('PACKPROOF_EVENT_CURSOR_KEY',randomBytes(32).toString('base64'));
   // The reference operation may never use a configured external database.
@@ -33,7 +39,11 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
   const app=createServerApp({db:db.db,clock,objectStore:new LocalObjectStore(path.join(root,'objects'),'http://localhost','isolated-fixture'),
     auth:new BearerUserAdapter(db.db),devAuth:true,testFixtures:true,publicBaseUrl:'https://api.example.test',corsOrigins:['https://portal.example.test'],
     webhookConfig:{encryptionKey:randomBytes(32).toString('base64'),allowedHosts:['example.test']},emailDelivery:new DisabledEmailDelivery()});
-  const server=createServer(app);
+  const server=createServer((req,res)=>{
+    if(dispatchTime && /\/order-workspace\/(observations|source-health)$|\/order-source-health\b/.test(req.url||''))
+      observationClock.run(dispatchTime,()=>app(req,res));
+    else app(req,res);
+  });
   const routes:Record<string,number>={};
   server.on('request',(req,res)=>{res.on('finish',()=>{
     const route=(req.method||'')+' '+(req.url||'').split('?')[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/ig,':id')+' '+res.statusCode;
@@ -77,11 +87,16 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const adminHeaders={Authorization:'Bearer '+owner};
     const scope={organizationId:org,environment:'sandbox'};
     const query='?'+new URLSearchParams(scope);
-    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.6.0'});
-    const enrolled=await call('POST','/me/records/agent-enrollments/'+e.id+'/decision'+query,{...scope,decision:'approve',comparisonCode:e.comparisonCode,operatorMembershipId:member,locationId:null,sourceName:'Controlled source files',integrationAccountId:null,createLocalSource:true},{...adminHeaders,'Idempotency-Key':'journey-enrollment'});
+    const locationId=reference?'reference-facility':null;
+    if(locationId) {
+      await db.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[locationId,org,'Reference facility',clock.now().toISOString()]);
+      vi.stubEnv('PACKPROOF_GUIDED_FACILITIES',[org,'sandbox',locationId].join(':'));
+    }
+    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.7.0'});
+    const enrolled=await call('POST','/me/records/agent-enrollments/'+e.id+'/decision'+query,{...scope,decision:'approve',comparisonCode:e.comparisonCode,operatorMembershipId:member,locationId,sourceName:'Controlled source files',integrationAccountId:null,createLocalSource:true},{...adminHeaders,'Idempotency-Key':'journey-enrollment'});
     const grant=await call('POST','/connect/enrollments/'+e.id+'/redeem',{redeemSecret:e.redeemSecret});
     const credentials={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
-    await call('POST','/v1/partner/agent/heartbeat',{version:'0.6.0',queueCount:0,enrollmentAcknowledged:true},credentials);
+    await call('POST','/v1/partner/agent/heartbeat',{version:'0.7.0',queueCount:0,enrollmentAcknowledged:true},credentials);
     const account=(await db.db.query<{id:string}>('SELECT integration_account_id AS id FROM record_agent_installations WHERE id=$1',[enrolled.installationId])).rows[0].id;
     const sender=await createServicePrincipal(db.db,clock,owner,org,{name:'Fixture ERP'},'fixture');
     const credential=await issuePartnerCredential(db.db,clock,owner,org,sender.id,{scopes:['proofs:write','proofs:read'],expiresAt:new Date(Date.now()+86400000).toISOString()},'fixture');
@@ -89,6 +104,16 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const partnerOrder={integrationAccountId:account,operatorMembershipId:member,externalId:'API-BEFORE',transaction:{itemTitle:'Existing direct order',quantity:2}};
     const earlier=await call('POST','/v1/partner/proofs',partnerOrder,{...merchant,'Idempotency-Key':'before-approval'});
     for(const folder of ['order','picking','packing','evidence','shipping','handoff','delivery','output']) await mkdir(path.join(root,folder));
+    const referenceFile=async(folder:string,file:string,name=file)=>{
+      const destination=path.join(root,folder,name);
+      await copyFile(path.join(referenceRoot,file),destination+'.tmp');
+      await rename(destination+'.tmp',destination);
+    };
+    if(reference) {
+      await copyFile(path.join(referenceRoot,'expectations.json'),path.join(root,'expectations.json'));
+      for(const [folder,file] of [['order','orders.csv'],['packing','cartons.csv'],['shipping','labels.csv'],['delivery','dispatch-initial.csv']])
+        await referenceFile(folder,file);
+    }
     const ps=process.env.PACKPROOF_JOURNEY_NATIVE_PS;
     runner=spawn(ps?'pwsh':'dotnet',ps?['-NoProfile','-NonInteractive','-File',ps]:['test','service-tests/PackProof.Connect.Service.Tests.csproj','-c','Release','--no-build','--filter','FullyQualifiedName~Run_real_order_service_against_isolated_http_application'],
       {cwd:path.join(repo,'connect-windows'),windowsHide:true,stdio:['ignore','inherit','inherit'],env:{...process.env,PACKPROOF_JOURNEY_ROOT:root,
@@ -99,12 +124,12 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const pending=await call('GET',resource+query,undefined,adminHeaders);
     expect(pending.scopeDigest).toBe(session.scopeDigest);
     const useBrowser=process.env.PACKPROOF_JOURNEY_BROWSER==='1';
-    async function checkInBrowser(proof?: {id:string;revision:number}) {
+    async function checkInBrowser(proof?: {id:string;revision:number;carton?:string;historicalRevision?:number;locationId?:string|null}) {
       const desktop=path.join(repo,'connect-windows');
       const phase=proof?'order':'consent';
       const locator=path.join(root,'browser-'+phase+'.json');
       await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath,proof}),{flag:'wx'});
-      const executable=createRequire(path.join(desktop,'package.json'))('electron') as string;
+      const executable=process.env.PACKPROOF_JOURNEY_BROWSER_EXE || createRequire(path.join(desktop,'package.json'))('electron') as string;
       const browser=spawn(executable,['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile-'+phase),path.join(desktop,'scripts/browser-order-approval.cjs')],{
         cwd:desktop,windowsHide:true,stdio:['ignore','inherit','inherit'],timeout:60000,env:{...process.env,PACKPROOF_BROWSER_FIXTURE:locator}
       });
@@ -121,6 +146,102 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     expect(approved.state).toBe('active'); mark('authorized');
     const list=()=>call('GET','/me/records/order-proofs'+query,undefined,adminHeaders);
     const view=(id:string)=>call('GET','/me/records/order-proofs/'+id+query,undefined,adminHeaders);
+    if(reference) {
+      await referenceFile('delivery','POD-7784.pdf');
+      const lookup=()=>call('GET','/me/records/order-proofs'+query+'&q=CTN-02&referenceType=package',undefined,adminHeaders);
+      const pinned=await poll('initial split order, label and carton 01 original',async()=>{
+        const card=(await lookup()).orders[0]; if(!card)return;
+        const proof=await view(card.proofId);
+        return proof.events.some((e:any)=>e.eventId==='LABEL-482') && proof.originalArtifacts.some((a:any)=>a.fileName==='POD-7784.pdf')?proof:undefined;
+      });
+      const deliveries=(proof:any)=>proof.events.filter((e:any)=>e.kind==='delivery').flatMap((e:any)=>e.references.filter((r:any)=>r.type==='package').map((r:any)=>r.id)).sort();
+      expect(deliveries(pinned)).toEqual(expected.split.deliveredBefore);
+      expect(pinned.events.find((e:any)=>e.eventId==='LABEL-482')).toMatchObject({kind:'label'});
+      expect(pinned.events.some((e:any)=>e.kind==='handoff')).toBe(false);
+      const verify=await import('../../examples/multisource-journey/verify-output.mjs');
+      const output=path.join(root,'output');
+      const packet=await poll('initial pinned packet',()=>verify.verifyOutput(output,pinned).catch(()=>undefined));
+      const originalPacket=path.join(output,packet.directory,'revision-'+String(pinned.revision).padStart(8,'0'),'record.json');
+      const previousPacket=await readFile(originalPacket);
+      const source=session.sources.find((s:any)=>s.role==='delivery').id;
+      const held=path.join(root,'dispatch-disconnected');
+      await rename(path.join(root,'delivery'),held);
+      dispatchTime=expected.clock.inspect;
+      await writeFile(path.join(root,'inspect-outage'),'');
+      await poll('service detects dispatch read failure',async()=>{
+        const status=await receipt('service-status.json'); return status?.workspace.sources.find((s:any)=>s.id===source && s.issue && s.coverageGap);
+      });
+      const health=()=>call('GET','/me/records/order-source-health'+query+'&locationId='+locationId,undefined,adminHeaders);
+      const delayed=await poll('one source incident for the missed dispatch check',async()=>{
+        const results=(await health()).incidents.filter((i:any)=>i.sourceId===source);
+        return results.length===1?results[0]:undefined;
+      });
+      expect(new Date(delayed.lastVerifiedReadAt).toISOString()).toBe(new Date(expected.clock.lastDispatchRead).toISOString());
+      expect(new Date(delayed.nextCheckAt).toISOString()).toBe(new Date(expected.clock.nextExpectedCheck).toISOString());
+      expect(delayed.affectedOrders.some((o:any)=>o.proofId===pinned.proofId)).toBe(true);
+      expect((await health()).overdue.some((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02')).toBe(false);
+      await referenceFile('packing','packing-progress.csv');
+      await poll('healthy packing source advances another order during dispatch outage',async()=>{
+        const card=(await call('GET','/me/records/order-proofs'+query+'&q=CTN-03&referenceType=package',undefined,adminHeaders)).orders[0];
+        if(!card)return;
+        return (await view(card.proofId)).events.some((e:any)=>e.kind==='packing' && e.version==='2')?true:undefined;
+      });
+      await writeFile(path.join(root,'restart'),'');
+      await poll('restart from protected state',()=>receipt('restarted.json'));
+      dispatchTime=expected.clock.recovery;
+      await writeFile(path.join(root,'dispatch-restored'),'');
+      await referenceFile('dispatch-disconnected','POD-7791.pdf');
+      await rename(held,path.join(root,'delivery'));
+      await poll('recover and preserve the second PDF before its linking row',async()=>{
+        const result=await db.db.query('SELECT 1 FROM record_order_receipts WHERE source_id=$1 AND file_name=$2',[source,'POD-7791.pdf']);
+        return result.rows.length?true:undefined;
+      });
+      await poll('verified source recovery clears the incident',async()=>(await health()).incidents.some((i:any)=>i.sourceId===source)?undefined:true);
+      const late=(await health()).overdue.find((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02');
+      expect(late?.deadline).toBe(new Date(expected.clock.receiptDeadline).toISOString());
+      expect(deliveries(await view(pinned.proofId))).toEqual(expected.split.deliveredBefore);
+      await referenceFile('delivery','dispatch-late.csv');
+      const complete=await poll('second delivery advances the original Proof',async()=>{
+        const proof=await view(pinned.proofId);
+        return proof.originalArtifacts.some((a:any)=>a.fileName==='POD-7791.pdf')?proof:undefined;
+      });
+      expect(complete.revision-pinned.revision).toBe(expected.recoveryRevisionDelta);
+      expect(deliveries(complete)).toEqual(expected.split.deliveredAfter);
+      expect((await health()).overdue.some((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02')).toBe(false);
+      const delivery=complete.events.find((e:any)=>e.kind==='delivery' && e.entity.id==='POD-7791');
+      expect(new Date(delivery.occurredAt).toISOString()).toBe(new Date(expected.clock.receipt2Event).toISOString());
+      expect(new Date(delivery.firstSeenAt).toISOString()).toBe(new Date(expected.clock.recovery).toISOString());
+      expect(delivery.observedAt).toBe(delivery.firstSeenAt);
+      const agentLookup=await call('GET','/v1/partner/agent/order-proofs?q=CTN-02&referenceType=package',undefined,credentials);
+      expect(agentLookup.orders[0]).toMatchObject({proofId:pinned.proofId,revision:complete.revision});
+      expect((await lookup()).orders[0]).toMatchObject({proofId:pinned.proofId,revision:complete.revision});
+      const completePacket=await poll('packet with both PDF originals',()=>verify.verifyOutput(output,complete).catch(()=>undefined));
+      const manifest=JSON.parse(await readFile(path.join(output,completePacket.directory,'revision-'+String(complete.revision).padStart(8,'0'),'manifest.json'),'utf8'));
+      expect(manifest.files.filter((f:any)=>f.kind==='original').map((f:any)=>f.sourceFileName).sort()).toEqual(['POD-7784.pdf','POD-7791.pdf']);
+      expect(await readFile(originalPacket)).toEqual(previousPacket);
+      for(const name of ['delivery-copy-1.csv','delivery-copy-2.csv'])await referenceFile('delivery','dispatch-late.csv',name);
+      await poll('replayed original receipts acknowledged',async()=>{
+        const result=await db.db.query('SELECT file_name FROM record_order_receipts WHERE source_id=$1 AND file_name LIKE $2',[source,'delivery-copy-%']);
+        return result.rows.length===2?true:undefined;
+      });
+      expect(await view(pinned.proofId)).toEqual(complete);
+      await referenceFile('delivery','dispatch-corrected.csv');
+      const corrected=await poll('explicit correction to the dispatch event',async()=>{
+        const p=await view(pinned.proofId); return p.events.some((e:any)=>e.kind==='delivery' && e.entity.id==='POD-7791' && e.version==='2')?p:undefined;
+      });
+      expect(corrected.revision).toBe(complete.revision+1);
+      expect(await call('GET','/me/records/order-proofs/'+pinned.proofId+'/revisions/'+pinned.revision+query,undefined,adminHeaders)).toEqual(pinned);
+      if(process.env.PACKPROOF_JOURNEY_VIEW_FIXTURE) {
+        const packet=await call('POST','/me/records/order-proofs/'+pinned.proofId+'/revisions/'+pinned.revision+'/packet'+query,undefined,adminHeaders);
+        await writeFile(process.env.PACKPROOF_JOURNEY_VIEW_FIXTURE,JSON.stringify({scope,locationId,search:await lookup(),pinned,corrected,packet}));
+      }
+      if(useBrowser) await checkInBrowser({id:corrected.proofId,revision:corrected.revision,carton:'CTN-02',historicalRevision:pinned.revision,locationId});
+      if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify({
+        proofId:pinned.proofId,partialRevision:pinned.revision,completeRevision:complete.revision,correctedRevision:corrected.revision,
+        firstSeenAt:delivery.firstSeenAt,occurredAt:delivery.occurredAt,observedAt:delivery.observedAt,replays:2,pdfOriginals:2
+      },null,2));
+      return;
+    }
     await publish('evidence','early_evidence.json');
     await publish('order','orders.json');mark('orderPublished');
     const first=await poll('earliest order capture',async()=>(await list()).orders?.find((o:any)=>o.orderReference==='SO10482'));

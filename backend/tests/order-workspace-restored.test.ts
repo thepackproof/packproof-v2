@@ -13,7 +13,7 @@ import {applyRestoredDelta} from '../../infra/backend-release/order-workspace-re
 
 const connection=process.env.PACKPROOF_TEST_DATABASE_URL;
 describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
-  it('restores the workspace on 123, applies only collector migration 124, and preserves API and worker access',async()=>{
+  it('restores the workspace, upgrades guided Logistics, and preserves original bytes and runtime access',async()=>{
     const opened=await openIsolatedTestDatabase();
     const suffix=randomBytes(6).toString('hex');
     const apiRole='workspace_api_'+suffix, workerRole='workspace_worker_'+suffix;
@@ -35,7 +35,7 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
         const target=new URL(connection!);target.username=name;target.password=password;target.searchParams.set('options','-c search_path='+schema);
         logins.push(createPgDatabase(target.toString()));
       }
-      const options=(throughMigration:122|123|124,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
+      const options=(throughMigration:122|123|124|129,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
       const policy122=options(122,(await recordsMigrationInventory(122)).migrationSha256);
       const baseline=await planRecordsRuntimePrivileges(opened.db,policy122);
       await opened.db.transaction(async tx=>{for(const sql of baseline.statements)await tx.query(sql);});
@@ -43,14 +43,15 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       await opened.db.query('CREATE TABLE preserved_sample(id integer PRIMARY KEY, original bytea NOT NULL)');
       await opened.db.query('INSERT INTO preserved_sample(id,original) VALUES(1,$1)',[Buffer.from('kept original')]);
       await opened.db.query(`GRANT SELECT ON preserved_sample TO ${apiRole}`);
-      const candidate=await migrationInventory();
+      const inventory=await migrationInventory();
+      const candidate=inventory.filter(row=>row.id<=collectorMigration.id);
       // Exercise the 122→123 restorer with its original release inventory before the
       // candidate migrator sees the exact 123 predecessor and the single new file.
       const predecessor=candidate.filter(row=>row.id<collectorMigration.id);
       const deps={migrationInventory:async()=>predecessor,splitSqlStatements,planRecordsRuntimePrivileges};
       const params={apiRole,workerRole,source,...identity};
       const rollback=Error('EXPECTED_REHEARSAL_ROLLBACK');
-      const hostedDeps={migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges};
+      const hostedDeps={migrationInventory:async()=>candidate,splitSqlStatements,planRecordsRuntimePrivileges};
       const hosted={...params,target:{database:identity.database},inventorySha256:collectorInventory,expectedLedger:backfillMigrationInventorySha256};
       const owner=(mode:string, review=hosted)=>opened.db.transaction(tx=>runOwnerTransaction(tx,review,mode,hostedDeps,schema));
       expect(await owner('inspect')).toMatchObject({initialLedger:backfillMigrationInventorySha256,through:122,applied:[]});
@@ -107,8 +108,38 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       await expect(logins[1].db.query('SELECT * FROM record_order_receipts')).rejects.toMatchObject({code:'42501'});
       expect(await owner('apply',{...hosted,expectedLedger:workspaceInventory})).toMatchObject(
         {through:124,applied:[],finalLedger:collectorInventory,grantStatementCount:0});
-      await migrate(opened.db);
+      const additions=inventory.filter(row=>row.id>collectorMigration.id);
+      const latest=129;
+      expect(additions.at(-1)?.id).toBe("129_unified_collector_version");
+      const logisticsPolicy=options(latest,(await recordsMigrationInventory(latest)).migrationSha256);
+      // Exercise the DDL and table privileges in the same restored schema. A failed
+      // rehearsal must leave both the old receipts and the old role policy usable.
+      await expect(opened.db.transaction(async tx=>{
+        for(const migration of additions){
+          for(const statement of splitSqlStatements(migration.sql))await tx.query(statement);
+          await tx.query("INSERT INTO schema_migrations(id,applied_at,checksum,checksum_provenance) VALUES($1,now(),$2,'EXECUTED_BYTES')",[migration.id,migration.checksum]);
+        }
+        const grants=await planRecordsRuntimePrivileges(tx,logisticsPolicy);
+        for(const statement of grants.statements)await tx.query(statement);
+        throw rollback;
+      })).rejects.toBe(rollback);
       expect(await ledger()).toEqual(after);
+      expect((await opened.db.query("SELECT to_regclass('record_order_packet_exports') IS NULL AS rolled_back")).rows[0]).toEqual({rolled_back:true});
+      for(const login of logins)await verifyRecordsRuntimePrivileges(login.db,policy124);
+
+      await migrate(opened.db);
+      const upgraded=await ledger();
+      expect(upgraded.slice(0,after.length)).toEqual(after);
+      expect(upgraded.slice(after.length).map(row=>({id:row.id,checksum:row.checksum}))).toEqual(additions.map(({id,checksum})=>({id,checksum})));
+      const grants=await planRecordsRuntimePrivileges(opened.db,logisticsPolicy);
+      await opened.db.transaction(async tx=>{for(const statement of grants.statements)await tx.query(statement);});
+      for(const [index,login] of logins.entries()) {
+        expect((await verifyRecordsRuntimePrivileges(login.db,logisticsPolicy)).caller).toBe(roles[index]);
+      }
+      expect((await logins[0].db.query("SELECT convert_from(original,'UTF8') AS original FROM preserved_sample")).rows).toEqual([{original:'kept original'}]);
+      await expect(logins[1].db.query('SELECT * FROM record_order_packet_exports')).rejects.toMatchObject({code:'42501'});
+      await migrate(opened.db);
+      expect(await ledger()).toEqual(upgraded);
     }finally{
       if(oldSource===undefined)delete process.env.PACKPROOF_RELEASE_SHA;else process.env.PACKPROOF_RELEASE_SHA=oldSource;
       for(const login of logins)await login.close();

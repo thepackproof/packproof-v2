@@ -1,0 +1,8 @@
+.logistics-menu { margin: 0 12px 12px; }
+.logistics-menu button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 6px; padding: 8px 12px; text-align: left; cursor: pointer; width: 100%; font: inherit; }
+.logistics-menu button:focus-visible { outline: 3px solid #5497fc; outline-offset: 2px; }
+.logistics-menu .workspace-switch-label { display: block; font-size: 12px; opacity: .8; }
+.logistics-menu section { padding: 8px 0; }
+.logistics-menu h2 { font-size: 14px; margin: 8px 0; }
+.logistics-menu p { font-size: 13px; }
+.logistics-menu section button { margin: 3px 0; }
