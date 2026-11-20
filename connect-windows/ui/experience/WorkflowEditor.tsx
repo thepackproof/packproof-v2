@@ -7,10 +7,21 @@ export const exampleKinds = ["ordinary", "split", "reprint"] as const;
 export const exampleNames = { ordinary: "Everyday order", split: "Split shipment", reprint: "Reprinted label" };
 const scopeNames = { order: "Order", line: "Order line", carton: "Carton", shipment: "Shipment" };
 const recordFields = { identifier: "Linking field", timeField: "Event time field", unit: "Unit", format: "Record format" };
+const templates:Record<string,[string,Step["scope"],string?]> = {
+  release:["Release","order"],pick:["Pick","line","release"],pack:["Pack","carton","pick"],weigh:["Weigh each carton","carton","pack"],
+  label:["Print label","carton","pack"],handoff:["Carrier handoff","shipment","label"],delivery:["Delivery","carton","handoff"],return:["Return","order","delivery"],
+};
+export function standardWorkflowStep(id:string,steps:Step[]):Step|undefined {
+  if(!Object.hasOwn(templates,id) || steps.some(s=>s.id===id)) return;
+  const [name,scope,predecessor]=templates[id];
+  return {id,name,scope,system:"",device:"",optional:false,after:predecessor && steps.some(s=>s.id===predecessor)?[predecessor]:[],
+    ...(id==="weigh"?{record:{identifier:"Carton",timeField:"",unit:"",format:""}}:{})};
+}
 
-export function ExpectationEditor({ examples, onChange }: {
+export function ExpectationEditor({ examples, onChange, compact = false }: {
   examples: Example[];
   onChange: (value: Example[]) => void;
+  compact?: boolean;
 }) {
   const [kind, setKind] = useState<Example["kind"]>("ordinary");
   const current = examples.find(e => e.kind === kind) ?? { kind, reference: "", cartons: null, labelCount: null };
@@ -18,12 +29,13 @@ export function ExpectationEditor({ examples, onChange }: {
     const next = { ...current, ...value };
     onChange([...examples.filter(e => e.kind !== kind), next]);
   }
-  return <section className="setup-card guided-form">
+  const reference = <label>Order, carton or shipment reference<input maxLength={160} autoComplete="off" value={current.reference}
+      onChange={e => update({ reference: e.target.value })} placeholder="Enter a reference you know" /></label>;
+  const expectations = <>
     <label>Example to check<select value={kind} onChange={e => setKind(e.target.value as Example["kind"])}>
       {exampleKinds.map(k => <option key={k} value={k}>{exampleNames[k]}</option>)}
     </select></label>
-    <label>Order, carton or shipment reference<input maxLength={160} autoComplete="off" value={current.reference}
-      onChange={e => update({ reference: e.target.value })} placeholder="Enter a reference you know" /></label>
+    {!compact && reference}
     <div className="guided-pair">
       <label>Expected cartons<input type="number" min={0} max={1000} placeholder="Unknown"
         value={current.cartons ?? ""} onChange={e => update({ cartons: e.target.value === "" ? null : e.target.valueAsNumber })} /></label>
@@ -31,6 +43,9 @@ export function ExpectationEditor({ examples, onChange }: {
         value={current.labelCount ?? ""} onChange={e => update({ labelCount: e.target.value === "" ? null : e.target.valueAsNumber })} /></label>
     </div>
     <small>Record what you remember before opening the preview. These expectations stay separate from the order’s evidence.</small>
+  </>;
+  return <section className={compact ? "guided-form guided-first-order" : "setup-card guided-form"}>
+    {compact ? <>{reference}<details className="guided-form"><summary>What do you remember about this order?</summary>{expectations}</details></> : expectations}
   </section>;
 }
 
@@ -55,10 +70,9 @@ export function WorkflowEditor({ steps, onChange }: { steps: Step[]; onChange: (
     onChange([...steps, { id, name: "New step", scope: "carton", system: "", device: "", after: [], optional: false }]);
     select(id);
   }
-  function addWeigh() {
-    onChange([...steps, {id: "weigh", name: "Weigh each carton", scope: "carton", system: "", device: "", optional: false,
-      after: steps.some(s => s.id === "pack") ? ["pack"] : [], record: {identifier: "Carton", timeField: "", unit: "", format: ""}}]);
-    select("weigh");
+  function addStandard(id:string) {
+    const preset=standardWorkflowStep(id,steps);
+    if(preset){onChange([...steps,preset]);select(id);}
   }
   return <section className="setup-card guided-form">
     <h3>Your warehouse workflow</h3>
@@ -94,6 +108,10 @@ export function WorkflowEditor({ steps, onChange }: { steps: Step[]; onChange: (
       <button className="setup-link" type="button" disabled={steps.length === 1} onClick={remove}>Remove this step</button>
     </fieldset>}
     <button type="button" className="setup-link" disabled={steps.length >= 32} onClick={add}>Add a step</button>
-    {!steps.some(s => s.id === "weigh") && <button type="button" className="setup-link" disabled={steps.length >= 32} onClick={addWeigh}>Add carton weighing</button>}
+    {!steps.some(s => s.id === "weigh") && <button type="button" className="setup-link" disabled={steps.length >= 32} onClick={()=>addStandard("weigh")}>Add carton weighing</button>}
+    {Object.keys(templates).some(id=>id!=="weigh" && !steps.some(s=>s.id===id)) &&
+      <label>Add a standard step<select value="" disabled={steps.length>=32} onChange={e=>addStandard(e.target.value)}>
+        <option value="">Choose a step</option>{Object.entries(templates).filter(([id])=>id!=="weigh" && !steps.some(s=>s.id===id)).map(([id,[name]])=><option key={id} value={id}>{name}</option>)}
+      </select></label>}
   </section>;
 }

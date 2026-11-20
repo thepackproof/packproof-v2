@@ -21,12 +21,16 @@ export async function humanOrderOriginal(deps: AppDependencies, db: Database, w:
     JOIN record_order_sessions s ON s.id=r.session_id JOIN record_agent_installations i ON i.id=s.installation_id
     JOIN platform_principals p ON p.id=i.principal_id AND p.organization_id=i.organization_id AND p.revoked_at IS NULL
     JOIN platform_credentials c ON c.id=i.credential_id AND c.principal_id=i.principal_id AND c.revoked_at IS NULL
-    LEFT JOIN record_order_original_access g ON g.installation_id=i.id AND g.membership_id=$2
-    WHERE r.id=$1 AND i.organization_id=$3 AND i.environment=$4 AND i.status NOT IN ('paused','revoked')
-    AND i.enrollment_acknowledged_at IS NOT NULL AND c.expires_at>$5 AND COALESCE(g.allowed,$6)
-    FOR SHARE OF i,p,c`, [receipt.receiptId,w.membershipId,w.organizationId,w.environment,deps.clock.now(),
-      w.role === 'OWNER' || w.role === 'ADMIN'])).rows[0];
-  if (!i) throw new DomainError('ORIGINAL_ACCESS_DENIED','Your current access permits the order summary only.',403);
+    WHERE r.id=$1 AND i.organization_id=$2 AND i.environment=$3 AND i.status NOT IN ('paused','revoked')
+    AND i.enrollment_acknowledged_at IS NOT NULL AND c.expires_at>$4
+    FOR SHARE OF i,p,c`, [receipt.receiptId,w.organizationId,w.environment,deps.clock.now()])).rows[0];
+  const denied=()=>new DomainError('ORIGINAL_ACCESS_DENIED','Your current access permits the order summary only.',403);
+  if (!i) throw denied();
+  // A policy writer locks this installation first. Read its override in a fresh
+  // statement after taking our shared lock so a concurrent revocation wins.
+  const override=(await db.query<{allowed:boolean}>(`SELECT allowed FROM record_order_original_access
+    WHERE installation_id=$1 AND membership_id=$2`,[i.id,w.membershipId])).rows[0];
+  if (!(override?.allowed ?? (w.role==='OWNER' || w.role==='ADMIN'))) throw denied();
   await requireRecordLocation(db,w,i.location_id);
   return kind === 'source' ? readOrderSource(deps,db,i,proofId,revision,key)
     : readOrderArtifact(deps,db,i,proofId,revision,key);

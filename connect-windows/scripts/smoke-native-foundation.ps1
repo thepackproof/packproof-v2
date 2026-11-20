@@ -104,7 +104,28 @@ try {
  if ($draft.workspace.sources[0].recognition.state -ne 'recognized') { throw 'The sample order could not be read by the service identity.' }
  $draft=Invoke-Bridge addWorkspaceSource @{folder=$sampleOrders;role='evidence'}
  if ($draft.workspace.sources.Count -ne 1 -or $draft.workspace.sources[0].id -ne $orderId -or $draft.workspace.sources[0].roles -notcontains 'evidence') { throw 'Shared folder created duplicate source subscriptions or lost its roles.' }
- [void](Invoke-Bridge addWorkspaceSource @{folder=$samplePicks;role='picking'})
+ $added=Invoke-Bridge addWorkspaceSource @{folder=$samplePicks;role='picking'}
+ $picksId=($added.workspace.sources | Where-Object folder -eq $samplePicks).id
+ $pickFile=Join-Path $samplePicks 'picking.csv'
+ Copy-Item -LiteralPath (Join-Path $root '..\examples\multisource-journey\fixtures\picking.csv') -Destination $pickFile
+ & icacls $pickFile /deny ("NT SERVICE\{0}:(R)" -f $serviceName) | Out-Null
+ if($LASTEXITCODE -ne 0){throw 'Cannot prepare the isolated service access fixture.'}
+ try {
+   if(-not [IO.File]::ReadAllText($pickFile)){throw 'The interactive reviewer could not read the source fixture.'}
+   $deniedSource=Invoke-Bridge inspectWorkspaceSource @{sourceId=$picksId}
+   if(($deniedSource.workspace.sources | Where-Object id -eq $picksId).recognition.state -ne 'unavailable' -or
+     ($deniedSource.workspace.sources | Where-Object id -eq $orderId).recognition.state -ne 'recognized'){
+     throw 'The unreadable source was not isolated from the healthy order source.'
+   }
+ } finally {
+   & icacls $pickFile /remove:d ("NT SERVICE\{0}" -f $serviceName) | Out-Null
+   if($LASTEXITCODE -ne 0){throw 'Unable to restore fixture access.'}
+ }
+ $restoredSource=Invoke-Bridge inspectWorkspaceSource @{sourceId=$picksId}
+ if(($restoredSource.workspace.sources | Where-Object id -eq $picksId).recognition.state -ne 'recognized'){
+   throw 'Restoring access did not restore the source.'
+ }
+ Record-Pass 'interactive operator retains source read while denied installed LocalService reports only the affected feed; restored access qualifies the sample'
  $rejected=$false
  try { [void](Invoke-Bridge setWorkspaceOutput @{folder=$sampleOrders}) }
  catch { if ($_.Exception.Message -notmatch 'OUTPUT_PATH_UNSAFE') { throw }; $rejected=$true }

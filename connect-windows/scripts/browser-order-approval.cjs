@@ -62,6 +62,11 @@ async function run() {
     const shots = path.resolve(__dirname, '../build/workspace-screens');
     await mkdir(shots, { recursive: true });
     if (fixture.proof) {
+      if (fixture.proof.carton) {
+        await require('./browser-carton-journey.cjs')({browser,origin,scope,fixture});
+        win.destroy();
+        return;
+      }
       const expectation = JSON.stringify('Revision ' + fixture.proof.revision + ' · ' + fixture.proof.id);
       await until(`(() => {
         const heading = Array.from(document.querySelectorAll('h1')).some(el => el.textContent.trim() === 'SO10482');

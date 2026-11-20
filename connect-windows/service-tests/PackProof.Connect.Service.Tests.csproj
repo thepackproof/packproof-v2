@@ -13,6 +13,7 @@
     <Compile Include="../service/*Workspace*.cs" />
     <Compile Include="../service/ExportCatalogue.cs" />
     <Compile Include="../service/*FacilityWorkflow.cs" />
+    <Compile Include="../service/FacilityPacking.cs" />
     <None Include="../../examples/multisource-journey/reference/*.csv" Link="reference/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../service/*ProofOutput*.cs" />
     <Compile Include="../service/ConnectException.cs" />

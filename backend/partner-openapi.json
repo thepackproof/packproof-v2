@@ -48644,7 +48644,7 @@
     },
     "/me/records/order-proofs/{proofId}/revisions/{revision}/sources/{eventKey}": {
       "get": {
-        "operationId": "logistics_get__me_records_order_proofs_proofId_revisions_revision_sources_eventKey_",
+        "operationId": "connect_get_me_records_order_proofs_proofId_revisions_revision_sources_eventKey",
         "summary": "Open authorized evidence from this pinned revision",
         "security": [
           {
@@ -48652,6 +48652,35 @@
           }
         ],
         "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "eventKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -48677,35 +48706,6 @@
             "name": "locationId",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "proofId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "revision",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "eventKey",
-            "in": "path",
-            "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -48740,7 +48740,7 @@
     },
     "/me/records/order-proofs/{proofId}/revisions/{revision}/artifacts/{receiptId}": {
       "get": {
-        "operationId": "logistics_get__me_records_order_proofs_proofId_revisions_revision_artifacts_receiptId_",
+        "operationId": "connect_get_me_records_order_proofs_proofId_revisions_revision_artifacts_receiptId",
         "summary": "Open authorized evidence from this pinned revision",
         "security": [
           {
@@ -48748,6 +48748,35 @@
           }
         ],
         "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "receiptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -48773,35 +48802,6 @@
             "name": "locationId",
             "in": "query",
             "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "proofId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "revision",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "receiptId",
-            "in": "path",
-            "required": true,
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -48836,7 +48836,7 @@
     },
     "/me/records/order-proofs/{proofId}/revisions/{revision}/packet": {
       "post": {
-        "operationId": "logistics_post__me_records_order_proofs_proofId_revisions_revision_packet",
+        "operationId": "connect_post_me_records_order_proofs_proofId_revisions_revision_packet",
         "summary": "Download and audit this authorized revision",
         "security": [
           {
@@ -48844,6 +48844,25 @@
           }
         ],
         "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "revision",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -48873,25 +48892,6 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 200
-            }
-          },
-          {
-            "name": "proofId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "revision",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
             }
           }
         ],
@@ -49028,8 +49028,8 @@
     },
     "/me/records/agent-installations/{installationId}/order-original-access": {
       "put": {
-        "operationId": "logistics_put__me_records_agent_installations_installationId_order_original_access",
-        "summary": "Set a member’s original access for one installation",
+        "operationId": "connect_put_me_records_agent_installations_installationId_order_original_access",
+        "summary": "Set a member’s original access for an installation",
         "security": [
           {
             "PersonSession": []
@@ -49138,14 +49138,24 @@
     },
     "/me/records/order-proofs/{proofId}/case-actions": {
       "get": {
-        "operationId": "logistics_get__me_records_order_proofs_proofId_case_actions",
-        "summary": "Read the last 100 actions on an authorized order",
+        "operationId": "connect_get_me_records_order_proofs_proofId_case_actions",
+        "summary": "Read the last 100 review actions on this order",
         "security": [
           {
             "PersonSession": []
           }
         ],
         "parameters": [
+          {
+            "name": "proofId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -49176,16 +49186,6 @@
               "minLength": 1,
               "maxLength": 200
             }
-          },
-          {
-            "name": "proofId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
           }
         ],
         "responses": {
@@ -49211,7 +49211,7 @@
                           "caseKey": {
                             "type": "string",
                             "minLength": 1,
-                            "maxLength": 200
+                            "maxLength": 512
                           },
                           "version": {
                             "type": "integer",
@@ -49243,7 +49243,7 @@
                           "reason": {
                             "type": "string",
                             "minLength": 1,
-                            "maxLength": 200
+                            "maxLength": 1024
                           },
                           "createdAt": {
                             "type": "string",
@@ -49284,8 +49284,8 @@
         }
       },
       "post": {
-        "operationId": "logistics_post__me_records_order_proofs_proofId_case_actions",
-        "summary": "Record a version-checked action on an order gap",
+        "operationId": "connect_post_me_records_order_proofs_proofId_case_actions",
+        "summary": "Record a version-checked review action",
         "security": [
           {
             "PersonSession": []
@@ -49330,7 +49330,7 @@
                     "caseKey": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 200
+                      "maxLength": 512
                     },
                     "version": {
                       "type": "integer",
@@ -49362,7 +49362,7 @@
                     "reason": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 200
+                      "maxLength": 1024
                     },
                     "createdAt": {
                       "type": "string",
@@ -49416,6 +49416,7 @@
                   },
                   "caseKey": {
                     "type": "string",
+                    "minLength": 1,
                     "maxLength": 512
                   },
                   "action": {
@@ -49462,7 +49463,7 @@
     },
     "/me/records/agent-installations/{installationId}/workspace-access": {
       "get": {
-        "operationId": "logistics_get__me_records_agent_installations_installationId_workspace_access",
+        "operationId": "connect_get_me_records_agent_installations_installationId_workspace_access",
         "summary": "Check the signed-in person’s guided workspace access",
         "security": [
           {
@@ -49470,6 +49471,16 @@
           }
         ],
         "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -49489,16 +49500,6 @@
                 "sandbox",
                 "live"
               ]
-            }
-          },
-          {
-            "name": "installationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
             }
           }
         ],
@@ -49563,14 +49564,24 @@
     },
     "/me/records/agent-installations/{installationId}/facility-setup/suggestions/v1": {
       "post": {
-        "operationId": "logistics_post__me_records_agent_installations_installationId_facility_setup_suggestions_v1",
-        "summary": "Request bounded setup suggestions with explicit consent",
+        "operationId": "connect_post_me_records_agent_installations_installationId_facility_setup_suggestions_v1",
+        "summary": "Request bounded setup suggestions with consent",
         "security": [
           {
             "PersonSession": []
           }
         ],
         "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
           {
             "name": "organizationId",
             "in": "query",
@@ -49591,16 +49602,6 @@
                 "live"
               ]
             }
-          },
-          {
-            "name": "installationId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            }
           }
         ],
         "responses": {
@@ -49615,6 +49616,10 @@
                     "revision": {
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
                     },
                     "suggestions": {
                       "type": "array",
@@ -49671,6 +49676,7 @@
                   },
                   "required": [
                     "revision",
+                    "requestId",
                     "suggestions"
                   ]
                 }
@@ -49721,8 +49727,8 @@
                         "return"
                       ]
                     },
-                    "minItems": 1,
                     "maxItems": 8,
+                    "minItems": 1,
                     "uniqueItems": true
                   },
                   "fields": {
@@ -49761,8 +49767,8 @@
                         "type"
                       ]
                     },
-                    "minItems": 1,
-                    "maxItems": 64
+                    "maxItems": 64,
+                    "minItems": 1
                   }
                 },
                 "required": [
@@ -49780,7 +49786,7 @@
     },
     "/v1/partner/agent/order-workspace/withdraw": {
       "post": {
-        "operationId": "logistics_post__v1_partner_agent_order_workspace_withdraw",
+        "operationId": "connect_post_v1_partner_agent_order_workspace_withdraw",
         "summary": "Withdraw the matching pending setup approval",
         "security": [
           {
@@ -49829,7 +49835,7 @@
                 "properties": {
                   "scopeDigest": {
                     "type": "string",
-                    "pattern": "^[0-9a-f]{64}$"
+                    "pattern": "^[a-f0-9]{64}$"
                   }
                 },
                 "required": [
@@ -49843,8 +49849,8 @@
     },
     "/v1/partner/agent/order-workspace/source-health": {
       "post": {
-        "operationId": "logistics_post__v1_partner_agent_order_workspace_source_health",
-        "summary": "Record a check by the enrolled collector of an approved source generation",
+        "operationId": "connect_post_v1_partner_agent_order_workspace_source_health",
+        "summary": "Record an installed collector source check",
         "security": [
           {
             "PartnerCredential": []
@@ -49892,7 +49898,7 @@
                 "properties": {
                   "scopeDigest": {
                     "type": "string",
-                    "pattern": "^[0-9a-f]{64}$"
+                    "pattern": "^[a-f0-9]{64}$"
                   },
                   "sourceId": {
                     "type": "string",
@@ -49937,8 +49943,8 @@
     },
     "/me/records/order-source-health": {
       "get": {
-        "operationId": "logistics_get__me_records_order_source_health",
-        "summary": "Read delayed or unreadable sources and overdue cartons in the current person’s scope",
+        "operationId": "connect_get_me_records_order_source_health",
+        "summary": "Read delayed sources and overdue cartons within the authorized scope",
         "security": [
           {
             "PersonSession": []
@@ -49989,6 +49995,9 @@
                     "asOf": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "limited": {
+                      "type": "boolean"
                     },
                     "incidents": {
                       "type": "array",
@@ -50114,6 +50123,7 @@
                   },
                   "required": [
                     "asOf",
+                    "limited",
                     "incidents",
                     "overdue"
                   ]
@@ -50128,6 +50138,109 @@
                 "schema": {
                   "$ref": "#/components/schemas/Problem"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/records/agent-installations/{installationId}/facility-setup/reviews/v1": {
+      "post": {
+        "operationId": "connect_post_me_records_agent_installations_installationId_facility_setup_reviews_v1",
+        "summary": "Record a setup suggestion decision without transmitting sample values",
+        "security": [
+          {
+            "PersonSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "installationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Review recorded."
+          },
+          "default": {
+            "description": "Scoped request rejected or requires action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "draftId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "requestId": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5
+                  },
+                  "decision": {
+                    "enum": [
+                      "accepted",
+                      "edited",
+                      "rejected"
+                    ]
+                  }
+                },
+                "required": [
+                  "draftId",
+                  "revision",
+                  "requestId",
+                  "index",
+                  "decision"
+                ]
               }
             }
           }
@@ -61769,7 +61882,7 @@
               },
               "digest": {
                 "type": "string",
-                "pattern": "^[0-9a-f]{64}$"
+                "pattern": "^[a-f0-9]{64}$"
               },
               "draftId": {
                 "type": "string",
@@ -62040,6 +62153,18 @@
           "integrity": {
             "const": "source_reported"
           },
+          "displayOrderReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "deliveryCoverage": {
+            "enum": [
+              "configured",
+              "outside_approved_sources",
+              "unreported"
+            ]
+          },
           "cartons": {
             "type": "array",
             "items": {
@@ -62093,6 +62218,77 @@
                 "observedAt",
                 "deliveryStatus"
               ]
+            }
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "sourceId"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "added",
+                    "updated",
+                    "unlinked",
+                    "original_attached",
+                    "historical_evidence_received"
+                  ]
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "eventKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "previousEventKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "profileVersion": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "receiptId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "field": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "previous": {},
+                      "current": {}
+                    },
+                    "required": [
+                      "scope",
+                      "field"
+                    ]
+                  }
+                }
+              }
             }
           }
         }
@@ -62148,6 +62344,11 @@
                     "string",
                     "null"
                   ]
+                },
+                "displayOrderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
                 },
                 "matchedSubjects": {
                   "type": "array",
@@ -62437,6 +62638,52 @@
                 },
                 "issue": {
                   "type": "string"
+                },
+                "locationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "displayOrderReference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "matchedSubjects": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "namespace": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "sourceId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "namespace",
+                      "sourceId"
+                    ]
+                  }
                 }
               },
               "required": [

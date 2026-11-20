@@ -11,7 +11,9 @@ LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
     SELECT jsonb_build_object('id',r->>'id','namespace',r->>'namespace','type',r->>'type','sourceId',e->>'sourceId') subject
     FROM jsonb_array_elements(snapshot->'events') e
     CROSS JOIN LATERAL jsonb_array_elements(jsonb_build_array(e->'entity') || COALESCE(e->'references','[]'::jsonb)) r
-    WHERE e->>'associationScope'='order' AND r->>'type' IN ('order','pick','warehouse_order','package','shipment','tracking')
+    WHERE r->>'type' IN ('order','pick','warehouse_order','package','shipment','tracking')
+      AND (e->>'associationScope'='order'
+        OR (e->>'associationScope'='shared' AND r=e->'entity' AND r->>'type'<>'order'))
     UNION ALL
     SELECT jsonb_build_object('id',alias,'namespace',e->'entity'->>'namespace','type','order','sourceId',e->>'sourceId')
     FROM jsonb_array_elements(snapshot->'events') e

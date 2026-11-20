@@ -1,21 +1,24 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { FacilityDraft, FacilityInputs } from "../guided-workflow-types";
 import type { ConnectStatus } from "../types";
 import type { SourceRole, WorkspaceBridge, WorkspaceSource } from "../workspace-types";
 import { FolderSuggestions } from "./FolderSuggestions";
 import { Clarify } from "./SourceClarification";
 import { roles, sourceName } from "./SetupParts";
-import { SetupAssistant } from "./SetupAssistant";
+import { SetupAssistant, type ManualReview } from "./SetupAssistant";
+import { PackingFieldEditor } from "./PackingFieldEditor";
 
 const timingFields = {
   expectedCheckIntervalSeconds: { label: "Expected time between checks (minutes)", max: 1440 },
   expectedDeliveryAfterLabelSeconds: { label: "Delivery due after carton label (minutes)", max: 525600 },
 };
 
-export function GuidedSources({ bridge, draft, value, sources, busy, update, run, editWorkflow }: {
+export function GuidedSources({ bridge, draft, value, sources, busy, update, run, editWorkflow, onManualReview, ruleComparison }: {
   bridge: WorkspaceBridge; draft: FacilityDraft; value: FacilityInputs; sources: WorkspaceSource[]; busy: boolean;
   update: (value: Partial<FacilityInputs>) => void;
   run: (action: () => Promise<ConnectStatus>) => void; editWorkflow: () => void;
+  onManualReview:(review:ManualReview|null)=>void;
+  ruleComparison?:(sourceId:string)=>ReactNode;
 }) {
   const [role, setRole] = useState<SourceRole>("order");
   const [search, setSearch] = useState(false);
@@ -23,7 +26,7 @@ export function GuidedSources({ bridge, draft, value, sources, busy, update, run
     const excluded = value.excludedSourceIds;
     update({ excludedSourceIds: excluded.includes(source.id) ? excluded.filter(id => id !== source.id) : [...excluded, source.id] });
   }
-  const sourceKey = JSON.stringify(sources.map(s => [s.id, s.generation, s.recognition.fields]));
+  const sourceKey = JSON.stringify(sources.map(s => [s.id, s.generation, s.recognition.fields, Object.keys(s.recognition.sample ?? {})]));
   return <>
     <section className="setup-card guided-form">
       <label>Which records should we look for?<select value={role} onChange={e => { setSearch(false); setRole(e.target.value as SourceRole); }}>
@@ -48,18 +51,26 @@ export function GuidedSources({ bridge, draft, value, sources, busy, update, run
       const read = draft.replay?.sources.find(s => s.sourceId === source.id);
       const timing = value.timing?.find(t => t.sourceId === source.id);
       return <section key={source.id} className="setup-card guided-form">
-        <h3>{sourceName(source)}</h3>
+        <h3 id={"guided-source-" + source.id} tabIndex={-1}>{sourceName(source)}</h3>
         <p>{excluded ? "Set up later · excluded from this proposal" : r.message}</p>
         {!excluded && <>
           <Clarify source={source} bridge={bridge} busy={busy} apply={run}/>
+          {source.roles.length === 1 && source.roles[0] === "packing" && <PackingFieldEditor
+            key={JSON.stringify([source.recognition.packingSchema,value.packing?.find(p=>p.sourceId===source.id)])}
+            source={source} orders={sources.filter(s => s.roles.includes("order") && !value.excludedSourceIds.includes(s.id))}
+            current={value.packing?.find(p => p.sourceId === source.id)} onSave={next => {
+              const rest = (value.packing ?? []).filter(p => p.sourceId !== source.id);
+              update({packing:next ? [...rest,next] : rest});
+            }}/>}
           {shippedAt && <label>When does “{shippedAt}” get filled in?
-            <select value={rule?.shippedAt ?? ""} onChange={e => update({
+            <select id={"guided-meaning-" + source.id} value={rule?.shippedAt ?? ""} onChange={e => update({
               rules: [...value.rules.filter(item => item.sourceId !== source.id), {sourceId: source.id, shippedAt: e.target.value as FacilityInputs["rules"][number]["shippedAt"]}],
             })}>
               <option disabled value="">Choose a meaning</option><option value="label">When a label is printed</option>
               <option value="handoff">When the carrier takes it</option><option value="unknown">I’m not sure</option>
             </select>
           </label>}
+          {ruleComparison?.(source.id)}
           <details><summary>Fields and access</summary>
             <p>{source.folder || "Partner API"} · Generation {source.generation}</p>
             <p>{r.profileVersion ? "Reader profile " + r.profileVersion : "No confirmed reader profile"}</p>
@@ -86,6 +97,13 @@ export function GuidedSources({ bridge, draft, value, sources, busy, update, run
       </section>;
     })}
     {sources.length > 0 && !busy && value.rules === draft.rules && value.steps === draft.steps && value.excludedSourceIds === draft.excludedSourceIds &&
-      <SetupAssistant key={draft.id + draft.revision + sourceKey} draft={draft} sources={sources} onChange={update} onEdit={editWorkflow}/>}
+      <SetupAssistant key={draft.id + draft.revision + sourceKey} draft={draft} sources={sources}
+        onChange={change=>{onManualReview(null);update(change);}} onEdit={review => {
+        onManualReview(review);
+        const sourceId = review.sourceId;
+        if (!sourceId) { editWorkflow(); return; }
+        const field = document.getElementById("guided-meaning-" + sourceId) ?? document.getElementById("guided-source-" + sourceId);
+        field?.focus();
+      }}/>}
   </>;
 }

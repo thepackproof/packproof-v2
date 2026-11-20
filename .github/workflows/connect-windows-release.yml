@@ -166,6 +166,7 @@ jobs:
       PACKPROOF_API_BASE_URL: ${{ vars.PACKPROOF_API_BASE_URL }}
       PACKPROOF_REVIEWED_PORTAL_SHA: ${{ inputs.reviewed_sha }}
       CONNECT_INSTALLER_SHA256: ${{ inputs.installer_sha256 }}
+      PACKPROOF_UNIFIED_WINDOWS: ${{ inputs.unified_windows && '1' || '0' }}
       PACKPROOF_RELEASE_BUCKET: ${{ vars.PACKPROOF_RELEASE_BUCKET }}
     steps:
       - uses: actions/checkout@v4

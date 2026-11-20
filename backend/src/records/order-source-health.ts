@@ -46,9 +46,9 @@ export function orderHealthAgentRouter(deps: AppDependencies) {
   return router;
 }
 type Approved = {id:string;displayName?:string;generation:number;expectedCheckIntervalSeconds?:number;expectedDeliveryAfterLabelSeconds?:number;roles:string[]};
-type Health = {source:Approved;installation_id:string;session_id:string;state:string|null;verified_read_at:Date|string|null;decided_at:Date|string;organization_id:string;environment:string;location_id:string|null};
+type Health = {source:Approved;sole_delivery_source:boolean;installation_id:string;session_id:string;state:string|null;verified_read_at:Date|string|null;decided_at:Date|string;organization_id:string;environment:string;location_id:string|null};
 type Events = Parameters<typeof cartonStates>[0];
-type Order = {proofId:string;orderReference:string;events:Events & Array<{sourceId?:string}>};
+type Order = {proofId:string;orderReference:string;events:Events;eligibleKeys:string[]};
 export function sourceCondition(row: Pick<Health,'source'|'state'|'verified_read_at'|'decided_at'>, asOf: Date) {
   const cadence = row.source.expectedCheckIntervalSeconds;
   const last = row.verified_read_at ? new Date(row.verified_read_at).toISOString() : null;
@@ -79,7 +79,8 @@ export async function readSourceHealth(db:Database, clock:Clock, w:RecordWorkspa
   const scope = currentOrderScope(await humanOrderFilter(db,w,location));
   const now = clock.now();
   const sources = (await db.query<Health>(`SELECT s.id session_id,i.id installation_id,i.organization_id,i.environment,i.location_id,s.decided_at,
-    src AS source,h.state,h.verified_read_at FROM record_agent_installations i JOIN record_order_sessions s
+    src AS source,h.state,h.verified_read_at,(SELECT count(*)=1 FROM jsonb_array_elements(s.scope->'sources') d WHERE d->'roles' ? 'delivery') AS sole_delivery_source
+    FROM record_agent_installations i JOIN record_order_sessions s
     ON s.installation_id=i.id AND s.state='active' CROSS JOIN LATERAL jsonb_array_elements(s.scope->'sources') src
     LEFT JOIN record_order_source_health h ON h.session_id=s.id AND h.source_id=src->>'id' AND h.generation=(src->>'generation')::int
     WHERE ${f.where} AND s.scope ? 'testedProfile' AND i.status NOT IN ('paused','revoked') AND src->>'transport'='folder'
@@ -91,22 +92,26 @@ export async function readSourceHealth(db:Database, clock:Clock, w:RecordWorkspa
     const source = row.source, condition = sourceCondition(row,now);
     const incident = condition.state === 'unreadable' || condition.state === 'delayed';
     if (!incident && !(condition.state === 'current' && source.expectedDeliveryAfterLabelSeconds && source.roles.includes('delivery'))) continue;
-    // Name affected orders only when a record from this installation and source explicitly linked to them.
+    // A label in this approval can start the deadline when only one delivery feed covers it.
+    // With multiple delivery feeds, attribute a carton only through a direct report from this source.
     const n = scope.params.length;
-    const orders = (await db.query<Order>(`SELECT r.proof_id "proofId",r.order_reference "orderReference",v.view->'events' events
+    const includeLabels = row.sole_delivery_source && source.roles.includes('delivery') && !!source.expectedDeliveryAfterLabelSeconds;
+    const orders = (await db.query<Order>(`SELECT r.proof_id "proofId",r.order_reference "orderReference",v.view->'events' events, linked.keys "eligibleKeys"
       FROM record_order_roots r JOIN LATERAL (SELECT view FROM record_order_revisions v WHERE v.proof_id=r.proof_id ORDER BY revision DESC LIMIT 1) v ON true
-      WHERE ${scope.where} AND EXISTS (SELECT 1 FROM record_order_receipts b JOIN record_order_sessions old ON old.id=b.session_id
-        JOIN record_order_events e ON e.receipt_id=b.id JOIN record_order_link_state l ON l.event_id=e.id AND l.operation_key=e.operation_key
-        WHERE b.operation_key=r.operation_key AND old.installation_id=$${n+1} AND b.source_id=$${n+2}
-          AND b.generation=$${n+3} AND r.proof_id=ANY(l.proof_ids))
-      ORDER BY r.proof_id LIMIT 51`,[...scope.params,row.installation_id,source.id,source.generation])).rows;
+      JOIN LATERAL (SELECT array_agg(e->>'eventKey') keys FROM jsonb_array_elements(v.view->'events') e
+        JOIN record_order_receipts b ON b.id=e->>'receiptId' JOIN record_order_sessions old ON old.id=b.session_id
+        WHERE e->>'associationScope'='order' AND old.installation_id=$${n+1} AND b.operation_key=r.operation_key AND
+          ((b.source_id=$${n+2} AND b.generation=$${n+3}) OR ($${n+4} AND b.session_id=$${n+5} AND e->>'kind'='label'))
+        HAVING count(*)>0) linked ON true
+      WHERE ${scope.where} ORDER BY r.proof_id LIMIT 51`,[...scope.params,row.installation_id,source.id,source.generation,includeLabels,row.session_id])).rows;
     limited ||= orders.length > 50;
     const visible = orders.slice(0,50);
     if (incident) incidents.push({installationId:row.installation_id,sourceId:source.id,generation:source.generation,
       displayName:source.displayName || source.roles.join(', '),...condition,
       affectedOrders:visible.map(({proofId,orderReference}) => ({proofId,orderReference}))});
     else for (const order of visible) {
-      const linked = new Set(order.events.filter(e => (e as {sourceId?:string}).sourceId === source.id && e.associationScope === 'order')
+      const eligibleKeys = new Set(order.eligibleKeys);
+      const linked = new Set(order.events.filter(e => eligibleKeys.has(e.eventKey))
         .flatMap(e => [e.entity,...e.references].filter(r => r.type === 'package').map(r => JSON.stringify([r.namespace,r.id]))));
       for (const carton of overdueCartons(source,order.events,now)) if (linked.has(JSON.stringify([carton.namespace,carton.id])))
         overdue.push({proofId:order.proofId,orderReference:order.orderReference,...carton});

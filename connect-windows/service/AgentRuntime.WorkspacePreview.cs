@@ -8,11 +8,29 @@ public sealed partial class AgentRuntime
 {
     // Preview is interactive and local. It never advances inventory, creates a receipt,
     // or uploads files while the operation's scope is awaiting approval.
-    private object WorkspaceDraftPreview(CancellationToken ct, WorkspaceSource[]? selected=null, List<SourceCheck>? checks=null)
+    private object FacilityComparisonPreview(JsonElement p,CancellationToken ct)
+    {
+        if(p.ValueKind!=JsonValueKind.Object || !p.TryGetProperty("expectedRevision",out var revision)) return WorkspaceDraftPreview(ct);
+        var workspace=Draft();
+        var draft=FacilityDraft(workspace);
+        if(revision.GetInt32()!=draft.Revision || p.GetProperty("draftId").GetString()!=draft.Id)
+            throw new ConnectException("DRAFT_CHANGED","Reopen the current draft before comparing source rules.");
+        if(!p.TryGetProperty("previous",out var previous)) return WorkspaceDraftPreview(ct);
+        var alternative=draft.Inputs with {
+            Rules=previous.GetProperty("rules").Deserialize<FacilityRule[]>(Json.Options) ?? [],
+            Packing=previous.GetProperty("packing").Deserialize<FacilityPacking[]>(Json.Options) ?? []
+        };
+        FacilityProfile.Validate(alternative,workspace.Sources);
+        var preview=new FacilityProfile {ScopeKey=draft.ScopeKey,Inputs=alternative};
+        return WorkspaceDraftPreview(ct,profileOverride:preview);
+    }
+
+    private object WorkspaceDraftPreview(CancellationToken ct, WorkspaceSource[]? selected=null, List<SourceCheck>? checks=null, FacilityExample[]? expected=null,FacilityProfile? profileOverride=null)
     {
         if (ServerState == "revoked" || checkpointed || state.CredentialRecoveryConfirmedAt is not null || state.Token is not null && !CurrentInstallation)
             throw new ConnectException("AUTH_REQUIRED", "Reconnect the computer to preview these sources.");
         var inputs = new List<DraftPreviewEvent>();
+        var originals=new List<string[]>();
         var scanned = 0;
         var unread = 0;
         var sampled = false;
@@ -21,10 +39,14 @@ public sealed partial class AgentRuntime
         FacilityRecordEdit[]? previewEdits=null;
         if (selected is null && GuidedSetupAvailable)
         {
-            var draft=FacilityDraft(Draft());
+            var draft=profileOverride ?? FacilityDraft(Draft());
             selected=draft.Candidates(Draft());
             previewEdits=draft.Inputs.RecordEdits;
+            expected=draft.Inputs.Examples;
         }
+        var references=expected?.Select(e=>e.Reference).Where(r=>!string.IsNullOrWhiteSpace(r)).ToHashSet(StringComparer.Ordinal);
+        var targeted=references is {Count:>0};
+        int fileLimit=targeted?24:3;
         foreach (var source in (selected ?? Draft().Sources.ToArray()).Where(s => !s.Paused && s.Roles.Count > 0))
         {
             ct.ThrowIfCancellationRequested();
@@ -36,6 +58,7 @@ public sealed partial class AgentRuntime
             }
             bool qualified=false,failedRead=false,meaningSeen=source.ShippedAtMeaning is null or "unknown",
                 weightSeen=source.PackingReader?.Rule.Unit is null;
+            var sampleDigests=checks is null?null:new List<string>();
             try
             {
                 var folder = FolderSource.ValidateWorkspaceRoot(source.Folder);
@@ -44,9 +67,9 @@ public sealed partial class AgentRuntime
                 if(source.PhysicalRoot is { } prior && pin.KeyStrings.FirstOrDefault()!=prior)
                     throw new ConnectException("SOURCE_REPLACED","Choose the replacement source again.");
                 var sample = Optional(source.Recognition, "fileName")?.GetString();
-                var candidates = PrioritizeSample(WorkspaceFiles(folder), sample).Take(4).ToArray();
-                if (candidates.Length > 3) sampled = true;
-                foreach (var path in candidates.Take(3))
+                var candidates = PrioritizeSample(WorkspaceFiles(folder), sample).Take(fileLimit+1).ToArray();
+                if (candidates.Length > fileLimit) sampled = true;
+                foreach (var path in candidates.Take(fileLimit))
                 {
                     ct.ThrowIfCancellationRequested();
                     if (totalBytes >= 16L * 1024 * 1024 || clock.Elapsed > TimeSpan.FromSeconds(10)) { sampled = true; break; }
@@ -57,6 +80,8 @@ public sealed partial class AgentRuntime
                         scanned++;
                         totalBytes += bytes.Length;
                         var parsed = SourceReaders.Read(name, bytes);
+                        originals.Add([source.Id,name,parsed.ContentSha256]);
+                        sampleDigests?.Add(parsed.ContentSha256);
                         var rows = WorkspaceRecords(source, parsed);
                         if(source.PackingReader!=null && rows.Any(r=>Optional(Optional(r,"fields"),"qualifiedCartonWeightUnit")?.ValueKind==JsonValueKind.String))
                             weightSeen=true;
@@ -65,8 +90,9 @@ public sealed partial class AgentRuntime
                             parsed.Headers.Count(h=>h.Replace(" ","",StringComparison.Ordinal).Equals("ShippedAt",StringComparison.OrdinalIgnoreCase))==1 &&
                             rows.Any(r=>Optional(r,"kind")?.GetString()==source.ShippedAtMeaning && Optional(r,"occurredAt")?.ValueKind==JsonValueKind.String)) meaningSeen=true;
                         if(rows.Length>0 || source.Roles.Contains("evidence") && parsed.State=="recognized") qualified=true;
-                        if (rows.Length > 8) sampled = true;
-                        foreach (var row in rows.Take(8)) inputs.Add(new(source.Id, Path.GetFileName(folder), name, row,
+                        var rowLimit=targeted?Math.Max(0,4096-inputs.Count):8;
+                        if (rows.Length > rowLimit) sampled = true;
+                        foreach (var row in rows.Take(rowLimit)) inputs.Add(new(source.Id, Path.GetFileName(folder), name, row,
                             source.Generation, parsed.ContentSha256, source.ProfileVersion, source.PackingReader!=null));
                         if (rows.Length == 0) unread++;
                     }
@@ -78,9 +104,10 @@ public sealed partial class AgentRuntime
                 "The collection service could not read this sample. Restore access or defer this source." :
                 !meaningSeen ? "The selected meaning did not match a confirmed source field and event. Review the source mapping." :
                 !weightSeen ? "The sample did not confirm the chosen weight value and unit. Check the source fields or leave the unit unknown." :
-                qualified ? "The collection service read a representative record." : "Confirm a supported mapping and stable identifiers, or defer this source."));
+                qualified ? "The collection service read a representative record." : "Confirm a supported mapping and stable identifiers, or defer this source.",sampleDigests?.ToArray()));
         }
-        return WorkspacePreview.Build(inputs, scanned, unread, sampled, previewEdits);
+        var basis=HashBytes(Json.Bytes(originals.OrderBy(o=>o[0],StringComparer.Ordinal).ThenBy(o=>o[1],StringComparer.Ordinal)));
+        return WorkspacePreview.Build(inputs, scanned, unread, sampled, previewEdits,targeted?references:null,includeOtherExamples:checks==null,sampleBasis:basis);
     }
 }
 
@@ -102,7 +129,8 @@ internal static class WorkspacePreview
     private static string RecordHash(DraftPreviewEvent e) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
         Json.Bytes(new {e.SourceId,e.Generation,e.OriginalSha256,e.Record})));
 
-    internal static object Build(IEnumerable<DraftPreviewEvent> inputs, int scanned, int unread, bool sampled,FacilityRecordEdit[]? edits=null)
+    internal static object Build(IEnumerable<DraftPreviewEvent> inputs, int scanned, int unread, bool sampled,FacilityRecordEdit[]? edits=null,
+        IReadOnlySet<string>? wanted=null,bool includeOtherExamples=false,string? sampleBasis=null)
     {
         var events = new List<DraftPreviewEvent>();
         var uncertain = 0;
@@ -169,12 +197,27 @@ internal static class WorkspacePreview
             if(!roots.ContainsKey(target)) continue;
             orders.Clear(); orders.Add(target);
         }
-        var examples=roots.OrderBy(p=>p.Key.Space,StringComparer.Ordinal).ThenBy(p=>p.Key.Id,StringComparer.Ordinal).Take(6).Select(pair=>{
+        var matches=roots.Keys.ToHashSet();
+        if(wanted is {Count:>0})
+        {
+            matches.Clear();
+            foreach(var (key,origin) in roots)
+            {
+                var fields=origin.Record.GetProperty("fields");
+                if(wanted.Contains(key.Id) || wanted.Contains(Text(fields,"orderReference")) || wanted.Contains(Text(fields,"sourceOrderName"))) matches.Add(key);
+            }
+            foreach(var (e,orders) in members)
+                if(References(e).Append(Entity(e)).Any(r=>r.Type is "warehouse" or "warehouse_order" or "package" or "shipment" or "tracking" && wanted.Contains(r.Id)))
+                    matches.UnionWith(orders);
+        }
+        var examples=roots.Where(p=>includeOtherExamples || matches.Contains(p.Key)).OrderByDescending(p=>matches.Contains(p.Key))
+            .ThenBy(p=>p.Key.Space,StringComparer.Ordinal).ThenBy(p=>p.Key.Id,StringComparer.Ordinal).Take(6).Select(pair=>{
             var origin=pair.Value;
             var related=members.Where(m=>m.Orders.Contains(pair.Key)).ToArray();
             var orderReference=Text(origin.Record.GetProperty("fields"),"orderReference");
             var displayReference=Text(origin.Record.GetProperty("fields"),"sourceOrderName");
-            var entities=related.SelectMany(m=>References(m.Event).Append(Entity(m.Event))).Distinct().ToArray();
+            var entities=related.Where(m=>m.Orders.Count==1).SelectMany(m=>References(m.Event).Append(Entity(m.Event)))
+                .Where(r=>r.Type!="order" || r==pair.Key).Distinct().ToArray();
             var packages=entities.Where(r=>r.Type=="package").ToArray();
             var lines=related.Where(m=>m.Orders.Count==1 && Kind(m.Event)=="order")
                 .SelectMany(m=>m.Event.Record.GetProperty("lines").EnumerateArray())
@@ -185,7 +228,7 @@ internal static class WorkspacePreview
                 displayReference=displayReference.Length>0?displayReference:null,
                 orderNamespace=pair.Key.Space,orderId=pair.Key.Id,
                 lookupReferences=entities.Where(r=>r.Type is "order" or "warehouse" or "warehouse_order" or "package" or "shipment" or "tracking").Select(r=>r.Id).Prepend(displayReference).Where(id=>id.Length>0).Distinct().Take(128).ToArray(),
-                cartonCount=packages.Length,labelCount=related.Count(m=>Kind(m.Event)=="label"),
+                cartonCount=packages.Length,labelCount=related.Count(m=>m.Orders.Count==1 && Kind(m.Event)=="label"),
                 cartons=packages.Take(12).Select(p=>{
                     var observations=related.Where(m=>m.Orders.Count==1 && (Entity(m.Event)==p || References(m.Event).Contains(p)))
                         .Select(m=>m.Event).ToArray();
@@ -195,7 +238,7 @@ internal static class WorkspacePreview
                         lastKind=last==null?null:Kind(last),occurredAt=last==null?null:Text(last.Record,"occurredAt")};
                 }),
                 source=origin.SourceName, lines,
-                packages=related.SelectMany(m=>References(m.Event).Append(Entity(m.Event))).Where(r=>r.Type=="package").Select(r=>r.Id).Distinct().Take(12),
+                packages=packages.Select(r=>r.Id).Distinct().Take(12),
                 events=related.OrderBy(m=>Text(m.Event.Record,"occurredAt"),StringComparer.Ordinal).Take(16).Select(m=>{
                     var e=m.Event;
                     var shared=m.Orders.Count>1;
@@ -213,13 +256,18 @@ internal static class WorkspacePreview
                             Text(measured,"qualifiedCartonWeight") : null,
                         qualifiedWeightUnit=e.VerifiedPacking && e.Record.TryGetProperty("fields",out var measuredUnit) ?
                             Text(measuredUnit,"qualifiedCartonWeightUnit") : null,
+                        lines=shared || !e.Record.TryGetProperty("lines",out var amounts) || amounts.ValueKind!=JsonValueKind.Array?[]:amounts.EnumerateArray().Take(12)
+                            .Select(l=>l.EnumerateObject().Where(f=>f.Value.ValueKind==JsonValueKind.String &&
+                                f.Name is "lineId" or "sku" or "unit" or "orderedQuantity" or "pickedQuantity" or "packedQuantity" or "loadedQuantity"
+                                    or "shippedQuantity" or "acknowledgedQuantity" or "backorderedQuantity" or "returnedQuantity" or "cancelledQuantity"
+                                    or "packageId" or "cartonId" or "packageReference" or "shipmentReference").ToDictionary(f=>f.Name,f=>f.Value.GetString())).ToArray(),
                         entity=new {@namespace=subject.Space, subject.Type,subject.Id}, references, fieldLineage=lineage
                     };
                 })
             };
         }).ToArray();
-        return new {examples,scannedFiles=scanned,unreadFiles=unread,unresolved=uncertain+members.Count(m=>m.Orders.Count==0),
-            limited=sampled || roots.Count>examples.Length};
+        return new {examples,sampleBasis,scannedFiles=scanned,unreadFiles=unread,unresolved=uncertain+members.Count(m=>m.Orders.Count==0),
+            limited=sampled || matches.Count>examples.Length};
     }
 }
 

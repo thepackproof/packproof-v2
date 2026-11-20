@@ -12,6 +12,8 @@ import { appendAudit } from '../domain/audit.js';
 import type { Installation } from './agent-enrollments.js';
 import { activeScope, boundedText, digest, positive, installationOperation } from './order-workspace.js';
 import { normalizedRecord, refKey, projectOrders, type Root, type StoredEvent, type OrderRecord } from './order-projection.js';
+import {recordBytes} from './order-record-basis.js';
+import {revisionChanges} from './order-revision-changes.js';
 type Deps = Pick<AppDependencies, 'db' | 'clock' | 'objectStore' | 'devAuth'>;
 interface Origin {
   organization: string;
@@ -93,26 +95,33 @@ export async function ensureOrderRoot(db: Database, clock: Clock, a: PartnerActo
   await db.query(`INSERT INTO record_order_roots(proof_id,operation_key,root_key,source_id,organization_id,environment,operator_membership_id,location_id,order_reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [proofId, o.operation, key, sourceId, o.organization, o.environment, o.operator, o.location, event.entity.id]);
   await db.query(`INSERT INTO record_state(proof_id,organization_id,environment,reference,location_id,updated_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, [proofId, o.organization, o.environment, event.entity.id, o.location, clock.now().toISOString()]);
 }
-export async function insertOrderEvent(db: Database, operation: string, source: string, receipt: string, record: OrderRecord) {
+export async function insertOrderEvent(db: Database, operation: string, source: string, receipt: string, record: OrderRecord,
+  recordDigest?: string, previousDigest?: (receiptId:string,locator:string)=>Promise<string|undefined>) {
   const id = newId('order_event'),
     signature = sha256Hex(canonicalize({
       ...record,
       locator: undefined,
       fieldLineage: undefined
     }));
+  const stored = JSON.stringify(recordDigest ? {...record,originalRecordSha256:recordDigest} : record);
   const inserted = (await db.query<{
     id: string;
-  }>('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING RETURNING id', [id, operation, source, record.eventId, record.version, receipt, signature, JSON.stringify(record)])).rows[0];
+  }>('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING RETURNING id', [id, operation, source, record.eventId, record.version, receipt, signature, stored])).rows[0];
   if (!inserted) {
     const old = (await db.query<{
       id: string;
       payload_digest: string;
-    }>('SELECT id,payload_digest FROM record_order_events WHERE operation_key=$1 AND source_id=$2 AND event_id=$3 AND source_version=$4', [operation, source, record.eventId, record.version])).rows[0];
-    if (old.payload_digest !== signature) {
+      record_digest:string|null; receipt_id:string; locator:string;
+    }>(`SELECT id,payload_digest,record->>'originalRecordSha256' record_digest,receipt_id,record->>'locator' locator
+      FROM record_order_events WHERE operation_key=$1 AND source_id=$2 AND event_id=$3 AND source_version=$4`,
+      [operation, source, record.eventId, record.version])).rows[0];
+    const priorBasis=old.payload_digest===signature && old.receipt_id!==receipt && recordDigest
+      ? old.record_digest ?? await previousDigest?.(old.receipt_id,old.locator) : undefined;
+    if (old.payload_digest !== signature || priorBasis && priorBasis!==recordDigest) {
       // Keep both independently captured claims. A conflicting version must never
       // change the canonical record until a reviewer resolves its identity.
-      const held = 'order_conflict_' + sha256Hex(canonicalize([operation, source, receipt, record.eventId, record.version, signature]));
-      await db.query('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING', [held, operation, source, '@conflict:' + held, record.version, receipt, signature, JSON.stringify(record)]);
+      const held = 'order_conflict_' + sha256Hex(canonicalize([operation, source, record.eventId, record.version, signature,recordDigest??null]));
+      await db.query('INSERT INTO record_order_events(id,operation_key,source_id,event_id,source_version,receipt_id,payload_digest,record) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) ON CONFLICT DO NOTHING', [held, operation, source, '@conflict:' + held, record.version, receipt, signature, stored]);
       await db.query('INSERT INTO record_order_link_state(event_id,operation_key,proof_ids,unresolved,updated_at) SELECT $1,$2,ARRAY[]::text[],true,received_at FROM record_order_receipts WHERE id=$3 ON CONFLICT DO NOTHING', [held, operation, receipt]);
       return held;
     }
@@ -179,10 +188,35 @@ export async function publish(db: Database, clock: Clock, operation: string, pro
   // All publishers acquire this last lock and retain it until commit. Sequence
   // allocation order is therefore commit order even across concurrent operations.
   await db.query('SELECT pg_advisory_xact_lock(1347438181,0)');
+  const previous=prior ? (await db.query<{view:typeof proof}>('SELECT view FROM record_order_revisions WHERE proof_id=$1 AND revision=$2',
+    [proof.proofId,prior.revision])).rows[0].view : undefined;
+  const receipts=[...new Set(proof.evidence.map(e=>e.receiptId))];
+  const oldEvidence=new Set(previous?.evidence.map(e=>e.eventKey));
+  const currentEvents=new Set(proof.events.map(e=>e.eventKey));
+  const oldArtifacts=new Set(previous?.originalArtifacts?.map(a=>a.receiptId));
+  const changes=[
+    ...revisionChanges(previous?.events??[],proof.events),
+    ...proof.evidence.filter(e=>!oldEvidence.has(e.eventKey) && !currentEvents.has(e.eventKey)).map(e=>({
+      kind:'historical_evidence_received',subject:e.entity,sourceId:e.sourceId,profileVersion:e.profileVersion,
+      eventKey:e.eventKey,locator:e.locator,originalSha256:e.originalSha256,observedAt:e.observedAt})),
+    ...proof.originalArtifacts.filter(a=>!oldArtifacts.has(a.receiptId)).map(a=>({
+      kind:'original_attached',receiptId:a.receiptId,sourceId:a.sourceId,originalSha256:a.originalSha256,
+      linkedByReceiptId:a.linkedByReceiptId})),
+  ];
+  const coverage=(await db.query<{coverage:string}>(`SELECT CASE
+    WHEN count(*)=0 OR count(*)<>$2 OR NOT bool_and(COALESCE(s.scope ? 'testedProfile',false)) THEN 'unreported'
+    WHEN bool_and(q.delivery) THEN 'configured'
+    WHEN NOT bool_or(q.delivery) THEN 'outside_approved_sources' ELSE 'unreported' END AS coverage
+    FROM record_order_receipts r LEFT JOIN record_order_sessions s ON s.id=r.session_id
+    CROSS JOIN LATERAL (SELECT EXISTS(SELECT 1 FROM jsonb_array_elements(s.scope->'sources') src
+      WHERE src->'roles' ? 'delivery') delivery) q
+    WHERE r.id=ANY($1::text[])`,[receipts,receipts.length])).rows[0].coverage;
   const revision = (prior?.revision ?? 0) + 1,
     updatedAt = clock.now().toISOString(),
     view = {
       ...proof,
+      deliveryCoverage:coverage,
+      changes,
       revision,
       updatedAt,
       integrity: 'source_reported'
@@ -273,8 +307,25 @@ export async function ingestOrderFile(deps: Deps, db: Database, a: PartnerActor,
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)`, [receiptId, o.operation, x.sourceId, x.generation, x.observationId, hash, x.sha, stored.key, stored.version, x.fileName, x.mediaType, x.profileVersion, JSON.stringify(x.issues), deps.clock.now().toISOString(), session.id, x.firstSeenAt]);
   }
   const ids: string[] = [];
+  const rowHashes=recordBytes(x.fileName,x.bytes,x.records);
+  const previous=new Map<string,Map<string,string>>();
+  async function previousDigest(id:string,locator:string) {
+    if (!previous.has(id)) {
+      const old=(await db.query<{object_key:string;object_version:string;original_sha256:string;file_name:string}>(`
+        SELECT object_key,object_version,original_sha256,file_name FROM record_order_receipts
+        WHERE id=$1 AND operation_key=$2 AND source_id=$3`,[id,o.operation,x.sourceId])).rows[0];
+      if (!old || old.object_key!==`evidence/${o.organization}/order-originals/committed/sha256-${old.original_sha256}`) return;
+      const original=await deps.objectStore.get(old.object_key,{versionId:old.object_version});
+      if (!original || sha256Hex(original.body)!==old.original_sha256)
+        throw new DomainError('ORIGINAL_UNVERIFIED','The prior receipt needs verification before comparing its version.',503);
+      const rows=await db.query<Pick<OrderRecord,'eventId'|'locator'>>(`SELECT record->>'eventId' AS "eventId",record->>'locator' locator
+        FROM record_order_events WHERE receipt_id=$1 LIMIT 513`,[id]);
+      previous.set(id,recordBytes(old.file_name,original.body,rows.rows));
+    }
+    return previous.get(id)?.get(locator);
+  }
   for (const r of x.records) {
-    const id = await insertOrderEvent(db, o.operation, x.sourceId, receiptId, r);
+    const id = await insertOrderEvent(db, o.operation, x.sourceId, receiptId, r,rowHashes.get(r.locator),previousDigest);
     ids.push(id);
     if (!id.startsWith('order_conflict_')) await ensureOrderRoot(db, deps.clock, a, o, x.sourceId, r, undefined, transport === 'api');
   }

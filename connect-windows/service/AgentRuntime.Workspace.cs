@@ -367,7 +367,18 @@ public sealed partial class AgentRuntime
         w.Attention = null;
         if (remoteState == "active")
         {
-            if(profile!=null) ApplyFacilityRules(w,profile);
+            if(profile!=null)
+            {
+                ApplyFacilityRules(w,profile);
+                w.ApprovedFacilityProfiles.TryAdd(w.ScopeDigest!,Json.Element(new {
+                    schema="packproof.approved-facility-profile/v1",profile.Id,profile.Revision,profile.ScopeKey,w.ScopeDigest,
+                    approvalSession=Optional(response,"id"),approvedBy=Optional(response,"approvedBy"),approvedAt=Optional(response,"approvedAt"),
+                    profile.Inputs,profile.Replay,compiler=FacilityProfile.Compiler,reader=SourceReaders.Version,catalogue=ExportCatalogue.Digest,
+                    outputDigest=w.ApprovedOutputDigest,sources=w.Sources.Where(s=>w.SubmittedGenerations.ContainsKey(s.Id)).Select(s=>new {
+                        s.Id,s.Generation,s.Roles,s.Transport,s.SourceNamespace,s.ProfileVersion,s.ConfirmedMap,s.ConfirmedDependencies,
+                        mappings=s.ApprovedWorkflows(),s.ShippedAtMeaning,s.PackingReader,s.ExpectedCheckIntervalSeconds,s.ExpectedDeliveryAfterLabelSeconds})
+                }));
+            }
             w.ActiveGrant = new(w.InstallationId!, w.ScopeDigest!, w.ApprovedOutputDigest!,
                 new(w.SubmittedGenerations), w.CheckedAt.Value, w.OfflineWindowSeconds,w.SubmittedProfileDigest);
             foreach (var source in w.Sources.Where(s => s.PreviousCollectorId != null && w.SubmittedGenerations.GetValueOrDefault(s.Id) == s.Generation))

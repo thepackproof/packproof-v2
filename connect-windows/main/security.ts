@@ -36,6 +36,7 @@ const facilityInputs = z.object({
 export const argumentsByMethod={
  getFacilityDraft:z.tuple([]),
  saveFacilityDraft:z.tuple([z.number().int().positive(),facilityInputs]),
+ saveFacilityNotes:z.tuple([z.number().int().positive(),facilityInputs.pick({steps:true,examples:true})]),
  replayFacilityDraft:z.tuple([z.number().int().positive()]),
  workspaceOrderPage:z.tuple([z.number().int().positive().safe()]),
  workspaceSourceRecord:z.tuple([id,z.number().int().positive().safe(),id]),
@@ -47,7 +48,8 @@ export const argumentsByMethod={
  workspaceAttention:z.union([z.tuple([]),z.tuple([z.number().int().positive().safe()])]),
  openWorkspaceReview:z.tuple([]),openWorkspaceOrder:z.union([z.tuple([id,z.number().int().positive().safe()]),z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(200)])]),
  getWorkspaceStatus:z.tuple([]),addWorkspaceDirectSource:z.union([z.tuple([]),z.tuple([z.string().regex(/^[A-Za-z0-9._-]{1,100}$/)])]),copyWorkspaceDirectProfile:z.tuple([id]),
- workspaceDraftPreview: z.tuple([]),
+ workspaceDraftPreview:z.union([z.tuple([]),z.tuple([z.object({draftId:z.string().uuid(),expectedRevision:z.number().int().positive(),
+   previous:facilityInputs.pick({rules:true,packing:true}).required().strict().optional()}).strict()])]),
  workspaceOrderDetail: z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceFolder: z.tuple([role]),
  reuseWorkspaceFolder: z.tuple([id, role]),

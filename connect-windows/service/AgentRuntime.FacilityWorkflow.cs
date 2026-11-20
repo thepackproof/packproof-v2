@@ -17,7 +17,8 @@ public sealed partial class AgentRuntime
     // local source handles, output cursor, samples and pending draft with their original facility.
     private void SelectFacilityContext()
     {
-        if(!CurrentInstallation || state.ServerConfig is null || state.FacilityContextKey is null && !GuidedSetupAvailable) return;
+        if(!CurrentInstallation || state.ServerConfig is null ||
+            state.FacilityContextKey is null && Optional(state.ServerConfig,"organizationId")?.ValueKind!=JsonValueKind.String) return;
         var key=FacilityScopeKey();
         if(state.FacilityContextKey==key)return;
         if(state.FacilityContextKey is { } previous)
@@ -33,6 +34,15 @@ public sealed partial class AgentRuntime
         }
         state.FacilityContextKey=key;
         Save();
+    }
+
+    private void ApplyServerConfig(JsonElement config)
+    {
+        // An older enrolled installation may have folders and output but no saved
+        // facility key. Bind those to the previous heartbeat before accepting a move.
+        SelectFacilityContext();
+        state.ServerConfig=config;
+        SelectFacilityContext();
     }
 
     private FacilityProfile FacilityDraft(OrderWorkspaceState w)
@@ -73,13 +83,31 @@ public sealed partial class AgentRuntime
     {
         var w=Draft();
         var draft=FacilityDraft(w);
-        if(operation=="getFacilityDraft") return draft.View();
+        if(operation=="getFacilityDraft")
+        {
+            if(draft.Replay is {Passed:true} prior)
+            {
+                bool current;
+                try {current=ProfileDigest(draft,draft.Candidates(w))==prior.Digest;}
+                catch(ConnectException){current=false;}
+                if(!current){draft.Replay=null;Save();}
+            }
+            return draft.View();
+        }
         if(p.GetProperty("expectedRevision").GetInt32()!=draft.Revision)
             throw new ConnectException("DRAFT_CHANGED","This workflow was edited. Reopen it to use the latest answers.");
-        if(operation=="saveFacilityDraft")
+        if(operation is "saveFacilityDraft" or "saveFacilityNotes")
         {
-            var input=p.GetProperty("changes").Deserialize<FacilityInputs>(Json.Options)
-                ?? throw new ConnectException("DRAFT_INVALID","Choose a facility workflow.");
+            var changes=p.GetProperty("changes");
+            FacilityInputs input;
+            if(operation=="saveFacilityNotes")
+            {
+                if(changes.EnumerateObject().Any(v=>v.Name is not ("steps" or "examples")))
+                    throw new ConnectException("DRAFT_INVALID","Offline editing supports workflow steps and known-order expectations.");
+                input=draft.Inputs with {Steps=changes.GetProperty("steps").Deserialize<FacilityStep[]>(Json.Options)??[],
+                    Examples=changes.GetProperty("examples").Deserialize<FacilityExample[]>(Json.Options)??[]};
+            }
+            else input=changes.Deserialize<FacilityInputs>(Json.Options) ?? throw new ConnectException("DRAFT_INVALID","Choose a facility workflow.");
             FacilityProfile.Validate(input,w.Sources);
             if(Json.Bytes(input).SequenceEqual(Json.Bytes(draft.Inputs))) return draft.View();
             await WithdrawPendingProfile(w,ct);
@@ -92,7 +120,7 @@ public sealed partial class AgentRuntime
         {
             var candidates=draft.Candidates(w);
             var sources=new List<SourceCheck>();
-            var preview=Json.Element(WorkspaceDraftPreview(ct,candidates,sources));
+            var preview=Json.Element(WorkspaceDraftPreview(ct,candidates,sources,draft.Inputs.Examples));
             var checks=FacilityProfile.CheckExamples(draft.Inputs.Examples,preview);
             if(draft.Inputs.RecordEdits is {Length:>0})
                 checks=[..checks,new("preview_correction","",false,"A record was reassigned in the preview. Correct the source mapping and clear preview changes before activation.")];

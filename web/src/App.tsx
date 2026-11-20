@@ -919,7 +919,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     );
   }
 
-  if (!firstExperience && !isProfileComplete(session)) {
+  if (!desktopContext && !firstExperience && !isProfileComplete(session)) {
     return (
       <AuthFrame>
         <ProfileSetupScreen

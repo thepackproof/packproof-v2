@@ -24,6 +24,7 @@ export interface FacilityInputs {
   recordEdits?: {sourceId:string; recordHash:string; fromSpace:string; fromId:string; toSpace:string; toId:string}[];
 }
 export interface FacilityDraft extends FacilityInputs {
+  notesOnly?:boolean;
   id: string;
   revision: number;
   scopeKey: string;

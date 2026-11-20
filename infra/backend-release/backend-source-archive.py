@@ -143,7 +143,7 @@ def archive(source,destination,profile,verify=False):
         if (len(collector)!=123 or digest(collector)!='d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60'
             or digest(collector[:-1])!='ce2f00a3cee6b8139fc6323830e787e781dab7780da93c8d4b23deaa742c1b4d'):
             raise ValueError('EXACT_SOURCE_PROFILE_INVENTORY_MISMATCH')
-        if logistics and (len(inventory)!=127 or digest(inventory)!='fd2dc9759f862d66dab95d3d7a3c8a57c559c47d9324e21bf56bf2dcf046f4b3'):
+        if logistics and (len(inventory)!=128 or digest(inventory)!='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc'):
             raise ValueError('EXACT_LOGISTICS_INVENTORY_MISMATCH')
     return {'sourceSha':source,'archiveSha256':hashlib.sha256(Path(destination).read_bytes()).hexdigest(),'gitFilesVerified':len(entries),'migrationCount':len(inventory),'migrationInventorySha256':hashlib.sha256(json.dumps(inventory,separators=(',',':')).encode()).hexdigest(),'allGitBlobBytesVerified':True}
 if __name__=='__main__':

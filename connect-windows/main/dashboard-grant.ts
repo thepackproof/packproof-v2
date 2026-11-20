@@ -1,6 +1,7 @@
 export type HumanDashboardIdentity = {
   apiBaseUrl: string; userId: string; username: string | null; displayName: string | null;
   token(): Promise<string>;
+  expired?(): void;
 };
 
 export function allowedDashboardRequest(url: string, method: string, apiBase: string, scope: {
@@ -15,6 +16,6 @@ export function allowedDashboardRequest(url: string, method: string, apiBase: st
       target.searchParams.getAll('environment').length !== 1 || target.searchParams.get('environment') !== scope.environment) return false;
   if (path === 'context') return method === 'GET';
   if (scope.locationId && (target.searchParams.getAll('locationId').length !== 1 || target.searchParams.get('locationId') !== scope.locationId)) return false;
-  if (method === 'GET') return /^(?:order-proofs(?:\/[A-Za-z0-9_-]+(?:\/case-actions|\/revisions\/[1-9]\d*(?:\/(?:sources|artifacts)\/[A-Za-z0-9_-]+)?)?)?|order-(?:changes|attention|lookup|source-health))$/.test(path);
+  if (method === 'GET') return /^(?:order-proofs(?:\/[A-Za-z0-9_-]+(?:\/case-actions|\/revisions\/[1-9]\d*(?:\/(?:sources|artifacts)\/[A-Za-z0-9_-]+)?)?)?|order-(?:changes|attention|lookup|source-health)|[A-Za-z0-9_-]+\/issue-reviewers)$/.test(path);
   return method === 'POST' && /^order-proofs\/[A-Za-z0-9_-]+\/(?:associations|case-actions|revisions\/[1-9]\d*\/packet)$/.test(path);
 }

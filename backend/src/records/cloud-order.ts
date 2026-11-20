@@ -147,7 +147,7 @@ export async function submitCloudEvents(deps: AppDependencies, db: Database, a: 
     operator = boundedText(b.operatorMembershipId, 'operator');
   const approved = await cloudBinding(db, a, account, operator, chosen);
   if (!approved) throw new DomainError('AUTH_REQUIRED', 'An approved API order source is required.', 403);
-  const item = strictBody(b.observation, ['observationId', 'fileName', 'mediaType', 'originalSha256', 'originalBase64', 'records', 'issues']);
+  const item = strictBody(b.observation, ['observationId', 'fileName', 'mediaType', 'originalSha256', 'originalBase64', 'records', 'issues', 'firstSeenAt']);
   return ingestOrderFile(deps, db, a, approved.i, {
     ...item,
     scopeDigest: chosen.scopeDigest,

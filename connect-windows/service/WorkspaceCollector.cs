@@ -254,7 +254,7 @@ public sealed partial class AgentRuntime
                 source.RetryAt = now.AddSeconds(10);
                 DropWatcher(source.Id);
             }
-            if(networkOnline && GuidedSetupAvailable && WorkspaceGrantCurrent)
+            if(networkOnline && w.ActiveGrant?.TestedProfileDigest!=null && GuidedSetupAvailable && WorkspaceGrantCurrent)
                 await ReportSourceCheck(w.ActiveGrant!,source,now,ct);
         }
         if (!WorkspaceGrantCurrent) return;
@@ -438,7 +438,11 @@ public sealed partial class AgentRuntime
                 originalSha256 = digest, originalBase64 = Convert.ToBase64String(bytes), mediaType = WorkspaceMediaType(name),
                 profileVersion = s.ProfileVersion, observationId = obs, firstSeenAt, records = Array.Empty<object>(), issues = new[]{"Interpretation exceeds the bounded request size. The original needs review."} });
         var staged = queue.StageWorkspace(bytes, name, body, w.ActiveGrant!.InstallationId, obs, s);
-        if (SourceReaders.IsMedia(name) && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
+        // Delivery indices bind their signed receipt by hash. Reading its pixels
+        // or text adds no delivery claim and must not hold the dispatch feed.
+        var indexedReceipt = s.Roles.Contains("delivery") && !s.Roles.Contains("evidence") &&
+            parsed.Format=="pdf" && SourceReaders.QualifiedReceiptPdf(bytes);
+        if (SourceReaders.IsMedia(name) && !indexedReceipt && !s.MediaJobs.Contains(staged.Id)) s.MediaJobs.Add(staged.Id);
         s.Inventory[key] = new(digest, sequence, s.Generation, name);
         WakeService();
         if (!awaitingSidecar && records.Length == 0) s.Issue = "PROFILE_NEEDS_REVIEW";

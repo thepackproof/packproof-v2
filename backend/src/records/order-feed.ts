@@ -81,15 +81,18 @@ const orderLabels = `(SELECT COALESCE(jsonb_object_agg(label,value),'{}'::jsonb)
  SELECT label,left(min(name),200) AS value FROM (
   SELECT CASE lower(replace(replace(f.key,'_',''),' ',''))
    WHEN 'customer' THEN 'customerName' WHEN 'customername' THEN 'customerName' WHEN 'soldtoname' THEN 'customerName'
+   WHEN 'sourceordername' THEN CASE WHEN e->'fieldLineage' ? 'sourceOrderName' THEN 'displayOrderReference' END
    WHEN 'fulfillmentstatus' THEN 'fulfillmentStatus' WHEN 'fulfilmentstatus' THEN 'fulfillmentStatus' END AS label,
    nullif(trim(f.value #>> '{}'),'') AS name
   FROM jsonb_array_elements(v.view->'events') e
   CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(e->'fields')='object' THEN e->'fields' ELSE '{}'::jsonb END) f
-  WHERE e->>'kind'='order' AND jsonb_typeof(f.value)='string') candidates
+  WHERE e->>'kind'='order' AND e->>'associationScope' IS DISTINCT FROM 'shared' AND jsonb_typeof(f.value)='string') candidates
  WHERE label IS NOT NULL AND name IS NOT NULL GROUP BY label HAVING min(name)=max(name)) unambiguous)`;
 const card = `(jsonb_strip_nulls(jsonb_build_object(
  'proofId',p.proof_id,'revision',p.revision,'orderReference',p.order_reference,'updatedAt',p.committed_at,
- 'latestKind',v.view->'events'->-1->>'kind','issue',left(${firstIssue},200))) || ${orderLabels})`;
+ 'latestKind',(SELECT event->>'kind' FROM jsonb_array_elements(v.view->'events') WITH ORDINALITY AS events(event,position)
+   ORDER BY COALESCE(event->>'occurredAt',event->>'observedAt')::timestamptz DESC NULLS LAST,
+     (event->>'observedAt')::timestamptz DESC NULLS LAST,event->>'eventKey' DESC NULLS LAST,position DESC LIMIT 1),'issue',left(${firstIssue},200))) || ${orderLabels})`;
 function visibleOrders(f: Filter) {
   return `SELECT last.sequence,last.revision,last.committed_at,r.proof_id,r.order_reference,r.location_id FROM record_order_roots r
  JOIN LATERAL (SELECT v.sequence,v.revision,v.committed_at FROM record_order_revisions v WHERE v.proof_id=r.proof_id ORDER BY v.revision DESC LIMIT 1) last ON true WHERE ${f.where}`;

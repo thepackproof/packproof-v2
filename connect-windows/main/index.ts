@@ -16,7 +16,10 @@ import { HostedSession } from './hosted-session';
 declare const __PACKPROOF_HOSTED__: boolean;
 const embedded = typeof __PACKPROOF_HOSTED__ !== 'undefined' && __PACKPROOF_HOSTED__;
 let host: HostedSession | null = null;
-if (!embedded) protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);app.enableSandbox();
+if (!embedded) {
+  protocol.registerSchemesAsPrivileged([{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
+  app.enableSandbox();
+}
 let win:BrowserWindow|null=null;
 const bridge=new ServiceBridge(process.resourcesPath);
 let config:{channel:string;webBaseUrl:string;updateUrl:string;publisher:string};
@@ -25,7 +28,7 @@ async function mutate(operation:string,payload?:unknown){await bridge.request(op
 function safeError(error:unknown){const message=error instanceof Error?error.message:'';return message&&!/Bearer\s|pp_org_|(?:token|secret|credential)\s*[:=]\s*\S+|[A-Z]:\\|\/workspace\//i.test(message)?message.slice(0,400):'PackProof could not complete this action. Your pending work is preserved. Open diagnostics for the next step.';}
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);
- const user = host ? await host.guard(name) : null;
+ const started = host ? await host.guard(name) : null;
  if (host && (name === 'openWorkspaceOrder' || name === 'openWorkspaceReview')) {
    const [proofId, revision, subject] = parsed as unknown[];
    await host.daily(name === 'openWorkspaceOrder' ? { proofId: String(proofId), revision: Number(revision), ...(typeof subject === 'string' ? {subject} : {}) } : undefined);
@@ -34,8 +37,9 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
  if (host && ['workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention','openWorkspaceOutput'].includes(name))
    throw Error('Open Orders and exceptions from the Logistics menu to view your authorized records.');
  const value = await fn(...parsed);
- if (host && await host.guard(name) !== user) throw Error('Your account changed.');
- return {ok:true,value:host ? host.present(name,value) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
+ const ended = host ? await host.guard(name) : null;
+ if (started?.user!==ended?.user || started?.scopeKey!==ended?.scopeKey) throw Error('Your account changed.');
+ return {ok:true,value:host ? host.present(name,value,started?.offline || ended?.offline) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
 async function openWorkspaceApproval(current:ConnectStatus) {
  if (!current.installationId && current.enrollment?.state === 'pending') {
   await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl));
@@ -71,6 +75,7 @@ async function availableFolderOptions(role: SourceRole, scan: boolean): Promise<
 function setup(){
  bind('getFacilityDraft',()=>bridge.request('getFacilityDraft'));
  bind('saveFacilityDraft',(expectedRevision,changes)=>bridge.request('saveFacilityDraft',{expectedRevision,changes}));
+ bind('saveFacilityNotes',(expectedRevision,changes)=>bridge.request('saveFacilityNotes',{expectedRevision,changes}));
  bind('replayFacilityDraft',expectedRevision=>bridge.request('replayFacilityDraft',{expectedRevision}));
  bind('getWorkspaceFolderSuggestion', async role => {
   const choices = await availableFolderOptions(role, false);
@@ -119,7 +124,7 @@ function setup(){
   if(encoded.length>8192)throw Error('The connection details are unavailable. Check the source in Settings.');
   clipboard.writeText(encoded);
  });
- bind('workspaceDraftPreview',async()=>rendererSafe(await bridge.request('workspaceDraftPreview')));
+ bind('workspaceDraftPreview',async compare=>rendererSafe(await bridge.request('workspaceDraftPreview',compare)));
  bind('workspaceOrderDetail', async (proofId,revision) => bridge.request('workspaceOrderDetail', {proofId,revision}));
  bind('chooseWorkspaceFolder', async role => {
   const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', defaultPath:(await availableFolderOptions(role, false))[0]?.folder, properties:['openDirectory','dontAddToRecent'] });
@@ -243,6 +248,7 @@ export async function attachHumanSession(human: ConstructorParameters<typeof Hos
   current.bindAssistant(() => win);
   return {
     choices: () => current.choices(),
+    readyForUpgrade: async () => { await bridge.request('status'); },
     orders: () => current.daily(),
     setup: async () => { await current.guard('getStatus'); await showSetup(); },
     close: () => { current.close(); if (win && !win.isDestroyed()) win.destroy(); }

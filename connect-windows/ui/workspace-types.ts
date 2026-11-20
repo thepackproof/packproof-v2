@@ -56,6 +56,7 @@ export interface OrderDetail extends OrderSummary {
 }
 export interface WorkspaceStatus {
   guidedSetupAvailable?: boolean;
+  offlineDraftOnly?: boolean;
   orders?: OrderSummary[];
   totalOrders?:number|null;
   nextBefore?:number|null;
@@ -83,6 +84,7 @@ export interface ProofOutput {
 }
 
 export interface DraftPreview {
+  sampleBasis?:string;
   examples: {
     orderReference: string; source: string;
     displayReference?:string|null;
@@ -100,6 +102,7 @@ export interface DraftPreview {
       entity?:{namespace:string;type:string;id:string};
       references?:{namespace:string;type:string;id:string}[];
       fieldLineage?:Record<string,string>|null;
+      lines?:Record<string,string>[];
     }[];
   }[];
   scannedFiles: number; unreadFiles: number; unresolved: number; limited: boolean;
@@ -139,8 +142,10 @@ export interface WorkspaceFolderSuggestion {
   evidence?: string;
 }
 export interface WorkspaceBridge {
+  beginEnrollment?(): Promise<ConnectStatus>;
   getFacilityDraft?(): Promise<FacilityDraft>;
   saveFacilityDraft?(expectedRevision: number, changes: FacilityInputs): Promise<FacilityDraft>;
+  saveFacilityNotes?(expectedRevision: number, changes: Pick<FacilityInputs,'steps'|'examples'>): Promise<FacilityDraft>;
   replayFacilityDraft?(expectedRevision: number): Promise<FacilityDraft>;
   workspaceOrderPage?(before:number):Promise<{orders:OrderSummary[];nextBefore?:number|null}>;
   workspaceSourceRecord?(proofId:string,revision:number,eventKey:string):Promise<WorkspaceSourceRecord>;
@@ -157,7 +162,8 @@ export interface WorkspaceBridge {
   getWorkspaceStatus():Promise<ConnectStatus>;
   addWorkspaceDirectSource(sourceNamespace?:string):Promise<ConnectStatus>;
   copyWorkspaceDirectProfile(sourceId:string):Promise<void>;
-  workspaceDraftPreview(): Promise<DraftPreview>;
+  workspaceDraftPreview(compare?:{draftId:string;expectedRevision:number;previous?:{
+    rules:FacilityInputs["rules"];packing:NonNullable<FacilityInputs["packing"]>}}): Promise<DraftPreview>;
   workspaceOrderDetail(proofId: string, revision: number): Promise<OrderDetail>;
   chooseWorkspaceFolder(role: SourceRole): Promise<ConnectStatus>;
   reuseWorkspaceFolder(sourceId: string, role: SourceRole): Promise<ConnectStatus>;

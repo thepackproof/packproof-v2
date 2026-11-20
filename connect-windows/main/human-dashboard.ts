@@ -61,7 +61,9 @@ export async function openHumanDashboard(webBaseUrl: string, scope: DashboardSco
         if (!window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame) window.close();
       };
       ipcMain.on('logistics:dashboard-close',close);
-      const expire = setTimeout(() => { if (!window.isDestroyed()) window.destroy(); }, expires - Date.now());
+      const expire = setTimeout(() => {
+        if (!window.isDestroyed()) { window.destroy(); identity.expired?.(); }
+      }, expires - Date.now());
       window.once('closed',() => { clearTimeout(expire); ipcMain.off('logistics:dashboard-session',bootstrap); ipcMain.off('logistics:dashboard-close',close); });
       isolated.webRequest.onBeforeSendHeaders((details, callback) => {
         const headers = {...details.requestHeaders};

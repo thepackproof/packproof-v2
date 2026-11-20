@@ -65,8 +65,13 @@ export async function requestSuggestions(input: SetupInput, fetcher: typeof fetc
     })
   });
   if (!response.ok) throw Error('Provider unavailable');
-  const value = await response.json() as { choices?: { message?: { content?: string; refusal?: string } }[]; usage?: { total_tokens?: number } };
+  const value = await response.json() as { choices?: { message?: { content?: string; refusal?: string } }[]; usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } };
   const message = value.choices?.[0]?.message;
   if (!message?.content || message.refusal || message.content.length > 8192) throw Error('No valid suggestion');
-  return { suggestions: validateSuggestions(JSON.parse(message.content), input), tokens: Math.max(0, Math.min(16384, Number(value.usage?.total_tokens) || 0)) };
+  const usage = value.usage;
+  const rates = [process.env.PACKPROOF_SETUP_AI_INPUT_USD_PER_MILLION,process.env.PACKPROOF_SETUP_AI_OUTPUT_USD_PER_MILLION];
+  const priced = rates.every(rate => rate?.trim() && Number.isFinite(Number(rate)) && Number(rate)>=0) &&
+    Number.isSafeInteger(usage?.prompt_tokens) && Number.isSafeInteger(usage?.completion_tokens);
+  const costMicrousd = priced ? Math.round(usage!.prompt_tokens!*Number(rates[0]) + usage!.completion_tokens!*Number(rates[1])) : null;
+  return { suggestions: validateSuggestions(JSON.parse(message.content), input), tokens: Math.max(0, Math.min(16384, Number(usage?.total_tokens) || 0)),costMicrousd };
 }

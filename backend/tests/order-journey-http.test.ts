@@ -92,11 +92,11 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
       await db.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[locationId,org,'Reference facility',clock.now().toISOString()]);
       vi.stubEnv('PACKPROOF_GUIDED_FACILITIES',[org,'sandbox',locationId].join(':'));
     }
-    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.6.0'});
+    const e=await call('POST','/connect/enrollments',{deviceName:'Controlled Windows collector',version:'0.7.0'});
     const enrolled=await call('POST','/me/records/agent-enrollments/'+e.id+'/decision'+query,{...scope,decision:'approve',comparisonCode:e.comparisonCode,operatorMembershipId:member,locationId,sourceName:'Controlled source files',integrationAccountId:null,createLocalSource:true},{...adminHeaders,'Idempotency-Key':'journey-enrollment'});
     const grant=await call('POST','/connect/enrollments/'+e.id+'/redeem',{redeemSecret:e.redeemSecret});
     const credentials={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
-    await call('POST','/v1/partner/agent/heartbeat',{version:'0.6.0',queueCount:0,enrollmentAcknowledged:true},credentials);
+    await call('POST','/v1/partner/agent/heartbeat',{version:'0.7.0',queueCount:0,enrollmentAcknowledged:true},credentials);
     const account=(await db.db.query<{id:string}>('SELECT integration_account_id AS id FROM record_agent_installations WHERE id=$1',[enrolled.installationId])).rows[0].id;
     const sender=await createServicePrincipal(db.db,clock,owner,org,{name:'Fixture ERP'},'fixture');
     const credential=await issuePartnerCredential(db.db,clock,owner,org,sender.id,{scopes:['proofs:write','proofs:read'],expiresAt:new Date(Date.now()+86400000).toISOString()},'fixture');
@@ -124,12 +124,12 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     const pending=await call('GET',resource+query,undefined,adminHeaders);
     expect(pending.scopeDigest).toBe(session.scopeDigest);
     const useBrowser=process.env.PACKPROOF_JOURNEY_BROWSER==='1';
-    async function checkInBrowser(proof?: {id:string;revision:number}) {
+    async function checkInBrowser(proof?: {id:string;revision:number;carton?:string;historicalRevision?:number;locationId?:string|null}) {
       const desktop=path.join(repo,'connect-windows');
       const phase=proof?'order':'consent';
       const locator=path.join(root,'browser-'+phase+'.json');
       await writeFile(locator,JSON.stringify({pipe:pipeName,owner,approvalPath:pending.approvalPath,proof}),{flag:'wx'});
-      const executable=createRequire(path.join(desktop,'package.json'))('electron') as string;
+      const executable=process.env.PACKPROOF_JOURNEY_BROWSER_EXE || createRequire(path.join(desktop,'package.json'))('electron') as string;
       const browser=spawn(executable,['--disable-gpu','--user-data-dir='+path.join(root,'browser-profile-'+phase),path.join(desktop,'scripts/browser-order-approval.cjs')],{
         cwd:desktop,windowsHide:true,stdio:['ignore','inherit','inherit'],timeout:60000,env:{...process.env,PACKPROOF_BROWSER_FIXTURE:locator}
       });
@@ -179,6 +179,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
       expect(new Date(delayed.lastVerifiedReadAt).toISOString()).toBe(new Date(expected.clock.lastDispatchRead).toISOString());
       expect(new Date(delayed.nextCheckAt).toISOString()).toBe(new Date(expected.clock.nextExpectedCheck).toISOString());
       expect(delayed.affectedOrders.some((o:any)=>o.proofId===pinned.proofId)).toBe(true);
+      expect((await health()).overdue.some((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02')).toBe(false);
       await referenceFile('packing','packing-progress.csv');
       await poll('healthy packing source advances another order during dispatch outage',async()=>{
         const card=(await call('GET','/me/records/order-proofs'+query+'&q=CTN-03&referenceType=package',undefined,adminHeaders)).orders[0];
@@ -196,6 +197,8 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
         return result.rows.length?true:undefined;
       });
       await poll('verified source recovery clears the incident',async()=>(await health()).incidents.some((i:any)=>i.sourceId===source)?undefined:true);
+      const late=(await health()).overdue.find((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02');
+      expect(late?.deadline).toBe(new Date(expected.clock.receiptDeadline).toISOString());
       expect(deliveries(await view(pinned.proofId))).toEqual(expected.split.deliveredBefore);
       await referenceFile('delivery','dispatch-late.csv');
       const complete=await poll('second delivery advances the original Proof',async()=>{
@@ -204,7 +207,8 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
       });
       expect(complete.revision-pinned.revision).toBe(expected.recoveryRevisionDelta);
       expect(deliveries(complete)).toEqual(expected.split.deliveredAfter);
-      const delivery=complete.events.find((e:any)=>e.eventId==='POD-7791');
+      expect((await health()).overdue.some((o:any)=>o.proofId===pinned.proofId && o.id==='CTN-02')).toBe(false);
+      const delivery=complete.events.find((e:any)=>e.kind==='delivery' && e.entity.id==='POD-7791');
       expect(new Date(delivery.occurredAt).toISOString()).toBe(new Date(expected.clock.receipt2Event).toISOString());
       expect(new Date(delivery.firstSeenAt).toISOString()).toBe(new Date(expected.clock.recovery).toISOString());
       expect(delivery.observedAt).toBe(delivery.firstSeenAt);
@@ -223,10 +227,15 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
       expect(await view(pinned.proofId)).toEqual(complete);
       await referenceFile('delivery','dispatch-corrected.csv');
       const corrected=await poll('explicit correction to the dispatch event',async()=>{
-        const p=await view(pinned.proofId); return p.events.some((e:any)=>e.eventId==='POD-7791' && e.version==='2')?p:undefined;
+        const p=await view(pinned.proofId); return p.events.some((e:any)=>e.kind==='delivery' && e.entity.id==='POD-7791' && e.version==='2')?p:undefined;
       });
       expect(corrected.revision).toBe(complete.revision+1);
       expect(await call('GET','/me/records/order-proofs/'+pinned.proofId+'/revisions/'+pinned.revision+query,undefined,adminHeaders)).toEqual(pinned);
+      if(process.env.PACKPROOF_JOURNEY_VIEW_FIXTURE) {
+        const packet=await call('POST','/me/records/order-proofs/'+pinned.proofId+'/revisions/'+pinned.revision+'/packet'+query,undefined,adminHeaders);
+        await writeFile(process.env.PACKPROOF_JOURNEY_VIEW_FIXTURE,JSON.stringify({scope,locationId,search:await lookup(),pinned,corrected,packet}));
+      }
+      if(useBrowser) await checkInBrowser({id:corrected.proofId,revision:corrected.revision,carton:'CTN-02',historicalRevision:pinned.revision,locationId});
       if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify({
         proofId:pinned.proofId,partialRevision:pinned.revision,completeRevision:complete.revision,correctedRevision:corrected.revision,
         firstSeenAt:delivery.firstSeenAt,occurredAt:delivery.occurredAt,observedAt:delivery.observedAt,replays:2,pdfOriginals:2

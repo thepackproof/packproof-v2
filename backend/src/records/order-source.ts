@@ -23,7 +23,7 @@ type SourceFact = {
   originalStatus: string;
   associationScope?: string;
 };
-type LinkedArtifact = { receiptId: string; sourceId: string; generation: number; linkedByReceiptId: string };
+type LinkedArtifact = { receiptId: string; sourceId: string; generation: number; linkedByReceiptId: string; linkedByEventKey?: string };
 type ReceiptRow = {
   record: OrderRecord;
   generation: number;
@@ -173,6 +173,7 @@ export async function readOrderSource(
   const attachments = (proof.originalArtifacts ?? []).filter(
     (a) =>
       a.linkedByReceiptId === receiptId &&
+      (a.linkedByEventKey ? a.linkedByEventKey===eventKey : row.single_event) &&
       scope.scope.sources.some((s) => s.id === a.sourceId && s.generation === a.generation),
   );
   const excerpt = {
@@ -183,7 +184,7 @@ export async function readOrderSource(
     occurredAt: row.record.occurredAt,
     eventKind: row.record.kind,
     mediaType: row.media_type,
-    ...(attachments.length === 1 && row.single_event ? { artifactReceiptId: attachments[0].receiptId } : {}),
+    ...(attachments.length === 1 ? { artifactReceiptId: attachments[0].receiptId } : {}),
   };
   if (
     evidence.originalStatus !== "retained" ||

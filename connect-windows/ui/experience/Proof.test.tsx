@@ -22,6 +22,22 @@ const event = (id: string, ref: string, qty: string, unit: string) => ({
   observedAt: "2026-11-01T09:02:00Z",
 });
 const events = [event("evt1", "SH-A", "8", "EA"), event("evt2", "SH-B", "2", "BOX")];
+
+it("shows an allocation under its identified carton and leaves unallocated multi-carton quantities unknown",()=>{
+  const cartons=["C1","C2"].map(id=>({type:"package",id,namespace:"packing"}));
+  const scoped=(lines:Record<string,string>[])=>modelProof({proofId:"P",revision:1,orderReference:"A",
+    lines:[{lineId:"10",sku:"Valve",orderedQuantity:"8",unit:"EA"}],evidence:[],events:[{
+      ...events[0],references:cartons,entity:ship("SH-A"),lines,
+    }]});
+  const line={lineId:"10",packedQuantity:"3",unit:"EA"};
+  const named=scoped([{...line,packageId:"C2"}]);
+  const unallocated=scoped([line]);
+  const carton1=JSON.stringify(["packing","package","C1"]),carton2=JSON.stringify(["packing","package","C2"]);
+  expect(named.scopes.find(s=>s.key===carton2)?.label).toBe("Carton C2");
+  expect(quantity(named,named.items[0],"packedQuantity",carton2).text).toBe("3");
+  expect(quantity(named,named.items[0],"packedQuantity",carton1).text).toBe("");
+  expect(quantity(unallocated,unallocated.items[0],"packedQuantity",carton2).text).toBe("");
+});
 const detail: OrderDetail = {
   proofId: "PP-real",
   orderReference: "SO-72",

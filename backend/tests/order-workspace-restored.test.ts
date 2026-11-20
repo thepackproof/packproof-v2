@@ -35,7 +35,7 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
         const target=new URL(connection!);target.username=name;target.password=password;target.searchParams.set('options','-c search_path='+schema);
         logins.push(createPgDatabase(target.toString()));
       }
-      const options=(throughMigration:number,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
+      const options=(throughMigration:122|123|124|129,reviewedMigrationSha256:string)=>({runtimeRole:apiRole,workerRole,schema,reviewedSourceCommit:source,reviewedMigrationSha256,throughMigration});
       const policy122=options(122,(await recordsMigrationInventory(122)).migrationSha256);
       const baseline=await planRecordsRuntimePrivileges(opened.db,policy122);
       await opened.db.transaction(async tx=>{for(const sql of baseline.statements)await tx.query(sql);});
@@ -109,7 +109,8 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       expect(await owner('apply',{...hosted,expectedLedger:workspaceInventory})).toMatchObject(
         {through:124,applied:[],finalLedger:collectorInventory,grantStatementCount:0});
       const additions=inventory.filter(row=>row.id>collectorMigration.id);
-      const latest=Number(additions.at(-1)!.id.slice(0,3));
+      const latest=129;
+      expect(additions.at(-1)?.id).toBe("129_unified_collector_version");
       const logisticsPolicy=options(latest,(await recordsMigrationInventory(latest)).migrationSha256);
       // Exercise the DDL and table privileges in the same restored schema. A failed
       // rehearsal must leave both the old receipts and the old role policy usable.

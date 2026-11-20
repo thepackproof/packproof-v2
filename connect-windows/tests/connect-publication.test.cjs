@@ -64,9 +64,13 @@ function store() {
 test('only the reviewed channel, installer hash, hosted endpoints, signed original and feed bytes qualify', async t => {
   const f=fixture(t);
   await inspect(f.directory,f.options);
-  for (const options of [{channel:'development'},{commit:'b'.repeat(40)},{webOrigin:'https://other.example'},{installerHash:'f'.repeat(64)}]) {
+  for (const options of [{channel:'development'},{commit:'b'.repeat(40)},{webOrigin:'https://other.example'},{installerHash:'f'.repeat(64)},{unifiedWindows:true}]) {
     await assert.rejects(inspect(f.directory,{...f.options,...options}));
   }
+  f.evidence.application.unifiedWindows=true; f.writeReport();
+  await inspect(f.directory,{...f.options,unifiedWindows:true});
+  await assert.rejects(inspect(f.directory,f.options));
+  f.evidence.application.unifiedWindows=false;
   f.evidence.signed=false; f.writeReport();
   await assert.rejects(inspect(f.directory,f.options));
   f.evidence.signed=true; f.writeReport();

@@ -60,15 +60,15 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
       return response.body;
     };
     async function enroll(site:string) {
-      const e=await success(api.post('/connect/enrollments').send({deviceName:'Collector '+site,version:'0.6.0'}));
+      const e=await success(api.post('/connect/enrollments').send({deviceName:'Collector '+site,version:'0.7.0'}));
       const installation=await success(api.post(human+'/agent-enrollments/'+e.id+'/decision').set(auth(owner))
         .set('Idempotency-Key','enroll-'+site).send({...scope,decision:'approve',comparisonCode:e.comparisonCode,
           operatorMembershipId:member,locationId:site,sourceName:'Test files',integrationAccountId:null,createLocalSource:true}));
       const grant=await success(api.post('/connect/enrollments/'+e.id+'/redeem').send({redeemSecret:e.redeemSecret}));
       const device={Authorization:'Bearer '+grant.token,'PackProof-Merchant-Id':org};
-      await success(api.post(agent+'/heartbeat').set(device).send({version:'0.6.0',queueCount:0,enrollmentAcknowledged:true}));
+      await success(api.post(agent+'/heartbeat').set(device).send({version:'0.7.0',queueCount:0,enrollmentAcknowledged:true}));
       const proposal=await success(api.post(agent+'/order-workspace/proposals').set(device).send({
-        sources:[{id:'dispatch',generation:1,folderDigest:'a'.repeat(64),roles:['order','packing','shipping','delivery'],profileVersion:'logistics/v1',
+        sources:[{id:'dispatch',generation:1,folderDigest:'a'.repeat(64),roles:['order','packing','shipping','handoff','delivery'],profileVersion:'logistics/v1',
           ...(site==='east'?{expectedCheckIntervalSeconds:300,expectedDeliveryAfterLabelSeconds:86400}:{})}],
         ...(site==='east'?{testedProfile:{schema:'packproof.facility-replay/v1',digest:'c'.repeat(64),draftId,revision:2,examples:3}}:{}),
         outputDigest:'b'.repeat(64),history:'existing_and_future'}));
@@ -111,6 +111,10 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     const suggestion=await success(suggest(east.id,owner));
     expect(suggestion.suggestions[0].operation).toBe('ask_question');
     expect(await success(suggest(east.id,owner))).toEqual(suggestion);
+    const review={draftId,revision:2,requestId:suggestion.requestId,index:0,decision:'edited'};
+    const reviewUrl=setupUrl(east.id)+'/facility-setup/reviews/v1';
+    for(let retry=0;retry<2;retry++) await api.post(reviewUrl).set(auth(owner)).query(scope).send(review).expect(204);
+    await api.post(reviewUrl).set(auth(owner)).query(scope).send({...review,decision:'accepted'}).expect(409);
     await suggest(east.id,owner,{...setup,revision:1}).expect(409);
     expect(provider).toHaveBeenCalledTimes(1);
     provider.mockRejectedValueOnce(Error('Deliberately offline'));
@@ -123,7 +127,7 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     const order=ref('order','export.order482'),carton1=ref('package','CTN-01'),carton2=ref('package','CTN-02');
     const row=(eventId:string,kind:string,entity:typeof order,references:typeof order[],occurredAt:string,fields={})=>({
       eventId,version:'1',kind,entity,references,occurredAt,fields,locator:'row 2',lines:[]});
-    const origin=row('order','order',order,[],'2026-11-19T08:00:00-05:00',{orderReference:'SO-10482'});
+    const origin=row('order','order',order,[],'2026-11-19T20:00:00+07:00',{orderReference:'SO-10482'});
     const initial=[origin,row('pack1','packing',carton1,[order],'2026-11-19T08:30:00-05:00'),
       row('pack2','packing',carton2,[order],'2026-11-19T08:30:00-05:00'),
       row('label2','label',carton2,[order],'2026-11-19T08:42:00-05:00'),row('pod1','delivery',carton1,[order],'2026-11-19T14:16:00-05:00')];
@@ -140,7 +144,9 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     expect((await lookup(reviewer,'order','SO-10482')).orders.map((x:{proofId:string})=>x.proofId)).toEqual([prior.proofId]);
     await api.get(human+'/order-proofs/'+other.proofId).set(auth(reviewer)).query(scope).expect(404);
     const card=(await lookup(reviewer,'package','CTN-02')).orders[0];
-    expect(card).toMatchObject({...prior,locationId:'east',matchedSubjects:[{...carton2,sourceId:'dispatch'}]});
+    expect(card).toMatchObject({...prior,latestKind:'delivery',locationId:'east',matchedSubjects:[{...carton2,sourceId:'dispatch'}]});
+    const devicePage=await success(api.get(agent+'/order-proofs').set(east.device).query({referenceType:'package',q:'CTN-02'}));
+    expect(devicePage.orders).toEqual([card]);
     const path=human+'/order-proofs/'+prior.proofId;
     const pin=path+'/revisions/'+prior.revision;
     const inspect=(url:string,user=owner)=>success(api.get(url).set(auth(user)).query(scope));
@@ -166,6 +172,9 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     const current=await inspect(path);
     expect(current.cartons[1]).toMatchObject({id:'CTN-02',deliveryStatus:'delivered',occurredAt:delivery.occurredAt,observedAt:'2026-11-19T19:34:00.000Z'});
     expect(current.events.find((e:{eventId:string})=>e.eventId==='pod2').firstSeenAt).toBe('2026-11-19T19:34:00.000Z');
+    expect(current.deliveryCoverage).toBe('configured');
+    expect(current.changes).toEqual(expect.arrayContaining([expect.objectContaining({kind:'added',subject:carton2,sourceId:'dispatch'}),
+      expect.objectContaining({kind:'original_attached',originalSha256:sha256Hex(pdf)})]));
     expect(await inspect(pin)).toEqual(before);
     const artifact=path+'/revisions/'+revision+'/artifacts/'+current.originalArtifacts[0].receiptId;
     expect((await inspect(artifact)).bytesBase64).toBe(pdf.toString('base64'));
@@ -181,7 +190,39 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     expect(packet.manifest.every((m:{disposition:string})=>m.disposition==='omitted')).toBe(true);
     expect((await success(api.post(path+'/case-actions').set(auth(owner)).set('Idempotency-Key','resolve-pod')
       .send({...body,action:'resolve',expectedVersion:1,expectedRevision:revision}))).version).toBe(2);
+    await api.post(path+'/case-actions').set(auth(owner)).set('Idempotency-Key','resolve-again')
+      .send({...body,action:'resolve',expectedVersion:2,expectedRevision:revision}).expect(409);
+    const quantity={...origin,eventId:'quantity',fields:{reportedQuantity:'1'},lines:[{lineId:'line1',unit:'EA',orderedQuantity:'1'}]};
+    await submit(east,'quantity-1',[quantity]);
+    const change={...quantity,version:'3',fields:{reportedQuantity:'3'},lines:[{lineId:'line1',unit:'EA',orderedQuantity:'3'}]};
+    await submit(east,'quantity-3',[change]);
+    const corrected=await inspect(path);
+    expect(corrected.changes).toMatchObject([{kind:'updated',fields:expect.arrayContaining([
+      {scope:'line/line1',field:'orderedQuantity',previous:'1',current:'3'}])}]);
+    await submit(east,'quantity-2',[{...quantity,version:'2',fields:{reportedQuantity:'2'}}]);
+    const delayed=await inspect(path);
+    expect(delayed.lines[0].orderedQuantity).toBe('3');
+    expect(delayed.evidence.filter((e:{eventId:string})=>e.eventId==='quantity')).toHaveLength(3);
+    // A retry or renamed copy with the exact same bytes keeps the revision. A
+    // different original for the same source/version is held, even when the
+    // parser maps both originals to the same quantities.
+    expect((await submit(east,'renamed',[change],'another.json')).proofs[0].revision).toBe(delayed.revision);
+    const whitespaceChanged=Buffer.from(JSON.stringify([change],null,2));
+    for(const id of ['conflict-a','conflict-b']) {
+      const held=await submit(east,id,[change],id+'.json',whitespaceChanged);
+      expect(held).toMatchObject({state:'pending',code:'REVISION_CONFLICT'});
+    }
+    expect((await inspect(path)).revision).toBe(delayed.revision);
+    const attention=await inspect(human+'/order-attention');
+    expect(attention.items.filter((e:{eventKey:string})=>e.eventKey.startsWith('order_conflict_'))).toHaveLength(1);
     expect(provider).toHaveBeenCalledTimes(2);
+    const secondOrder=ref('order','export.order483'),shipment=ref('shipment','SHP-CONSOLIDATED');
+    const second=(await submit(east,'second-order',[row('second-order','order',secondOrder,[],now)])).proofs[0];
+    await submit(east,'consolidated',[row('consolidated','handoff',shipment,[order,secondOrder],now)]);
+    const common=await lookup(reviewer,'shipment',shipment.id);
+    expect(common.orders.map((c:{proofId:string})=>c.proofId).sort()).toEqual([prior.proofId,second.proofId].sort());
+    for(const c of common.orders) expect(c.matchedSubjects).toEqual([{...shipment,sourceId:'dispatch'}]);
+    expect((await lookup(reviewer,'order',secondOrder.id)).orders.map((c:{proofId:string})=>c.proofId)).toEqual([second.proofId]);
     // Reopen a cold database copy and the matching object versions under a new root.
     await h.close();
     databaseOpen=false;
@@ -193,6 +234,26 @@ it('recovers the late carton once and enforces scoped lookups, actions and origi
     expect((await inspect(artifact)).bytesBase64).toBe(pdf.toString('base64'));
     await api.get(artifact).set(auth(reviewer)).query(scope).expect(403);
     expect(provider).toHaveBeenCalledTimes(2);
+    // Roll back this facility after restoring its data. A stale approval cannot
+    // reopen collection, and the independently authorized west operation stays live.
+    vi.stubEnv('PACKPROOF_GUIDED_FACILITIES','');
+    expect(await success(api.get(workPath).set(east.device).query({scopeDigest:east.scopeDigest})))
+      .toMatchObject({state:'paused',offlineWindowSeconds:0});
+    await api.get(agent+'/order-proofs').set(east.device).expect(403);
+    await api.post(workPath+'/proposals').set(east.device).send(approved.scope).expect(409);
+    expect((await success(api.get(workPath).set(west.device))).state).toBe('active');
+    expect((await submit(west,'initial',[origin])).proofs).toEqual([other]);
+    expect(await inspect(pin)).toEqual(before);
+    const {testedProfile: rolledBackProfile,...manual}=approved.scope;
+    expect(rolledBackProfile.digest).toBeTruthy();
+    const replacement=await success(api.post(workPath+'/proposals').set(east.device).send(manual));
+    expect(replacement).toMatchObject({state:'pending'});
+    await api.get(agent+'/order-proofs').set(east.device).expect(403);
+    await success(api.post(setupUrl(east.id)+'/order-workspace/'+replacement.id+'/decision').set(auth(owner))
+      .send({...scope,decision:'approve',scopeDigest:replacement.scopeDigest}));
+    expect((await success(api.get(workPath).set(east.device).query({scopeDigest:east.scopeDigest}))).state).toBe('superseded');
+    expect((await success(api.get(workPath).set(east.device).query({scopeDigest:replacement.scopeDigest}))).state).toBe('active');
+    expect((await inspect(artifact)).bytesBase64).toBe(pdf.toString('base64'));
   } finally {
     transport.destroy();
     if(http.listening) await new Promise<void>(resolve=>http.close(()=>resolve()));

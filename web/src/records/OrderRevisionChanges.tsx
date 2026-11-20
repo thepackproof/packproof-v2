@@ -1,45 +1,30 @@
-import { useState } from 'react';
-import type { PackProofApi } from '../api/client';
-import { revisionPath } from './OrderEvidence';
 import { displayState } from './model';
-import { useWorkflowData } from './workflow';
 
-interface HistoryEvent {
-  eventKey?:string;eventId?:string;sourceId:string;kind:string;version?:string;observedAt?:string;
-  locator?:string;profileVersion?:string;fields:Record<string,unknown>;
-  lines?:Record<string,unknown>[];entity?:{id:string};
+export interface OrderChange {
+  kind:string;
+  sourceId:string;
+  subject?:{id:string;type:string};
+  eventKey?:string;
+  previousEventKey?:string;
+  receiptId?:string;
+  profileVersion?:string;
+  locator?:string;
+  observedAt?:string;
+  fields?:{scope:string;field:string;previous?:unknown;current?:unknown}[];
 }
-interface Revision {proofId:string;revision:number;events:HistoryEvent[]}
-function identity(e:HistoryEvent) {return JSON.stringify([e.sourceId,e.eventId || e.eventKey]);}
-function amounts(rows:Record<string,unknown>[] = []) {
-  return Object.fromEntries(rows.flatMap(line=>Object.entries(line).filter(([key])=>key !== 'lineId')
-    .map(([key,value])=>[String(line.lineId) + ' · ' + key,value])));
-}
-export function OrderRevisionChanges({api,scope,current}: {api:PackProofApi;scope:string;current:Revision}) {
-  const [open,setOpen] = useState(false);
-  const previous = useWorkflowData<Revision>(api,open && current.revision>1 ? revisionPath(current.proofId,current.revision-1)+'?'+scope : null);
-  if (current.revision <= 1) return <p>First recorded revision.</p>;
-  const before = previous.data?.proofId === current.proofId && previous.data.revision === current.revision-1 ? previous.data : null;
-  const old = new Map(before?.events.map(e=>[identity(e),e]));
-  const keys = new Set(current.events.map(identity));
-  const changes = current.events.flatMap(event=>{
-    const prior=old.get(identity(event));
-    if (prior?.eventKey === event.eventKey && prior?.version === event.version && prior) return [];
-    const oldFields={...prior?.fields,...amounts(prior?.lines)}, newFields={...event.fields,...amounts(event.lines)};
-    return [{event,status:prior ? 'Corrected' : 'Added',differences:prior ?
-      [...new Set([...Object.keys(oldFields),...Object.keys(newFields)])].filter(k=>oldFields[k]!==newFields[k])
-        .map(k=>k + ' · ' + String(oldFields[k] ?? 'unreported') + ' → ' + String(newFields[k] ?? 'unreported')) : []}];
-  });
-  return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>What changed since revision {current.revision-1}?</summary>
-    {previous.error ? <p role="alert">{previous.error}</p> : !before ? <p role="status">Checking the earlier revision…</p> : <>
-      <ul>{changes.map(({event,status,differences})=><li key={identity(event)}><strong>{status} · {displayState(event.kind)}</strong>
-        {event.entity?.id && ' · ' + event.entity.id}<p>{event.sourceId} · {event.locator || 'No locator reported'}</p>
-        {event.observedAt && <p>Received by PackProof · {new Date(event.observedAt).toLocaleString()}</p>}
-        {event.profileVersion && <p>Reader · {event.profileVersion}</p>}
-        {differences.length > 0 && <ul>{differences.map(item=><li key={item}>{item}</li>)}</ul>}
-      </li>)}
-      {before.events.filter(e=>!keys.has(identity(e))).map(e=><li key={identity(e)}>Removed from this order · {displayState(e.kind)} · {e.sourceId}</li>)}</ul>
-      {changes.length===0 && before.events.every(e=>keys.has(identity(e))) && <p>Event versions are unchanged. Open the previous revision to compare its linked evidence.</p>}
-    </>}
+
+export function OrderRevisionChanges({revision,changes}: {revision:number;changes?:OrderChange[]}) {
+  if (revision<=1) return <p>First recorded revision.</p>;
+  if (!changes) return <p>Open the previous revision to compare its saved evidence.</p>;
+  return <details><summary>What changed since revision {revision-1}?</summary>
+    <ul>{changes.map((item,i)=><li key={JSON.stringify([item.kind,item.eventKey,item.previousEventKey,item.receiptId,i])}>
+      <strong>{displayState(item.kind)}</strong>{item.subject && ' · ' + displayState(item.subject.type) + ' ' + item.subject.id}
+      <p>{item.sourceId}{item.locator && ' · ' + item.locator}</p>
+      {item.observedAt && <p>Received by PackProof · {new Date(item.observedAt).toLocaleString()}</p>}
+      {item.profileVersion && <p>Reader · {item.profileVersion}</p>}
+      {item.fields && item.fields.length>0 && <ul>{item.fields.map(field=><li key={JSON.stringify([field.scope,field.field])}>
+        {field.scope} · {field.field} · {String(field.previous ?? 'unreported')} → {String(field.current ?? 'unreported')}
+      </li>)}</ul>}
+    </li>)}</ul>
   </details>;
 }

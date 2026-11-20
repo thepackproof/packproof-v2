@@ -43,6 +43,10 @@ export class DesktopApi {
     const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });
     return this.request('/me/records/agent-installations/'+id(scope.installationId)+'/facility-setup/suggestions/v1?'+query,{ method:'POST',body:input });
   }
+  async reviewFacilitySuggestion(scope: { installationId: string; organizationId: string; environment: string }, input:unknown) {
+    const query = new URLSearchParams({organizationId:scope.organizationId,environment:scope.environment});
+    await this.response('/me/records/agent-installations/'+id(scope.installationId)+'/facility-setup/reviews/v1?'+query,{method:'POST',body:input});
+  }
   assertAccount(accountId: string): void {
     if (!accountId || this.options.getAccountId() !== accountId) throw new DesktopApiError('SESSION_CHANGED', 'Sign in to the account that recorded this evidence.', 401);
   }

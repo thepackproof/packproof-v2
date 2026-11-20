@@ -15,11 +15,13 @@ internal static class FacilityWorkflowScenario
         public int Proposals;
         public int Withdrawals;
         public JsonElement Scope;
+        public JsonElement Heartbeat;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req,CancellationToken ct)
         {
             var path=req.RequestUri!.AbsolutePath;
             object result;
-            if(path.EndsWith("/withdraw")) {Withdrawals++;result=new {withdrawn=true};}
+            if(path.EndsWith("/heartbeat")) result=Heartbeat;
+            else if(path.EndsWith("/withdraw")) {Withdrawals++;result=new {withdrawn=true};}
             else if(path.EndsWith("/proposals") || path.EndsWith("/order-workspace"))
             {
                 if(path.EndsWith("/proposals")){Proposals++;Scope=Json.Read<JsonElement>(await req.Content!.ReadAsByteArrayAsync(ct));}
@@ -54,7 +56,15 @@ internal static class FacilityWorkflowScenario
                 async Task<string> Add(string input,string role)
                 {
                     var path=Directory.CreateDirectory(Path.Combine(root,role)).FullName;
-                    File.Copy(Path.Combine(fixtures,input),Path.Combine(path,input));
+                    var file=Path.Combine(path,input);
+                    File.Copy(Path.Combine(fixtures,input),file);
+                    if(role=="order")
+                    {
+                        var template=File.ReadAllLines(file)[1];
+                        var background=Enumerable.Range(1,9).Select(n=>template.Replace("export.line482","unrelated.line"+n)
+                            .Replace("export.order482","unrelated.order"+n).Replace("SO-10482","OTHER-"+n));
+                        File.AppendAllText(file,"\n"+string.Join("\n",background));
+                    }
                     var status=await Send("addWorkspaceSource",new {folder=path,role});
                     var s=status.GetProperty("workspace").GetProperty("sources").EnumerateArray().Single(s=>s.GetProperty("folder").GetString()==path);
                     var sourceId=s.GetProperty("id").GetString()!;
@@ -64,7 +74,7 @@ internal static class FacilityWorkflowScenario
                 }
                 await Add("orders.csv","order"); await Add("cartons.csv","packing");
                 var labels=await Add("labels.csv","shipping");
-                await Add("dispatch-initial.csv","delivery");
+                var dispatch=await Add("dispatch-initial.csv","delivery");
                 var aside=Directory.CreateDirectory(Path.Combine(root,"deferred")).FullName;
                 var extra=(await Send("addWorkspaceSource",new {folder=aside,role="evidence"})).GetProperty("workspace").GetProperty("sources").EnumerateArray().Single(s=>s.GetProperty("folder").GetString()==aside).GetProperty("id").GetString();
                 var output=Directory.CreateDirectory(Path.Combine(root,"output")).FullName;
@@ -77,6 +87,14 @@ internal static class FacilityWorkflowScenario
                 Check(revision==2,"Expected a new draft revision");
                 try{await Send("saveFacilityDraft",new {expectedRevision=1,changes=input});throw new Exception("Stale edit accepted");}
                 catch(ConnectException error) when(error.Code=="DRAFT_CHANGED"){}
+                using(var unavailable=File.Open(Path.Combine(root,"delivery","dispatch-initial.csv"),FileMode.Open,FileAccess.Read,FileShare.None))
+                {
+                    var blocked=(await Send("replayFacilityDraft",new {expectedRevision=revision})).GetProperty("replay");
+                    var checkedSources=blocked.GetProperty("sources").EnumerateArray().ToArray();
+                    Check(!blocked.GetProperty("passed").GetBoolean() && checkedSources.Count(s=>s.GetProperty("readable").GetBoolean())==3 &&
+                        checkedSources.Single(s=>s.GetProperty("sourceId").GetString()==dispatch).GetProperty("readable").GetBoolean()==false,
+                        "One unreadable file should leave the other sources qualified");
+                }
                 var replay=(await Send("replayFacilityDraft",new {expectedRevision=revision})).GetProperty("replay");
                 Check(replay.GetProperty("passed").GetBoolean(),replay.GetRawText());
                 Check(replay.GetProperty("sources").GetArrayLength()==4,"Deferred source entered replay");
@@ -101,13 +119,20 @@ internal static class FacilityWorkflowScenario
                 async Task<JsonElement> Send(string op,object? payload=null)=>Json.Element(await app.Command(op,Json.Element(payload??new{}),default));
                 var current=await Send("getFacilityDraft");
                 Check(current.GetProperty("id").GetString()==id && current.GetProperty("revision").GetInt32()==revision,"Lost draft on restart");
-                restored.ServerConfig=Config("east");
+                server.Heartbeat=Config("east");
+                var east=(await Send("refresh")).GetProperty("workspace");
                 Check((await Send("getFacilityDraft")).GetProperty("id").GetString()!=id,"Cross-facility draft disclosure");
-                var east=(await Send("status")).GetProperty("workspace");
                 Check(east.GetProperty("sources").GetArrayLength()==0 && !east.TryGetProperty("outputFolder",out _),"Cross-facility source or output disclosure");
-                restored.ServerConfig=Config("west");
+                server.Heartbeat=Config("west");
+                await Send("refresh");
+                var notes=await Send("saveFacilityNotes",new {expectedRevision=revision,changes=new {
+                    steps=current.GetProperty("steps"),examples=current.GetProperty("examples")}});
+                Check(notes.GetProperty("rules").GetArrayLength()==1 && notes.GetProperty("excludedSourceIds").GetArrayLength()==1,
+                    "A notes-only save replaced existing source rules");
+                revision=notes.GetProperty("revision").GetInt32();
                 var destination=Directory.CreateDirectory(Path.Combine(root,"second-output")).FullName;
                 await Send("setWorkspaceOutput",new {folder=destination});
+                Check((await Send("getFacilityDraft")).GetProperty("replay").ValueKind==JsonValueKind.Null,"Stale successful replay still displayed");
                 try{await Send("activateWorkspace");throw new Exception("Stale destination activated");}
                 catch(ConnectException e) when(e.Code=="REPLAY_REQUIRED"){}
                 await Send("replayFacilityDraft",new {expectedRevision=revision});
@@ -116,6 +141,10 @@ internal static class FacilityWorkflowScenario
                 Check(status.GetProperty("workspace").GetProperty("phase").GetString()=="active","The exact re-tested scope failed to activate");
                 var active=restored.Workspace!.Sources.Single(s=>s.Roles.Contains("shipping"));
                 Check(active.ShippedAtMeaning=="label" && restored.Workspace.ActiveGrant!.Generations[active.Id]==active.Generation,"Mismatch between approved rules and live generation");
+                var history=restored.Workspace.ApprovedFacilityProfiles.Single().Value;
+                var accepted=history.GetProperty("replay");
+                Check(accepted.GetProperty("checks").GetArrayLength()==3 && accepted.GetProperty("sources").EnumerateArray().All(s=>
+                    s.GetProperty("sampleDigests").GetArrayLength()>0),"Approved replay evidence was not retained");
             }
         }
         finally {SqliteConnection.ClearAllPools();Directory.Delete(root,true);}

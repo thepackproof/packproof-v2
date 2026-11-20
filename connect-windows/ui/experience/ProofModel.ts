@@ -161,10 +161,10 @@ export function modelProof(detail: OrderDetail, names: Record<string, string> = 
     : events;
   const scopeMap = new Map<string, Scope>();
   function mark(ref: Ref) {
-    scopeMap.set(refKey(ref), { key: refKey(ref), label: human(ref.type) + " " + ref.id, ref });
+    scopeMap.set(refKey(ref), { key: refKey(ref), label: (ref.type==="package" ? "Carton" : human(ref.type)) + " " + ref.id, ref });
   }
   for (const s of [...events, ...records]) {
-    for (const r of s.refs) if (r.type === "shipment" || r.type === "delivery") mark(r);
+    for (const r of s.refs) if (r.type === "shipment" || r.type === "delivery" || r.type === "package") mark(r);
     const ids = new Set(
       [
         ...s.lines.map((l) => text(l, "shipmentReference")),
@@ -209,7 +209,8 @@ function allocatedTo(s: Source, scope: string, line: Row) {
   if (!scope) return true;
   const ref = s.refs.find((r) => refKey(r) === scope);
   if (!ref || text(s.row, "associationScope") === "shared") return false;
-  const code = text(line, ref.type === "shipment" ? "shipmentReference" : "deliveryReference");
+  const code = ref.type==="package" ? text(line,"packageId","cartonId","packageReference") :
+    text(line, ref.type === "shipment" ? "shipmentReference" : "deliveryReference");
   if (code) return code === ref.id && s.refs.filter((r) => r.type === ref.type && r.id === code).length === 1;
   return s.refs.filter((r) => r.type === ref.type).length === 1;
 }

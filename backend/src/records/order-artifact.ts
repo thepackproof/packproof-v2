@@ -16,6 +16,7 @@ interface Artifact {
   fileName: string;
   mediaType: string;
   linkedByReceiptId: string;
+  linkedByEventKey?: string;
 }
 
 const shaPattern = /^[a-f0-9]{64}$/;
@@ -55,7 +56,8 @@ export async function attachMedia(db: Database, operation: string, proof: Projec
       if (matches.length !== 1 || originalArtifacts.some(item => item.receiptId === matches[0].id)) continue;
       const r = matches[0];
       originalArtifacts.push({receiptId:r.id, originalSha256:hash, sourceId:source, generation:r.generation,
-        fileName:r.file_name,mediaType:artifactType(r.file_name,r.media_type,event.kind)!,linkedByReceiptId:event.receiptId});
+        fileName:r.file_name,mediaType:artifactType(r.file_name,r.media_type,event.kind)!,linkedByReceiptId:event.receiptId,
+        ...(event.kind==='delivery'?{linkedByEventKey:event.eventKey}:{})});
     }
   }
   return {...proof, originalArtifacts: originalArtifacts.sort((a,b)=>a.receiptId.localeCompare(b.receiptId))};
@@ -95,8 +97,8 @@ export async function readOrderArtifact(deps: Pick<AppDependencies,'objectStore'
   if (!item || !shaPattern.test(item.originalSha256)) throw notFound();
   if (!scope.scope.sources.some(s=>s.id===item.sourceId && s.generation===item.generation))
     return {kind:'derived_excerpt',reason:'original_scope_unavailable',receiptId};
-  if (item.mediaType === 'application/pdf') {
-    // A dedicated POD sidecar identifies the applicable subject. An ambiguous,
+  {
+    // An explicit sidecar identifies the applicable subject. An ambiguous,
     // revoked or reassigned cross-order attachment must stay out of the packet.
     const links = (await db.query<{source_id:string;generation:number;receipt_id:string;exclusive:boolean}>(`
       SELECT side.source_id,side.generation,e.receipt_id,

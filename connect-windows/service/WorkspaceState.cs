@@ -19,6 +19,7 @@ public sealed class OrderWorkspaceState
     public bool AllowPendingOutput { get; set; }
     public WorkspaceGrant? ActiveGrant { get; set; }
     public Dictionary<string,FacilityProfile> FacilityDrafts { get; set; } = [];
+    public Dictionary<string,JsonElement> ApprovedFacilityProfiles { get; set; } = [];
     public string? SubmittedProfileDigest { get; set; }
     public string Step { get; set; } = "order";
     public string Phase { get; set; } = "draft";

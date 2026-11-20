@@ -95,6 +95,8 @@ interface Session {
   scope: OrderScope;
   state: 'active' | 'pending' | 'denied' | 'superseded';
   expires_at: string | Date;
+  decided_at?:string|Date|null;
+  decided_by?:string|null;
 }
 export function operationKey(organization: string, environment: string, operator: string, account: string, location: string | null) {
   return sha256Hex(canonicalize(['order-operation/v1', organization, environment, operator, account, location]));
@@ -117,7 +119,9 @@ function present(clock: Clock, i: Installation, s: Session | undefined) {
     deviceName: i.device_name,
     offlineWindowSeconds: 0
   };
-  const state = s.state === 'pending' && new Date(s.expires_at) <= clock.now() ? 'expired' : s.state;
+  const paused = (s.state === 'active' || s.state === 'pending') && s.scope.testedProfile &&
+    !facilityEnabled('guided',i.organization_id,i.environment,i.location_id);
+  const state = paused ? 'paused' : s.state === 'pending' && new Date(s.expires_at) <= clock.now() ? 'expired' : s.state;
   const query = new URLSearchParams({
     workspaceSession: s.id,
     installationId: i.id,
@@ -129,6 +133,7 @@ function present(clock: Clock, i: Installation, s: Session | undefined) {
     state,
     scopeDigest: s.scope_digest,
     scope: s.scope,
+    ...(state==='active' && s.decided_at && s.decided_by ? {approvedAt:new Date(s.decided_at).toISOString(),approvedBy:s.decided_by}:{}),
     expiresAt: new Date(s.expires_at).toISOString(),
     deviceName: i.device_name,
     approvalPath: state === 'pending' ? '/app/records/connect/approve?' + query.toString() : null,
@@ -142,9 +147,8 @@ export async function workspaceState(db: Database, clock: Clock, i: Installation
   return present(clock, i, result.rows[0]);
 }
 async function requireCurrentGenerations(db: Database, installationId: string, proposed: OrderScope) {
-  if (!proposed.testedProfile) return;
   const current=(await db.query<Session>("SELECT * FROM record_order_sessions WHERE installation_id=$1 AND state='active' FOR SHARE",[installationId])).rows[0];
-  if (!current) return;
+  if (!current || !proposed.testedProfile && !current.scope.testedProfile) return;
   for (const source of proposed.sources) {
     const previous=current.scope.sources.find(s=>s.id===source.id);
     if (!previous) continue;
@@ -163,10 +167,10 @@ export async function proposeScope(db: Database, clock: Clock, i: Installation, 
       operation: installationOperation(i),
       scope
     }));
-  const latest = await workspaceState(db, clock, i);
-  if (latest.scopeDigest === scopeDigest && ['active', 'pending'].includes(latest.state)) return latest;
   if (facilityEnabled('guided',i.organization_id,i.environment,i.location_id) !== Boolean(scope.testedProfile))
     throw new DomainError('INVALID_SCOPE', 'Use the currently enabled setup flow to review these sources.', 409);
+  const latest = await workspaceState(db, clock, i);
+  if (latest.scopeDigest === scopeDigest && ['active', 'pending'].includes(latest.state)) return latest;
   await requireCurrentGenerations(db,i.id,scope);
   await db.query("UPDATE record_order_sessions SET state='superseded' WHERE installation_id=$1 AND state='pending'", [i.id]);
   const now = clock.now(),

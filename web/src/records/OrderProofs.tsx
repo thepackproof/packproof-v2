@@ -6,18 +6,19 @@ import { workflowError } from './workflow';
 import { RemoveOrderLink } from './OrderReferenceReview';
 import { OrderEvidence, OrderPacketDownload, revisionPath } from './OrderEvidence';
 import { OrderCaseReview } from './OrderCaseReview';
-import { OrderRevisionChanges } from './OrderRevisionChanges';
+import { OrderRevisionChanges, type OrderChange } from './OrderRevisionChanges';
 
 interface Subject { type: string; id: string; namespace: string; sourceId?:string }
-interface OrderSummary { proofId: string; revision: number; orderReference: string; updatedAt: string; locationId?:string; matchedSubjects?:Subject[] }
-interface OrderLine { lineId: string; sku?: string; orderedQuantity?: string; pickedQuantity?: string; packedQuantity?: string; shippedQuantity?: string; orderedShippedDiscrepancy?: string; loadedAcknowledgedDiscrepancy?: string }
-interface OrderEvent { eventKey?: string; kind: string; occurredAt?: string; observedAt?:string; firstSeenAt?:string; sourceId: string; fileName?: string; locator?: string; entity?: Subject; references?:Subject[]; fields: Record<string, unknown> }
+interface OrderSummary { proofId: string; revision: number; orderReference: string; displayOrderReference?:string; updatedAt: string; locationId?:string; matchedSubjects?:Subject[] }
+interface OrderLine { lineId: string; sku?: string; title?:string; unit?:string; orderedQuantity?: string; pickedQuantity?: string; packedQuantity?: string; shippedQuantity?: string; loadedQuantity?:string; acknowledgedQuantity?:string; returnedQuantity?:string; backorderedQuantity?:string; cancelledQuantity?:string; orderedShippedDiscrepancy?: string; loadedAcknowledgedDiscrepancy?: string }
+interface OrderEvent { eventKey?: string; kind: string; occurredAt?: string; observedAt?:string; firstSeenAt?:string; sourceId: string; fileName?: string; locator?: string; entity?: Subject; references?:Subject[]; fields: Record<string, unknown>; lines?:OrderLine[]; associationScope?:string }
 interface OrderDetail extends OrderSummary {
+  changes?: OrderChange[];
   deliveryCoverage?:'configured'|'outside_approved_sources'|'unreported';
   lines: OrderLine[];
   events: OrderEvent[];
-  evidence: { eventKey?:string; fileName?: string; kind?: string; locator?: string; sourceId?: string }[];
-  originalArtifacts?: {receiptId:string;fileName:string}[];
+  evidence: { eventKey?:string; fileName?: string; kind?: string; locator?: string; sourceId?: string; entity?:Subject; references?:Subject[] }[];
+  originalArtifacts?: {receiptId:string;fileName:string;linkedByEventKey?:string}[];
   cartons?: {id:string;namespace:string;lastEventKind:string;lastEventKey:string;occurredAt?:string;observedAt?:string;deliveryStatus:string}[];
   conflicts?: string[];
 }
@@ -83,6 +84,13 @@ type RefType = keyof typeof referenceTypes;
 const stageNames: Record<string,string> = {order:'Order received',picking:'Picking recorded',packing:'Packed',label:'Label printed',handoff:'Carrier handoff',delivery:'Delivery recorded',return:'Return recorded',correction:'Correction recorded'};
 const stage = (kind:string) => stageNames[kind] || displayState(kind);
 function clock(value?:string) { return value ? new Date(value).toLocaleString() : 'Time not reported'; }
+const quantityLabels = {orderedQuantity:'Ordered',pickedQuantity:'Picked',packedQuantity:'Packed',loadedQuantity:'Loaded',shippedQuantity:'Shipped',
+  acknowledgedQuantity:'Acknowledged',returnedQuantity:'Returned',backorderedQuantity:'Backordered',cancelledQuantity:'Cancelled'} as const;
+function QuantityFacts({line,inlineUnit = false}: {line:OrderLine;inlineUnit?:boolean}) {
+  return <dl className="records-facts">{(Object.keys(quantityLabels) as (keyof typeof quantityLabels)[]).filter(field=>line[field]!=null)
+    .map(field=><div key={field}><dt>{quantityLabels[field]}</dt><dd>{line[field]}{inlineUnit && line.unit && ' '+line.unit}</dd></div>)}
+    {!inlineUnit && line.unit && <div><dt>Unit</dt><dd>{line.unit}</dd></div>}</dl>;
+}
 
 function OrderContents({ order, api, scope, canManage, canAct, refresh, route }: { order: OrderDetail; api: PackProofApi; scope: string; canManage: boolean; canAct:boolean; refresh: () => void; route: URLSearchParams }) {
   const subject = route.get('subject'), namespace = route.get('namespace'), type = route.get('subjectType');
@@ -90,6 +98,16 @@ function OrderContents({ order, api, scope, canManage, canAct, refresh, route }:
   const filtered = subject ? order.events.filter(e => (e.entity && matches(e.entity)) || e.references?.some(matches)
     || (type === 'order' && e.kind === 'order' && e.entity?.namespace === namespace && [e.fields.orderReference,e.fields.sourceOrderName].includes(subject))) : order.events;
   const cartons = order.cartons?.filter(c => !subject || matches({...c,type:'package'})) ?? [];
+  const selectedCarton = !!subject && type === 'package';
+  const allocations = selectedCarton ? filtered.flatMap(event=>{
+    const packages = [event.entity,...(event.references || [])].filter((ref):ref is Subject=>ref?.type==='package');
+    if (event.associationScope==='shared' || !packages.length || !packages.every(matches)) return [];
+    return (event.lines || []).map(line=>({line,event}));
+  }) : [];
+  const keys = new Set(filtered.map(event=>event.eventKey).filter(Boolean));
+  const evidence = subject ? order.evidence.filter(item=>(item.entity && matches(item.entity)) || item.references?.some(matches) || (item.eventKey && keys.has(item.eventKey))) : order.evidence;
+  const evidenceKeys = new Set([...keys,...evidence.map(item=>item.eventKey).filter(Boolean)]);
+  const originals = (order.originalArtifacts || []).filter(item=>!subject || (item.linkedByEventKey && evidenceKeys.has(item.linkedByEventKey)));
   const props = {api,scope,proofId:order.proofId,revision:order.revision};
   const detailLink = (updates:Record<string,string|null>) => recordsPath('order-proofs',route,updates,order.proofId);
   return <>
@@ -103,14 +121,15 @@ function OrderContents({ order, api, scope, canManage, canAct, refresh, route }:
       {!cartons.length && <p>{subject ? (filtered.length ? 'Matching events are shown below.' : 'No matching subject in this revision.') : 'No carton summary recorded in this revision.'}</p>}
     </section>
     {!!order.conflicts?.length && <div className="records-notice warning"><div><strong>Source reports disagree</strong><ul>{order.conflicts.map(item => <li key={item}>{item}</li>)}</ul></div></div>}
-    <section className="records-panel"><h2>Items</h2>
-      {!order.lines.length ? <p>Waiting for line items.</p> : <ul>{order.lines.map(line => <li key={line.lineId}>
+    <section className="records-panel"><h2>{selectedCarton ? 'Carton quantities' : 'Order items'}</h2>
+      {selectedCarton ? (allocations.length ? <ul>{allocations.map(({line,event},i)=><li key={JSON.stringify([event.eventKey,line.lineId,i])}>
+        <strong>{line.sku || line.title || line.lineId}</strong><QuantityFacts line={line} inlineUnit/>
+        <a href={'#event-'+encodeURIComponent(event.eventKey || '')}>{event.fileName || 'Supporting report'} {event.locator}</a>
+      </li>)}</ul> : <p>No source allocated line quantities to this carton.</p>) : !order.lines.length ? <p>Waiting for line items.</p> : <ul>{order.lines.map(line => <li key={line.lineId}>
         <strong>{line.sku ?? 'Item'}</strong> · Line {line.lineId}
-        <dl className="records-facts">
-          {([['Ordered', line.orderedQuantity], ['Picked', line.pickedQuantity], ['Packed', line.packedQuantity], ['Shipped', line.shippedQuantity]] as const)
-            .filter(([, quantity]) => quantity != null).map(([label, quantity]) => <div key={label}><dt>{label}</dt><dd>{quantity}</dd></div>)}
-        </dl>
+        <QuantityFacts line={line}/>
         {line.orderedShippedDiscrepancy && <p>{line.orderedShippedDiscrepancy}</p>}
+        {line.loadedAcknowledgedDiscrepancy && <p>{line.loadedAcknowledgedDiscrepancy}</p>}
       </li>)}</ul>}
     </section>
     <section className="records-panel"><h2>Order timeline</h2>
@@ -129,12 +148,12 @@ function OrderContents({ order, api, scope, canManage, canAct, refresh, route }:
       </li>)}</ol>}
     </section>
     <section className="records-panel"><h2>Evidence</h2>
-      {order.evidence.length ? <ul>{order.evidence.map((item, index) => <li key={index}>{item.fileName || 'Source report'}{item.kind === 'derived_excerpt' && ' · Excerpt'}{item.locator && <small> · {item.locator}</small>}</li>)}</ul> : <p>No evidence files in this revision.</p>}
-      {order.originalArtifacts?.map(a => <article key={a.receiptId}><strong>{a.fileName || 'Linked original'}</strong><OrderEvidence {...props} id={a.receiptId} artifact/></article>)}
+      {evidence.length ? <ul>{evidence.map((item, index) => <li key={index}>{item.fileName || 'Source report'}{item.kind === 'derived_excerpt' && ' · Excerpt'}{item.locator && <small> · {item.locator}</small>}</li>)}</ul> : <p>No linked evidence files in this view.</p>}
+      {originals.map(a => <article key={a.receiptId}><strong>{a.fileName || 'Linked original'}</strong><OrderEvidence {...props} id={a.receiptId} artifact/></article>)}
       <details><summary>Revision history</summary><p>Revision {order.revision} · {order.proofId}</p>
         {order.revision > 1 && <p><a href={detailLink({revision:String(order.revision-1)})}>Previous revision</a></p>}
         <a href={detailLink({revision:route.has('revision') ? null : String(order.revision)})}>{route.has('revision') ? 'View latest revision' : 'Open this saved revision'}</a>
-        <OrderRevisionChanges api={api} scope={scope} current={order}/>
+        <OrderRevisionChanges revision={order.revision} changes={order.changes}/>
       </details>
       <OrderPacketDownload {...props}/>
     </section>
@@ -165,7 +184,7 @@ export function OrderProofs({ api, organization, locationId, id, revision, route
   const allOrders = recordsPath('order-proofs',route,{revision:null,subject:null,namespace:null,subjectType:null});
   return <>
     <header className="records-page-heading"><div>{id && <a href={allOrders}>All orders</a>}
-      <h1>{view?.detail?.orderReference || (id ? 'Order' : 'Orders')}</h1></div></header>
+      <h1>{view?.detail?.displayOrderReference || view?.detail?.orderReference || (id ? 'Order' : 'Orders')}</h1></div></header>
     {!id && <form role="search" className="records-search" onSubmit={e => { e.preventDefault(); setBefore(null); setSearchType(type); setSearch(query.trim()); }}>
       <label>Reference type<select value={type} onChange={e => setType(e.target.value as RefType)}>{Object.entries(referenceTypes).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label htmlFor="order-ref">Exact reference</label><input id="order-ref" value={query} maxLength={200} onChange={e => setQuery(e.target.value)}/>
@@ -176,7 +195,7 @@ export function OrderProofs({ api, organization, locationId, id, revision, route
       : !view ? <p role="status">Checking order records…</p>
       : view.detail ? <OrderContents key={view.detail.proofId + '/' + view.detail.revision} order={view.detail} api={api} scope={params.toString()} route={route} canAct={organization.role!=='REVIEWER'} canManage={['ADMIN','OWNER'].includes(organization.role)} refresh={() => setRetry(n => n+1)}/> : <section className="records-panel"><h2>{search ? 'Search results' : 'Recently updated orders'}</h2>
         {!view.rows.length ? <p>{search ? 'No order matches this number.' : 'Waiting for the first order.'}</p> :
-          <ul>{view.rows.map(row => <li key={row.proofId}><a href={recordsPath('order-proofs', route, {}, row.proofId)}>{row.orderReference}</a>
+          <ul>{view.rows.map(row => <li key={row.proofId}><a href={recordsPath('order-proofs', route, {}, row.proofId)}>{row.displayOrderReference || row.orderReference}</a>
             {' · Revision ' + row.revision + ' · ' + clock(row.updatedAt)}
             {row.locationId && <p>{organization.locations.find(l => l.id === row.locationId)?.name || row.locationId}</p>}
             {row.matchedSubjects?.map(ref => <p key={JSON.stringify(ref)}><a href={recordsPath('order-proofs', route, {subject:ref.id,subjectType:ref.type,namespace:ref.namespace}, row.proofId)}>

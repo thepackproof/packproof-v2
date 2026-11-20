@@ -23,6 +23,7 @@ import { FolderSuggestions } from "./FolderSuggestions";
 import { Clarify } from "./SourceClarification";
 import { GuidedSetup } from "./GuidedSetup";
 import "./Setup.css";
+import "./GuidedSetup.css";
 
 type Stage =
   | "welcome"
@@ -75,10 +76,11 @@ function stamp(value?: string) {
 }
 
 export function Setup(props: SetupProps) {
-  if (props.status.workspace?.guidedSetupAvailable) {
+  if (props.status.workspace?.guidedSetupAvailable || props.status.workspace?.offlineDraftOnly) {
     const { installationId, environment, binding, locationId, operatorMembershipId, integrationAccountId } = props.status;
     const scope = JSON.stringify([installationId, environment, binding?.organizationId, binding?.operatorMembershipId ?? operatorMembershipId,
-      binding?.integrationAccountId ?? integrationAccountId, binding?.locationId ?? locationId, props.status.workspace.viewKey]);
+      binding?.integrationAccountId ?? integrationAccountId, binding?.locationId ?? locationId, props.status.workspace.viewKey,
+      !!props.status.workspace.offlineDraftOnly]);
     return <GuidedSetup key={scope} {...props} />;
   }
   return <StandardSetup {...props} />;
@@ -297,6 +299,16 @@ function StandardSetup({
           {act("Connect my records", () => setStage(bridge.discoverWorkspaceFolders ? "discover" : "start"))}
           {act("Try a sample order", onSample, true)}
         </div>
+        {!status.installationId && bridge.beginEnrollment && (
+          <section className="setup-card">
+            <h3>{enrolling ? "Finish connecting this computer" : "Set up a warehouse facility"}</h3>
+            <p>{enrolling ? "Complete the sign-in request in your browser. This window will reopen the connected facility."
+              : "Sign in to the facility before choosing records. PackProof will open the setup available to your organization."}</p>
+            {enrolling && status.enrollment?.comparisonCode && <p>Match this code in your browser · <strong>{status.enrollment.comparisonCode}</strong></p>}
+            {act(enrolling ? "Reopen facility sign-in" : "Connect this computer to a facility", () =>
+              void run("Opening facility sign-in", () => enrolling ? bridge.openWorkspaceApproval().then(() => status) : bridge.beginEnrollment!(), accept),true)}
+          </section>
+        )}
         <p className="setup-hint">The sample opens immediately. You can start setup whenever you’re ready.</p>
       </>
     );

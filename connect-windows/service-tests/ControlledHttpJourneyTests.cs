@@ -42,7 +42,7 @@ public sealed class ControlledHttpJourneyTests
             cartons=expected.GetProperty(kind).GetProperty("cartons"),labelCount=expected.GetProperty(kind).GetProperty("labels")}).ToArray();
         var saved=Json.Element(await setup.Command("saveFacilityDraft",Json.Element(new {expectedRevision=draft.GetProperty("revision"),
             changes=new {steps=draft.GetProperty("steps"),examples,rules=new[]{new {sourceId=labelSource,shippedAt="label"}},
-                timing=new[]{new {sourceId=deliverySource,expectedCheckIntervalSeconds=300}},excludedSourceIds=Array.Empty<string>()}}),ct));
+                timing=new[]{new {sourceId=deliverySource,expectedCheckIntervalSeconds=300,expectedDeliveryAfterLabelSeconds=20700}},excludedSourceIds=Array.Empty<string>()}}),ct));
         var replay=Json.Element(await setup.Command("replayFacilityDraft",Json.Element(new {expectedRevision=saved.GetProperty("revision")}),ct));
         Assert.True(replay.GetProperty("replay").GetProperty("passed").GetBoolean(),replay.GetRawText());
     }

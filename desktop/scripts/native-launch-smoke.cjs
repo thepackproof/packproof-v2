@@ -6,7 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { releaseContext } = require('./release-policy.cjs');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const fatalCodes = new Set(['UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE', 'QUIT_FAILED']);
+const fatalCodes = new Set(['STARTUP_FAILED', 'UNCAUGHT_EXCEPTION', 'UNHANDLED_REJECTION', 'RENDERER_CRASH', 'SECURE_STORAGE_OR_QUEUE_UNAVAILABLE', 'QUIT_FAILED']);
 const shutdownCodes = new Set(['WINDOW_CLOSE_REQUESTED','WINDOW_CLOSE_ALLOWED','WINDOW_CLOSE_WAITING_FOR_DRAIN','WINDOW_CLOSE_CAPTURE_BLOCKED','WINDOW_CLOSE_QUEUE_PROMPT','WINDOW_CLOSE_CANCELED','QUIT_REQUESTED','QUIT_EVIDENCE_DRAINED','QUIT_REPORTING_CLOSED','QUIT_CLOSE_ALLOWED','QUIT_NATIVE_REQUESTED','QUIT_CANCELED','QUIT_FAILED','APP_BEFORE_QUIT','APP_WILL_QUIT']);
 function shutdownDiagnostics(rows) {
   return rows.filter(row => row.category === 'SYSTEM' && shutdownCodes.has(row.code)).slice(-32).map(row => ({ code: row.code, at: Number.isFinite(Date.parse(row.at)) ? new Date(row.at).toISOString() : null }));
@@ -115,7 +115,9 @@ async function launchCycle(target, logFile, result, { env = process.env } = {}) 
   } catch (error) { failure = error; }
   finally {
     if (child?.pid) result.shutdown = await stopOwnedChild(child, target, result);
-    result.shutdownDiagnostics = shutdownDiagnostics(diagnosticRows(logFile).slice(previousRows));
+    const rows = diagnosticRows(logFile).slice(previousRows);
+    result.startupCodes = [...new Set(rows.filter(row => row.category === 'SYSTEM' && /^[A-Z_]{1,60}$/.test(row.code)).map(row => row.code))].slice(0,32);
+    result.shutdownDiagnostics = shutdownDiagnostics(rows);
   }
   if (failure) throw failure;
   // Quit may fail after readiness: include shutdown diagnostics and require a clean owned-process exit.

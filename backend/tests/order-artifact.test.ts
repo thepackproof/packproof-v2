@@ -19,7 +19,8 @@ describe('revision-bound original export',()=>{
         'CREATE TABLE platform_proof_ownership(proof_id text,merchant_id text,environment text,operator_membership_id text)',
         'CREATE TABLE record_state(proof_id text,location_id text)',
         'CREATE TABLE record_order_revisions(proof_id text,revision integer,view jsonb)',
-        'CREATE TABLE record_order_events(operation_key text,source_id text,record jsonb)',
+        'CREATE TABLE record_order_events(id text,receipt_id text,operation_key text,source_id text,record jsonb)',
+        'CREATE TABLE record_order_link_state(event_id text,operation_key text,proof_ids text[],unresolved boolean)',
         'CREATE TABLE record_order_receipts(id text,operation_key text,source_id text,generation integer,original_sha256 text,object_key text,object_version text,file_name text,media_type text,received_at timestamptz)'
       ]) await db.query(sql);
       const installation={id:'i',organization_id:'owner',environment:'sandbox',operator_membership_id:'operator',integration_account_id:'account',location_id:null} as Installation;
@@ -33,7 +34,9 @@ describe('revision-bound original export',()=>{
       const record=normalizedRecord({eventId:'picture',version:'1',kind:'evidence',entity:{namespace:'media',type:'photo',id:'P'},references:[order],fields:{artifactSha256:sha},lines:[],locator:'$'});
       const [view]=projectOrders([{id:'e',receipt_id:'sidecar',source_id:'photos',record,original_sha256:'f'.repeat(64),file_name:'packing_photo.json',profile_version:'1',received_at:'2026-11-17T12:00:00Z'}],[{proof_id:'p',source_id:'erp',order_reference:'SO10482',root_key:refKey(order)}]).projections;
       await db.query("INSERT INTO record_order_sessions VALUES ('i','active',$1::jsonb)",[JSON.stringify({sources:[{id:'photos',generation:1}]})]);
-      await db.query("INSERT INTO record_order_events VALUES ($1,'photos',$2::jsonb)",[operation,JSON.stringify(record)]);
+      await db.query("INSERT INTO record_order_events VALUES ('e','sidecar',$1,'photos',$2::jsonb)",[operation,JSON.stringify(record)]);
+      await db.query("INSERT INTO record_order_receipts VALUES ('sidecar',$1,'photos',1,$2,'key','version','sidecar.json','application/json',now())",[operation,'f'.repeat(64)]);
+      await db.query("INSERT INTO record_order_link_state VALUES('e',$1,ARRAY['p'],false)",[operation]);
       await db.query("INSERT INTO record_order_roots VALUES ('p',$1,'owner','sandbox','operator',NULL)",[operation]);
       await db.query("INSERT INTO platform_proof_ownership VALUES ('p','owner','sandbox','operator')");
       await db.query("INSERT INTO record_state VALUES ('p',NULL)");
@@ -54,6 +57,8 @@ describe('revision-bound original export',()=>{
       const result=await readOrderArtifact(deps,db,installation,'p','2','photo');
       expect(result).toMatchObject({kind:'original',bytesBase64:photo.toString('base64'),receiptId:'photo',originalSha256:sha});
       expect(get).toHaveBeenCalledWith(key,{versionId:'version-1'});
+      await db.query("UPDATE record_order_link_state SET proof_ids=ARRAY['reassigned']");
+      expect(await readOrderArtifact(deps,db,installation,'p','2','photo')).toMatchObject({kind:'derived_excerpt'});
       await db.query("UPDATE record_order_sessions SET scope='{\"sources\":[]}'::jsonb WHERE installation_id='i'");
       expect(await readOrderArtifact(deps,db,installation,'p','2','photo')).toMatchObject({kind:'derived_excerpt'});
       await db.query("UPDATE platform_proof_ownership SET operator_membership_id='another-operator' WHERE proof_id='p'");

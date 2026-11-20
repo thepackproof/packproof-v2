@@ -14,7 +14,7 @@ public sealed record FacilityTiming(string SourceId,int? ExpectedCheckIntervalSe
 public record FacilityInputs(FacilityStep[] Steps, FacilityExample[] Examples, FacilityRule[] Rules, string[] ExcludedSourceIds,
     FacilityTiming[]? Timing=null,FacilityPacking[]? Packing=null,FacilityRecordEdit[]? RecordEdits=null);
 public sealed record ReplayCheck(string Kind, string Reference, bool Passed, string Message);
-public sealed record SourceCheck(string SourceId, bool Readable, string Message);
+public sealed record SourceCheck(string SourceId, bool Readable, string Message,string[]? SampleDigests=null);
 public sealed record FacilityReplay(bool Passed, string Digest, ReplayCheck[] Checks, SourceCheck[] Sources, DateTimeOffset TestedAt);
 
 public sealed class FacilityProfile
@@ -72,15 +72,16 @@ public sealed class FacilityProfile
             next.Examples.Select(e=>e.Kind).Distinct().Count()==next.Examples.Length);
         var choices=sources.Where(s=>s.Roles.Count>0).ToDictionary(s=>s.Id);
         if (next.Packing is { } packing)
-            Require(packing.Length<=24 && packing.Select(r=>r.SourceId).Distinct().Count()==packing.Length &&
-                packing.All(r=>r!=null && choices.TryGetValue(r.SourceId,out var s) && s.Transport=="folder" && s.Roles.SequenceEqual(["packing"]) &&
+            Require(packing.Length<=24 &&
+                packing.All(r=>r!=null && Id(r.SourceId) && Id(r.OrderSourceId) && choices.TryGetValue(r.SourceId,out var s) && s.Transport=="folder" && s.Roles.SequenceEqual(["packing"]) &&
                     choices.TryGetValue(r.OrderSourceId,out var order) && order.Roles.Contains("order") && order.Id!=s.Id &&
                     r.Schema is {Length:64} && r.Schema.All(char.IsAsciiHexDigit) && Text(r.CartonField) && r.CartonField.Length>0 &&
                     (r.WeightField==null || Text(r.WeightField) && r.WeightField!=r.CartonField) &&
                     (r.UnitField==null || Text(r.UnitField) && r.UnitField!=r.CartonField && r.UnitField!=r.WeightField && r.WeightField!=null) &&
-                    (r.Unit==null || r.Unit is "kg" or "g" or "lb" or "oz" && r.UnitField!=null && Text(r.UnitValue) && r.UnitValue!.Length>0)));
+                    (r.Unit==null || r.Unit is "kg" or "g" or "lb" or "oz" && r.UnitField!=null && Text(r.UnitValue) && r.UnitValue!.Length>0)) &&
+                packing.Select(r=>r.SourceId).Distinct().Count()==packing.Length);
         if(next.RecordEdits is { } edits)
-            Require(edits.Length<=24 && edits.All(e=>e!=null && choices.ContainsKey(e.SourceId) && e.RecordHash is {Length:64}
+            Require(edits.Length<=24 && edits.All(e=>e!=null && Id(e.SourceId) && choices.ContainsKey(e.SourceId) && e.RecordHash is {Length:64}
                 && e.RecordHash.All(char.IsAsciiHexDigit) && new[]{e.FromSpace,e.FromId,e.ToSpace,e.ToId}.All(v=>Text(v)&&v.Length>0) &&
                 (e.FromSpace!=e.ToSpace || e.FromId!=e.ToId)) && edits.Select(e=>(e.SourceId,e.RecordHash)).Distinct().Count()==edits.Length);
         if (next.Timing is { } timing)
@@ -109,7 +110,9 @@ public sealed class FacilityProfile
                     throw new ConnectException("ORDER_SOURCE_REQUIRED","Include the order source for this carton mapping or remove the mapping.");
                 string ns=order.ConfirmedMap?.Catalogue is { } catalogue ? SourceReaders.CompanyOrderNamespace(order.Id,catalogue) :
                     order.SourceNamespace ?? order.ObservedNamespace ?? order.Id;
-                reader=new(rule,ns,order.Generation);
+                var effectiveOrder=order.WithRules(Inputs.Rules.FirstOrDefault(r=>r.SourceId==order.Id)?.ShippedAt,
+                    Inputs.Timing?.FirstOrDefault(t=>t.SourceId==order.Id));
+                reader=new(rule,ns,effectiveOrder.Generation);
             }
             return s.WithRules(Inputs.Rules.FirstOrDefault(r=>r.SourceId==s.Id)?.ShippedAt,Inputs.Timing?.FirstOrDefault(t=>t.SourceId==s.Id),reader);
         }).ToArray();
@@ -129,6 +132,7 @@ public sealed class FacilityProfile
     public static ReplayCheck[] CheckExamples(FacilityExample[] expected, JsonElement preview)
     {
         var examples=preview.GetProperty("examples").EnumerateArray().ToArray();
+        var used=new HashSet<(string?,string?)>();
         return new[]{"ordinary","split","reprint"}.Select(kind=>{
             var e=expected.FirstOrDefault(x=>x.Kind==kind);
             if (e is null || string.IsNullOrWhiteSpace(e.Reference) || e.Cartons is null ||
@@ -141,6 +145,8 @@ public sealed class FacilityProfile
             if(matches.Length!=1)return new ReplayCheck(kind,e.Reference,false,matches.Length==0?
                 "This order was not found in the permitted sample.":"This reference matches multiple orders. Choose an unambiguous reference.");
             var x=matches[0];
+            if(!used.Add((x.GetProperty("orderNamespace").GetString(),x.GetProperty("orderId").GetString())))
+                return new ReplayCheck(kind,e.Reference,false,"This is another reference for an example already tested. Choose a distinct order.");
             var cartons=x.GetProperty("cartonCount").GetInt32();
             var labels=x.GetProperty("labelCount").GetInt32();
             bool pass=cartons==e.Cartons && (e.LabelCount is null || e.LabelCount==labels);

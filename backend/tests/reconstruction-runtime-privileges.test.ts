@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { openIsolatedTestDatabase,migrateTestDatabaseThrough } from './isolated-test-database.js';
-import { migrate,migrationInventory } from '../src/db/migrate.js';
+import { migrationInventory } from '../src/db/migrate.js';
 import { insertUser } from '../src/domain/users.js';
 import {createServicePrincipal,issuePartnerCredential,createIntegrationAccount,PARTNER_SCOPES} from '../src/platform/organizations.js';
 import {canonicalize} from '../src/canonical.js';
@@ -15,8 +15,7 @@ describe.each([113,116,117,118,119,120,121,122,123] as const)('reconstruction%s 
  const asRole=async<T>(role:string,fn:(db:typeof opened.db)=>Promise<T>)=>{try{return await opened.db.transaction(async tx=>{await tx.query(`SET LOCAL SESSION AUTHORIZATION ${role}`);return fn(tx);});}finally{await reset();}};
  beforeAll(async()=>{
   vi.stubEnv('PACKPROOF_RELEASE_SHA',source);opened=await openIsolatedTestDatabase();
-  if(profile<123)await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
-  else await migrate(opened.db);
+  await migrateTestDatabaseThrough(opened.db,Math.max(profile,117));
   ownerRole=(await opened.db.query<{name:string}>('SELECT session_user AS name')).rows[0].name;
   const schema=(await opened.db.query<{name:string}>('SELECT current_schema() AS name')).rows[0].name;
   for(const role of [api,worker,broad]){await opened.db.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);await opened.db.query(`GRANT USAGE ON SCHEMA ${schema} TO ${role}`);await opened.db.query(`GRANT SELECT(id,checksum) ON schema_migrations TO ${role}`);await opened.db.query(`GRANT SELECT(datname,datdba) ON pg_catalog.pg_database TO ${role}`);}

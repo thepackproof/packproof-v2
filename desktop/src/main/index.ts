@@ -26,7 +26,7 @@ import type {DesktopEvent,DesktopSettings,SessionView,SystemView} from '../share
 
 declare const __PACKPROOF_UNIFIED__: boolean;
 const unified = typeof __PACKPROOF_UNIFIED__ !== 'undefined' && __PACKPROOF_UNIFIED__;
-type LogisticsHost = {choices(): Promise<{setup:boolean;orders:boolean}>; orders():Promise<void>; setup():Promise<void>; close():void};
+type LogisticsHost = {choices(): Promise<{setup:boolean;orders:boolean}>; orders():Promise<void>; setup():Promise<void>; readyForUpgrade():Promise<void>; close():void};
 let logistics: LogisticsHost | undefined;
 protocol.registerSchemesAsPrivileged([...(unified ? [{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}] : []),{scheme:'packproof-app',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}},{scheme:'packproof-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 app.enableSandbox();
@@ -183,7 +183,7 @@ async function ready(){
     engine=new EvidenceEngine({rootDir:join(app.getPath('userData'),'EvidenceQueue'),encryptionKey:install.key,api:new DesktopEvidenceTransport(api),onChange:jobs=>{emit({type:'queue'});for(const job of jobs)if(['FAILED','WAITING_FOR_AUTH'].includes(job.state)){logs.record('UPLOAD',job.state==='FAILED'?'UPLOAD_FAILED':'UPLOAD_AUTH_REQUIRED');const key=job.id+':'+job.state;if(!notifiedFailures.has(key)){notifiedFailures.add(key);notify('PackProof upload needs attention','Your original recording is retained on this computer. Open Uploads to review it.');}}},onComplete:()=>notify('PackProof','Evidence has been secured by PackProof.')});await engine.initialize();engine.setRetentionHours(settings.retentionHours);await auth.restore();await engine.setAccount(auth.getAccountId());}
   }catch{logs.record('SYSTEM','SECURE_STORAGE_OR_QUEUE_UNAVAILABLE');}
  }
- updates=new Updates(config,()=>{emit({type:'update'});if(updates?.state.state==='ready')notify('PackProof update ready','Open Settings to install the verified update after recording is finished.');},()=>!!engine?.activeCapture,()=>shutdown.prepare(),()=>logs.record('UPDATES','UPDATE_CHECK_FAILED'));
+ updates=new Updates(config,()=>{emit({type:'update'});if(updates?.state.state==='ready')notify('PackProof update ready','Open Settings to install the verified update after recording is finished.');},()=>!!engine?.activeCapture,async()=>{await logistics?.readyForUpgrade();await shutdown.prepare();},()=>logs.record('UPDATES','UPDATE_CHECK_FAILED'));
  const rendererRoot=resolve(__dirname,'../renderer');
  protocol.handle('packproof-app',async request=>{try{const u=new URL(request.url);if(!isTrustedRenderer(request.url))return new Response(null,{status:403});const path=resolve(rendererRoot,'.'+decodeURIComponent(u.pathname==='/'?'/index.html':u.pathname));if(!path.startsWith(rendererRoot+sep)||!['.html','.js','.css','.wasm','.svg','.png','.webp','.woff2','.ttf','.ico'].includes(extname(path)))return new Response(null,{status:404});const response=await net.fetch(pathToFileURL(path).toString());const headers=new Headers(response.headers);headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: packproof-media:; media-src 'self' blob: packproof-media:; connect-src 'self' packproof-media:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'");return new Response(response.body,{status:response.status,headers});}catch{return new Response(null,{status:404});}});
  protocol.handle('packproof-media',async request=>{const u=new URL(request.url),grant=mediaGrants.get(u.pathname.slice(1));if(u.hostname!=='evidence'||!grant||grant.expires<Date.now()||grant.accountId!==auth?.getAccountId()||!api)return new Response(null,{status:403});if(grant.localJobId){try{const original=requireEngine().localRecording(grant.localJobId,request.headers.get('range'));const iterator=original.bytes[Symbol.asyncIterator]();const body=new ReadableStream({async pull(target){try{if(grant.accountId!==auth?.getAccountId()||mediaGrants.get(u.pathname.slice(1))!==grant||grant.expires<Date.now())throw new Error('Account changed');const part=await iterator.next();if(grant.accountId!==auth?.getAccountId()||mediaGrants.get(u.pathname.slice(1))!==grant)throw new Error('Account changed');if(part.done)target.close();else target.enqueue(part.value);}catch(error){target.error(error);}},async cancel(){await iterator.return?.();}});return new Response(body,{status:original.status,headers:{'Content-Type':original.mimeType,'Cache-Control':'no-store','Accept-Ranges':'bytes','Content-Length':String(original.end-original.start+1),...(original.status===206?{'Content-Range':`bytes ${original.start}-${original.end}/${original.total}`}:{})}});}catch(error){return new Response(null,{status:(error as {code?:string}).code==='INVALID_RANGE'?416:403});}}
@@ -192,6 +192,7 @@ async function ready(){
  session.defaultSession.setPermissionCheckHandler((contents,permission,origin)=>!!win&&contents===win.webContents&&permission==='media'&&isTrustedRenderer(origin));
  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,callback)=>callback({cancel:true}));
  if (unified) {
+   logs.record('SYSTEM','LOGISTICS_HOST_LOADING');
    const factory = require(join(__dirname,'../../main/host.cjs'));
    type Scope = Parameters<DesktopApi['facilityAccess']>[0];
    logistics = await factory.attachHumanSession({
@@ -201,6 +202,7 @@ async function ready(){
        if (!signed || !config) throw Error('Sign in to open Logistics.');
        const owner = signed.userId;
        return {apiBaseUrl:config.apiBaseUrl,userId:owner,username:signed.username,displayName:signed.displayName,
+         expired: () => { if (auth?.getAccountId() === owner) notify('Logistics session expired','Reopen Orders and exceptions in the workspace menu to continue.'); },
          token: async () => {
            if (auth?.getAccountId() !== owner) throw Error('Your account changed.');
            const token = await auth.getAccessToken();
@@ -209,8 +211,10 @@ async function ready(){
          }};
      },
      access: (scope: Scope) => requireApi().facilityAccess(scope),
-     suggest: (scope: Scope, input: unknown) => requireApi().facilitySuggestions(scope,input)
+     suggest: (scope: Scope, input: unknown) => requireApi().facilitySuggestions(scope,input),
+     review: (scope: Scope, input: unknown) => requireApi().reviewFacilitySuggestion(scope,input)
    });
+   logs.record('SYSTEM','LOGISTICS_HOST_READY');
  }
  setupIpc();await createWindow();
  let icon=nativeImage.createFromPath((app.isPackaged?join(process.resourcesPath,'icon.png'):join(__dirname,'../../build/icon.png')));if(icon.isEmpty())icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
@@ -222,6 +226,18 @@ async function ready(){
  logs.record('SYSTEM','STARTED');if(config?.channel!=='development'&&config?.updateUrl)setTimeout(()=>void updates.check().catch(()=>{}),10_000);
 }
 try{const boot=JSON.parse(readFileSync(join(__dirname,'runtime-config.json'),'utf8'));environment=boot.channel;const suffix=boot.research?' Research':environment==='production'?'':environment==='staging'?' Staging':' Dev';app.setName(`PackProof${suffix}`);const base=process.platform==='win32'?(process.env.LOCALAPPDATA??app.getPath('appData')):app.getPath('appData');app.setPath('userData',join(base,`PackProof${suffix}`));}catch{}
-if(!app.requestSingleInstanceLock())app.quit();else{app.whenReady().then(ready).catch(()=>{dialog.showErrorBox('PackProof could not start','Your local evidence has been retained. Reopen PackProof or contact support.');app.quit();});app.on('activate',()=>win?.show());app.on('will-quit',()=>{logs?.record('SYSTEM','APP_WILL_QUIT');workspaceNotifications.stop();});app.on('before-quit',event=>{logs?.record('SYSTEM','APP_BEFORE_QUIT');if(!shutdown.closeAllowed){event.preventDefault();win?.close();}});app.on('window-all-closed',()=>{});}
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.whenReady().then(ready).catch(async () => {
+    logs?.record('SYSTEM','STARTUP_FAILED');
+    await logs?.recentEntries().catch(() => {});
+    dialog.showErrorBox('PackProof could not start','Your local evidence has been retained. Reopen PackProof or contact support.');
+    await quitSafely();
+  });
+  app.on('activate',()=>win?.show());
+  app.on('will-quit',()=>{logs?.record('SYSTEM','APP_WILL_QUIT');workspaceNotifications.stop();});
+  app.on('before-quit',event=>{logs?.record('SYSTEM','APP_BEFORE_QUIT');if(!shutdown.closeAllowed){event.preventDefault();win?.close();}});
+  app.on('window-all-closed',()=>{});
+}
 process.on('uncaughtException',()=>{logs?.record('SYSTEM','UNCAUGHT_EXCEPTION');void engine?.interruptActiveCapture('Application error. Partial evidence retained.');});
 process.on('unhandledRejection',()=>logs?.record('SYSTEM','UNHANDLED_REJECTION'));

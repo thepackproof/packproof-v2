@@ -66,7 +66,7 @@ export function setupAssistantRouter(deps: AppDependencies, provider = requestSu
       return null;
     });
     res.set('Cache-Control', 'private, no-store');
-    if (saved) return res.json({ ...saved, revision: input.revision });
+    if (saved) return res.json({ suggestions:saved.suggestions, revision:input.revision, requestId:digest });
     const start = Date.now();
     let produced: Awaited<ReturnType<typeof provider>> | undefined;
     try { produced = await provider(input); } catch { /* The manual path remains available. */ }
@@ -74,13 +74,34 @@ export function setupAssistantRouter(deps: AppDependencies, provider = requestSu
       await authorize(tx);
       const row = (await tx.query<{latest_revision: number}>('SELECT latest_revision FROM record_setup_drafts WHERE installation_id=$1 AND draft_id=$2 AND requester_id=$3 FOR UPDATE', key)).rows[0];
       const valid = !!produced && row.latest_revision === input.revision;
-      const result = valid ? { suggestions: produced!.suggestions } : null;
+      const result = valid ? { suggestions: produced!.suggestions, costMicrousd:produced!.costMicrousd, reviews:{} } : null;
       await tx.query('UPDATE record_setup_requests SET result=$5::jsonb,tokens=$6,duration_ms=$7,outcome=$8 WHERE installation_id=$1 AND draft_id=$2 AND requester_id=$3 AND digest=$4',
         [...key,digest,result ? JSON.stringify(result) : null,produced?.tokens ?? 0,Date.now()-start,valid?'suggested':row.latest_revision!==input.revision?'superseded':'unavailable']);
       return result;
     });
     if (!result) throw manual();
-    return res.json({ ...result, revision: input.revision });
+    return res.json({ suggestions:result.suggestions, revision:input.revision, requestId:digest });
+  }));
+  router.post(base + '/facility-setup/reviews/v1', route(async (r,res) => {
+    const user = (await deps.auth.authenticate(r.headers)).userId;
+    const {draftId,revision,requestId,index,decision} = r.body ?? {};
+    if (Object.keys(r.body ?? {}).length !== 5 || typeof draftId !== 'string' || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(draftId) ||
+        !Number.isSafeInteger(revision) || revision < 1 || typeof requestId !== 'string' || !/^[a-f0-9]{64}$/.test(requestId) ||
+        !Number.isSafeInteger(index) || index < 0 || index > 5 || !['accepted','edited','rejected'].includes(decision)) throw missing();
+    await deps.db.transaction(async tx => {
+      const {canConfigure,installation:i} = await access(tx,r,user);
+      if (!canConfigure || !facilityEnabled('assistant',i.organization_id,i.environment,i.location_id)) throw missing();
+      const key = [i.id,draftId,user,requestId,revision];
+      const row = (await tx.query<{result:{suggestions:unknown[];reviews?:Record<string,string>}|null}>(
+        'SELECT result FROM record_setup_requests WHERE installation_id=$1 AND draft_id=$2 AND requester_id=$3 AND digest=$4 AND revision=$5 FOR UPDATE',key)).rows[0];
+      if (!row?.result || index >= row.result.suggestions.length) throw missing();
+      const reviews = row.result.reviews ?? {};
+      if (reviews[index] === decision) return;
+      if (reviews[index]) throw new DomainError('REVISION_CONFLICT','This suggestion was already reviewed.',409);
+      await tx.query('UPDATE record_setup_requests SET result=$6::jsonb WHERE installation_id=$1 AND draft_id=$2 AND requester_id=$3 AND digest=$4 AND revision=$5',
+        [...key,JSON.stringify({...row.result,reviews:{...reviews,[index]:decision}})]);
+    });
+    return res.set('Cache-Control','private, no-store').sendStatus(204);
   }));
   return router;
 }

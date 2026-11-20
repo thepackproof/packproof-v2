@@ -5,7 +5,8 @@ import { newId } from '../ids.js';
 import { idempotent } from '../platform/idempotency.js';
 import { strictBody } from '../platform/organizations.js';
 import type { RecordWorkspace } from './access.js';
-import { humanOrderFilter, readOrder } from './order-feed.js';
+import { currentOrderScope, humanOrderFilter, readOrder } from './order-feed.js';
+import { lockOperation } from './order-ledger.js';
 import { boundedText, positive } from './order-workspace.js';
 
 const columns = `id,case_key AS "caseKey",version,proof_revision AS "proofRevision",action,
@@ -30,18 +31,23 @@ export async function caseAction(db: Database, clock: Clock, w: RecordWorkspace,
   const owner = body.ownerMembershipId == null ? null : boundedText(body.ownerMembershipId,'owner');
   if (action === 'assign' && !owner) throw new DomainError('INVALID_REQUEST','Select a case owner.',400);
   const filter = await humanOrderFilter(db,w);
+  const scope=currentOrderScope(filter);
+  const root=(await db.query<{operation_key:string}>(`SELECT r.operation_key FROM record_order_roots r
+    WHERE ${scope.where} AND r.proof_id=$${scope.params.length+1}`,[...scope.params,proofId])).rows[0];
+  if (!root) throw new DomainError('PROOF_NOT_FOUND','This order is unavailable in your workspace.',404);
   const result = await idempotent(db,clock,w.tenantId,'order-case:'+w.membershipId+':'+proofId,key,input,async tx => {
-    await tx.query('SELECT pg_advisory_xact_lock(1347438181,0)');
+    await lockOperation(tx,root.operation_key);
     const view = await readOrder(tx,filter,proofId) as {revision:number;conflicts:string[];
       lines:Array<Record<string,unknown>>;cartons:Array<{namespace:string;id:string;deliveryStatus:string}>};
     if (view.revision !== revision) throw new DomainError('REVISION_CONFLICT','Review the current proof revision.',409);
-    const last = (await tx.query<{version:number;owner:string|null}>(`SELECT version,owner_membership_id AS owner
+    const last = (await tx.query<{version:number;owner:string|null;action:string}>(`SELECT version,owner_membership_id AS owner,action
       FROM record_order_case_actions WHERE proof_id=$1 AND case_key=$2 ORDER BY version DESC LIMIT 1`,[proofId,caseKey])).rows[0];
     if ((last?.version ?? 0) !== version) throw new DomainError('REVISION_CONFLICT','Refresh the case before saving.',409);
+    const carton = view.cartons.find(c => 'carton:'+c.namespace+':'+c.id === caseKey);
     const hasGap = caseKey === 'order' ? view.conflicts.length > 0 || view.lines.some(l =>
-      l.loadedAcknowledgedDiscrepancy || l.orderedShippedDiscrepancy) : view.cartons.some(c =>
-      'carton:'+c.namespace+':'+c.id === caseKey && c.deliveryStatus === 'awaiting_evidence');
-    if (action === 'resolve' ? hasGap || !last : !hasGap)
+      l.loadedAcknowledgedDiscrepancy || l.orderedShippedDiscrepancy) : carton?.deliveryStatus === 'awaiting_evidence';
+    const recovered = caseKey === 'order' ? !hasGap : carton?.deliveryStatus === 'delivered';
+    if (action === 'resolve' ? !last || last.action === 'resolve' || !recovered : !hasGap)
       throw new DomainError('CASE_STATE_CHANGED','Review the remaining evidence gap before taking this action.',409);
     if (owner) {
       const allowed = (await tx.query(`SELECT 1 FROM platform_memberships m JOIN record_order_roots r ON r.proof_id=$1
