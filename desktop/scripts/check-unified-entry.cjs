@@ -11,7 +11,10 @@ const {setTimeout:wait}=require('node:timers/promises');
 const {app,BrowserWindow,ipcMain,protocol,net}=require('electron');
 
 const root=path.resolve(__dirname,'../..');
-const assets=path.join(root,'connect-windows','dist','commerce');
+// Inspect the bytes inside the actual electron-builder app.asar, not a
+// standalone dev renderer that might differ from the installed application.
+const packagedAsar=path.join(root,'connect-windows','release',process.env.APP_ENV||'development','win32-x64','win-unpacked','resources','app.asar');
+const assets=path.join(packagedAsar,'dist','commerce');
 const renderer=path.join(assets,'renderer');
 const preload=path.join(assets,'main','preload.cjs');
 const out=path.join(root,'connect-windows','build','unified-ux-screens');
@@ -54,6 +57,7 @@ async function shoot(page,name){
  fs.writeFileSync(path.join(out,name+'.png'),img.toPNG());
 }
 async function main(){
+ assert.ok(fs.existsSync(packagedAsar),'Packaged unified app.asar missing');
  assert.ok(fs.existsSync(preload),'Unified native preload missing');
  assert.ok(fs.existsSync(path.join(renderer,'index.html')),'Unified Commerce renderer missing');
  assert.ok(fs.existsSync(path.join(renderer,'brand','connect','packproof.png')),'Approved PackProof logo missing');
