@@ -1,10 +1,12 @@
 import {app,BrowserWindow,clipboard,protocol,net,ipcMain,dialog,shell,session} from 'electron';
-import {readFile,writeFile,stat} from 'node:fs/promises';
+import {readFile,writeFile,stat,lstat} from 'node:fs/promises';
 import {join,resolve,sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ServiceBridge} from './pipe';
 import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
+import {discoverWorkspaceFolders} from './workspace-discovery';
+import {distinctLocations,WorkspaceFolderOffers,type FolderOption} from './workspace-folder-offers';
 import {workspaceParams,currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
 import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
@@ -29,23 +31,38 @@ async function openWorkspaceApproval(current:ConnectStatus) {
    throw Error('Review your selected sources and start collecting to request permission.');
  await open(approvalUrl(path, config.webBaseUrl));
 }
-async function workspaceFolderSuggestion(role:SourceRole):Promise<WorkspaceFolderSuggestion|null>{
- const current=await status();
- const known=current.workspace?.sources.find(source=>source.transport!=='api' && source.roles.includes(role));
- const choices:WorkspaceFolderSuggestion[]=[];
- if(known?.folder)choices.push({folder:known.folder,kind:'selected'});
- choices.push({folder:preparedExportPath(config.channel,process.env.ProgramData),kind:'prepared'});
- for(const choice of choices){
-  if(await stat(choice.folder).then(info=>info.isDirectory(),()=>false))return choice;
+const folderOffers = new WorkspaceFolderOffers();
+async function availableFolderOptions(role: SourceRole, scan: boolean): Promise<FolderOption[]> {
+ const current = await status();
+ const selected: WorkspaceFolderSuggestion[] = (current.workspace?.sources ?? [])
+  .filter(source => source.folder && source.transport !== 'api' && source.roles.includes(role))
+  .map(source => ({folder: source.folder, kind: 'selected'}));
+ const prepared = preparedExportPath(config.channel, process.env.ProgramData);
+ const preparedExists = await lstat(prepared).then(info => info.isDirectory() && !info.isSymbolicLink(), () => false);
+ const fallback: WorkspaceFolderSuggestion[] = preparedExists ? [{folder: prepared, kind: 'prepared'}] : [];
+ if (!scan) {
+  // Existing remote shares remain available to the explicit picker. Do not
+  // contact them during automatic local discovery.
+  const available: WorkspaceFolderSuggestion[] = [];
+  for (const choice of selected) {
+   if (await stat(choice.folder).then(info => info.isDirectory(), () => false)) available.push(choice);
+  }
+  return [...available, ...fallback];
  }
- return null;
+ const exclude = [current.proofOutput?.folder, current.workspace?.outputFolder].filter((path): path is string => !!path);
+ const discovered = await discoverWorkspaceFolders(role, {exclude}, bridge);
+ return distinctLocations([...discovered, ...selected, ...fallback]);
 }
 function setup(){
- bind('getWorkspaceFolderSuggestion',workspaceFolderSuggestion);
- bind('useWorkspaceFolderSuggestion',async (role,expectedFolder)=>{
-  const choice=await workspaceFolderSuggestion(role);
-  if(!choice || choice.folder!==expectedFolder)throw Error('That folder is unavailable. Choose a records folder to continue.');
-  return mutate('addWorkspaceSource',{role,folder:choice.folder});
+ bind('getWorkspaceFolderSuggestion', async role => {
+  const choices = await availableFolderOptions(role, false);
+  folderOffers.remember(role, choices.slice(0, 1));
+  return choices[0] ?? null;
+ });
+ bind('discoverWorkspaceFolders', async role => folderOffers.remember(role, await availableFolderOptions(role, true)));
+ bind('useWorkspaceFolderSuggestion', async (role, expectedFolder) => {
+  const choice = await folderOffers.confirm(role, expectedFolder, scan => availableFolderOptions(role, scan));
+  return mutate('addWorkspaceSource', {role, folder: choice.folder, sampleFile: choice.sampleFile});
  });
  bind('replaceWorkspaceFolder',async (sourceId,expectedGeneration)=>{
   const current=await status();
@@ -85,7 +102,7 @@ function setup(){
  bind('workspaceDraftPreview',async()=>rendererSafe(await bridge.request('workspaceDraftPreview')));
  bind('workspaceOrderDetail', async (proofId,revision) => bridge.request('workspaceOrderDetail', {proofId,revision}));
  bind('chooseWorkspaceFolder', async role => {
-  const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', defaultPath:(await workspaceFolderSuggestion(role))?.folder, properties:['openDirectory','dontAddToRecent'] });
+  const result = await dialog.showOpenDialog(win!, { title:'Choose a records folder', defaultPath:(await availableFolderOptions(role, false))[0]?.folder, properties:['openDirectory','dontAddToRecent'] });
   if (result.canceled || result.filePaths.length !== 1) return status();
   return mutate('addWorkspaceSource', {role, folder:result.filePaths[0]});
  });

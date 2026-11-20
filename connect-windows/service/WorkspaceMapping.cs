@@ -32,7 +32,9 @@ public sealed partial class AgentRuntime
                 continue;
             }
             source.RelatedSources[targetRole]=selected.Id;
-            targets[targetRole]=selected.SourceNamespace ?? selected.ObservedNamespace ?? selected.Id;
+            targets[targetRole] = targetRole == "order" && selected.ConfirmedMap?.Catalogue is { } scope
+                ? SourceReaders.CompanyOrderNamespace(selected.Id, scope)
+                : selected.SourceNamespace ?? selected.ObservedNamespace ?? selected.Id;
             names.Add(selected.Transport == "api" ? selected.DisplayName : Path.GetFileName(selected.Folder));
         }
         if (choices.Count > 0)

@@ -4,6 +4,17 @@ using Xunit;
 
 public class WorkspacePreviewTests
 {
+    [Fact]
+    public void DiscoveryAndPreviewUseTheSameValidatedFileWithinTheirSampleLimits()
+    {
+        string[] inventory = ["01.csv", "02.csv", "03.csv", "04.csv", "05.csv", "06.csv", "Sales.csv"];
+        var ordered = AgentRuntime.PrioritizeSample(inventory, "sales.csv").ToArray();
+        Assert.Equal("Sales.csv", ordered[0]);
+        Assert.Equal(inventory.Take(6), ordered.Skip(1));
+        Assert.Equal(inventory, AgentRuntime.PrioritizeSample(inventory, "../Sales.csv"));
+        Assert.Equal(inventory, AgentRuntime.PrioritizeSample(inventory, "removed.csv"));
+    }
+
     static object Ref(string ns, string type, string id) => new {@namespace=ns,type,id};
     static DraftPreviewEvent Observation(string source,string kind,string eventId,object entity,
         object[]? references=null,object[]? lines=null) =>

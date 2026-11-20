@@ -64,14 +64,20 @@ public sealed partial class AgentRuntime
         }
     }
 
-    private static JsonElement[] WorkspaceRecords(WorkspaceSource source, SourceReadResult parsed)
+    internal static JsonElement[] WorkspaceRecords(WorkspaceSource source, SourceReadResult parsed)
     {
+        var export = SourceReaders.RecognizeExport(parsed, out bool ambiguous);
+        if (ambiguous) return [];
         var candidates = new List<JsonElement[]>();
         if (source.ConfirmedMap != null && source.Roles.Contains("order"))
         {
             var orderLines = SourceReaders.NormalizeOrderLines(parsed, source.Id, source.ConfirmedMap).EnumerateArray().ToArray();
             if (orderLines.Length > 0) candidates.Add(orderLines);
         }
+        // A known vendor order layout must pass its approved company, status and revision rules.
+        // Supplementary canonical-looking fields cannot bypass a missing or rejected mapping.
+        if (export?.OrderColumns != null && candidates.Count == 0 && (source.ConfirmedMap == null || source.ConfirmedMap.Catalogue != null))
+            return [];
         foreach (var workflow in source.ApprovedWorkflows())
         {
             var matches = SourceReaders.NormalizeWorkflow(parsed,source.Id,workflow).EnumerateArray().ToArray();
@@ -80,11 +86,21 @@ public sealed partial class AgentRuntime
         // An ambiguous file may not be applied independently to two workflow stages.
         if (candidates.Count > 0) return candidates.Count == 1 ? candidates[0] : [];
         if (source.Roles.Count == 0 || source.Roles.Count > 1 && parsed.Rows.Any(r => !r.Fields.ContainsKey("kind"))) return [];
-        return source.Roles.SelectMany(role => SourceReaders.Normalize(parsed, role).EnumerateArray())
+        return source.Roles.Where(role => role != "order" || source.ConfirmedMap?.Catalogue == null)
+            .SelectMany(role => SourceReaders.Normalize(parsed, role).EnumerateArray())
             .DistinctBy(record => record.GetRawText()).ToArray();
     }
 
-    private void InspectWorkspaceSource(WorkspaceSource source)
+    // Only reorder basenames from the validated folder inventory. A hint cannot
+    // introduce a path or expand the existing sample budget.
+    internal static IEnumerable<string> PrioritizeSample(string[] names, string? sample)
+    {
+        var index = Array.FindIndex(names, name => string.Equals(name, sample, StringComparison.OrdinalIgnoreCase));
+        if (index <= 0) return names;
+        return names.Skip(index).Take(1).Concat(names.Take(index)).Concat(names.Skip(index + 1));
+    }
+
+    private void InspectWorkspaceSource(WorkspaceSource source, string? sampleFile = null)
     {
         try
         {
@@ -97,15 +113,18 @@ public sealed partial class AgentRuntime
                 source.Issue = null;
                 return;
             }
-            JsonElement? first = null;
+            JsonElement? first = null, exportGuidance = null;
             source.ProposedMap = null;
             source.ProposedWorkflow = null;
-            foreach (var name in names.Take(6))
+            sampleFile ??= Optional(source.Recognition, "fileName")?.GetString();
+            foreach (var name in PrioritizeSample(names, sampleFile).Take(6))
             {
                 try
                 {
                     var parsed = SourceReaders.Read(name, FolderSource.WorkspaceSnapshot(path, name));
                     var mapped = WorkspaceRecords(source, parsed);
+                    var vendor = SourceReaders.RecognizeExport(parsed);
+                    if (vendor?.Role != (source.InspectRole ?? source.Roles.LastOrDefault())) vendor = null;
                     var requestedKind = source.InspectRole switch { "shipping" => "label", "returns" => "return", var r => r };
                     if (requestedKind != null && source.Roles.Count > 1)
                         mapped = mapped.Where(r=>Optional(r,"kind")?.GetString() is { } k && (k==requestedKind || k=="correction")).ToArray();
@@ -118,8 +137,12 @@ public sealed partial class AgentRuntime
                     {
                         source.ProposedMap = proposal;
                         var profileVersion = SourceReaders.OrderProfileVersion(proposal);
-                        source.Recognition = Json.Element(new { state = "ambiguous", message = $"Read order lines, quantities, units and versions from {name}.",
-                            question = $"Does {proposal.Order} identify the sales order in this report?",
+                        var question = proposal.Catalogue is { } scope
+                            ? $"Does {proposal.Order} identify the order for company {scope.Company}?"
+                            : $"Does {proposal.Order} identify the sales order in this report?";
+                        source.Recognition = Json.Element(new { state = "ambiguous", message = vendor == null
+                            ? $"Read order lines, quantities, units and versions from {name}."
+                            : $"Found {vendor.Label} in {name}.", question,
                             suggestedOrderColumn = proposal.Order, profileVersion, fields = parsed.Headers.Take(16), sample = preview, fileName = name });
                         return;
                     }
@@ -138,11 +161,14 @@ public sealed partial class AgentRuntime
                         source.ObservedNamespace = namespaces.Length == 1 ? namespaces[0] : null;
                         source.Recognition = recognition; source.Issue = null; return;
                     }
+                    if (vendor != null)
+                        exportGuidance ??= Json.Element(new { state = "ambiguous", message = $"Found {vendor.Label} in {name}. {vendor.Guidance}",
+                            fields = detected, fileName = name, checkedFilesLimit = 6 });
                     first ??= recognition;
                 }
                 catch (ConnectException e) { first ??= Json.Element(new { state = "unavailable", message = e.Message, fields = Array.Empty<string>() }); }
             }
-            source.Recognition = first;
+            source.Recognition = exportGuidance ?? first;
         }
         catch (Exception e) when (e is ConnectException or IOException or UnauthorizedAccessException)
         {

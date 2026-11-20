@@ -20,7 +20,7 @@ const roleHeadings = {picking:'picking records',packing:'packing records',shippi
 const scenes = [
   {name:'welcome',step:'order',heading:'Your orders. One clear story.'},
   {name:'order',step:'order',heading:'Your order files are ready to review.',contains:summary.orderReference},
-  ...Object.entries(roleHeadings).map(([step,role])=>({name:step,step,heading:'Where are your '+role+'?'})),
+  ...Object.entries(roleHeadings).map(([step,role])=>({name:step,step,heading:'Find your '+role+'.',contains:'Search again'})),
   {name:'review',step:'review',heading:'Review your first order',contains:'packages.xml'},
   {name:'output',step:'output',heading:'Where should we save your proofs?',contains:folder},
   {name:'activate',step:'activate',heading:'Connect your records.',contains:'Sales orders'},
@@ -50,6 +50,7 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
     return detail;
   });
   register('workspaceAttention',{items:[],hasMore:false,orderIssues:[],orderIssueCount:0,nextIssuesBefore:null});
+  register('discoverWorkspaceFolders',role=>sources.filter(s=>s.roles.includes(role)).map(s=>({folder:s.folder,kind:'selected'})));
   register('workspaceDraftPreview',()=>['empty-source','ambiguous-source'].includes(activeScene)?{...preview,examples:[]}:preview);
   register('inspectWorkspaceSource',id=>{
     assert.equal(activeScene,'restored-source');assert.equal(id,'shipping');inspected=true;

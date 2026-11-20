@@ -27,10 +27,14 @@ module.exports = async function workspaceWalkthrough({
     return response;
   }
   register('saveWorkspaceStep', step => publish({ step }));
-  register('getWorkspaceFolderSuggestion', null);
-  register('chooseWorkspaceFolder', role => {
+  register('discoverWorkspaceFolders', role => {
     assert.equal(role, 'order');
-    calls.push('choose folder');
+    calls.push('find exports');
+    return [{ folder, kind: 'discovered', label: 'Sales reports', evidence: 'Matched order columns' }];
+  });
+  register('useWorkspaceFolderSuggestion', (role, chosen) => {
+    assert.deepEqual([role, chosen], ['order', folder]);
+    calls.push('confirm folder');
     return publish({ sources: [source] });
   });
   register('workspaceDraftPreview', { scannedFiles: 1, unresolved: 0, limited: false, unreadFiles: 0,
@@ -80,8 +84,8 @@ module.exports = async function workspaceWalkthrough({
   stage('keyboard: connect sales folder and resume the observed order');
   publish({});
   await page.loadURL(appUrl); await setup('welcome');
-  await press('Connect my records'); await setup('start'); await press('In a spreadsheet or folder', true);
-  await setup('files'); await press('Choose a folder myself', true); await setup('checked');
+  await press('Connect my records'); await setup('discover'); await includes('Matching exports');
+  await press('Sales reports', true); await setup('checked');
   await press('Open order ' + order.orderReference); await setup('first');
   await page.loadURL(appUrl); await setup('first'); await includes(order.orderReference);
   await capture('first-order');
@@ -116,6 +120,6 @@ module.exports = async function workspaceWalkthrough({
   assert.ok(tree.nodes.some(n => n.role?.value === 'heading' && n.name?.value === 'Proof ' + order.proofId));
   // Returning from metadata can reread the same exact source at the same revision.
   const operations = calls.filter((entry, i) => entry !== calls[i - 1]);
-  assert.deepEqual(operations, ['choose folder','choose output','request access','open browser','find order','open committed revision','read exact source']);
+  assert.deepEqual(operations, ['find exports','confirm folder','choose output','request access','open browser','find order','open committed revision','read exact source']);
   report.keyboardWalkthrough = { scope: 'Packaged renderer and preload, real keyboard, isolated service and external approval', cssWidth: 640, scale: 2, checks: calls };
 };

@@ -26,7 +26,8 @@ public sealed partial class AgentRuntime
             {
                 var folder = FolderSource.ValidateWorkspaceRoot(source.Folder);
                 ValidateProofSourceFolder(folder);
-                var candidates = WorkspaceFiles(folder).Take(4).ToArray();
+                var sample = Optional(source.Recognition, "fileName")?.GetString();
+                var candidates = PrioritizeSample(WorkspaceFiles(folder), sample).Take(4).ToArray();
                 if (candidates.Length > 3) sampled = true;
                 foreach (var path in candidates.Take(3))
                 {

@@ -180,7 +180,7 @@ public sealed partial class AgentRuntime
                     // work remains owned by its original grant throughout the cutover.
                     picked.Recognition = null;
                 }
-                InspectWorkspaceSource(picked);
+                InspectWorkspaceSource(picked, Optional(p, "sampleFile")?.GetString());
                 break;
             }
             case "chooseWorkspaceRelatedSource":

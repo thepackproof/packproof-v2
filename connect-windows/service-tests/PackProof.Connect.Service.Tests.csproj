@@ -11,7 +11,11 @@
 </ItemGroup>
 <ItemGroup>
     <Compile Include="../service/*Workspace*.cs" />
+    <Compile Include="../service/ExportCatalogue.cs" />
     <Compile Include="../service/*ProofOutput*.cs" />
+    <Compile Include="../service/ConnectException.cs" />
+    <Compile Include="../bridge/WorkspaceDiscovery.cs" />
+    <Compile Include="../bridge/WorkspaceEvidenceDiscovery.cs" />
 </ItemGroup>
 <ItemGroup><Compile Include="../service/SourceSubscriptionState.cs" Link="SourceSubscriptionState.cs"/><Compile Include="../service/SourceScheduler.cs" Link="SourceScheduler.cs"/><Compile Include="../service/TypedSourceRuntime.cs" Link="TypedSourceRuntime.cs"/><Compile Include="../service/TypedSourceSemantics.cs" Link="TypedSourceSemantics.cs"/><Compile Include="../service/CsvSnapshotBoundary.cs" Link="CsvSnapshotBoundary.cs"/><Compile Include="../service/AgentSetup.cs" Link="AgentSetup.cs"/><Compile Include="../service/AgentRuntime.cs" Link="AgentRuntime.cs"/><Compile Include="../service/CollectionPolicy.cs" Link="CollectionPolicy.cs"/><Compile Include="../service/Models.cs" Link="Models.cs"/><Compile Include="../service/ProtectedStore.cs" Link="ProtectedStore.cs"/><Compile Include="../service/DurableQueue.cs" Link="DurableQueue.cs"/><Compile Include="../service/DurableQueue.Backfills.cs" Link="DurableQueue.Backfills.cs"/><Compile Include="../service/SourceBackfillRuntime.cs" Link="SourceBackfillRuntime.cs"/><Compile Include="../service/CsvHeaderPolicy.cs" Link="CsvHeaderPolicy.cs" />
     <Compile Include="../service/CsvSemantics.cs" Link="CsvSemantics.cs"/><Compile Include="../service/FolderSource.cs" Link="FolderSource.cs"/><Compile Include="../service/PackProofClient.cs" Link="PackProofClient.cs"/><Compile Include="../tests/native-security-probes.cs" Link="NativeSecurityProbes.cs"/><Compile Include="../service/QueueCompatibility.cs" Link="QueueCompatibility.cs"/><Compile Include="../service/AgentConnection.cs" Link="AgentConnection.cs"/></ItemGroup>

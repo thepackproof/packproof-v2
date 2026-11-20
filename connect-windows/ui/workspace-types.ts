@@ -114,11 +114,17 @@ export interface WorkspaceSourceRecord {
   reason?:string;
   artifact?:{receiptId:string;fileName:string;mediaType:string;originalSha256:string;bytesBase64:string};
 }
-export interface WorkspaceFolderSuggestion {folder:string;kind:'selected'|'prepared'}
+export interface WorkspaceFolderSuggestion {
+  folder: string;
+  kind: 'selected' | 'prepared' | 'discovered';
+  label?: string;
+  evidence?: string;
+}
 export interface WorkspaceBridge {
   workspaceOrderPage?(before:number):Promise<{orders:OrderSummary[];nextBefore?:number|null}>;
   workspaceSourceRecord?(proofId:string,revision:number,eventKey:string):Promise<WorkspaceSourceRecord>;
   getWorkspaceFolderSuggestion?(role:SourceRole):Promise<WorkspaceFolderSuggestion|null>;
+  discoverWorkspaceFolders?(role:SourceRole):Promise<WorkspaceFolderSuggestion[]>;
   useWorkspaceFolderSuggestion?(role:SourceRole,expectedFolder:string):Promise<ConnectStatus>;
   replaceWorkspaceFolder?(sourceId:string,expectedGeneration:number):Promise<ConnectStatus>;
   workspaceAttention(before?:number):Promise<AttentionReport>;

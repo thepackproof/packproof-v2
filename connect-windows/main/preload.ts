@@ -5,6 +5,7 @@ const bridge:ConnectBridge={
  workspaceOrderPage:before=>call('workspaceOrderPage',before),
  workspaceSourceRecord:(proofId,revision,eventKey)=>call('workspaceSourceRecord',proofId,revision,eventKey),
  getWorkspaceFolderSuggestion:role=>call('getWorkspaceFolderSuggestion',role),
+ discoverWorkspaceFolders:role=>call('discoverWorkspaceFolders',role),
  useWorkspaceFolderSuggestion:(role,folder)=>call('useWorkspaceFolderSuggestion',role,folder),
  replaceWorkspaceFolder:(sourceId,expectedGeneration)=>call('replaceWorkspaceFolder',sourceId,expectedGeneration),
  chooseWorkspaceRelatedSource:(id,generation,role,related)=>call('chooseWorkspaceRelatedSource',id,generation,role,related),

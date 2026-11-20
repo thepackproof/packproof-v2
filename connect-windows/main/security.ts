@@ -19,7 +19,7 @@ const role = z.enum(sourceRoles);
 export const argumentsByMethod={
  workspaceOrderPage:z.tuple([z.number().int().positive().safe()]),
  workspaceSourceRecord:z.tuple([id,z.number().int().positive().safe(),id]),
- getWorkspaceFolderSuggestion:z.tuple([role]),useWorkspaceFolderSuggestion:z.tuple([role,z.string().min(1).max(32767)]),
+ getWorkspaceFolderSuggestion:z.tuple([role]),discoverWorkspaceFolders:z.tuple([role]),useWorkspaceFolderSuggestion:z.tuple([role,z.string().min(1).max(32767)]),
  replaceWorkspaceFolder:z.tuple([id,z.number().int().positive().safe()]),
  chooseWorkspaceRelatedSource:z.tuple([id,z.number().int().positive().safe(),role,id]),
  confirmWorkspaceOrderMap:z.tuple([id,z.number().int().positive().safe(),z.string().min(1).max(160)]),
