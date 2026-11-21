@@ -39,13 +39,20 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
  }
  if (host && ['workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention','openWorkspaceOutput'].includes(name))
    throw Error('Open Orders and exceptions from the Logistics menu to view your authorized records.');
- const value = await fn(...parsed);
- const ended = host ? await host.guard(name) : null;
- if (started?.user!==ended?.user || started?.scopeKey!==ended?.scopeKey) throw Error('Your account changed.');
- return {ok:true,value:host ? host.present(name,value,started?.offline || ended?.offline) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
+  let value: unknown;
+  if (host && started?.mode === 'bootstrap' && (name === 'openApproval' || name === 'openWorkspaceApproval')) {
+    await open(approvalUrl(host.installationReviewPath(started), config.webBaseUrl));
+  } else if (host && started?.mode === 'bootstrap' && name === 'getWorkspaceStatus') {
+    // Recovery polling must observe revocation without reading the old workspace.
+    try { await bridge.request('refresh'); } catch { /* Read the preserved recovery state. */ }
+    value = await status();
+  } else value = await fn(...parsed);
+  const ended = host ? await host.guard(name === 'recoverEnrollment' ? 'getStatus' : name) : null;
+  if (host && started && ended) host.assertTransition(name,started,ended);
+  return {ok:true,value:host && ended ? host.present(name,value,{...ended,offline:!!started?.offline || ended.offline}) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
 async function openWorkspaceApproval(current:ConnectStatus) {
  if (!current.installationId && current.enrollment?.state === 'pending') {
-  await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl));
+   await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl));
   return;
  }
  const path = current.workspace?.approvalPath;

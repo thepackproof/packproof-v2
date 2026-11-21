@@ -206,6 +206,7 @@ export interface TransportObservation {
   sourceContracts?: string[];
 }
 export interface ConnectStatus {
+  setupAccess?: { reason: 'enrollment_required' | 'facility_required' | 'facility_unavailable' | 'reapproval_required' };
   workspace?: WorkspaceStatus;
   proofOutput?: ProofOutput;
   state: string;

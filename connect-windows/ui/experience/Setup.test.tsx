@@ -9,6 +9,59 @@ import type { DraftPreview, WorkspaceBridge, WorkspaceFolderSuggestion, Workspac
 import { Setup } from "./Setup";
 
 afterEach(cleanup);
+
+it('shows only browser review and retry for an installation without a facility',async()=>{
+  const state:ConnectStatus={...selected,installationId:'installation_test',setupAccess:{reason:'facility_required'},workspace:{phase:'draft',step:'order',sources:[]}};
+  const bridge=bridgeFor(state);
+  render(<Harness initial={state} bridge={bridge}/>);
+  expect(screen.getByRole('heading',{name:'Choose this computer’s facility.'})).toBeVisible();
+  expect(screen.queryByRole('button',{name:'Connect my records'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Try a sample order'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Review this computer in browser'}));
+  await waitFor(()=>expect(bridge.openWorkspaceApproval).toHaveBeenCalledTimes(1));
+  expect(bridge.recoverEnrollment).not.toHaveBeenCalled();
+  expect(bridge.chooseWorkspaceFolder).not.toHaveBeenCalled();
+});
+
+it('requires explicit preservation consent before existing recovery and returns to facility enrollment',async()=>{
+  const state:ConnectStatus={...selected,state:'revoked',installationId:'installation_test',binding:undefined,recoveryAvailable:true,setupAccess:{reason:'reapproval_required'},workspace:{phase:'draft',step:'order',sources:[]}};
+  const fresh:ConnectStatus={state:'needs_approval',environment:'development',setupAccess:{reason:'enrollment_required'},health:{serviceOnline:true,queueCount:0},workspace:{phase:'draft',step:'order',sources:[]}};
+  const bridge=bridgeFor(state,{recoverEnrollment:vi.fn(async()=>fresh),beginEnrollment:vi.fn(async()=>fresh)});
+  render(<Harness initial={state} bridge={bridge}/>);
+  const recover=screen.getByRole('button',{name:'Preserve work and reconnect'});
+  expect(recover).toBeDisabled();expect(bridge.recoverEnrollment).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Preserve former pending work and begin new browser approval.'}));
+  fireEvent.click(recover);
+  await waitFor(()=>expect(bridge.recoverEnrollment).toHaveBeenCalledWith({preservePendingWorkApproved:true}));
+  expect(await screen.findByRole('heading',{name:'Connect this computer to a facility.'})).toBeVisible();
+  expect(bridge.beginEnrollment).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'Connect this computer to a facility'}));
+  await waitFor(()=>expect(bridge.beginEnrollment).toHaveBeenCalledTimes(1));
+});
+
+it('reopens the exact pending approval with its comparison code without creating another enrollment',async()=>{
+  const state:ConnectStatus={state:'needs_approval',environment:'development',setupAccess:{reason:'enrollment_required'},health:{serviceOnline:true,queueCount:0},workspace:{phase:'draft',step:'order',sources:[]},
+    enrollment:{id:'enrollment_test',state:'pending',expiresAt:'2099-01-01T00:00:00Z',comparisonCode:'A1B2C3'}};
+  const bridge=bridgeFor(state);
+  render(<Harness initial={state} bridge={bridge}/>);
+  expect(screen.getByText('A1B2C3')).toBeVisible();
+  expect(screen.queryByRole('button',{name:'Connect my records'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Reopen facility sign-in'}));
+  await waitFor(()=>expect(bridge.openWorkspaceApproval).toHaveBeenCalledTimes(1));
+  expect(bridge.beginEnrollment).not.toHaveBeenCalled();
+});
+
+it('keeps failed recovery actionable and does not advance to enrollment',async()=>{
+  const state:ConnectStatus={...selected,installationId:'installation_test',recoveryAvailable:true,setupAccess:{reason:'reapproval_required'},workspace:{phase:'draft',step:'order',sources:[]}};
+  const bridge=bridgeFor(state,{recoverEnrollment:vi.fn(async()=>{throw Error('The protected archive could not be saved.');})});
+  render(<Harness initial={state} bridge={bridge}/>);
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Preserve work and reconnect'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('The protected archive could not be saved.');
+  expect(screen.getByRole('button',{name:'Preserve work and reconnect'})).toBeEnabled();
+  expect(bridge.beginEnrollment).not.toHaveBeenCalled();
+});
+
 const folder: WorkspaceSource = {
   id: "orders",
   folder: "C:\\Sales",

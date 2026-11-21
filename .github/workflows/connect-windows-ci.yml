@@ -209,6 +209,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node --check scripts/check-renderer-layout.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tokens = $null; $syntaxErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'scripts/smoke-logistics-upgrade.ps1').Path, [ref]$tokens, [ref]$syntaxErrors)
+          if ($syntaxErrors.Count) { $syntaxErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }
       - run: npm run build
       - name: Install the backend video validator for the Windows camera journey
         run: |
@@ -282,7 +285,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [Clean, Upgrade]
+        mode: [Clean, Upgrade, SameVersion]
     runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.disposable_windows11 && fromJSON('["self-hosted","windows","x64","packproof-disposable-windows11"]') || 'windows-2025' }}
     timeout-minutes: 40
     defaults:
@@ -303,12 +306,24 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - name: Obtain the frozen Commerce source for the upgrade input
-        if: matrix.mode == 'Upgrade'
+      - name: Obtain the frozen Commerce queue writer for the installed upgrade input
+        if: matrix.mode != 'Clean'
         uses: actions/checkout@v4
         with:
-          ref: 63843c5616dce4ce5824015f975fd0ac6327012d
+          ref: ${{ matrix.mode == 'SameVersion' && '617a58b883328ad04513a48564d33c573b9b7c78' || '63843c5616dce4ce5824015f975fd0ac6327012d' }}
           path: previous
+      - name: Download the exact qualified unified 0.7.0 installer
+        if: matrix.mode == 'SameVersion'
+        uses: actions/download-artifact@v4
+        with:
+          name: packproof-unified-DEVELOPMENT-win32-x64-617a58b883328ad04513a48564d33c573b9b7c78
+          run-id: 44836162283
+          github-token: ${{ github.token }}
+          path: previous-unified
+      - name: Install the exact prior unified Commerce queue writer dependencies
+        if: matrix.mode == 'SameVersion'
+        working-directory: previous/desktop
+        run: npm ci --no-audit --no-fund
       - name: Build the previous standalone Commerce installer
         if: matrix.mode == 'Upgrade'
         working-directory: previous/desktop
@@ -340,7 +355,9 @@ jobs:
             Invoke-WebRequest -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/actions/artifacts/14587903702/zip" -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } -OutFile $archive
           }
           if ((Get-FileHash -Algorithm SHA256 $archive).Hash -ne '00279cff2fc00e14fdaba0126a1c9b7c356b93ed41ed982a60f34ea04dea001e') { throw 'Previous Connect release archive checksum mismatch.' }
-          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Prepare the isolated real enrollment and collection fixture
+        if: matrix.mode != 'Clean'
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
       - name: Rehearse the verified installers
         env:
           REHEARSAL_MODE: ${{ matrix.mode }}
@@ -349,6 +366,10 @@ jobs:
           if ($env:REHEARSAL_MODE -eq 'Upgrade') {
             $arguments.PriorConnectArchive = Join-Path $env:RUNNER_TEMP 'packproof-connect-pr175.zip'
             $arguments.PriorCommerceDirectory = (Resolve-Path 'previous/desktop/release/development/win32-x64').Path
+            $arguments.PriorCommerceSource = (Resolve-Path 'previous/desktop').Path
+          }
+          if ($env:REHEARSAL_MODE -eq 'SameVersion') {
+            $arguments.PriorUnifiedDirectory = (Resolve-Path 'previous-unified').Path
             $arguments.PriorCommerceSource = (Resolve-Path 'previous/desktop').Path
           }
           ./connect-windows/scripts/smoke-logistics-upgrade.ps1 @arguments
@@ -360,3 +381,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
           path: candidate/logistics-install-${{ matrix.mode }}.json
+

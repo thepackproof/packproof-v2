@@ -3,6 +3,7 @@ import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '
 import type {RndCapabilities,RndSnapshot,Feature,ReviewerAnnotation,DerivativeGrant} from '../../../web/src/rnd/types';
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
 import { randomUUID } from 'node:crypto';
+import { readInstallationSetupAccess, type InstallationSetupLocator } from './installation-setup';
 import type { DesktopConfig } from './config.js';
 import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, PublicProofView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
 
@@ -38,6 +39,17 @@ export class DesktopApi {
     const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });
     return this.request<{canConfigure:boolean; organizationId:string; environment:string; locationId:string|null; userId:string}>(
       '/me/records/agent-installations/'+id(scope.installationId)+'/workspace-access?'+query);
+  }
+  async installationSetupAccess(locator: InstallationSetupLocator) {
+    const userId = this.options.getAccountId();
+    if (!userId) throw new DesktopApiError('UNAUTHENTICATED', 'Sign in to PackProof.', 401);
+    const signal = AbortSignal.timeout(15_000);
+    const access = await readInstallationSetupAccess(locator, userId, path => {
+      this.assertAccount(userId);
+      return this.request(path, { signal });
+    });
+    this.assertAccount(userId);
+    return access;
   }
   facilitySuggestions(scope: { installationId: string; organizationId: string; environment: string }, input: unknown) {
     const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });

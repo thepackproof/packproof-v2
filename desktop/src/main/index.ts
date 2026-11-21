@@ -211,6 +211,7 @@ async function ready(){
          }};
      },
      access: (scope: Scope) => requireApi().facilityAccess(scope),
+      setupAccess: (locator: Parameters<DesktopApi['installationSetupAccess']>[0]) => requireApi().installationSetupAccess(locator),
      suggest: (scope: Scope, input: unknown) => requireApi().facilitySuggestions(scope,input),
      review: (scope: Scope, input: unknown) => requireApi().reviewFacilitySuggestion(scope,input)
    }, () => win);

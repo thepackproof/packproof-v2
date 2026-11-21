@@ -143,6 +143,7 @@ export interface WorkspaceFolderSuggestion {
 }
 export interface WorkspaceBridge {
   beginEnrollment?(): Promise<ConnectStatus>;
+  recoverEnrollment?(consent: { preservePendingWorkApproved: true }): Promise<ConnectStatus>;
   getFacilityDraft?(): Promise<FacilityDraft>;
   saveFacilityDraft?(expectedRevision: number, changes: FacilityInputs): Promise<FacilityDraft>;
   saveFacilityNotes?(expectedRevision: number, changes: Pick<FacilityInputs,'steps'|'examples'>): Promise<FacilityDraft>;

@@ -76,6 +76,7 @@ function stamp(value?: string) {
 }
 
 export function Setup(props: SetupProps) {
+  if (props.status.setupAccess) return <InstallationRecovery key={props.status.installationId} {...props} />;
   if (props.status.workspace?.guidedSetupAvailable || props.status.workspace?.offlineDraftOnly) {
     const { installationId, environment, binding, locationId, operatorMembershipId, integrationAccountId } = props.status;
     const scope = JSON.stringify([installationId, environment, binding?.organizationId, binding?.operatorMembershipId ?? operatorMembershipId,
@@ -84,6 +85,59 @@ export function Setup(props: SetupProps) {
     return <GuidedSetup key={scope} {...props} />;
   }
   return <StandardSetup {...props} />;
+}
+
+/** Uses the existing setup layout and guarded native recovery operation. No source
+ * discovery, sample success, or facility reassignment is available in this state. */
+function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps) {
+  const [consent,setConsent] = useState(false), [busy,setBusy] = useState(false), [error,setError] = useState('');
+  const alive = useRef(true), pending = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const needsFacility = status.setupAccess?.reason === 'facility_required';
+  const needsEnrollment = !status.installationId;
+  const enrolling = needsEnrollment && status.enrollment?.state === 'pending' && Date.parse(status.enrollment.expiresAt) > Date.now();
+  const canRecover = status.recoveryAvailable === true && !!bridge.recoverEnrollment;
+  async function run(operation: () => Promise<ConnectStatus | void>) {
+    if (pending.current) return;
+    pending.current = true; setBusy(true); setError(''); onBusyChange?.(true);
+    try { const next = await operation(); if (alive.current && next) onStatus(next); }
+    catch (e) { if (alive.current) setError(message(e)); }
+    finally { pending.current = false; if (alive.current) setBusy(false); onBusyChange?.(false); }
+  }
+  return <main className="setup-experience step-welcome" data-setup-screen="installation-recovery" aria-label="Connection setup">
+    <div className="setup-left">
+      <span className="setup-tag">Facility connection</span>
+      <h1>{needsEnrollment ? enrolling ? 'Finish connecting this computer.' : 'Connect this computer to a facility.'
+        : canRecover ? 'Reconnect this computer.' : needsFacility ? 'Choose this computer’s facility.' : 'Review this computer’s connection.'}</h1>
+      <p className="setup-lead">{needsEnrollment
+        ? 'In your browser, select this computer’s intended facility from your authorized locations and approve the matching installation. Return here to continue with your records.'
+        : canRecover
+        ? 'Preserve the former pending work, then approve this computer again in your browser. Choose the intended facility from your authorized locations.'
+        : needsFacility
+          ? 'The current approval does not name a facility. Review this installation in your browser, revoke only its current service access, then return here to reconnect it to the intended facility.'
+          : status.setupAccess?.reason === 'reapproval_required'
+            ? 'This computer needs a new approval. Check the connection again after the service has received the change.'
+            : 'The facility is connected, but guided setup is not available for this installation. Review its approval or ask your workspace administrator to check this facility’s setup access.'}</p>
+      {enrolling && <p className="setup-hint">Match this code in your browser · <strong>{status.enrollment?.comparisonCode}</strong></p>}
+      {canRecover && <div className="guided-form"><label className="guided-checkbox"><input type="checkbox" checked={consent} disabled={busy}
+        onChange={event => setConsent(event.target.checked)} />Preserve former pending work and begin new browser approval.</label></div>}
+      <div className="setup-actions">
+        {needsEnrollment
+          ? <button className="setup-primary" disabled={busy || !bridge.beginEnrollment} onClick={() => void run(() => enrolling ? bridge.openWorkspaceApproval() : bridge.beginEnrollment!())}>{enrolling ? 'Reopen facility sign-in' : 'Connect this computer to a facility'}</button>
+          : canRecover
+          ? <button className="setup-primary" disabled={busy || !consent} onClick={() => void run(() => bridge.recoverEnrollment!({preservePendingWorkApproved:true}))}>Preserve work and reconnect</button>
+          : <button className="setup-primary" disabled={busy} onClick={() => void run(() => bridge.openWorkspaceApproval())}>Review this computer in browser</button>}
+        <button className="setup-secondary" disabled={busy} onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
+      </div>
+      {busy && <p role="status">Checking this computer’s connection…</p>}
+      {error && <p className="setup-error" role="alert">{error}</p>}
+    </div>
+    <Context label={needsEnrollment ? 'Facility approval' : 'Your existing work'} title={needsEnrollment ? 'You choose the facility.' : 'Preserved through reconnection.'}
+      intro={needsEnrollment ? 'Review the exact computer, workspace and location before approving its connection.' : 'The existing recovery process keeps former queued originals and receipt ownership protected.'}>
+      <Row icon="records" title="Current approval" detail="Review the exact computer and workspace in PackProof before replacing its connection." />
+      <Row icon="location" title="Explicit facility" detail="Choose the intended authorized location in the browser. Setup remains incomplete until that facility is available." />
+    </Context>
+  </main>;
 }
 
 function StandardSetup({
