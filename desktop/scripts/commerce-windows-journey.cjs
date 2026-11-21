@@ -79,8 +79,15 @@ async function run() {
   assert.equal(win.webContents.getLastWebPreferences().sandbox,true);
   assert.equal(win.webContents.getLastWebPreferences().contextIsolation,true);
   await js("window.packproof.auth.signIn({email:'commerce-test@example.invalid',password:'isolated-synthetic-login'})");
-  // Unified builds intentionally launch the approved Logistics workspace first.
-  // Commerce acceptance must explicitly enter Commerce, not depend on an old default.
+  // The auth IPC reply can precede the renderer's session effect. Wait for its
+  // visible Logistics access check to settle before making one workspace choice.
+  // A missing LocalService is an actionable state here, not a reason to skip Commerce.
+  await until('Logistics workspace choice',()=>js(`(()=>{
+    const entry=document.querySelector('.logistics-entry');
+    const primary=entry?.querySelector('.logistics-entry-primary');
+    return !!primary && !primary.textContent.includes('Checking this workstation') &&
+      !entry.querySelector('[role=status]')?.textContent.includes('Checking your account');
+  })()`));
   await button('^Open Commerce workspace$');
   await until('signed-in Commerce home',()=>js("!!document.querySelector('.app-layout .sidebar nav')"));
   openProof();
@@ -123,3 +130,4 @@ run().then(()=>app.exit(0)).catch(async error=>{
   console.error('Commerce fixture',step,error.message,JSON.stringify(labels));
   app.exit(1);
 });
+
