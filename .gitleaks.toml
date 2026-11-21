@@ -276,3 +276,17 @@ paths = [
   '''^connect-windows/scripts/verify-windows-ux-contract\.cjs$''',
 ]
 regexes = ['''^PZ8dfCcXe2D8SMtmF497v3$''']
+
+# CI scan artifact 14696188338 (2026-11-21), fingerprints at lines 16 and 22
+# in the logistics release handoff. Both strings are public AWS CodeBuild job
+# execution UUIDs, not credential material; no rule, history, or path is skipped.
+[[allowlists]]
+description = "Exact public AWS CodeBuild execution UUIDs in the historical Logistics source-staging handoff."
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/windows-connect/LOGISTICS_BACKEND_404_RELEASE_HANDOFF_2026-11-21\.md$''']
+regexes = [
+  '''^fd213639-7c7e-429c-b454-f171f26a855c$''',
+  '''^269cebe2-023f-4455-b777-f24b4fdadec8$''',
+]
