@@ -29,7 +29,19 @@ function cloneTask(t){
 // empty default is equivalent to omission; preserve real requests and controls.
 function taskConfigurationHash(t){
  const copy=structuredClone(t);
- for(const c of copy.containerDefinitions??[])if(Array.isArray(c.systemControls)&&c.systemControls.length===0)delete c.systemControls;
+ for(const c of copy.containerDefinitions??[]){
+  if(Array.isArray(c.systemControls)&&c.systemControls.length===0)delete c.systemControls;
+  // ECS may return unique named environment bindings in a different order.
+  if(c.environment===undefined)continue;
+  check(Array.isArray(c.environment),'CONNECT_RUNTIME_BINDINGS_AMBIGUOUS');
+  const names=new Set();
+  for(const binding of c.environment){
+   check(typeof binding?.name==='string'&&binding.name.length>0&&
+    typeof binding.value==='string'&&!names.has(binding.name),'CONNECT_RUNTIME_BINDINGS_AMBIGUOUS');
+   names.add(binding.name);
+  }
+  c.environment.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);
+ }
  return hash(copy);
 }
 function replaceRelease(c,r){
