@@ -4,7 +4,7 @@ import { checkOrder } from './check-order.mjs';
 
 const input = { source: 'a'.repeat(40), organizationId: 'test-org', environment: 'sandbox',
   proofId: 'sample', token: 'test-session', output: '/sample/exports' };
-function dependencies(selectedOrganizationId = input.organizationId) {
+function dependencies(selectedOrganizationId = input.organizationId, workspaceEnvironment = input.environment) {
   return {
     async fetcher(url, options) {
       assert.equal(url.hostname, 'pa-5faf90eb81cb4764b37bd3dc259a5ac4.ecs.us-east-1.on.aws');
@@ -15,9 +15,9 @@ function dependencies(selectedOrganizationId = input.organizationId) {
       }
       assert.equal(options.headers.Authorization, 'Bearer ' + input.token);
       assert.equal(url.searchParams.get('organizationId'), input.organizationId);
-      assert.equal(url.searchParams.get('environment'), input.environment);
+      assert.equal(url.searchParams.get('environment'), workspaceEnvironment);
       if (url.pathname === '/me/records/context') return Response.json({
-        selectedOrganizationId, environment: 'sandbox', capabilities: { orderProofs: true } });
+        selectedOrganizationId, environment: workspaceEnvironment, capabilities: { orderProofs: true } });
       assert.equal(url.pathname, '/me/records/order-proofs/sample');
       return Response.json({ proofId: input.proofId, revision: 3, lines: [] });
     },
@@ -36,3 +36,9 @@ test('checks one operator-selected order online and locally without returning cu
 test('stops before reading a Proof if the account resolves to a different organization', async () => {
   await assert.rejects(checkOrder(input, dependencies('another-org')), /no active Proof workspace/);
 });
+for (const environment of ['live', 'production']) {
+  test(`uses the live workspace for ${environment} without changing the production API release check`, async () => {
+    const result = await checkOrder({ ...input, environment }, dependencies(input.organizationId, 'live'));
+    assert.equal(result.revision, 3);
+  });
+}
