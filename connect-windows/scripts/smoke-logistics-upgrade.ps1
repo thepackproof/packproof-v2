@@ -309,6 +309,7 @@ try {
      Stop-ConnectChecked
      if((Pending-SpoolSnapshot) -ne $pendingSpool) {throw 'Same-version replacement changed the encrypted pending original or its spool key.'}
      Start-Service -Name $serviceName
+     . (Join-Path $program 'resources\installer\storage-health.ps1')
      [void](Wait-ConnectReadiness $serviceName 'PackProofConnect-development-v1' $native)
      [void](Control @{command='releaseObservations'})
      [void](Bridge resumeWorkspaceSource @{sourceId=$source.id})

@@ -29,10 +29,13 @@ const system={version:'0.7.0',platform:'win32',environment:'development',online:
 },update:{state:'unavailable'},reporting:{configured:false}};
 const calls={orders:0,setup:0,choices:0};
 const bootstrapCalls={review:0,recover:0,enroll:0,source:0};
+const fixtureProofs=Array.from({length:4},(_,index)=>({proofId:'proof_fixture_'+index,status:'READY_FOR_EVIDENCE',role:'SELLER',
+ createdAt:'2026-11-20T12:00:00Z',updatedAt:'2026-11-20T12:00:00Z',finalizedAt:null,evidenceCount:0,
+ transaction:{itemTitle:'Example shipment '+(index+1),externalReference:'EXAMPLE-'+(10482+index),trackingNumber:null,carrier:null}}));
 let failChoices=false;
 const sample={
   'auth.state':{userId:'fixture-operator',email:'operator@example.invalid',profile:{displayName:'Fixture Operator',username:'operator'}},
-  'system.state':system,'proofs.list':[],'orders.list':[],'integrations.list':{accounts:[],providers:[]},
+  'system.state':system,'proofs.list':fixtureProofs,'orders.list':[],'integrations.list':{accounts:[],providers:[]},
   'uploads.list':[],'onboarding.get':null
 };
 async function until(page,expression){
@@ -60,16 +63,17 @@ async function measure(page,w,h){
  assert.deepEqual(measured.clipped,[],'Clipped buttons: '+JSON.stringify(measured));
  return measured;
 }
-async function shoot(page,name,w,h,scale=1){
+async function shoot(page,name,w,h,scale=1,atScroll=false){
  await page.executeJavaScript('document.fonts.ready.then(()=>true)');
- const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{x:0,y:0,width:w,height:h,scale:1}});
+ const origin=atScroll?await page.executeJavaScript('({x:scrollX,y:scrollY})'):{x:0,y:0};
+ const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{...origin,width:w,height:h,scale:1}});
  const png=Buffer.from(shot.data,'base64');
  assert.ok(png.length>24,'Empty screenshot');
  const actual={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
  fs.mkdirSync(out,{recursive:true});
  fs.writeFileSync(path.join(out,name+'.png'),png);
  assert.deepEqual(actual,{width:Math.round(w*scale),height:Math.round(h*scale)},'Mislabelled packaged screenshot '+name);
- return {...actual,cssWidth:w,cssHeight:h,scale};
+ return {...actual,cssWidth:w,cssHeight:h,scale,...(atScroll?{scrollY:origin.y}:{})};
 }
 async function checkBootstrap(parent){
  assert.ok(fs.existsSync(setupPreload),'Packaged Connect preload missing');
@@ -130,6 +134,45 @@ async function checkBootstrap(parent){
    return screenshots;
  }finally{if(page.debugger.isAttached())page.debugger.detach();if(!win.isDestroyed())win.destroy();}
 }
+async function checkCommerce(page){
+ const screenshots={};
+ await page.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+ for(const theme of ['light','dark']){
+  system.settings.theme=theme;
+  await page.reload();
+  await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>!e.disabled)");
+  await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Open Commerce workspace')?.click()");
+  await until(page,"!!document.querySelector('.app-layout .sidebar nav') && document.documentElement.dataset.theme==="+JSON.stringify(theme));
+  for(const [route,label] of [['home','Home'],['packing-station','Packing Station'],['orders','Orders'],['settings','Settings']]){
+   await page.executeJavaScript(`(()=>{
+     const details=document.querySelector('.sidebar details');if(details&&!details.open)details.querySelector('summary').click();
+     const button=[...document.querySelectorAll('.sidebar button')].find(e=>e.textContent.trim()===${JSON.stringify(label)});
+     if(!button)throw Error('Missing Commerce navigation');button.click();
+   })()`);
+   await until(page,"document.querySelector('.breadcrumb')?.textContent.trim()==="+JSON.stringify('/ '+label));
+   if(route==='home')await until(page,"document.body.innerText.includes('Example shipment 1') && ![...document.querySelectorAll('button')].find(e=>e.textContent==='Refresh records')?.disabled");
+   if(route==='settings')await until(page,`(()=>{
+    const panel=document.querySelector('[aria-label="Optional capture timing study"]');
+    return !!panel && panel.textContent.includes('Collection starts only after I agree.') &&
+      panel.querySelector('input[type=checkbox]')?.checked===false &&
+      [...panel.querySelectorAll('button')].some(e=>e.textContent==='Join this timing study'&&e.disabled);
+   })()`);
+   for(const [w,h,scale,suffix]of[[1440,900,1,'1440x900'],[1024,640,1.25,'1280x800-125pct']]){
+    await viewport(page,w,h,scale);
+    await page.executeJavaScript("window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0)");
+    const name=`commerce-${route}-${theme}-${suffix}`;
+    screenshots[name+'.png']=await shoot(page,name,w,h,scale);
+    await measure(page,w,h);
+    if(route==='settings'){
+     await page.executeJavaScript("document.querySelector('.settings-grid')?.scrollIntoView({block:'start'})");
+     screenshots[name+'-preferences.png']=await shoot(page,name+'-preferences',w,h,scale,true);
+    }
+   }
+   await viewport(page,1440,900,1);
+  }
+ }
+ return screenshots;
+}
 async function main(){
  assert.ok(fs.existsSync(packagedAsar),'Packaged unified app.asar missing');
  assert.ok(fs.existsSync(preload),'Unified native preload missing');
@@ -162,7 +205,12 @@ async function main(){
  ipcMain.handle('packproof:workspace.orders',async()=>{calls.orders++;return {ok:true,value:null};});
  ipcMain.handle('packproof:workspace.setup',async()=>{calls.setup++;return {ok:true,value:null};});
  for(const [channel,value] of Object.entries(sample))ipcMain.handle('packproof:'+channel,async()=>({ok:true,value}));
- ipcMain.handle('packproof:study.scope',async()=>({ok:false,error:'Fixture does not enable analytics.'}));
+ ipcMain.handle('packproof:study.scope',async()=>({ok:true,value:'https://fixture.example.invalid'}));
+ ipcMain.handle('packproof:study.request',async(_event,input)=>{
+  assert.equal(input.userId,'fixture-operator');assert.equal(input.path,'/consent');assert.equal(input.method,'GET','Visual fixture must not submit study consent or timings');assert.equal(input.body,undefined);
+  return{ok:true,value:{enabled:true,datasetRef:'visual-fixture',granted:false,statementVersion:'capture-timing-study-v1',
+   statement:'I agree to contribute capture task timings and operational outcomes from this account to this study dataset. Collection starts only after I agree. No recording content, label text, barcodes, names, email, or access tokens are collected. References are pseudonymous. I can stop future collection by withdrawing; observations already contributed remain in this dataset.'}};
+ });
  try{
   await page.loadURL('about:blank');
   page.debugger.attach('1.3');
@@ -200,15 +248,18 @@ async function main(){
   await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>!e.disabled)");
   await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.includes('Open Commerce workspace'))?.click()");
   await until(page,"!!document.querySelector('.app-layout .sidebar nav')");
+  const commerceScreenshots=await checkCommerce(page);
   await page.executeJavaScript("[...document.querySelectorAll('.logistics-return')][0]?.click()");
   await until(page,"!!document.querySelector('.logistics-entry h1')");
   const bootstrapScreenshots=await checkBootstrap(win);
   fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({
-   scope:'packaged unified renderer and production preload; synthetic IPC only',
+   scope:'packaged unified renderer and production preload; synthetic IPC only',sourceCommit:process.env.GITHUB_SHA||null,
    designFile:'PZ8dfCcXe2D8SMtmF497v3',entryNode:'2:9',setupNode:'69:8866',recoveryNode:'83:9262',
-   screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots},
+   screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
+   commerceCoverage:{scope:'Existing explicitly selected Commerce; visual inspection only, no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'synthetic ungranted GET only'},
    verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions',
-     'packaged Connect renderer and preload','missing-facility review','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap'],
+     'packaged Connect renderer and preload','missing-facility review','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',
+     'explicit Commerce Home, Packing Station, Orders and Settings at both scales and themes'],
    calls,bootstrapCalls
   },null,2));
   console.log('Unified Windows entry renderer layout and functional IPC routing verified (synthetic state).');

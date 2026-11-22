@@ -36,12 +36,24 @@ const scenes = [
   {name:'disconnected',nav:'Orders',heading:'Orders',contains:'Reconnect to your approved workspace'},
   {name:'assembled-order',nav:'Orders',action:'proof',heading:'Proof '+summary.proofId,contains:summary.orderReference},
 ];
+const guidedScenes = [
+  {name:'guided-order',step:'order',heading:'Start with an order you know.',contains:'Order preview · Sample',guided:true},
+  {name:'guided-sources',step:'packing',heading:'Where can we look?',contains:'Review a known order',guided:true},
+  {name:'guided-review',step:'review',heading:'Does this match the shipment?',contains:'packages.xml',guided:true,action:'guided-preview'},
+  {name:'guided-activate',step:'output',heading:'Approve the facility setup.',contains:'Known-order replay',guided:true},
+];
+// Matches the existing GuidedSetup test contract. This is local renderer state,
+// not an authorization, replay receipt, or live facility configuration.
+const facilityDraft = {id:'11111111-2222-4333-8444-555555555555',revision:1,scopeKey:'visual-fixture',
+  steps:[],examples:[{kind:'ordinary',reference:summary.orderReference,cartons:2,labelCount:2}],
+  rules:[],excludedSourceIds:[],replay:null};
 const navHeading = {Orders:'Orders',Connections:'Your connections','Needs attention':'Needs attention'};
 const visibleButton = text => `[...document.querySelectorAll('button')].find(el=>el.checkVisibility() && el.textContent.trim().startsWith(${JSON.stringify(text)}))`;
 const navButton = text => `[...document.querySelectorAll('nav[aria-label="Workspace"] button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const squash = text => text.replace(/\s+/g,'');
 
-module.exports = async function workspaceLayout({page,setStatus,register,state,waitFor,checkPage,stage,reach,keyboard,appUrl,directory,report}) {
+module.exports = async function workspaceLayout({page,setStatus,register,state,waitFor,checkPage,stage,reach,keyboard,appUrl,directory,report,
+  themes=['light','dark'],displayCases=[[1280,900,1],[1280,900,1.25],[1280,900,1.5],[1280,900,2],[560,720,1]],captureViewport=false,includeGuidedSetup=false}) {
   fs.mkdirSync(directory,{recursive:true});
   let current, activeScene, inspected;
   function publish(next){current=next;setStatus(next);return next;}
@@ -50,6 +62,10 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
     return detail;
   });
   register('workspaceAttention',{items:[],hasMore:false,orderIssues:[],orderIssueCount:0,nextIssuesBefore:null});
+  if(includeGuidedSetup)register('getFacilityDraft',()=>{
+    assert.ok(activeScene.startsWith('guided-'),'Facility draft is only available in the explicit guided visual fixture');
+    return structuredClone(facilityDraft);
+  });
   register('discoverWorkspaceFolders',role=>sources.filter(s=>s.roles.includes(role)).map(s=>({folder:s.folder,kind:'selected'})));
   register('workspaceDraftPreview',()=>['empty-source','ambiguous-source'].includes(activeScene)?{...preview,examples:[]}:preview);
   register('inspectWorkspaceSource',id=>{
@@ -59,18 +75,26 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
   });
   async function press(target){await reach(page,target);await keyboard(page,'Enter',13);}
   const heading = title => waitFor(page,`[...document.querySelectorAll('h1')].find(el=>el.checkVisibility())?.textContent.replace(/\\s+/g,'')===${JSON.stringify(squash(title))}`);
-  async function capture(name){
+  async function capture(name,display){
+    if(display)await page.executeJavaScript('window.scrollTo(0,0)');
     const {cssContentSize}=await page.debugger.sendCommand('Page.getLayoutMetrics');
     const {data}=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,
-      clip:{x:0,y:0,width:Math.ceil(cssContentSize.width),height:Math.ceil(cssContentSize.height),scale:1}});
-    fs.writeFileSync(path.join(directory,name+'.png'),Buffer.from(data,'base64'));
+      clip:{x:0,y:0,width:display?display.cssWidth:Math.ceil(cssContentSize.width),height:display?Math.round(display.height/display.scale):Math.ceil(cssContentSize.height),scale:1}});
+    const png=Buffer.from(data,'base64');
+    if(display){
+      assert.ok(png.length>24,'Empty packaged screenshot');
+      const dimensions={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
+      assert.deepEqual(dimensions,{width:display.width,height:display.height},'Incorrect unified screenshot dimensions: '+name);
+      (report.screenshots??={})[name+'.png']={...display,...dimensions};
+    }
+    fs.writeFileSync(path.join(directory,name+'.png'),png);
   }
-  for(const theme of ['light','dark']) {
-    for(const [width,height,scale] of [[1280,900,1],[1280,900,1.25],[1280,900,1.5],[1280,900,2],[560,720,1]]) {
+  for(const theme of themes) {
+    for(const [width,height,scale] of displayCases) {
       const cssWidth=Math.round(width/scale);
       await page.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:cssWidth,height:Math.round(height/scale),deviceScaleFactor:scale,mobile:false});
       await page.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme},{name:'prefers-reduced-motion',value:'reduce'}]});
-      for(const scene of scenes) {
+      for(const scene of [...(includeGuidedSetup?guidedScenes:[]),...scenes]) {
         activeScene=scene.name;inspected=false;
         report.currentRun={scene:scene.name,theme,width,height,scale,cssWidth};
         stage(`packaged workspace ${theme} ${cssWidth}px ${scene.name}`);
@@ -83,6 +107,7 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         if(!canReadOrders)for(const source of localSources)source.state='pending';
         publish({...state,capabilities:{...state.capabilities,orderWorkspace:true},
           workspace:{step:scene.step||'overview',phase:scene.step?'draft':'active',sources:localSources,
+            ...(scene.guided?{guidedSetupAvailable:true}:{}),
             orders:canReadOrders?[summary]:[],totalOrders:canReadOrders?1:null,updatedToday:canReadOrders?1:null,
             canReadOrders,viewKey:canReadOrders?'a'.repeat(64):null,outputState:'ready',outputFolder:folder},
           proofOutput:{folder,pending:pending?1:0,state:pending?'pending':'ready'}});
@@ -104,6 +129,11 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         }
         if(scene.action==='proof')await press(visibleButton(summary.orderReference));
         await heading(scene.heading);
+        if(scene.guided){
+          await waitFor(page,`!!document.querySelector('main[aria-label="Guided facility setup"]')`);
+          if(scene.action==='guided-preview')await press(visibleButton('Find these orders'));
+          if(scene.name==='guided-activate')await waitFor(page,`(${visibleButton('Request browser approval')})?.disabled===true`);
+        }
         if(scene.contains)await waitFor(page,`document.body.innerText.includes(${JSON.stringify(scene.contains)})`);
         if(scene.name==='overview'||scene.name==='orders'){
           const row=visibleButton(summary.orderReference);
@@ -116,7 +146,8 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         await checkPage(page,cssWidth);
         const tree=await page.debugger.sendCommand('Accessibility.getFullAXTree');
         assert.ok(tree.nodes.some(n=>n.role?.value==='heading'&&squash(n.name?.value||'')===squash(scene.heading)),`Missing accessible heading: ${scene.heading}`);
-        if(width===1280&&scale===1)await capture(scene.name+'-'+theme);
+        if(captureViewport)await capture(`${scene.name}-${theme}-${width}x${height}-${Math.round(scale*100)}pct`,{width,height,scale,cssWidth});
+        else if(width===1280&&scale===1)await capture(scene.name+'-'+theme);
         report.runs.push({...report.currentRun});
       }
     }

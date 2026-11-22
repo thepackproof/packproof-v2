@@ -240,7 +240,11 @@ jobs:
       - run: npm run verify:artifacts
       - name: Verify actual unified host renderer, Logistics entry and access recovery at Windows scales
         timeout-minutes: 5
-        run: node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+        run: |
+          node node_modules/electron/cli.js --disable-gpu ../desktop/scripts/check-unified-entry.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node node_modules/electron/cli.js --disable-gpu scripts/check-renderer-layout.cjs --unified-workspace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

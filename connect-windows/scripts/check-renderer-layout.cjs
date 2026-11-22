@@ -8,14 +8,19 @@ const { setTimeout: delay } = require("node:timers/promises");
 const { app, BrowserWindow, ipcMain, net, protocol } = require("electron");
 
 const root = path.join(__dirname, "..");
-const packaged = process.argv.includes("--packaged-workspace");
+const unified = process.argv.includes("--unified-workspace");
+const packaged = unified || process.argv.includes("--packaged-workspace");
 const assets = packaged ? path.join(root,"release",process.env.APP_ENV || "development","win32-x64","win-unpacked","resources","app.asar") : root;
+if (unified) {
+  assert.equal(JSON.parse(fs.readFileSync(path.join(assets,"package.json"),"utf8")).main,"dist/commerce/main/index.cjs","Unified workspace evidence requires the actual unified host package");
+  assert.ok(fs.existsSync(path.join(assets,"dist","commerce","main","preload.cjs")),"Unified host preload is missing");
+}
 const renderer = path.join(assets, "dist", "renderer");
 const appUrl = "packproof-connect://app/index.html";
 protocol.registerSchemesAsPrivileged([{scheme:"packproof-connect", privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 app.enableSandbox();
-const report = { scope: packaged ? "packaged ASAR renderer and preload; isolated synthetic IPC state" : "synthetic Electron renderer", platform: process.platform, electron: process.versions.electron, runs: [] };
-const out = path.join(root, "build", packaged ? "workspace-layout.json" : "renderer-layout.json");
+const report = { scope: unified ? "actual unified ASAR Logistics renderer and production preload; isolated synthetic IPC state" : packaged ? "packaged ASAR renderer and preload; isolated synthetic IPC state" : "synthetic Electron renderer", sourceCommit: process.env.GITHUB_SHA || null, platform: process.platform, electron: process.versions.electron, runs: [] };
+const out = path.join(root, "build", unified ? "unified-ux-screens/workspace-layout.json" : packaged ? "workspace-layout.json" : "renderer-layout.json");
 let watchdog;
 
 function saveReport() {
@@ -165,7 +170,8 @@ async function main() {
     });
     if (packaged) {
       const harness={page,state,appUrl,report,stage,reach,keyboard,waitFor,checkPage,
-        directory:path.join(root,"build","workspace-screens"), setStatus:next=>{ currentState=next; },
+        directory:path.join(root,"build",unified ? "unified-ux-screens/workspace-screens" : "workspace-screens"), setStatus:next=>{ currentState=next; },
+        ...(unified ? {themes:["light"],displayCases:[[1440,900,1],[1280,800,1.25]],captureViewport:true,includeGuidedSetup:true} : {}),
         register:(method,data)=>{
           ipcMain.removeHandler("connect:"+method);
           ipcMain.handle("connect:"+method,async (event,...args)=>{
