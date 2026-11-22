@@ -3,7 +3,7 @@ import {buildRndRequest,type RndOperationId,type RndInput,type RndOutput} from '
 import type {RndCapabilities,RndSnapshot,Feature,ReviewerAnnotation,DerivativeGrant} from '../../../web/src/rnd/types';
 import type { OnboardingState, Action } from "../../../packages/onboarding/model";
 import { randomUUID } from 'node:crypto';
-import { readInstallationSetupAccess, type InstallationSetupLocator } from './installation-setup';
+import { readInstallationSetupAccess, type InstallationSetupLocator, type InstallationSetupAccess } from './installation-setup';
 import type { DesktopConfig } from './config.js';
 import type { CanonicalProof, ProfileView, ProofCollectionItem, FulfillmentQueueItem, PackingStationResolveView, ConnectedAccountsListView, CommerceConnectionView, CommerceSyncView, EvidenceUploadView, AccessLinkView, PublicProofView, TransactionWriteInput, ManifestView, ShipmentIntegrityView } from '../../../web/src/api/types.js';
 
@@ -30,6 +30,35 @@ export interface PartReceipt { partNumber: number; sha256: string; byteSize: num
 interface RequestOptions { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'; body?: unknown; bytes?: Uint8Array; signal?: AbortSignal; idempotencyKey?: string; auth?: boolean; timeout?: number; range?: string }
 const id = (value: string) => encodeURIComponent(value);
 
+function objectFields(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function pendingFileReview(value: unknown, locator: InstallationSetupLocator) {
+  const row = objectFields(value), proposal = objectFields(row?.pendingProposal);
+  const contract = objectFields(proposal?.sourceContract), history = objectFields(contract?.historyPolicy);
+  const hash = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  if (!row || row.installationId !== locator.installationId || row.id !== locator.installationId ||
+      row.environment !== locator.environment || typeof row.organizationId !== 'string' ||
+      (locator.organizationId !== undefined && row.organizationId !== locator.organizationId) ||
+      row.state !== 'setup' || row.configRevision !== 0 || row.config !== null || row.configSha256 !== null ||
+      row.testImportId !== null || row.verifiedImportId !== null || !hash(row.pendingProposalSha256) ||
+      !proposal || !contract || contract.schema !== 'packproof.scheduled-csv/v2' ||
+      (contract.basedOnConfigRevision !== undefined && contract.basedOnConfigRevision !== 0) ||
+      !history || history.mode !== 'selected_then_new' || !hash(history.initialFileSha256) || !hash(history.baselineSha256) ||
+      typeof history.initialFileName !== 'string' || !/\.csv$/i.test(history.initialFileName) || history.initialFileName.length > 255 ||
+      /[\\/:*?"<>|\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(history.initialFileName) || typeof history.observedAt !== 'string') return;
+  if (!hash(proposal.folderDigest) || ['sourceName', 'integrationAccountId', 'operatorMembershipId'].some(key =>
+    typeof row[key] !== 'string' || !row[key] || proposal[key] !== row[key]) || (proposal.locationId ?? null) !== row.locationId) return;
+  const timestamp = history.observedAt;
+  if (!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp) || timestamp.startsWith('0000')) return;
+  const day = timestamp.slice(0, 10), dayStart = Date.parse(day + 'T00:00:00Z'), observed = Date.parse(timestamp);
+  if (!Number.isFinite(dayStart) || new Date(dayStart).toISOString().slice(0, 10) !== day ||
+      !Number.isFinite(observed) || observed > Date.now() + 60_000) return;
+  return { organizationId: row.organizationId, proposalSha256: row.pendingProposalSha256,
+    fileName: history.initialFileName, expiresAt: new Date(observed + 30 * 60_000).toISOString() };
+}
+
 /** Main-process-only transport. No arbitrary endpoint is exposed to renderer IPC. */
 export class DesktopApi {
   private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{this.requireResearch();const request=buildRndRequest(operation,input);return this.request(request.path,{method:request.method as RequestOptions['method'],body:request.body,idempotencyKey:request.headers['Idempotency-Key']});}
@@ -40,16 +69,22 @@ export class DesktopApi {
     return this.request<{canConfigure:boolean; organizationId:string; environment:string; locationId:string|null; userId:string}>(
       '/me/records/agent-installations/'+id(scope.installationId)+'/workspace-access?'+query);
   }
-  async installationSetupAccess(locator: InstallationSetupLocator) {
+  async installationSetupAccess(locator: InstallationSetupLocator): Promise<InstallationSetupAccess & {
+    pendingFileReview?: { proposalSha256: string; fileName: string; expiresAt: string };
+  }> {
     const userId = this.options.getAccountId();
     if (!userId) throw new DesktopApiError('UNAUTHENTICATED', 'Sign in to PackProof.', 401);
     const signal = AbortSignal.timeout(15_000);
-    const access = await readInstallationSetupAccess(locator, userId, path => {
+    let review: ReturnType<typeof pendingFileReview>;
+    const access = await readInstallationSetupAccess(locator, userId, async path => {
       this.assertAccount(userId);
-      return this.request(path, { signal });
+      const value = await this.request(path, { signal });
+      if (path.startsWith('/me/records/agent-installations/')) review = pendingFileReview(value, locator);
+      return value;
     });
     this.assertAccount(userId);
-    return access;
+    return review && review.organizationId === access.organizationId
+      ? { ...access, pendingFileReview: { proposalSha256: review.proposalSha256, fileName: review.fileName, expiresAt: review.expiresAt } } : access;
   }
   facilitySuggestions(scope: { installationId: string; organizationId: string; environment: string }, input: unknown) {
     const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });
