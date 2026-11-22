@@ -37,7 +37,7 @@ const scenes = [
   {name:'assembled-order',nav:'Orders',action:'proof',heading:'Proof '+summary.proofId,contains:summary.orderReference},
 ];
 const guidedScenes = [
-  {name:'guided-order',step:'order',heading:'Start with an order you know.',contains:'Order preview · Sample',guided:true},
+  {name:'guided-order',step:'order',heading:'Start with an order you know.',guided:true},
   {name:'guided-sources',step:'packing',heading:'Where can we look?',contains:'Review a known order',guided:true},
   {name:'guided-review',step:'review',heading:'Does this match the shipment?',contains:'packages.xml',guided:true,action:'guided-preview'},
   {name:'guided-activate',step:'output',heading:'Approve the facility setup.',contains:'Known-order replay',guided:true},
@@ -131,6 +131,7 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         await heading(scene.heading);
         if(scene.guided){
           await waitFor(page,`!!document.querySelector('main[aria-label="Guided facility setup"]')`);
+          if(scene.name==='guided-order')await waitFor(page,`[...document.querySelectorAll('.setup-context .setup-tag')].some(el=>el.checkVisibility() && el.textContent.trim()==='Order preview · Sample')`);
           if(scene.action==='guided-preview')await press(visibleButton('Find these orders'));
           if(scene.name==='guided-activate')await waitFor(page,`(${visibleButton('Request browser approval')})?.disabled===true`);
         }
