@@ -27,6 +27,174 @@ public sealed class GuidedSetupTests : IDisposable
     private static JsonElement Policy(bool approved=false,bool verified=false,bool active=false)=>Json.Element(new{state=active?"active":"ready",config=Configuration(),configSha256="approved",configRevision=1,integrationAccountId="source",operatorMembershipId="operator",sourceName="Synthetic",testImportId=approved?"import-fixture":null,verifiedImportId=verified?"import-fixture":null,credentialExpiresAt=DateTimeOffset.UtcNow.AddDays(20)});
     private ProtectedStore Store(){var store=new ProtectedStore(root,new PlainProtector());store.Initialize();return store;}
     private static LocalState State()=>new(){Token="synthetic-secret",InstallationId="installation-fixture",Folder="synthetic-folder",FolderDigest="folder",FileName="synthetic.csv",FileDigest=Digest,CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(20),ServerConfig=Policy(),LastPolicyCheckAt=DateTimeOffset.UtcNow,GuidedSetup=true,GuidedProposalSha256="approved",GuidedFileSha256=Digest,GuidedPhase="permission_review",LocalPaused=true};
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Restarted_expired_review_recaptures_the_selected_original_and_history_before_proposing(bool changed)
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(root, "reports")).FullName;
+        var original = Path.Combine(folder, "synthetic.csv");
+        var latest = changed ? Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(Original).Replace(",12,", ",17,")) : Original;
+        var expectedDigest = Convert.ToHexStringLower(SHA256.HashData(latest));
+        var store = Store();
+        var state = State();
+        var expired = DateTimeOffset.UtcNow.AddDays(-4).ToString("O");
+        state.Folder = folder;
+        state.DraftRevision = 7;
+        state.BaselineObservedAt = expired;
+        state.BaselineSha256 = "old-history";
+        state.GuidedProposalSha256 = "expired-proposal";
+        state.LocalAnalysis = Json.Element(new { ready=true, headers=new[]{"Shipment reference"}, configuration=Configuration() });
+        state.ExcludedFileNames = ["synthetic.csv"];
+        JsonElement pending = Configuration();
+        JsonElement PolicyResponse() => Json.Element(new {
+            state="setup", installationId=state.InstallationId, configRevision=0, pendingProposal=pending,
+            integrationAccountId="source", operatorMembershipId="operator", sourceName="Synthetic",
+            capabilities=new {sourceContracts=new[]{"packproof.scheduled-csv/v2"},rulesVersion=CsvSemantics.Version,
+                interpretationVersions=new[]{CsvSemantics.InterpretationVersion}},credentialExpiresAt=state.CredentialExpiresAt
+        });
+        state.ServerConfig = PolicyResponse();
+        store.Write("state.bin",state);
+        File.WriteAllText(Path.Combine(folder,"arrived-before-reread.csv"), "another report");
+        var proposals=0;
+        JsonElement Respond(HttpRequestMessage request)
+        {
+            if(request.RequestUri!.AbsolutePath.EndsWith("/heartbeat")) return PolicyResponse();
+            Assert.EndsWith("/config-proposals",request.RequestUri.AbsolutePath);
+            proposals++;
+            pending = JsonDocument.Parse(request.Content!.ReadAsStringAsync().Result).RootElement.Clone();
+            return Json.Element(new {proposalSha256="new-proposal",approvalPath="/app/records/connect/approve?installationId=installation-fixture"});
+        }
+        var restored=store.Read<LocalState>("state.bin")!;
+        using var runtime=new AgentRuntime(Host(),store,new PackProofClient(Host(),new Handler(Respond)),restored,
+            (source,name)=>File.ReadAllBytes(Path.Combine(source,name)));
+        var consent=Json.Element(new {wholeFileUploadApproved=true,draftRevision=7});
+        Assert.Equal("APPROVAL_EXPIRED",(await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("startSetup",consent,default))).Code);
+        var select=Json.Element(new {fileName="synthetic.csv"});
+        await Assert.ThrowsAsync<FileNotFoundException>(()=>runtime.Command("localPreview",select,default));
+        Assert.Equal(0,proposals);
+        File.WriteAllBytes(original,latest);
+        await runtime.Command("localPreview",select,default);
+        Assert.False(restored.GuidedSetup);
+        Assert.Null(restored.GuidedProposalSha256);
+        Assert.Equal(expectedDigest,restored.FileDigest);
+        Assert.Contains("arrived-before-reread.csv",restored.ExcludedFileNames!);
+        Assert.NotEqual("old-history",restored.BaselineSha256);
+        Assert.NotEqual(expired,restored.BaselineObservedAt);
+        Assert.Equal(0,proposals);
+        Assert.Equal("PREVIEW_CHANGED",(await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("startSetup",consent,default))).Code);
+        await runtime.Command("startSetup",Json.Element(new {wholeFileUploadApproved=true,draftRevision=restored.DraftRevision}),default);
+        Assert.Equal(1,proposals);
+        var history=pending.GetProperty("sourceContract").GetProperty("historyPolicy");
+        Assert.Equal(expectedDigest,history.GetProperty("initialFileSha256").GetString());
+        Assert.Equal(restored.BaselineSha256,history.GetProperty("baselineSha256").GetString());
+        Assert.Equal(restored.BaselineObservedAt,history.GetProperty("observedAt").GetString());
+        Assert.True(restored.LocalPaused);
+        Assert.Null(restored.SetupQueueId);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Unbound_historical_review_recovers_one_metadata_proposal_after_restart_or_a_lost_response(bool priorAttemptCommitted)
+    {
+        var folder=Directory.CreateDirectory(Path.Combine(root,"shipping")).FullName;
+        var file=Path.Combine(folder,"synthetic.csv");
+        File.WriteAllBytes(file,Original);
+        var store=Store();
+        var state=State();
+        state.Folder=folder;
+        state.FolderDigest=Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(folder.ToUpperInvariant())));
+        string oldDigest=new('a',64), newDigest=new('c',64);
+        string serverDigest=oldDigest;
+        JsonElement pending=default;
+        int posts=0;
+        string? firstRequest=null;
+        bool moved=false;
+        JsonElement PolicyView()=> Json.Element(new {
+            installationId=state.InstallationId,organizationId="org-test",environment="sandbox",state="setup",
+            configRevision=moved?1:0,pendingProposalSha256=serverDigest,
+            pendingProposal=pending.ValueKind==JsonValueKind.Undefined?(JsonElement?)null:pending,
+            sourceName="Synthetic",integrationAccountId="source",operatorMembershipId="operator",locationId=(string?)null,
+            credentialExpiresAt=state.CredentialExpiresAt,capabilities=new {sourceContracts=new[]{"packproof.scheduled-csv/v2"},
+                rulesVersion=CsvSemantics.Version,interpretationVersions=new[]{CsvSemantics.InterpretationVersion}}
+        });
+        JsonElement Respond(HttpRequestMessage request)
+        {
+            if(request.Method==HttpMethod.Get && request.RequestUri!.AbsolutePath=="/v1/partner/agent/config") return PolicyView();
+            Assert.Equal("/v1/partner/agent/config-proposals",request.RequestUri!.AbsolutePath);
+            Assert.Equal(HttpMethod.Post,request.Method);
+            Assert.False(store.Read<LocalState>("state.bin")!.GuidedSetup);
+            string body=request.Content!.ReadAsStringAsync().Result;
+            if(firstRequest is not null) Assert.Equal(firstRequest,body);
+            firstRequest=body;
+            posts++;
+            if(posts!=1 || priorAttemptCommitted)
+            {
+                pending=JsonDocument.Parse(body).RootElement.Clone(); serverDigest=newDigest;
+            }
+            if(posts==1) throw new HttpRequestException("Local fixture dropped the response.");
+            return Json.Element(new {proposalSha256=serverDigest});
+        }
+        AgentRuntime Restart(LocalState persisted)=>new(Host(),store,new PackProofClient(Host(),new Handler(Respond)),persisted,
+            (source,name)=>File.ReadAllBytes(Path.Combine(source,name)));
+        state.ServerConfig=PolicyView();
+        using(var originalRuntime=Restart(state))
+            await originalRuntime.Command("localPreview",Json.Element(new {fileName="synthetic.csv"}),default);
+        var saved=JsonNode.Parse(state.LocalAnalysis!.Value.GetRawText())!.AsObject();
+        var config=saved["configuration"]!.AsObject();
+        var oldContract=config["sourceContract"]!.AsObject();
+        oldContract.Remove("basedOnConfigRevision");
+        oldContract.Remove("interpretationVersion");
+        state.BaselineObservedAt=DateTimeOffset.UtcNow.AddDays(-4).ToString("O");
+        oldContract["historyPolicy"]!["observedAt"]=state.BaselineObservedAt;
+        pending=JsonSerializer.SerializeToElement(config);
+        state.LocalAnalysis=JsonSerializer.SerializeToElement(saved);
+        if(!priorAttemptCommitted)
+        {
+            // Some upgraded installations retained the original binding and pending review without its local preview.
+            state.LocalAnalysis=null; state.BaselineSha256=null; state.ExcludedFileNames=null;
+        }
+        state.ServerConfig=PolicyView(); state.GuidedSetup=true; state.GuidedProposalSha256=oldDigest;
+        store.Write("state.bin",state);
+        var args=Json.Element(new {installationId=state.InstallationId,organizationId="org-test",environment="sandbox",
+            expectedProposalSha256=oldDigest,wholeFileUploadApproved=true});
+        File.WriteAllText(Path.Combine(folder,"older-at-renewal.csv"),"other report");
+        using(var first=Restart(store.Read<LocalState>("state.bin")!))
+        {
+            moved=true;
+            Assert.Equal("PREVIEW_CHANGED",(await Assert.ThrowsAsync<ConnectException>(()=>first.Command("refreshPendingFileReview",args,default))).Code);
+            moved=false;
+            File.WriteAllBytes(file,Encoding.UTF8.GetBytes("replaced"));
+            Assert.Equal("SOURCE_CHANGED",(await Assert.ThrowsAsync<ConnectException>(()=>first.Command("refreshPendingFileReview",args,default))).Code);
+            File.Delete(file);
+            await Assert.ThrowsAsync<FileNotFoundException>(()=>first.Command("refreshPendingFileReview",args,default));
+            Assert.Equal(0,posts);
+            File.WriteAllBytes(file,Original);
+            await Assert.ThrowsAsync<HttpRequestException>(()=>first.Command("refreshPendingFileReview",args,default));
+        }
+        var durable=store.Read<LocalState>("state.bin")!;
+        Assert.False(durable.GuidedSetup); Assert.True(durable.LocalPaused); Assert.NotNull(durable.FileReviewRenewal);
+        using var retry=Restart(durable);
+        var result=Json.Element(await retry.Command("refreshPendingFileReview",args,default));
+        Assert.Equal(newDigest,result.GetProperty("proposalSha256").GetString());
+        Assert.Equal(priorAttemptCommitted?1:2,posts);
+        Assert.False(durable.GuidedSetup); Assert.True(durable.LocalPaused); Assert.Null(durable.SetupQueueId);
+        Assert.Contains("older-at-renewal.csv",durable.ExcludedFileNames!);
+        var guarded=pending.GetProperty("sourceContract");
+        Assert.Equal(0,guarded.GetProperty("basedOnConfigRevision").GetInt32());
+        Assert.Equal(CsvSemantics.InterpretationVersion,guarded.GetProperty("interpretationVersion").GetString());
+        var history=guarded.GetProperty("historyPolicy");
+        Assert.Equal(Digest,history.GetProperty("initialFileSha256").GetString());
+        Assert.Equal(durable.BaselineSha256,history.GetProperty("baselineSha256").GetString());
+        Assert.NotEqual(state.BaselineObservedAt,history.GetProperty("observedAt").GetString());
+        var expected=JsonNode.Parse(config.ToJsonString())!.AsObject();
+        var expectedContract=expected["sourceContract"]!.AsObject();
+        expectedContract["basedOnConfigRevision"]=0;
+        expectedContract["interpretationVersion"]=CsvSemantics.InterpretationVersion;
+        expectedContract["historyPolicy"]!["baselineSha256"]=durable.BaselineSha256;
+        expectedContract["historyPolicy"]!["observedAt"]=durable.BaselineObservedAt;
+        Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expected),pending));
+    }
     [Fact] public async Task Guided_setup_survives_restart_and_requires_exact_batch_then_separate_recurring_approval()
     {
         var approved=false;var terminal=false;var verified=false;var active=false;var previews=0;var commits=0;

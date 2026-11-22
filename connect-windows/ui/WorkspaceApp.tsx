@@ -186,6 +186,19 @@ function Experience({
           {ws.attention}
         </div>
       )}
+      {!status.setupAccess && !ws.offlineDraftOnly && status.installationId && status.binding?.locationId && (
+        status.pendingProposal?.sourceContract?.schema === "packproof.scheduled-csv/v2" ? (
+          <div className="pp-system-notice">
+            <span>A shipment report is waiting for review.</span>
+            <button className="pp-text-button" onClick={onLegacy}>Review the shipment report</button>
+          </div>
+        ) : showSetup && !status.config && (
+          <details className="setup-partner">
+            <summary>Other source options</summary>
+            <button className="setup-link" onClick={onLegacy}>Set up a scheduled shipment CSV</button>
+          </details>
+        )
+      )}
       {status.installationId && status.capabilities?.orderWorkspace === false && (
         <div className="pp-system-notice" role="status">
           Your server supports earlier connections. You can prepare sources here while the order workspace is

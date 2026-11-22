@@ -4,18 +4,163 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 namespace PackProof.Connect;
 
+public sealed record FileReviewRenewal(string InstallationId, string OrganizationId, string Environment,
+    string PreviousDigest, JsonElement Configuration, string[] ExcludedFileNames);
+
 public sealed partial class AgentRuntime
 {
     private void InvalidateAnalysis()
     {
-        state.LocalAnalysis=null;state.ExcludedFileNames=null;state.BaselineSha256=null;state.BaselineObservedAt=null;
+        state.LocalAnalysis=null;state.ExcludedFileNames=null;state.BaselineSha256=null;state.BaselineObservedAt=null;state.FileReviewRenewal=null;
         state.GuidedSetup=false;state.GuidedPhase=null;state.GuidedProposalSha256=null;state.GuidedFileSha256=null;state.VerifiedSetupImportId=null;state.DraftRevision++;
     }
-    private void CaptureBaseline()
+    private (string[] Files, string Digest, string ObservedAt) ReadBaseline()
     {
-        state.ExcludedFileNames=Directory.EnumerateFiles(state.Folder!,"*",SearchOption.TopDirectoryOnly).Where(p=>Path.GetExtension(p).Equals(".csv",StringComparison.OrdinalIgnoreCase)).Select(Path.GetFileName).Select(n=>n!).OrderBy(n=>n,StringComparer.OrdinalIgnoreCase).ToArray();
-        if(state.ExcludedFileNames.Length>10000)throw new ConnectException("SOURCE_CAPACITY_REACHED","Use the approved bounded shipment folder.");
-        state.BaselineSha256=Hash(JsonSerializer.Serialize(state.ExcludedFileNames));state.BaselineObservedAt=DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ",CultureInfo.InvariantCulture);
+        var files=Directory.EnumerateFiles(state.Folder!,"*",SearchOption.TopDirectoryOnly)
+            .Where(p=>Path.GetExtension(p).Equals(".csv",StringComparison.OrdinalIgnoreCase))
+            .Select(p=>Path.GetFileName(p)!).Take(10001).OrderBy(n=>n,StringComparer.OrdinalIgnoreCase).ToArray();
+        if(files.Length>10000)throw new ConnectException("SOURCE_CAPACITY_REACHED","Use the approved bounded shipment folder.");
+        return (files,Hash(JsonSerializer.Serialize(files)),DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ",CultureInfo.InvariantCulture));
+    }
+    private void CaptureBaseline() => (state.ExcludedFileNames,state.BaselineSha256,state.BaselineObservedAt)=ReadBaseline();
+    private static ConnectException ReviewChanged() => new("PREVIEW_CHANGED","This review no longer matches the saved report. Open the latest review or choose the original report again.");
+    private static bool ReviewDigest(string? value) => value?.Length == 64 && value.All(c => c is >= 'a' and <= 'f' or >= '0' and <= '9');
+
+    private async Task<object> RefreshPendingFileReview(JsonElement input, CancellationToken ct)
+    {
+        RequireCredential();
+        RequireReasonableClock(DateTimeOffset.UtcNow);
+        if (!input.TryGetProperty("wholeFileUploadApproved",out var consent) || consent.ValueKind != JsonValueKind.True ||
+            input.EnumerateObject().Any(p=>p.Name is not ("installationId" or "organizationId" or "environment" or "expectedProposalSha256" or "wholeFileUploadApproved")))
+            throw new ConnectException("UPLOAD_CONSENT_REQUIRED","Confirm that you want a new browser review of this entire saved shipment report.");
+        var installation = input.GetProperty("installationId").GetString();
+        var organization = input.GetProperty("organizationId").GetString();
+        var environment = input.GetProperty("environment").GetString();
+        var expected = input.GetProperty("expectedProposalSha256").GetString();
+        if (installation is null || organization is null || environment is not ("sandbox" or "live") || !ReviewDigest(expected) ||
+            installation != state.InstallationId || state.CredentialRecoveryConfirmedAt is not null ||
+            state.CredentialExpiresAt is null || state.CredentialExpiresAt <= DateTimeOffset.UtcNow || state.Folder is null || state.FileName is null ||
+            !ReviewDigest(state.FileDigest) || state.SetupQueueId is not null || !state.LocalPaused) throw ReviewChanged();
+
+        // Fetch the installation's current state with its own credential while the native command gate is held.
+        var live = await api.Request("GET","/v1/partner/agent/config",null,state.Token,null,ct);
+        RequireReasonableClock(DateTimeOffset.UtcNow);
+        if (Optional(live,"installationId")?.GetString()!=installation || Optional(live,"organizationId")?.GetString()!=organization ||
+            Optional(live,"environment")?.GetString()!=environment || Optional(live,"state")?.GetString()!="setup" ||
+            !live.TryGetProperty("configRevision",out var revision) || revision.GetInt32()!=0 ||
+            Optional(live,"config") is {ValueKind:JsonValueKind.Object} ||
+            Optional(live,"pendingProposal") is not {ValueKind:JsonValueKind.Object} proposal ||
+            Optional(live,"pendingProposalSha256")?.GetString() is not string digest || !ReviewDigest(digest))
+            throw ReviewChanged();
+        if (Optional(proposal,"sourceContract") is not {ValueKind:JsonValueKind.Object} contract ||
+            Optional(contract,"schema")?.GetString()!="packproof.scheduled-csv/v2" ||
+            Optional(contract,"rulesVersion")?.GetString()!=CsvSemantics.Version ||
+            Optional(contract,"profileVersion")?.GetString()!=CsvSemantics.Profile ||
+            Optional(contract,"historyPolicy") is not {ValueKind:JsonValueKind.Object} history ||
+            Optional(history,"mode")?.GetString()!="selected_then_new" ||
+            Optional(history,"initialFileName")?.GetString()!=state.FileName || Optional(history,"initialFileSha256")?.GetString()!=state.FileDigest ||
+            Optional(proposal,"folderDigest")?.GetString()!=state.FolderDigest || state.FolderDigest!=Hash(state.Folder.ToUpperInvariant()) ||
+            new[]{"integrationAccountId","operatorMembershipId","sourceName","locationId"}.Any(field=>Comparable(proposal,field)!=Comparable(live,field)))
+            throw ReviewChanged();
+        if (!DateTimeOffset.TryParse(Optional(history,"observedAt")?.GetString(),out var oldObservation)) throw ReviewChanged();
+        var previous=state.FileReviewRenewal;
+        var isOurReplacement=previous is not null && previous.InstallationId==installation && previous.OrganizationId==organization &&
+            previous.Environment==environment && JsonElement.DeepEquals(previous.Configuration,proposal) && digest!=previous.PreviousDigest;
+        if (digest!=expected && !(isOurReplacement && expected==previous!.PreviousDigest)) throw ReviewChanged();
+        if (DateTimeOffset.UtcNow<=oldObservation.AddMinutes(30) && !isOurReplacement) throw ReviewChanged();
+
+        byte[] ReadSavedOriginal()
+        {
+            var bytes=setupSnapshot(state.Folder,state.FileName);
+            if (HashBytes(bytes)!=state.FileDigest) throw new ConnectException("SOURCE_CHANGED","The saved report changed. Choose it again and review its updated contents.");
+            return bytes;
+        }
+        var original=ReadSavedOriginal();
+        FolderSource.ValidateContract(original,proposal);
+        if (isOurReplacement && DateTimeOffset.UtcNow<=oldObservation.AddMinutes(30))
+            return FinishFileReviewRenewal(previous!,digest);
+        if (digest!=expected || state.BaselineSha256 is not null && Optional(history,"baselineSha256")?.GetString()!=state.BaselineSha256 ||
+            state.GuidedFileSha256 is not null && state.GuidedFileSha256!=state.FileDigest ||
+            state.GuidedProposalSha256 is not null && state.GuidedProposalSha256!=digest) throw ReviewChanged();
+        // A protected filename and byte identity survive even in releases without the cached analysis.
+        // Reject conflicting cached bindings, but an absent preview is rebuilt below from the original.
+        var binding=Optional(state.LocalAnalysis,"binding");
+        if (binding is {ValueKind:JsonValueKind.Object} saved &&
+            ((Optional(saved,"sourceBindingId")?.GetString() is string priorId && priorId!=installation) ||
+             (Optional(saved,"fileSha256")?.GetString() is string priorFile && priorFile!=state.FileDigest) ||
+             (Optional(saved,"folderDigest")?.GetString() is string priorFolder && priorFolder!=state.FolderDigest)))
+            throw ReviewChanged();
+        if (Optional(state.LocalAnalysis,"configuration") is {ValueKind:JsonValueKind.Object} local &&
+            Optional(local,"mapping") is {ValueKind:JsonValueKind.Object} priorMapping &&
+            !JsonElement.DeepEquals(priorMapping,proposal.GetProperty("mapping"))) throw ReviewChanged();
+
+        // Older initial configurations may predate interpretation pinning. Requalify the same mapping and pin
+        // revision zero only for a still-unconfigured installation. The API checks this revision under its row lock.
+        if (contract.TryGetProperty("basedOnConfigRevision",out var oldRevision) && oldRevision.GetInt32()!=0) throw ReviewChanged();
+        var mapping=JsonSerializer.Deserialize<Dictionary<string,string>>(proposal.GetProperty("mapping"),Json.Options)!;
+        var confirmed=contract.GetProperty("confirmedFields").EnumerateArray().Select(v=>v.GetString()!).ToArray();
+        var parsed=FolderSource.Parse(original);
+        if (!contract.GetProperty("expectedHeaders").EnumerateArray().Select(h=>h.GetString()).SequenceEqual(parsed.Headers)) throw ReviewChanged();
+        var result=CsvSemantics.Analyze(parsed,mapping,confirmed,Optional(proposal,"locationId")?.GetString(),interpret:true);
+        if (!result.Ready || result.Interpretation?.Outcome!="automatic" || result.Interpretation.Grain!="shipment" ||
+            result.Mapping.Count!=mapping.Count || mapping.Any(pair=>result.Mapping.GetValueOrDefault(pair.Key)!=pair.Value) ||
+            binding is {ValueKind:JsonValueKind.Object} cached && Optional(cached,"headerFingerprint")?.GetString() is string fingerprint &&
+            fingerprint!=result.HeaderFingerprint) throw ReviewChanged();
+        var baseline=ReadBaseline();
+        if (!baseline.Files.Contains(state.FileName,StringComparer.OrdinalIgnoreCase)) throw ReviewChanged();
+        var candidate=JsonNode.Parse(proposal.GetRawText())!.AsObject();
+        var refreshed=candidate["sourceContract"]!.AsObject();
+        refreshed["interpretationVersion"]=CsvSemantics.InterpretationVersion;
+        refreshed["basedOnConfigRevision"]=0;
+        refreshed["historyPolicy"]!["observedAt"]=baseline.ObservedAt;
+        refreshed["historyPolicy"]!["baselineSha256"]=baseline.Digest;
+        var replacement=JsonSerializer.SerializeToElement(candidate);
+        if (!CsvSemantics.AdmissionSupported(replacement.GetProperty("sourceContract"),Optional(live,"capabilities")))
+            throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server cannot verify the current report interpretation. Open the source for a new manual review.");
+        var attempt=new FileReviewRenewal(installation,organization,environment,digest,replacement,baseline.Files);
+        if (previous is not null && previous.InstallationId==installation && previous.OrganizationId==organization &&
+            previous.Environment==environment && previous.PreviousDigest==digest && previous.ExcludedFileNames.SequenceEqual(baseline.Files))
+        {
+            var priorHistory=previous.Configuration.GetProperty("sourceContract").GetProperty("historyPolicy");
+            if (DateTimeOffset.TryParse(priorHistory.GetProperty("observedAt").GetString(),out var captured) &&
+                DateTimeOffset.UtcNow<=captured.AddMinutes(30)) attempt=previous;
+        }
+        var checkedPolicy=await api.Request("GET","/v1/partner/agent/config",null,state.Token,null,ct);
+        if (Comparable(checkedPolicy,"pendingProposalSha256")!=digest || Comparable(checkedPolicy,"state")!="setup" ||
+            Comparable(checkedPolicy,"installationId")!=installation || Comparable(checkedPolicy,"organizationId")!=organization ||
+            Comparable(checkedPolicy,"environment")!=environment || checkedPolicy.GetProperty("configRevision").GetInt32()!=0)
+            throw ReviewChanged();
+        _=ReadSavedOriginal();
+        state.FileReviewRenewal=attempt;
+        state.GuidedSetup=false;
+        state.GuidedPhase=null;
+        Save();
+        var reply=await api.Request("POST","/v1/partner/agent/config-proposals",attempt.Configuration,state.Token,null,ct);
+        var next=Optional(reply,"proposalSha256")?.GetString();
+        if (!ReviewDigest(next) || next==digest) throw ReviewChanged();
+        return FinishFileReviewRenewal(attempt,next!);
+    }
+    private object FinishFileReviewRenewal(FileReviewRenewal attempt,string digest)
+    {
+        var history=attempt.Configuration.GetProperty("sourceContract").GetProperty("historyPolicy");
+        state.ExcludedFileNames=attempt.ExcludedFileNames;
+        state.BaselineSha256=history.GetProperty("baselineSha256").GetString();
+        state.BaselineObservedAt=history.GetProperty("observedAt").GetString();
+        if (state.LocalAnalysis is JsonElement analysis)
+        {
+            var updated=JsonNode.Parse(analysis.GetRawText())!.AsObject();
+            updated["configuration"]=JsonNode.Parse(attempt.Configuration.GetRawText());
+            state.LocalAnalysis=JsonSerializer.SerializeToElement(updated);
+        }
+        // Renewal authorizes publishing the description only. A subsequent tick must never stage an original.
+        state.GuidedSetup=false;
+        state.GuidedPhase=null;
+        state.GuidedFileSha256=state.FileDigest;
+        state.GuidedProposalSha256=digest;
+        state.LocalPaused=true;
+        state.ApprovalPath="/app/records/connect/approve?installationId="+Uri.EscapeDataString(attempt.InstallationId);
+        Save();
+        return new {installationId=attempt.InstallationId,organizationId=attempt.OrganizationId,environment=attempt.Environment,proposalSha256=digest,approvalPath=state.ApprovalPath};
     }
     private byte[] CurrentSnapshot()
     {
