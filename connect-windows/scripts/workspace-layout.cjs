@@ -15,7 +15,7 @@ const sources = [['sales','order','Sales orders'],['picks','picking','Warehouse 
   .map(([id,role,name])=>({id,folder:'C:\\Sample operation\\'+name,transport:'folder',roles:[role],generation:2,state:'active',
     recognition:{state:'recognized',message:'Found records from this location.'}}));
 const folder = 'C:\\Sample operation\\Proofs';
-const home = 'Workspace overview';
+const home = 'Operations, at a glance.';
 const roleHeadings = {picking:'picking records',packing:'packing records',shipping:'shipping records',evidence:'photos and documents',handoff:'carrier handoffs',delivery:'delivery confirmations',returns:'returns'};
 const scenes = [
   {name:'welcome',step:'order',heading:'Your orders. One clear story.'},
@@ -27,14 +27,14 @@ const scenes = [
   {name:'empty-source',step:'order',heading:'No order lists in this folder yet.',contains:'No records have arrived yet.'},
   {name:'ambiguous-source',step:'order',heading:'Check your records folder.',contains:'Which column identifies this order?'},
   {name:'overview',heading:home,contains:summary.orderReference},
-  {name:'orders',nav:'Orders',heading:'Orders',contains:summary.orderReference},
-  {name:'connections',nav:'Connections',heading:'Your connections',contains:'Carrier labels'},
-  {name:'healthy-source',nav:'Connections',action:'detail',heading:'Sales orders',contains:sources[0].folder},
-  {name:'offline-source',nav:'Connections',action:'repair',heading:'Reconnect your shipping folder.',contains:sources[3].folder},
-  {name:'restored-source',nav:'Connections',action:'restore',heading:'Your folder is connected.',contains:'Carrier labels'},
-  {name:'pending-output',nav:'Needs attention',heading:'Needs attention',contains:'Local copies pending'},
-  {name:'disconnected',nav:'Orders',heading:'Orders',contains:'Reconnect to your approved workspace'},
-  {name:'assembled-order',nav:'Orders',action:'proof',heading:'Proof '+summary.proofId,contains:summary.orderReference},
+  {name:'orders',nav:'Orders & proofs',heading:'Orders',contains:summary.orderReference},
+  {name:'connections',nav:'Connected systems',heading:'Your connections',contains:'Carrier labels'},
+  {name:'healthy-source',nav:'Connected systems',action:'detail',heading:'Sales orders',contains:sources[0].folder},
+  {name:'offline-source',nav:'Connected systems',action:'repair',heading:'Reconnect your shipping folder.',contains:sources[3].folder},
+  {name:'restored-source',nav:'Connected systems',action:'restore',heading:'Your folder is connected.',contains:'Carrier labels'},
+  {name:'pending-output',nav:'Exceptions',heading:'Needs attention',contains:'Local copies pending'},
+  {name:'disconnected',nav:'Orders & proofs',heading:'Orders',contains:'Reconnect to your approved workspace'},
+  {name:'assembled-order',nav:'Orders & proofs',action:'proof',heading:'Proof '+summary.proofId,contains:summary.orderReference},
 ];
 const guidedScenes = [
   {name:'guided-order',step:'order',heading:'Start with an order you know.',guided:true},
@@ -47,7 +47,7 @@ const guidedScenes = [
 const facilityDraft = {id:'11111111-2222-4333-8444-555555555555',revision:1,scopeKey:'visual-fixture',
   steps:[],examples:[{kind:'ordinary',reference:summary.orderReference,cartons:2,labelCount:2}],
   rules:[],excludedSourceIds:[],replay:null};
-const navHeading = {Orders:'Orders',Connections:'Your connections','Needs attention':'Needs attention'};
+const navHeading = {'Orders & proofs':'Orders','Connected systems':'Your connections',Exceptions:'Needs attention'};
 const visibleButton = text => `[...document.querySelectorAll('button')].find(el=>el.checkVisibility() && el.textContent.trim().startsWith(${JSON.stringify(text)}))`;
 const navButton = text => `[...document.querySelectorAll('nav[aria-label="Workspace"] button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const squash = text => text.replace(/\s+/g,'');
