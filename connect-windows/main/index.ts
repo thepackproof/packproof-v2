@@ -35,9 +35,9 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
  if(name==='refreshPendingFileReview') {
    if(!host || !started)throw Error('Open the saved file review from the signed-in PackProof application.');
    const [input]=parsed as [{wholeFileUploadApproved:boolean;expectedProposalSha256:string}];
-   await host.openPendingFileReview(started,input,payload=>bridge.request('refreshPendingFileReview',payload),
+   const receipt=await host.openPendingFileReview(started,input,payload=>bridge.request('refreshPendingFileReview',payload),
      path=>open(approvalUrl(path,config.webBaseUrl)));
-   return {ok:true};
+   return {ok:true,value:receipt};
  }
  if (host && (name === 'openWorkspaceOrder' || name === 'openWorkspaceReview')) {
    const [proofId, revision, subject] = parsed as unknown[];

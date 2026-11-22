@@ -77,7 +77,7 @@ function stamp(value?: string) {
 
 export function Setup(props: SetupProps) {
   if (props.status.setupAccess) {
-    const key = JSON.stringify([props.status.installationId, props.status.environment, props.status.setupAccess.pendingFileReview?.proposalSha256]);
+    const key = JSON.stringify([props.status.installationId, props.status.environment, props.status.setupAccess.reason, props.status.setupAccess.pendingFileReview?.fileName]);
     return <InstallationRecovery key={key} {...props} />;
   }
   if (props.status.workspace?.guidedSetupAvailable || props.status.workspace?.offlineDraftOnly) {
@@ -94,9 +94,19 @@ export function Setup(props: SetupProps) {
  * discovery, sample success, or facility reassignment is available in this state. */
 function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps) {
   const [consent,setConsent] = useState(false), [busy,setBusy] = useState(false), [error,setError] = useState('');
-  const [confirmReview, setConfirmReview] = useState(false), [reviewOpened, setReviewOpened] = useState(false);
+  const [confirmDigest, setConfirmDigest] = useState<string>();
+  const [receipt, setReceipt] = useState<{ original?: string; opened: string }>();
   const [, updateReviewTime] = useState(0);
   const fileReview = status.setupAccess?.pendingFileReview;
+  const digest = fileReview?.proposalSha256;
+  useEffect(() => {
+    setConfirmDigest(undefined);
+    setReceipt(previous => {
+      if (!previous || !digest) return undefined;
+      if (digest === previous.opened) return previous.original ? { opened: digest } : previous;
+      return digest === previous.original ? previous : undefined;
+    });
+  }, [digest]);
   const reviewDeadline = Date.parse(fileReview?.expiresAt ?? '');
   useEffect(() => {
     const remaining = reviewDeadline - Date.now();
@@ -120,18 +130,24 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
   if (fileReview && status.installationId && !canRecover) {
     const renew = bridge.refreshPendingFileReview;
     const current = reviewDeadline > Date.now();
+    const reviewOpened = current && receipt?.opened === digest;
+    const awaitingStatus = !!receipt?.original && receipt.original === digest && receipt.opened !== digest;
     return <main className="setup-experience step-welcome" data-setup-screen="pending-file-review" aria-label="Export file review">
       <div className="setup-left">
         <span className="setup-tag">Export file review</span>
-        <h1>{reviewOpened ? 'Continue in your browser.' : current ? 'Your export file review is ready.' : 'Renew your export file review.'}</h1>
-        <p className="setup-lead">{reviewOpened
+        <h1>{reviewOpened ? 'Continue in your browser.' : awaitingStatus ? 'Checking your updated review.' : current ? 'Your export file review is ready.' : 'Renew your export file review.'}</h1>
+        <p className="setup-lead">{awaitingStatus
+          ? <>PackProof is checking the latest review for <strong>{fileReview.fileName}</strong>. If this message stays here, select <b>Check connection again</b>.</>
+          : reviewOpened
           ? <>Check the file details and permissions for <strong>{fileReview.fileName}</strong> in your browser.</>
           : current ? <>Open the current browser review for <strong>{fileReview.fileName}</strong> to check the file details and permissions.</>
           : <>The review for <strong>{fileReview.fileName}</strong> expired. PackProof can check the saved file again and open a new review. Your current connection stays in place.</>}</p>
         <div className="setup-actions">
-          {current && <button className="setup-primary" disabled={busy || !renew} onClick={() => renew && void run(() =>
-            renew({ wholeFileUploadApproved: false, expectedProposalSha256: fileReview.proposalSha256 }))}>Open current file review</button>}
-          {!current && !reviewOpened && <button className="setup-primary" disabled={busy || !renew || !Number.isFinite(reviewDeadline)} onClick={() => setConfirmReview(true)}>Request a fresh file review</button>}
+          {current && <button className="setup-primary" disabled={busy || !renew} onClick={() => renew && void run(async () => {
+            const opened = await renew({ wholeFileUploadApproved: false, expectedProposalSha256: fileReview.proposalSha256 });
+            if (alive.current && opened.proposalSha256 === fileReview.proposalSha256) setReceipt({ opened: opened.proposalSha256 });
+          })}>Open current file review</button>}
+          {!current && !awaitingStatus && <button className="setup-primary" disabled={busy || !renew || !Number.isFinite(reviewDeadline)} onClick={() => setConfirmDigest(fileReview.proposalSha256)}>Request a fresh file review</button>}
           <button className="setup-secondary" disabled={busy} onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
         </div>
         {!renew && <p role="status">Update PackProof on this computer to request a fresh review.</p>}
@@ -143,13 +159,13 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
         intro="PackProof reads the selected file on this computer. Upload and collection permissions are reviewed separately in your browser.">
         <Row icon="records" title="Selected file" detail={fileReview.fileName} />
       </Context>
-      {confirmReview && renew && <SetupDialog title="Recheck the saved export file?" onClose={() => setConfirmReview(false)}>
+      {confirmDigest === digest && !current && renew && <SetupDialog title="Recheck the saved export file?" onClose={() => setConfirmDigest(undefined)}>
         <p>PackProof will recheck the entire original <strong>{fileReview.fileName}</strong> on this computer and send a new configuration proposal for browser review. The file stays on this computer during this step.</p>
         <div className="setup-actions"><button className="setup-primary" onClick={() => {
-          setConfirmReview(false);
+          setConfirmDigest(undefined);
           void run(async () => {
-            await renew({ wholeFileUploadApproved: true, expectedProposalSha256: fileReview.proposalSha256 });
-            if (alive.current) setReviewOpened(true);
+            const opened = await renew({ wholeFileUploadApproved: true, expectedProposalSha256: fileReview.proposalSha256 });
+            if (alive.current) setReceipt({ original: fileReview.proposalSha256, opened: opened.proposalSha256 });
           });
         }}>Recheck file and open review</button></div>
       </SetupDialog>}

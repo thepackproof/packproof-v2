@@ -154,6 +154,7 @@ export class HostedSession {
     if(!end.setup||!verified||verified.proposalSha256!==target||verified.fileName!==pending.fileName||Date.parse(verified.expiresAt)<=Date.now())
       throw Error('The current file review could not be verified. Check the connection again.');
     await open(installationReviewPath(end.setup));
+    return {proposalSha256:verified.proposalSha256};
   }
   present(method: string, value: unknown, authority: Authority) {
     const offline = authority.offline;
