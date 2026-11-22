@@ -74,7 +74,7 @@ export function SignalHome({proofs,jobs,userId,onCreate,onOpen,onJob,onAll,loadi
       {!saved&&pending&&<SignalBadge state={signalJob(pending).state}>{signalJob(pending).label}</SignalBadge>}
     </section>
     <button className="primary eim-next-action" onClick={()=>pending&&(paused||local)?onJob(pending):onCreate()}>
-      {paused?'Open recovery':local?'Review recording':pending?'Pack another item':'Pack an item'}<Icon name="arrow"/>
+      <span>{paused?'Open recovery':local?'Review recording':pending?'Pack another item':'Pack an item'}</span><Icon name="arrow"/>
     </button>
     {featured&&!pending&&<button className="text-button" onClick={()=>onOpen(featured.proofId)}>View your latest Proof<Icon name="arrow"/></button>}
     {pending&&!paused&&!local&&<button className="text-button" onClick={()=>onJob(pending)}>View actual upload progress<Icon name="arrow"/></button>}

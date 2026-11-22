@@ -7,6 +7,7 @@ const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
+const {createHash}=require('node:crypto');
 const {setTimeout:wait}=require('node:timers/promises');
 const {app,BrowserWindow,ipcMain,protocol,net}=require('electron');
 
@@ -134,6 +135,78 @@ async function checkBootstrap(parent){
    return screenshots;
  }finally{if(page.debugger.isAttached())page.debugger.detach();if(!win.isDestroyed())win.destroy();}
 }
+async function verifyCommerceControls(page,route){
+ await page.executeJavaScript('document.fonts.ready.then(()=>true)');
+ const facts=await page.executeJavaScript(`(()=>{
+  const box=el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};};
+  const brand=document.querySelector('.sidebar .packproof-brand img');
+  const result={brand:brand?{source:brand.getAttribute('src'),loaded:brand.complete&&brand.naturalWidth>0,...box(brand)}:null,
+   currentNavigation:[...document.querySelectorAll('.sidebar button[aria-current="page"]')].map(e=>({label:e.textContent.trim(),active:e.classList.contains('active')}))};
+  const action=document.querySelector('.signal-home-primary>.eim-next-action');
+  if(action)result.home={label:box(action.querySelector('span')),icon:box(action.querySelector('svg')),display:getComputedStyle(action).display,direction:getComputedStyle(action).flexDirection};
+  const dates=document.querySelector('.order-date-range');
+  if(dates)result.dates={from:box(dates.querySelector('[aria-label="Orders from date"]')),through:box(dates.querySelector('[aria-label="Orders through date"]'))};
+  const start=document.querySelector('.station-start-actions');
+  if(start)result.start=[...start.querySelectorAll('button')].map(box);
+  if(start)result.stationTools=[...document.querySelectorAll('.is-unselected .station-tool-fields select,.is-unselected aside form input,.is-unselected aside form button')].map(el=>({visible:el.checkVisibility(),viewportHeight:innerHeight,...box(el)}));
+  const study=document.querySelector('.desktop-study-settings');
+  if(study){
+   const label=study.querySelector('label'),checkbox=label.querySelector('input[type=checkbox]');
+   const text=[...label.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim());
+   const range=document.createRange();range.selectNodeContents(text);const r=range.getBoundingClientRect();
+   result.study={preferences:box(document.querySelector('.settings-grid')),panel:box(study),checkbox:box(checkbox),labelText:{x:r.x,y:r.y},checked:checkbox.checked,
+    joinDisabled:[...study.querySelectorAll('button')].find(e=>e.textContent==='Join this timing study')?.disabled};
+  }
+  return result;
+ })()`);
+ assert.equal(facts.brand?.source,'/brand/connect/packproof.png','Commerce must use the current approved logo');
+ assert.equal(facts.brand.loaded,true,'Commerce logo did not load');
+ assert.ok(Math.abs(facts.brand.width-facts.brand.height)<1,'The official square logo must retain its aspect ratio');
+ assert.deepEqual(facts.currentNavigation,[{label:({'home':'Home','packing-station':'Packing Station','orders':'Orders','settings':'Settings'})[route],active:true}],'The actual Commerce page must remain indicated in navigation');
+ if(route==='home'){
+  assert.equal(facts.home.display,'flex');assert.equal(facts.home.direction,'row');
+  const {label,icon}=facts.home;
+  assert.ok(Math.abs(label.y+label.height/2-icon.y-icon.height/2)<4,'Home action text and icon are not aligned');
+  assert.ok(icon.x>=label.right+8,'Home action icon overlaps its label');
+ }
+ if(route==='orders')assert.ok(Math.abs(facts.dates.from.y-facts.dates.through.y)<2,'From and Through must remain a cohesive date pair');
+ if(route==='packing-station'){
+  assert.ok(facts.start.length===2&&facts.start[1].x>=facts.start[0].right+8,'Packing start actions need a visible gap');
+  assert.equal(facts.stationTools.length,5,'Initial camera, resolution, audio and shipment lookup controls are required');
+  assert.ok(facts.stationTools.every(el=>el.visible&&el.y>=0&&el.bottom<=el.viewportHeight+1),'Initial station tools extend below the requested viewport: '+JSON.stringify(facts.stationTools));
+ }
+ if(route==='settings'){
+  assert.ok(facts.study.panel.y>=facts.study.preferences.bottom+16,'Everyday preferences must precede the separated optional study');
+  assert.ok(facts.study.labelText.x>=facts.study.checkbox.right+6,'Study checkbox and label must share an inline row');
+  assert.ok(Math.abs(facts.study.labelText.y-facts.study.checkbox.y)<5,'Study consent label is separated from its checkbox');
+  assert.equal(facts.study.checked,false);assert.equal(facts.study.joinDisabled,true);
+ }
+}
+async function verifyProfileAccess(page){
+ const profileFacts=()=>page.executeJavaScript(`(()=>{
+  const button=document.querySelector('.sidebar .profile-button'),name=button.querySelector('strong'),r=button.getBoundingClientRect();
+  const rgba=value=>(value.match(/[0-9.]+/g)||[]).map(Number);
+  const ancestors=[];for(let el=name;el;el=el.parentElement)ancestors.unshift(el);
+  let background=[255,255,255];
+  for(const el of ancestors){const c=rgba(getComputedStyle(el).backgroundColor),a=c[3]??1;background=background.map((v,i)=>(c[i]??v)*a+v*(1-a));}
+  const luminance=c=>c.slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+  const foreground=luminance(rgba(getComputedStyle(name).color)),back=luminance(background);
+  return{focused:document.activeElement===button,top:r.top,bottom:r.bottom,height:innerHeight,contrast:(Math.max(foreground,back)+.05)/(Math.min(foreground,back)+.05)};
+ })()`);
+ await page.executeJavaScript('document.activeElement?.blur()');
+ const normal=await profileFacts();
+ assert.ok(normal.contrast>=4.5,'Default account name contrast is insufficient: '+normal.contrast);
+ await page.executeJavaScript("document.querySelector('.sidebar .logistics-return')?.focus()");
+ for(let i=0;i<24;i++){
+  if(await page.executeJavaScript("document.activeElement===document.querySelector('.sidebar .profile-button')"))break;
+  for(const type of ['keyDown','keyUp'])await page.debugger.sendCommand('Input.dispatchKeyEvent',{type,key:'Tab',code:'Tab',windowsVirtualKeyCode:9,nativeVirtualKeyCode:9});
+ }
+ const facts=await profileFacts();
+ assert.equal(facts.focused,true,'Account controls must be reachable with Tab');
+ assert.ok(facts.top>=0&&facts.bottom<=facts.height+1,'Account controls are trapped below the sidebar viewport');
+ assert.ok(facts.contrast>=4.5,'Account name contrast is insufficient: '+facts.contrast);
+ await page.executeJavaScript("document.activeElement.blur();document.querySelector('.sidebar').scrollTop=0");
+}
 async function checkCommerce(page){
  const screenshots={};
  await page.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
@@ -143,6 +216,7 @@ async function checkCommerce(page){
   await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>!e.disabled)");
   await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Open Commerce workspace')?.click()");
   await until(page,"!!document.querySelector('.app-layout .sidebar nav') && document.documentElement.dataset.theme==="+JSON.stringify(theme));
+  await until(page,"[...document.querySelectorAll('.sidebar .brand img')].every(e=>e.complete&&e.naturalWidth>0)");
   for(const [route,label] of [['home','Home'],['packing-station','Packing Station'],['orders','Orders'],['settings','Settings']]){
    await page.executeJavaScript(`(()=>{
      const details=document.querySelector('.sidebar details');if(details&&!details.open)details.querySelector('summary').click();
@@ -157,19 +231,32 @@ async function checkCommerce(page){
       panel.querySelector('input[type=checkbox]')?.checked===false &&
       [...panel.querySelectorAll('button')].some(e=>e.textContent==='Join this timing study'&&e.disabled);
    })()`);
+   if(route==='settings')assert.equal(await page.executeJavaScript("[...document.querySelectorAll('button')].some(e=>e.textContent==='Download update')"),false,'Unavailable updates must not offer a download');
    for(const [w,h,scale,suffix]of[[1440,900,1,'1440x900'],[1024,640,1.25,'1280x800-125pct']]){
     await viewport(page,w,h,scale);
-    await page.executeJavaScript("window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0)");
+    await page.executeJavaScript("window.scrollTo(0,0);document.querySelector('.workspace')?.scrollTo(0,0);document.querySelector('.sidebar').scrollTop=0");
+    if(route==='home')await verifyProfileAccess(page);
+    await verifyCommerceControls(page,route);
     const name=`commerce-${route}-${theme}-${suffix}`;
     screenshots[name+'.png']=await shoot(page,name,w,h,scale);
     await measure(page,w,h);
     if(route==='settings'){
      await page.executeJavaScript("document.querySelector('.settings-grid')?.scrollIntoView({block:'start'})");
      screenshots[name+'-preferences.png']=await shoot(page,name+'-preferences',w,h,scale,true);
+     await page.executeJavaScript("document.querySelector('.desktop-study-settings').scrollIntoView({block:'start'})");
+     await until(page,"document.querySelector('.desktop-study-settings button').getBoundingClientRect().bottom<=innerHeight+1");
+     screenshots[name+'-study.png']=await shoot(page,name+'-study',w,h,scale,true);
     }
    }
    await viewport(page,1440,900,1);
   }
+ }
+ // Exercise genuine updater states through the real Settings renderer. No
+ // check, download or install operation is invoked by this visual fixture.
+ for(const [state,action]of[['available','Download update'],['ready','Install & restart'],['unavailable',null]]){
+  system.update={state,...(action?{version:'0.7.1'}:{})};
+  await page.executeJavaScript("document.querySelector('button[aria-label=\"Refresh workspace\"]').click()");
+  await until(page,`(()=>{const buttons=[...document.querySelectorAll('button')];return ${action?`buttons.some(e=>e.textContent===${JSON.stringify(action)}&&!e.disabled)`:`!buttons.some(e=>['Download update','Install & restart'].includes(e.textContent))`};})()`);
  }
  return screenshots;
 }
@@ -178,6 +265,10 @@ async function main(){
  assert.ok(fs.existsSync(preload),'Unified native preload missing');
  assert.ok(fs.existsSync(path.join(renderer,'index.html')),'Unified Commerce renderer missing');
  assert.ok(fs.existsSync(path.join(renderer,'brand','connect','packproof.png')),'Approved PackProof logo missing');
+  const logo=fs.readFileSync(path.join(renderer,'brand','connect','packproof.png'));
+  const logoBlob=createHash('sha1').update('blob '+logo.length+'\0').update(logo).digest('hex');
+  assert.equal(logoBlob,'5224892f4b09263e486751ae3848a92aba7ca560','The packaged official logo bytes changed');
+  assert.deepEqual(logo,fs.readFileSync(path.join(setupRenderer,'brand','connect','packproof.png')),'Commerce and Logistics must use the same approved logo asset');
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'packproof-unified-ux-'));
  app.setPath('userData',tmp);
  await app.whenReady();
@@ -214,6 +305,7 @@ async function main(){
  try{
   await page.loadURL('about:blank');
   page.debugger.attach('1.3');
+   await page.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});
   await viewport(page,1440,900,1);
   await page.loadURL(uri);
   await until(page,"document.querySelector('.logistics-entry h1')?.textContent?.includes('One clear story.')");
@@ -256,7 +348,7 @@ async function main(){
    scope:'packaged unified renderer and production preload; synthetic IPC only',sourceCommit:process.env.GITHUB_SHA||null,
    designFile:'PZ8dfCcXe2D8SMtmF497v3',entryNode:'2:9',setupNode:'69:8866',recoveryNode:'83:9262',
    screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
-   commerceCoverage:{scope:'Existing explicitly selected Commerce; visual inspection only, no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'synthetic ungranted GET only'},
+    commerceCoverage:{scope:'Explicitly selected Commerce with scoped defect repairs; no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'full statement; synthetic ungranted GET only',logoBlob,updaterStates:['unavailable','available','ready']},
    verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions',
      'packaged Connect renderer and preload','missing-facility review','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',
      'explicit Commerce Home, Packing Station, Orders and Settings at both scales and themes'],
