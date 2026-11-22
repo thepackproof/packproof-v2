@@ -14,7 +14,7 @@ function openInstallation(state: string, locationId: string | null | undefined, 
   const params = new URLSearchParams({ installationId: 'agent-a' });
   if (importId) params.set('importId', importId);
   render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi}
-    organizationId="org-a" environment="sandbox" params={params} canManage />);
+    organizationId="org-a" environment="sandbox" params={params} facilityLocations={[{ id: 'site-a', name: 'Warehouse A' }]} canManage />);
   return request;
 }
 
