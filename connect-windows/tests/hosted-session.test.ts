@@ -42,7 +42,7 @@ describe('unified installation bootstrap and preserved-work recovery',()=>{
     expect(f.human.setupAccess).toHaveBeenLastCalledWith({installationId:'installation_test',environment:'sandbox'});
     const access=await f.host.guard('recoverEnrollment');
     expect(access.canRecover).toBe(true);
-    expect(f.host.installationReviewPath(access)).toBe('/app/records/connect/approve?installationId=installation_test&organizationId=org_test&environment=sandbox');
+    expect(f.host.installationReviewPath(access)).toBe('/app/records/connect/approve?installationId=installation_test&organizationId=org_test&environment=sandbox&intent=facility');
     expect(f.host.present('getStatus',f.status,access)).toMatchObject({setupAccess:{reason:'reapproval_required'},recoveryAvailable:true});
   });
   it('keeps active facility behavior and never turns bootstrap into an offline draft lease',async()=>{

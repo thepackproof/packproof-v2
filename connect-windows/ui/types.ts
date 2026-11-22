@@ -206,7 +206,7 @@ export interface TransportObservation {
   sourceContracts?: string[];
 }
 export interface ConnectStatus {
-  setupAccess?: { reason: 'enrollment_required' | 'facility_required' | 'facility_unavailable' | 'reapproval_required' };
+  setupAccess?: { reason: 'enrollment_required' | 'facility_required' | 'facility_unavailable' | 'reapproval_required'; pendingFileReview?: {fileName:string;proposalSha256:string;expiresAt:string} };
   workspace?: WorkspaceStatus;
   proofOutput?: ProofOutput;
   state: string;

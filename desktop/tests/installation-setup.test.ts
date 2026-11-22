@@ -55,3 +55,70 @@ describe('exact human-authorized installation setup metadata',()=>{
     expect(fetcher.mock.calls[0][1]?.method).toBe('GET');
   });
 });
+
+describe('pending file review in authenticated setup access', () => {
+  const sha = 'a'.repeat(64);
+  const binding = { sourceName: 'Shipping exports', integrationAccountId: 'source_1', operatorMembershipId: 'member_1', locationId: null };
+  const history = { mode: 'selected_then_new', observedAt: '2020-01-02T03:04:05.000Z', initialFileName: 'Shipping report.csv',
+    initialFileSha256: 'b'.repeat(64), baselineSha256: 'c'.repeat(64) };
+  const contract = { schema: 'packproof.scheduled-csv/v2', historyPolicy: history };
+  const proposal = { ...binding, sourceContract: contract, folderDigest: 'd'.repeat(64), mapping: { trackingNumber: 'Private heading' } };
+  const pending = { ...row, ...binding, configRevision: 0, configSha256: null, config: null, pendingProposal: proposal,
+    pendingProposalSha256: sha, testImportId: null, verifiedImportId: null };
+
+  function transport(installation: unknown, role = 'ADMIN') {
+    const fetcher = vi.fn<typeof fetch>(async input => Response.json(String(input).endsWith('/context')
+      ? { organizations: [{ ...organization, role }] } : installation));
+    const api = new DesktopApi({ config: { channel: 'development', apiBaseUrl: 'https://api.example.test', webBaseUrl: 'https://example.test',
+      cognito: { clientId: 'example', userPoolId: 'us-east-1_example', region: 'us-east-1' } },
+      getAccountId: () => 'user_test', getToken: async () => 'test-token', fetch: fetcher });
+    return { result: api.installationSetupAccess({ ...locator, organizationId: organization.id }), fetcher };
+  }
+
+  it('exposes only the original basename and pending digest from the exact current administrator read', async () => {
+    const { result, fetcher } = transport(pending);
+    expect(await result).toEqual({ installationId: locator.installationId, organizationId: organization.id, environment: 'sandbox',
+      locationId: null, state: 'setup', userId: 'user_test', pendingFileReview: {
+        proposalSha256: sha, fileName: 'Shipping report.csv', expiresAt: '2020-01-02T03:34:05.000Z' } });
+    expect(fetcher.mock.calls.map(([url, opts]) => [new URL(String(url)).pathname, opts?.method])).toEqual([
+      ['/me/records/context', 'GET'], ['/me/records/agent-installations/' + locator.installationId, 'GET']]);
+  });
+
+  it.each([
+    { state: 'ready' }, {configRevision: 1}, {config: {}}, {configSha256: sha}, {testImportId: 'import_1'}, {pendingProposalSha256: 'bad'},
+    {installationId: 'other'}, { pendingProposal: {...proposal, sourceName: 'other'} },
+    { pendingProposal: {...proposal, sourceContract: {...contract, schema: 'packproof.scheduled-csv/v1'}} },
+    ...[{observedAt: '2999-01-01T00:00:00Z'}, {observedAt: 'invalid'}, {observedAt: '2020-02-30T00:00:00Z'},
+      {observedAt: '2020-01-01'}, {initialFileName: '../report.csv'},
+      {initialFileName: 'unsafe\nreport.csv'}, {initialFileSha256: ''}].map(change => ({
+        pendingProposal: {...proposal, sourceContract: {...contract, historyPolicy: {...history, ...change}}} })),
+  ])('omits an ineligible review while preserving normal setup metadata', async change => {
+    const { result } = transport({ ...pending, ...change });
+    expect(await result).not.toHaveProperty('pendingFileReview');
+  });
+
+  it('does not read the installation for a non-administrator', async () => {
+    const { result, fetcher } = transport(pending, 'OPERATOR');
+    await expect(result).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a fresh proposal after restart with the source timestamp and exact server digest', async () => {
+    const renewedDigest = 'e'.repeat(64), observed = Date.now() - 120_000;
+    const renewed = { ...pending, pendingProposalSha256: renewedDigest,
+      pendingProposal: { ...proposal, sourceContract: { ...contract, historyPolicy: { ...history, observedAt: new Date(observed).toISOString() } } } };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { result } = transport(renewed);
+      expect((await result).pendingFileReview).toEqual({ proposalSha256: renewedDigest, fileName: history.initialFileName,
+        expiresAt: new Date(observed + 30 * 60_000).toISOString() });
+    }
+  });
+
+  it('accepts an older source proposal with no location field only on an unrestricted installation', async () => {
+    const { locationId: _location, ...older } = proposal;
+    const { result } = transport({ ...pending, pendingProposal: older });
+    expect((await result).pendingFileReview?.proposalSha256).toBe(sha);
+    const restricted = transport({ ...pending, locationId: 'location_test', pendingProposal: older });
+    expect(await restricted.result).not.toHaveProperty('pendingFileReview');
+  });
+});

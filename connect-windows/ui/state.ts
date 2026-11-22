@@ -33,7 +33,28 @@ export function verificationCurrent(status: ConnectStatus, draft: Configuration 
     && typeof status.configRevision === 'number' && status.verification.configRevision === status.configRevision
     && !!status.source?.fileSha256 && status.verification.fileSha256 === status.source.fileSha256;
 }
+/** A stale cloud proposal can coexist with a newly read local draft until the operator submits it. */
+export function pendingCsvReview(status: ConnectStatus | null, now: number): 'current' | 'expired' | 'reread' {
+  const pending = status?.pendingProposal?.sourceContract;
+  if (!status || pending?.schema !== 'packproof.scheduled-csv/v2' || status.preview) return 'current';
+  const windowMs = 30 * 60 * 1000;
+  const observed = Date.parse(pending.historyPolicy?.observedAt ?? '');
+  if (Number.isFinite(observed) && now <= observed + windowMs) return 'current';
+  const draft = status.analysis;
+  const local = draft?.configuration.sourceContract;
+  const reread = Date.parse(local?.historyPolicy?.observedAt ?? '');
+  if (draft && local?.schema === 'packproof.scheduled-csv/v2' && local.historyPolicy
+      && Number.isFinite(reread) && reread <= now && now <= reread + windowMs
+      && (!Number.isFinite(observed) || reread > observed)
+      && draft.binding.sourceBindingId === status.installationId
+      && draft.binding.folderDigest === status.source?.folderDigest
+      && draft.binding.fileSha256 === status.source?.fileSha256
+      && local.historyPolicy.initialFileSha256 === draft.binding.fileSha256
+      && local.historyPolicy.initialFileName === status.source?.selectedFileName) return 'reread';
+  return 'expired';
+}
 export function resumeStep(status: ConnectStatus): number {
+  if (pendingCsvReview(status, Date.now()) === 'reread') return 4;
   if(status.setup?.running||status.pendingProposal)return 5;
   if (['active', 'paused'].includes(status.state)) return 6;
   if (status.preview) return 5;

@@ -29,7 +29,7 @@ const system={version:'0.7.0',platform:'win32',environment:'development',online:
   notifications:true,scannerSuffix:'Enter',theme:'light'
 },update:{state:'unavailable'},reporting:{configured:false}};
 const calls={orders:0,setup:0,choices:0};
-const bootstrapCalls={review:0,recover:0,enroll:0,source:0};
+const bootstrapCalls={review:0,recover:0,enroll:0,source:0,fileReview:0};
 const fixtureProofs=Array.from({length:4},(_,index)=>({proofId:'proof_fixture_'+index,status:'READY_FOR_EVIDENCE',role:'SELLER',
  createdAt:'2026-11-20T12:00:00Z',updatedAt:'2026-11-20T12:00:00Z',finalizedAt:null,evidenceCount:0,
  transaction:{itemTitle:'Example shipment '+(index+1),externalReference:'EXAMPLE-'+(10482+index),trackingNumber:null,carrier:null}}));
@@ -142,7 +142,17 @@ async function checkBootstrap(parent){
  let state={state:'source_selected',installationId:'installation_fixture',environment:'development',
    setupAccess:{reason:'facility_required'},health:{serviceOnline:true,queueCount:null},
    workspace:{phase:'draft',step:'order',sources:[],canReadOrders:false}};
+ const fileName='Fixture dispatch.csv',expiredDigest='a'.repeat(64),freshDigest='b'.repeat(64);
  for(const method of ['getStatus','getWorkspaceStatus','pollEnrollment'])ipcMain.handle('connect:'+method,async()=>({ok:true,value:state}));
+ ipcMain.handle('connect:refreshPendingFileReview',async(_event,...args)=>{
+   const first=bootstrapCalls.fileReview===0;
+   assert.ok(bootstrapCalls.fileReview<2,'A fresh review must not be requested twice');
+   assert.equal(state.installationId,'installation_fixture');
+   assert.deepEqual(args,[{wholeFileUploadApproved:first,expectedProposalSha256:first?expiredDigest:freshDigest}]);
+   bootstrapCalls.fileReview++;
+   state={...state,setupAccess:{...state.setupAccess,pendingFileReview:{fileName,proposalSha256:freshDigest,expiresAt:'2099-01-01T00:00:00Z'}}};
+   return {ok:true};
+ });
  ipcMain.handle('connect:openWorkspaceApproval',async()=>{bootstrapCalls.review++;return{ok:true};});
  ipcMain.handle('connect:recoverEnrollment',async(_event,consent)=>{
    assert.deepEqual(consent,{preservePendingWorkApproved:true});
@@ -171,6 +181,18 @@ async function checkBootstrap(parent){
    }
    await viewport(page,1440,900,1);
  }
+ async function pressFileReview(label){
+   const point=await page.executeJavaScript(`(()=>{
+     const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(label)});
+     if(!button || !button.checkVisibility() || button.disabled)return null;
+     button.scrollIntoView({block:'nearest'});
+     const r=button.getBoundingClientRect(),x=Math.floor(r.x+r.width/2),y=Math.floor(r.y+r.height/2);
+     return button.contains(document.elementFromPoint(x,y))?{x,y}:null;
+   })()`);
+   assert.ok(point,label+' must be visible, enabled and reachable by mouse');
+   for(const type of ['mousePressed','mouseReleased'])
+     await page.debugger.sendCommand('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});
+ }
  try{
    await page.loadURL('about:blank');page.debugger.attach('1.3');await viewport(page,1440,900,1);
    await page.loadURL('packproof-connect://app/index.html?facilitySetup=1');
@@ -179,6 +201,25 @@ async function checkBootstrap(parent){
    assert.equal(await page.executeJavaScript("[...document.querySelectorAll('button')].some(e=>/Connect my records|Try a sample order/.test(e.textContent))"),false);
    await click('Review this computer in browser');await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Check connection again'&&!e.disabled)");
    assert.equal(bootstrapCalls.review,1);await capture('logistics-facility-required');
+   // Start a fresh renderer with the limited status returned for an existing computer and expired file review.
+   state={...state,setupAccess:{reason:'facility_required',pendingFileReview:{fileName,proposalSha256:expiredDigest,expiresAt:'2001-01-01T00:00:00Z'}}};
+   await page.loadURL('packproof-connect://app/index.html?facilitySetup=1');
+   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Renew your export file review.'");
+   assert.ok((await page.executeJavaScript('document.body.innerText')).includes(fileName));
+   assert.equal(await page.executeJavaScript("[...document.querySelectorAll('button')].some(e=>/revoke|disconnect|reconnect|enroll/i.test(e.textContent))"),false);
+   await capture('logistics-expired-file-review');
+   await pressFileReview('Request a fresh file review');
+   await until(page,"document.querySelector('[role=dialog],dialog')?.textContent.includes('Recheck the saved export file?')");
+   assert.equal(bootstrapCalls.fileReview,0,'Opening the confirmation must not send a file-review command');
+   await pressFileReview('Recheck file and open review');
+   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Continue in your browser.'");
+   assert.equal(bootstrapCalls.fileReview,1);
+   // Opening a still-current proposal after restarting uses the replacement digest without renewal consent.
+   await page.loadURL('packproof-connect://app/index.html?facilitySetup=1');
+   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Your export file review is ready.'");
+   await pressFileReview('Open current file review');
+   await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Open current file review'&&!e.disabled)");
+   assert.deepEqual(bootstrapCalls,{review:1,recover:0,enroll:0,source:0,fileReview:2});
    state={...state,state:'revoked',recoveryAvailable:true,setupAccess:{reason:'reapproval_required'}};
    await click('Check connection again');
    await until(page,"document.querySelector('[data-setup-screen=installation-recovery] h1')?.textContent==='Reconnect this computer.'");
@@ -420,7 +461,7 @@ async function main(){
    screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
     commerceCoverage:{scope:'Explicitly selected Commerce with scoped defect repairs; no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'full statement; synthetic ungranted GET only',logoBlob,updaterStates:['unavailable','available','ready']},
    verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions',
-     'packaged Connect renderer and preload','missing-facility review','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',
+     'packaged Connect renderer and preload','missing-facility review','fresh export review after restart and explicit file confirmation','current export review reopens without renewal','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',
      'explicit Commerce Home, Packing Station, Orders and Settings at both scales and themes'],
    calls,bootstrapCalls
   },null,2));

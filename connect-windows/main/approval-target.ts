@@ -2,6 +2,17 @@ import type {ConnectStatus} from '../ui/types';
 import {approvalUrl} from './security';
 const validId=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
 const route='/app/records/connect/approve';
+export function installationReviewPath(scope:{installationId:string;organizationId:string;environment:string},facility=false):string {
+ if(!validId(scope.installationId)||!validId(scope.organizationId)||!['sandbox','live'].includes(scope.environment))
+   throw Error('Refresh this computer’s connection before opening its review.');
+ const query=new URLSearchParams({installationId:scope.installationId,organizationId:scope.organizationId,environment:scope.environment});
+ if(facility)query.set('intent','facility');
+ return route+'?'+query;
+}
+export function enrollmentReviewPath(status:ConnectStatus,facility:boolean):string {
+ const path=currentApprovalPath(status);
+ return facility && !status.installationId ? path+'&intent=facility' : path;
+}
 export function workspaceParams(status: ConnectStatus): URLSearchParams {
  const params = new URLSearchParams();
  if (!status.binding?.organizationId) return params;

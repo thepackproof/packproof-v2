@@ -1,7 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import type { ConnectStatus } from '../ui/types';
 import { trustedRenderer } from './security';
-import { workspaceParams } from './approval-target';
+import { installationReviewPath, workspaceParams } from './approval-target';
 import { openHumanDashboard, closeHumanDashboard } from './human-dashboard';
 import type { HumanDashboardIdentity } from './dashboard-grant';
 import { FacilityDraftLease } from './facility-draft-lease';
@@ -9,7 +9,8 @@ import type { FacilityDraft } from '../ui/guided-workflow-types';
 
 export interface FacilityScope { installationId: string; organizationId: string; environment: string }
 interface Access { canConfigure: boolean; organizationId: string; environment: string; locationId: string | null; userId: string }
-interface SetupAccess extends FacilityScope { locationId: string | null; userId: string; state: string }
+interface PendingFileReview { proposalSha256:string; fileName:string; expiresAt:string }
+interface SetupAccess extends FacilityScope { locationId: string | null; userId: string; state: string; pendingFileReview?:PendingFileReview }
 interface BoundScope extends FacilityScope { locationId: string | null; operatorMembershipId: string; integrationAccountId: string }
 interface Authority {
   user: string; epoch: number; scopeKey: string; offline: boolean;
@@ -26,9 +27,17 @@ interface HumanSession {
 }
 type LocalRead = (operation: string) => Promise<unknown>;
 const enrollment = new Set(['getStatus','getWorkspaceStatus','beginEnrollment','pollEnrollment','refresh','openApproval','openWorkspaceApproval']);
-const bootstrap = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh','openApproval','openWorkspaceApproval','recoverEnrollment']);
+const bootstrap = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh','openApproval','openWorkspaceApproval','recoverEnrollment','refreshPendingFileReview']);
 const completingEnrollment = new Set(['pollEnrollment','getStatus','refresh']);
 const isMissing = (error: unknown) => !!error && typeof error === 'object' && 'status' in error && error.status === 404;
+function reviewMetadata(authority:Authority):PendingFileReview|undefined {
+  const setup=authority.setup, review=setup?.pendingFileReview;
+  if(authority.mode!=='bootstrap'||authority.offline||authority.canRecover||setup?.state!=='setup'||setup.locationId!==null||!review||
+     typeof review.proposalSha256!=='string'||!/^[a-f0-9]{64}$/.test(review.proposalSha256)||
+     typeof review.fileName!=='string'||!/^.{1,251}\.csv$/i.test(review.fileName)||/[\x00-\x1f\x7f/\\:]/.test(review.fileName)||
+     typeof review.expiresAt!=='string'||!Number.isFinite(Date.parse(review.expiresAt))) return;
+  return {proposalSha256:review.proposalSha256,fileName:review.fileName,expiresAt:review.expiresAt};
+}
 export class HostedSession {
   private lease=new FacilityDraftLease();
   private sessionEpoch=0;
@@ -92,9 +101,11 @@ export class HostedSession {
     if (setup.userId !== user || setup.installationId !== current.installationId || setup.environment !== environment ||
         (scope && (setup.organizationId !== scope.organizationId || setup.locationId !== scope.locationId))) throw Error('Your workspace changed. Open Logistics again.');
     const canRecover = current.recoveryAvailable === true;
+    const localDenied=['revoked','permission_required'].includes(current.state) ||
+      current.transport?.state==='forbidden' || current.transport?.state==='unauthenticated';
     if (method === 'recoverEnrollment' && !canRecover) throw Error('Review this installation in PackProof before replacing its approval.');
     return {...base,mode:'bootstrap',scopeKey:JSON.stringify([setup.installationId,setup.organizationId,setup.environment,setup.locationId]),
-      offline:false,canConfigure:false,canReadOrders:false,setup,canRecover};
+      offline:false,canConfigure:false,canReadOrders:false,setup:localDenied?{...setup,pendingFileReview:undefined}:setup,canRecover};
   }
   async choices() {
     const access = await this.authority('choices');
@@ -119,8 +130,30 @@ export class HostedSession {
   installationReviewPath(access: Authority) {
     if (access.mode !== 'bootstrap' || !access.setup || access.epoch !== this.sessionEpoch || this.human.user() !== access.user)
       throw Error('Refresh this computer’s connection before opening its review.');
-    const {installationId,organizationId,environment} = access.setup;
-    return '/app/records/connect/approve?' + new URLSearchParams({installationId,organizationId,environment});
+    return installationReviewPath(access.setup,true);
+  }
+  async openPendingFileReview(start:Authority,input:{wholeFileUploadApproved:boolean;expectedProposalSha256:string},
+    renew:(payload:Record<string,unknown>)=>Promise<unknown>,open:(path:string)=>Promise<void>) {
+    const pending=reviewMetadata(start), scope=start.setup;
+    if (!scope || !pending || pending.proposalSha256!==input.expectedProposalSha256 || this.human.user()!==start.user || this.sessionEpoch!==start.epoch)
+      throw Error('The saved file review changed. Check the connection again.');
+    let target=pending.proposalSha256;
+    if (Date.parse(pending.expiresAt)<=Date.now()) {
+      if(input.wholeFileUploadApproved!==true)throw Error('Confirm that PackProof may recheck this saved file before renewing its review.');
+      const result=await renew({installationId:scope.installationId,organizationId:scope.organizationId,environment:scope.environment,
+        expectedProposalSha256:target,wholeFileUploadApproved:true});
+      const updated=result as Partial<FacilityScope & {proposalSha256:string}>|null;
+      if(!updated||updated.installationId!==scope.installationId||updated.organizationId!==scope.organizationId||updated.environment!==scope.environment||
+         typeof updated.proposalSha256!=='string'||!/^[a-f0-9]{64}$/.test(updated.proposalSha256)||updated.proposalSha256===target)
+        throw Error('The renewed file review could not be verified. Check the connection again.');
+      target=updated.proposalSha256;
+    }
+    const end=await this.guard('refreshPendingFileReview');
+    this.assertTransition('refreshPendingFileReview',start,end);
+    const verified=reviewMetadata(end);
+    if(!end.setup||!verified||verified.proposalSha256!==target||verified.fileName!==pending.fileName||Date.parse(verified.expiresAt)<=Date.now())
+      throw Error('The current file review could not be verified. Check the connection again.');
+    await open(installationReviewPath(end.setup));
   }
   present(method: string, value: unknown, authority: Authority) {
     const offline = authority.offline;
@@ -133,7 +166,7 @@ export class HostedSession {
     if (current.installationId !== authority.installationId) throw Error('The installation changed. Open Logistics again.');
     if (authority.mode === 'bootstrap') return {state:current.state,installationId:current.installationId,environment:current.environment,
       installedVersion:current.installedVersion,recoveryAvailable:authority.canRecover,
-      setupAccess:{reason:authority.canRecover || authority.setup?.state === 'revoked' ? 'reapproval_required' :
+      setupAccess:{...(reviewMetadata(authority) ? {pendingFileReview:reviewMetadata(authority)} : {}),reason:authority.canRecover || authority.setup?.state === 'revoked' ? 'reapproval_required' :
         authority.setup?.locationId === null ? 'facility_required' : 'facility_unavailable'},
       health:{serviceOnline:current.health.serviceOnline,queueCount:null},
       workspace:{phase:'draft',step:'order',sources:[],canReadOrders:false}};

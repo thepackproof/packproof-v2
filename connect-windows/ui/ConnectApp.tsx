@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { accessUnavailable, GUIDED_STAGES, guidedStage, resumeStep } from "./state";
+import { accessUnavailable, GUIDED_STAGES, guidedStage, pendingCsvReview, resumeStep } from "./state";
 import { SourceControls } from "./SourceControls";
 import { deriveConnectView } from "./connect-view";
 import { getBridge, type ConnectBridge, type ConnectStatus } from "./types";
@@ -269,7 +269,8 @@ export function ConnectApp({
   const reorderAvailable = !!analysis && status?.capabilities?.csvHeaderPolicies?.includes("same_names_any_order/v1") === true;
   const reviewBinding = analysis ? JSON.stringify(analysis.binding) : "";
   const reorderChecked = reorderAvailable && reorderFor !== "" && reorderFor === reviewBinding;
-  const approvalPending = !!status?.setup?.running || !!status?.pendingProposal;
+  const savedCsvReview = pendingCsvReview(status, now);
+  const approvalPending = savedCsvReview !== "reread" && (!!status?.setup?.running || !!status?.pendingProposal);
   function external(operation: () => Promise<unknown>) {
     setError("");
     void operation().catch((caught) => {
@@ -1069,7 +1070,19 @@ export function ConnectApp({
                     <p>The source owner reviews this option in the browser. Added, removed or renamed columns still require review.</p>
                   </details>
                 )}
-                {approvalPending && status ? (
+                {savedCsvReview === "expired" && status ? (
+                  <>
+                    <p className="connect-notice warning" role="status">This saved report review expired. Read the report again to check its current contents and the files already in its folder.</p>
+                    <div className="connect-actions">
+                      {status.source?.selectedFileName && (
+                        <button className="primary" disabled={disabled} onClick={() => void inspectFile(status.source!.selectedFileName!)}>
+                          Read the selected report again
+                        </button>
+                      )}
+                      <button className="secondary" disabled={disabled} onClick={() => setStage(0)}>Choose another report</button>
+                    </div>
+                  </>
+                ) : approvalPending && status ? (
                   <>
                     <ApprovalJourney status={status} phases={view.phases} />
                     <div className="connect-actions">

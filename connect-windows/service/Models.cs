@@ -67,6 +67,7 @@ public sealed partial class LocalState
     public string? BaselineObservedAt { get; set; }
     public bool GuidedSetup { get; set; }
     public string? GuidedProposalSha256 { get; set; }
+    public FileReviewRenewal? FileReviewRenewal { get; set; }
     public string? GuidedFileSha256 { get; set; }
     public string? GuidedPhase { get; set; }
     public string? VerifiedSetupImportId { get; set; }
