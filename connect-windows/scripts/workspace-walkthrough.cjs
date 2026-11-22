@@ -102,9 +102,9 @@ module.exports = async function workspaceWalkthrough({
   publish({ phase: 'active', step: 'overview', approvalPath: null, canReadOrders: true, viewKey: 'approved-walkthrough', orders: [order],
     sources: [{ ...source, state: 'active' }] });
   // Resume from the returned service grant through normal renderer polling.
-  await setup('done'); await press('Open my workspace'); await heading('Workspace overview');
+  await setup('done'); await press('Open my workspace'); await heading('Operations, at a glance.');
   stage('keyboard: find an order and trace its quantity to the original');
-  await press('Orders', false, 'nav button'); await heading('Orders');
+  await press('Orders & proofs', false, 'nav button'); await heading('Orders');
   await reach(page, 'document.querySelector("input[aria-label=\'Order reference\']")');
   await page.debugger.sendCommand('Input.insertText', {text:order.orderReference});
   await press('Find order'); await press(order.orderReference, true);
