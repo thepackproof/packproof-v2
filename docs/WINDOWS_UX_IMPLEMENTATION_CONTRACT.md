@@ -47,6 +47,20 @@ The Figma design's **UX acceptance charter** (node `6:116`) is binding, not comm
 
 The initial route/error correction and static build contract do not by themselves establish full pixel-level parity, signed installer readiness, or successful live facility authorization. Those remain explicit release gates, not implied claims.
 
+## Evidence OS extension — 2026-11-22
+
+The founder-approved PackProof Evidence OS Figma file is `nNnkgTZOBNkG8muy8AkIv1` (https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1). The new visual and interaction design supersedes the older **appearance** target for the active Logistics workspace. It does **not** supersede authenticated facility scope, consent, full-original preservation, durable ordering and versioning, or original access safety; those functional requirements remain binding.
+
+| Evidence OS visual frame | Runtime ownership / status | Functional boundary |
+| --- | --- | --- |
+| Dashboard `3:262` | `connect-windows/ui/experience/OperationalSignal.tsx`; work in progress | Use real `ConnectStatus.workspace` data and honest unavailable states, not Figma mock statistics. |
+| Application shell `3:262`, light `8:258` | `connect-windows/ui/experience/Shell.tsx`, `EvidenceOS.css`; work in progress | Navigation must still reach the authorized existing Logistics screens; theme preferences must not alter access control. |
+| Intelligent setup `3:15`, scan `3:97`, approval `3:168` | Existing `GuidedSetup.tsx`, `WorkspaceConnections.tsx`; visual parity open | Consent-checked source discovery and backend review remain authoritative. |
+| Per-order Proof `4:122`, matching `4:230`, integrity `5:190`, finalized `5:381` | Existing `Proof.tsx` and canonical API; visual parity open | Stable Proof identity and source-original/revision traceability; no heuristic identity merge. |
+| Exceptions `4:322`, recovery `4:410`, outputs `5:286` | Existing `Workspace.tsx`, `LocalService`, export pipeline; visual parity open | No synthetic green states, lost evidence or unapproved source access. |
+
+Build gate: `node connect-windows/scripts/verify-windows-ux-contract.cjs --unified` checks source-to-design linkages; this is necessary but **not sufficient** for runtime qualification. The regression suite must still test actual installed Windows with scoped multi-source folders, late/corrected events, restart/outage recovery, approval return, proof revision identity and rendered screenshots at requested display scaling. No release claim until those receipts are present.
+
 ## Commerce regression acceptance — authorized repair (2026-11-21, Eastern)
 
 Keeping the existing Commerce renderer and its CSS preserves implementation ownership. It does not require retaining known contrast, spacing, hierarchy or responsive-layout defects. Repair those defects within the Commerce owner while keeping Logistics owned by the existing Connect experience. Shared shell or branding changes must remain legible in their actual light and dark callsites.
