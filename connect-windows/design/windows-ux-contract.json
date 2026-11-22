@@ -25,6 +25,40 @@
       "approvedOn": "2026-11-20",
       "status": "approved",
       "note": "Approved in the user conversation; no further visual concept sign-off required. Pixel/functional verification of the packaged Windows application is still required."
+    },
+    "evidenceOs": {
+      "fileKey": "nNnkgTZOBNkG8muy8AkIv1",
+      "url": "https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1",
+      "status": "founder-approved-visual-target",
+      "approvedOn": "2026-11-22",
+      "note": "14-screen high-fidelity UX prototype; animations are design references, not evidence of Windows runtime functionality.",
+      "nodeReferences": {
+        "cover": "2:79",
+        "firstRun": "3:15",
+        "discoveryScan": "3:97",
+        "sourceApproval": "3:168",
+        "operationalDashboard": "3:262",
+        "evolvingProof": "4:122",
+        "explainableMatching": "4:230",
+        "exceptions": "4:322",
+        "recovery": "4:410",
+        "integrity": "5:190",
+        "automaticExports": "5:286",
+        "finalizedProof": "5:381",
+        "preferences": "5:455",
+        "lightDashboard": "8:258"
+      },
+      "implementedInRuntime": {
+        "operationalDashboard": "connect-windows/ui/experience/OperationalSignal.tsx",
+        "operationalProjection": "connect-windows/ui/experience/operations-overview.ts",
+        "navigationShell": "connect-windows/ui/experience/Shell.tsx",
+        "themeStyles": "connect-windows/ui/experience/EvidenceOS.css"
+      },
+      "unfinished": [
+        "Native Windows visual qualification",
+        "Figma parity outside active operations shell",
+        "Full installed end-to-end approval, ingest, order joining, proof updates, export and recovery receipts"
+      ]
     }
   },
   "runtime": {
@@ -37,7 +71,10 @@
     "authorizedService": "connect-windows/main/hosted-session.ts",
     "ipcBridge": "desktop/src/main/index.ts",
     "unifiedBuild": "connect-windows/scripts/build.mjs",
-    "unifiedPackageRenderer": "connect-windows/dist/commerce/renderer"
+    "unifiedPackageRenderer": "connect-windows/dist/commerce/renderer",
+    "evidenceOsOverview": "connect-windows/ui/experience/OperationalSignal.tsx",
+    "evidenceOsProjection": "connect-windows/ui/experience/operations-overview.ts",
+    "evidenceOsTheme": "connect-windows/ui/experience/EvidenceOS.css"
   },
   "acceptance": {
     "unifiedStartsIn": "logistics",
@@ -62,6 +99,7 @@
       "order-proof",
       "source-recovery"
     ],
-    "packagedVisualApproval": "required-before-production-or-pilot-release"
+    "packagedVisualApproval": "required-before-production-or-pilot-release",
+    "visualReference": "nNnkgTZOBNkG8muy8AkIv1"
   }
 }
