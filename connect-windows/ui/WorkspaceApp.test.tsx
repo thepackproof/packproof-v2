@@ -178,12 +178,12 @@ it("discards a proof read that completes after switching the approved workspace"
     workspaceOrderDetail: vi.fn(() => inFlight),
   });
   render(<WorkspaceApp bridge={bridge}/>);
-  await clickButton(/West-120/);
+  fireEvent.click(within(screen.getByRole("region", { name: "Recent order evidence" })).getByRole("button", { name: /West-120/ }));
   await waitFor(() => expect(bridge.workspaceOrderDetail).toHaveBeenCalledWith("old-proof", 2));
   current = active({ viewKey: "new-grant", orders: [newOrder] });
   fireEvent.focus(window);
-  expect(await screen.findByRole("button", { name: /East-806/ })).toBeVisible();
+  expect(await within(screen.getByRole("region", { name: "Recent order evidence" })).findByRole("button", { name: /East-806/ })).toBeVisible();
   await act(async () => { finishRead({ ...oldOrder, lines: [], evidence: [], events: [] }); });
   expect(screen.queryByRole("heading", { name: "Proof old-proof" })).toBeNull();
-  expect(screen.getByRole("button", { name: /East-806/ })).toBeVisible();
+  expect(within(screen.getByRole("region", { name: "Recent order evidence" })).getByRole("button", { name: /East-806/ })).toBeVisible();
 });
