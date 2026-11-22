@@ -19,6 +19,25 @@ const list = { records: [record], nextCursor: null, counts: { total: 1, open: 1,
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/app/records'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 function portal(api: PackProofApi, href = '/app/records?organizationId=org-a&environment=live') { return <RecordsPortal api={api} session={session} href={href} onGo={vi.fn()} onSignOut={vi.fn()}/>; }
+it.each(['', '&intent=facility'])('keeps an installed sandbox computer connected when its authorized workspace has no facilities (%s)', async intent => {
+  const organization = { ...organizations[1], role: 'OWNER', locations: [] };
+  const installation = { id: 'agent-a', version: '0.7.0', deviceName: 'Warehouse PC', state: 'setup', locationId: null,
+    configRevision: 0, pendingProposalSha256: 'a'.repeat(64), pendingProposal: { sourceContract: {
+      schema: 'packproof.scheduled-csv/v2', expectedHeaders: ['Reference'], historyPolicy: { observedAt: '2020-01-01T00:00:00Z', initialFileName: 'orders.csv' },
+    } } };
+  const request = vi.fn(async (path: string, method?: string) => {
+    if (method && method !== 'GET') throw new Error('Opening this review must be read-only');
+    if (path.startsWith('/context?')) return { ...context, organizations: [organization], selectedOrganizationId: organization.id };
+    if (path === '/agent-installations/agent-a?organizationId=org-b&environment=sandbox') return installation;
+    throw new Error('Unexpected review path');
+  });
+  const href = '/app/records/connect/approve?installationId=agent-a&organizationId=org-b&environment=sandbox' + intent;
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, href));
+  expect(await screen.findByRole('heading', { name: 'Renew your export file review' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Make your facility available' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Disconnect and continue' })).not.toBeInTheDocument();
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(0);
+});
 it('loads only Logistics navigation and scoped attention panels in the signed-in desktop window', async () => {
   vi.spyOn(navigator,'userAgent','get').mockReturnValue('PackProofLogistics/1');
   const href='/app/needs-attention?organizationId=org-a&environment=live&locationId=site-a&desktopUser=operator';

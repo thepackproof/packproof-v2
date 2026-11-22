@@ -6,6 +6,8 @@ on:
       - '.github/workflows/connect-rollout-prepare.yml'
       - 'infra/connect-rollout/**'
       - 'infra/connect-portal-release.mjs'
+      - 'infra/connect-portal-runtime*.mjs'
+      - '.github/workflows/connect-portal-publish.yml'
       - 'infra/backend-release/connect-hosted*'
       - 'docs/windows-connect/LIVE_ROLLOUT.md'
 
@@ -21,6 +23,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -34,21 +37,46 @@ jobs:
           npm ci --prefix web --no-audit --no-fund
       - name: Check rollout, rollback and publication commands
         run: |
-          node --test infra/connect-rollout/*.test.mjs infra/connect-portal-release.test.mjs infra/backend-release/connect-hosted-*.test.mjs infra/desktop-distribution/configure-connect-environments.test.mjs
+          node --test infra/connect-rollout/*.test.mjs infra/connect-portal-release.test.mjs infra/connect-portal-runtime.test.mjs infra/backend-release/connect-hosted-*.test.mjs infra/desktop-distribution/configure-connect-environments.test.mjs
           python3 -m py_compile infra/connect-rollout/stage-private.py
-      - name: Build and verify the release packet
+      - name: Select the release packet from the files under review
+        id: packet
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          kind=paired
+          if [ -n "$BASE" ]; then
+            kind=portal
+            git diff --name-only -z "$BASE"...HEAD > "$RUNNER_TEMP/changed-paths"
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                web/*|infra/connect-portal-release.mjs|infra/connect-portal-release.test.mjs|infra/connect-portal-runtime.mjs|infra/connect-portal-runtime.test.mjs|infra/connect-rollout/portal-promotion.json|.github/workflows/connect-portal-publish.yml|.github/workflows/connect-rollout-prepare.yml) ;;
+                *) kind=paired; break ;;
+              esac
+            done < "$RUNNER_TEMP/changed-paths"
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+      - name: Build and verify the paired release packet
+        if: steps.packet.outputs.kind == 'paired'
         env:
           SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           node infra/connect-rollout/prepare.mjs prepare "$RUNNER_TEMP/connect-release/candidate" "$SOURCE"
           node infra/connect-rollout/prepare.mjs verify "$RUNNER_TEMP/connect-release/candidate" "$SOURCE"
+      - name: Build the portal-only candidate
+        if: steps.packet.outputs.kind == 'portal'
+        run: |
+          node infra/connect-portal-release.mjs build
+          mkdir -p "$RUNNER_TEMP/connect-release/candidate"
+          cp -a web/dist "$RUNNER_TEMP/connect-release/candidate/portal"
       - name: Capture the current portal for rollback
         run: node infra/connect-portal-release.mjs snapshot "$RUNNER_TEMP/connect-release/previous-portal"
       - name: Preserve dotfiles and complete asset paths
         run: tar -C "$RUNNER_TEMP/connect-release" -czf "$RUNNER_TEMP/packproof-connect-rollout.tar.gz" candidate previous-portal
       - uses: actions/upload-artifact@v4
         with:
-          name: connect-rollout-${{ github.event.pull_request.head.sha || github.sha }}
+          name: ${{ steps.packet.outputs.kind == 'portal' && 'connect-portal' || 'connect-rollout' }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/packproof-connect-rollout.tar.gz
           if-no-files-found: error
           retention-days: 30
