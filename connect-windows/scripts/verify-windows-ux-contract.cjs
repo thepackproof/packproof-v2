@@ -32,17 +32,17 @@ assert.equal(visual.nodeReferences.operationalDashboard, '3:262');
 assert.equal(visual.nodeReferences.evolvingProof, '4:122');
 assert.equal(Object.keys(visual.nodeReferences).length, 14);
 for (const [name, id] of Object.entries(visual.nodeReferences))
-  assert.match(id, /^\\d+:\\d+$/, `Invalid Evidence OS Figma node: ${name}`);
+  assert.match(id, /^\d+:\d+$/, `Invalid Evidence OS Figma node: ${name}`);
 for (const [name, owner] of Object.entries(visual.implementedInRuntime))
   assert.ok(exists(owner), `Evidence OS owner missing: ${name} -> ${owner}`);
 const ops = source(contract.runtime.evidenceOsOverview);
 const projection = source(contract.runtime.evidenceOsProjection);
 const appearance = source(contract.runtime.evidenceOsTheme);
 assert.match(ops, /nNnkgTZOBNkG8muy8AkIv1/, 'Evidence OS overview must cite its actual Figma source');
-assert.match(ops, /operationsOverview\\(status\\)/, 'Overview must use the authorized live workspace projection');
+assert.match(ops, /operationsOverview\(status\)/, 'Overview must use the authorized live workspace projection');
 assert.match(projection, /canRead/, 'Overview projection must guard protected workspace data');
 assert.match(projection, /recent-page/, 'Limited recent-order data cannot masquerade as full facility throughput');
-assert.doesNotMatch(ops, /2,407|98\\.2%|614/, 'Figma demonstration numbers must not be present in the installed UI');
+assert.doesNotMatch(ops, /2,407|98\.2%|614/, 'Figma demonstration numbers must not be present in the installed UI');
 assert.match(appearance, /prefers-reduced-motion/, 'Animated Windows theme requires a reduced-motion path');
 
 const desktop = source(contract.runtime.unifiedShell);
