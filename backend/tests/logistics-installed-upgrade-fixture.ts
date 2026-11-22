@@ -3,6 +3,7 @@
 import {createServer} from 'node:https';
 import {readFile,writeFile,rename} from 'node:fs/promises';
 import {createHash,randomBytes} from 'node:crypto';
+import {EventEmitter} from 'node:events';
 import path from 'node:path';
 import {setTimeout as wait} from 'node:timers/promises';
 import request from 'supertest';
@@ -30,7 +31,8 @@ const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passp
     const key=req.headers['idempotency-key'],hash=createHash('sha256');
     let bytes=0,digest:string|undefined;
     const validKey=typeof key==='string' && /^[a-f0-9]{32}$/.test(key);
-    req.on('data',(chunk:Buffer)=>{bytes+=chunk.length;hash.update(chunk);if(bytes>2*1024*1024)witnessInvalid=true;});
+    // Observe bytes without starting flow before the real app attaches its parser.
+    EventEmitter.prototype.on.call(req,'data',(chunk:Buffer)=>{bytes+=chunk.length;hash.update(chunk);if(bytes>2*1024*1024)witnessInvalid=true;});
     req.on('end',()=>{
       digest=hash.digest('hex');
       if(!validKey || bytes===0 || bytes>2*1024*1024)witnessInvalid=true;
@@ -45,7 +47,8 @@ const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passp
     });
     res.on('finish',()=>{if(!held && res.statusCode>=200 && res.statusCode<300 && validKey && digest && pendingOriginals.get(key)===digest)acceptedOriginals.add(key);});
   }
-  if(!held)h.app(req,res);
+  if(held)req.resume();
+  else h.app(req,res);
 });
 async function signal(name:string,value:unknown) {
   const target=path.join(root,name+'.json');
