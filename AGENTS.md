@@ -14,6 +14,14 @@ For all work touching PackProof Windows / Connect / Logistics, **read and follow
 
 Do not assume `main` is the newest Windows release. Verify the active Logistics release line and packaged renderer before beginning or reporting completion.
 
+## New Evidence OS visual authority (founder approved November 22, 2026)
+
+The founder has since approved a new **14-screen PackProof Windows high-fidelity visual and interaction target**:
+https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1 .
+The new Figma frame map is `design.evidenceOs` in `connect-windows/design/windows-ux-contract.json`. It extends—not replaces—the November 20 **functional** authorization, exact-original, durable queue and approval charter below. The existing approved setup journey remains authoritative for its permission and service operations until its redesigned replacement passes installed acceptance.
+
+The Figma dashboard uses **fictional example metrics**. No agent may copy those figures into a production screen or claim that navigation / CSS / animations constitute a working warehouse integration. The implemented operations view must use the existing authorized status/order APIs (`connect-windows/ui/experience/OperationalSignal.tsx` and `operations-overview.ts`). Full parity of every Figma screen and a complete end-to-end Windows installer receipt are still unqualified. Always verify the actual release branch, packaging renderer, and target source revisions. Changes must be isolated and must preserve Commerce/capture queues and the original Logistics service.
+
 ## PackProof Windows / Logistics (mandatory for all coding agents)
 
 Before modifying `desktop/`, `connect-windows/`, the unified installer, Windows release CI, or any related UI:
