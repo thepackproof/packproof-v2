@@ -58,7 +58,7 @@ it("counts only the latest visible revision of each order and labels the chart a
   expect(m.buckets.reduce((count, b) => count + b.count, 0)).toBe(2);
   expect(m.bucketBasis).toBe("recent-page");
   expect(m.activity).toHaveLength(3);
-  expect(m.activity[0].revision).toBe(2);
+  expect(m.activity.find((order) => order.proofId === "one")?.revision).toBe(2);
 });
 
 it("never discloses cached records after service failure or facility permission loss", () => {
