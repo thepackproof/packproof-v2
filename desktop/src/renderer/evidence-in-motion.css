@@ -16,7 +16,7 @@ body{min-width:320px}
 .signal-desktop .sidebar{width:240px;padding:32px 20px;background:#0A172A;color:#F6F9FD;border-right:1px solid #29425F;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .signal-desktop .sidebar>*{flex-shrink:0}
 .signal-desktop .sidebar .brand{color:#fff;font-size:24px;letter-spacing:-.7px;margin:0 12px 40px}
-.signal-desktop .sidebar nav button{color:#A5B6CB;font-size:16px;background:transparent;border:1px solid transparent}
+.signal-desktop .sidebar nav button{position:relative;color:#A5B6CB;font-size:16px;background:transparent;border:1px solid transparent}
 .signal-desktop .sidebar nav button:hover,.signal-desktop .sidebar nav button.active{color:#fff;background:#10243D;border-color:#29425F}
 .signal-desktop .sidebar nav button.active::before{background:#65DFF7}
 .signal-desktop .sidebar summary,.signal-desktop .sidebar .station-online,.signal-desktop .sidebar .profile-button small{color:#A5B6CB}
@@ -105,7 +105,7 @@ body{min-width:320px}
 :is(.signal-desktop,.auth-story,.startup) .brand.packproof-brand{font-family:Inter,system-ui,sans-serif;font-weight:700;letter-spacing:-.025em;gap:12px}
 :is(.signal-desktop,.auth-story,.startup) .brand.packproof-brand>.packproof-brand-mark{display:block;position:relative;width:40px;height:46px;overflow:hidden;flex-shrink:0;background:#F6F9FD;border-radius:8px}
 :is(.signal-desktop,.auth-story,.startup) .brand.packproof-brand .packproof-brand-mark img{position:absolute;width:65px;height:65px;max-width:none;left:-13px;top:-9.5px;object-fit:contain}
-.signal-desktop .order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.8fr);align-items:end;gap:16px;padding:0;margin:0 0 24px}
+.signal-desktop .order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.8fr);align-items:end;gap:16px;padding:0;margin:16px 0 24px}
 .signal-desktop .order-filter-row>.search-field{min-width:0;width:100%;margin:0}
 .signal-desktop .order-date-range{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
 .signal-desktop .order-date-range label{display:grid;gap:8px;min-width:0;margin:0;font-size:14px;line-height:20px}
@@ -120,6 +120,7 @@ body{min-width:320px}
 .signal-desktop .desktop-study-settings button{align-self:flex-start}
 .signal-desktop .shortcut-list{font-size:14px;line-height:20px;gap:12px 16px}
 .signal-desktop .shortcut-list kbd{font-size:12px}
+.signal-desktop .settings-grid .panel>button+h3{margin-top:16px}
 .signal-desktop .signal-station-ready.is-unselected{grid-template-columns:1fr;gap:24px}
 .signal-desktop .is-unselected .station-start-actions{margin-top:20px;gap:12px}
 .signal-desktop .signal-station-ready.is-unselected>aside{border-left:0;border-top:1px solid var(--signal-line);padding:24px 0 0}

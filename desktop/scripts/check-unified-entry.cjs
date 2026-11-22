@@ -144,12 +144,16 @@ async function verifyCommerceControls(page,route){
    currentNavigation:[...document.querySelectorAll('.sidebar button[aria-current="page"]')].map(e=>({label:e.textContent.trim(),active:e.classList.contains('active')}))};
   const action=document.querySelector('.signal-home-primary>.eim-next-action');
   if(action)result.home={label:box(action.querySelector('span')),icon:box(action.querySelector('svg')),display:getComputedStyle(action).display,direction:getComputedStyle(action).flexDirection};
+  const active=document.querySelector('.sidebar nav button[aria-current="page"]');
+  if(active){const marker=getComputedStyle(active,'::before');result.activeMarker={position:getComputedStyle(active).position,top:parseFloat(marker.top),height:parseFloat(marker.height),containerHeight:active.clientHeight};}
   const dates=document.querySelector('.order-date-range');
-  if(dates)result.dates={from:box(dates.querySelector('[aria-label="Orders from date"]')),through:box(dates.querySelector('[aria-label="Orders through date"]'))};
+  if(dates)result.dates={from:box(dates.querySelector('[aria-label="Orders from date"]')),through:box(dates.querySelector('[aria-label="Orders through date"]')),toolbar:box(dates.parentElement.previousElementSibling),search:box(dates.parentElement.querySelector('.search-field'))};
   const start=document.querySelector('.station-start-actions');
   if(start)result.start=[...start.querySelectorAll('button')].map(box);
   if(start)result.stationTools=[...document.querySelectorAll('.is-unselected .station-tool-fields select,.is-unselected aside form input,.is-unselected aside form button')].map(el=>({visible:el.checkVisibility(),viewportHeight:innerHeight,...box(el)}));
   const study=document.querySelector('.desktop-study-settings');
+  const supportHeading=document.querySelector('.settings-grid .panel>button+h3');
+  if(supportHeading)result.support={heading:box(supportHeading),previousAction:box(supportHeading.previousElementSibling)};
   if(study){
    const label=study.querySelector('label'),checkbox=label.querySelector('input[type=checkbox]');
    const text=[...label.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim());
@@ -165,17 +169,23 @@ async function verifyCommerceControls(page,route){
  assert.deepEqual(facts.currentNavigation,[{label:({'home':'Home','packing-station':'Packing Station','orders':'Orders','settings':'Settings'})[route],active:true}],'The actual Commerce page must remain indicated in navigation');
  if(route==='home'){
   assert.equal(facts.home.display,'flex');assert.equal(facts.home.direction,'row');
+  assert.equal(facts.activeMarker.position,'relative','Active navigation must contain its own marker');
+  assert.ok(Math.abs(facts.activeMarker.top+facts.activeMarker.height/2-facts.activeMarker.containerHeight/2)<1,'Active navigation marker is detached from its button');
   const {label,icon}=facts.home;
   assert.ok(Math.abs(label.y+label.height/2-icon.y-icon.height/2)<4,'Home action text and icon are not aligned');
   assert.ok(icon.x>=label.right+8,'Home action icon overlaps its label');
  }
- if(route==='orders')assert.ok(Math.abs(facts.dates.from.y-facts.dates.through.y)<2,'From and Through must remain a cohesive date pair');
+ if(route==='orders'){
+  assert.ok(Math.abs(facts.dates.from.y-facts.dates.through.y)<2,'From and Through must remain a cohesive date pair');
+  assert.ok(facts.dates.search.y-facts.dates.toolbar.bottom>=12,'Orders search must be separated from marketplace controls');
+ }
  if(route==='packing-station'){
   assert.ok(facts.start.length===2&&facts.start[1].x>=facts.start[0].right+8,'Packing start actions need a visible gap');
   assert.equal(facts.stationTools.length,5,'Initial camera, resolution, audio and shipment lookup controls are required');
   assert.ok(facts.stationTools.every(el=>el.visible&&el.y>=0&&el.bottom<=el.viewportHeight+1),'Initial station tools extend below the requested viewport: '+JSON.stringify(facts.stationTools));
  }
  if(route==='settings'){
+  assert.ok(facts.support.heading.y-facts.support.previousAction.bottom>=12,'Diagnostics must be separated from the preceding tutorial action');
   assert.ok(facts.study.panel.y>=facts.study.preferences.bottom+16,'Everyday preferences must precede the separated optional study');
   assert.ok(facts.study.labelText.x>=facts.study.checkbox.right+6,'Study checkbox and label must share an inline row');
   assert.ok(Math.abs(facts.study.labelText.y-facts.study.checkbox.y)<5,'Study consent label is separated from its checkbox');
