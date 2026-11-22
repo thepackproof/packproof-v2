@@ -1,0 +1,265 @@
+/* PackProof Evidence OS theme. Figma: nNnkgTZOBNkG8muy8AkIv1.
+ * This file changes presentation only. The existing connected Logistics views
+ * remain the owners of setup, approvals, immutable evidence and recovery.
+ */
+.pp-evidence-os {
+  --eos-bg: #071321;
+  --eos-sidebar: #08111f;
+  --eos-surface: #12253d;
+  --eos-surface-raised: #182e49;
+  --eos-hover: #203952;
+  --eos-text: #e9f4ff;
+  --eos-muted: #94aec7;
+  --eos-border: #29415b;
+  --eos-blue: #547fff;
+  --eos-green: #36e8c5;
+  --eos-warn: #ffc46b;
+  --eos-panel-shadow: 0 14px 28px #0000001c;
+  color: var(--eos-text);
+  color-scheme: dark;
+  background: var(--eos-bg);
+  grid-template-columns: clamp(212px, 16.5vw, 258px) minmax(0, 1fr);
+  font: 400 15px/1.45 Inter, "Segoe UI", sans-serif;
+}
+.pp-evidence-os[data-appearance="light"] {
+  --eos-bg: #f5f8fd;
+  --eos-sidebar: #ecf3fb;
+  --eos-surface: #fff;
+  --eos-surface-raised: #edf4fc;
+  --eos-hover: #e2ecf9;
+  --eos-text: #14283f;
+  --eos-muted: #627990;
+  --eos-border: #d8e4f0;
+  --eos-blue: #366bf7;
+  --eos-green: #008d79;
+  --eos-warn: #9b6018;
+  --eos-panel-shadow: 0 12px 28px #16385b0b;
+  color-scheme: light;
+}
+.pp-evidence-os .pp-sidebar {
+  background: var(--eos-sidebar);
+  color: var(--eos-text);
+  min-width: 0;
+  padding: 17px 17px 26px;
+  gap: 20px;
+  border-right: 1px solid var(--eos-border);
+}
+.pp-evidence-os .pp-eos-brand {
+  padding: 4px 8px 18px;
+  border-bottom: 1px solid var(--eos-border);
+}
+.pp-evidence-os .pp-eos-brand .pp-brand {
+  color: var(--eos-text);
+  flex-wrap: wrap;
+  font-size: 22px;
+  gap: 9px;
+  letter-spacing: -.03em;
+}
+.pp-evidence-os .pp-eos-brand .pp-brand-mark {
+  background: #fff;
+  border-radius: 9px;
+  width: 41px;
+  height: 47px;
+}
+.pp-evidence-os .pp-eos-brand .pp-brand small {
+  display: block;
+  width: 100%;
+  margin: 0 0 0 52px;
+  color: var(--eos-green);
+  font-size: 10px;
+  letter-spacing: .16em;
+}
+.pp-evidence-os .pp-nav-label {
+  color: var(--eos-muted);
+  padding-left: 13px;
+  font-weight: 750;
+  letter-spacing: .14em;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.pp-evidence-os .pp-sidebar nav {
+  gap: 6px;
+}
+.pp-evidence-os .pp-sidebar nav button {
+  min-height: 47px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: var(--eos-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 550;
+  position: relative;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+.pp-evidence-os .pp-sidebar nav button:hover { background: var(--eos-hover); color: var(--eos-text); transform: translateX(2px); }
+.pp-evidence-os .pp-sidebar nav button[aria-current="page"] {
+  background: var(--eos-surface-raised);
+  color: var(--eos-text);
+  font-weight: 700;
+}
+.pp-evidence-os .pp-sidebar nav button[aria-current="page"]::before {
+  position: absolute;
+  content: "";
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 5px;
+  background: var(--eos-green);
+}
+.pp-evidence-os .pp-sidebar nav .pp-icon { width: 23px; height: 23px; }
+.pp-evidence-os .pp-eos-nav-hint {
+  padding: 14px;
+  border-radius: 15px;
+  background: var(--eos-surface);
+  border: 1px solid var(--eos-border);
+}
+.pp-evidence-os .pp-eos-nav-hint span {
+  color: var(--eos-green);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .13em;
+}
+.pp-evidence-os .pp-eos-nav-hint p {
+  margin: 9px 0 0;
+  font-size: 12px;
+  color: var(--eos-muted);
+  line-height: 1.5;
+}
+.pp-evidence-os .pp-sidebar-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 9px;
+  margin: auto 6px 0;
+  padding: 19px 5px 0;
+  border-color: var(--eos-border);
+}
+.pp-evidence-os .pp-eos-status { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.pp-evidence-os .pp-eos-status strong { color: var(--eos-text); font-size: 12px; }
+.pp-evidence-os .pp-eos-status small { color: var(--eos-muted); font-size: 11px; }
+.pp-evidence-os .pp-eos-health-dot {
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--eos-warn);
+  flex: none;
+}
+.pp-evidence-os .pp-eos-health-dot.is-live { background: var(--eos-green); animation: eos-pulse 3s ease-in-out infinite; }
+.pp-evidence-os .pp-sidebar-foot .pp-text-button {
+  color: var(--eos-blue);
+  font-size: 12px;
+  padding: 1px 0;
+  width: 100%;
+  text-align: left;
+}
+.pp-evidence-os .pp-eos-appearance {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 6px;
+  border: 1px solid var(--eos-border);
+  background: var(--eos-surface);
+  color: var(--eos-text);
+  min-height: 39px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.pp-evidence-os .pp-eos-appearance span { color: var(--eos-green); font-size: 18px; }
+.pp-evidence-os .pp-eos-appearance:hover { border-color: var(--eos-blue); }
+.pp-evidence-os .pp-canvas { min-width: 0; background: var(--eos-bg); color: var(--eos-text); }
+.pp-app:has(.pp-evidence-os[data-appearance="dark"]) > .pp-header {
+  background: #0c1b2d;
+  color: #e9f4ff;
+  border-color: #29415b;
+}
+.pp-app:has(.pp-evidence-os[data-appearance="light"]) > .pp-header {
+  background: #fff;
+  color: #14283f;
+  border-color: #d8e4f0;
+}
+/* The logo is already displayed in the sidebar on active operations screens. */
+.pp-app:has(.pp-evidence-os) > .pp-header .pp-brand { visibility: hidden; }
+.pp-app:has(.pp-evidence-os[data-appearance="dark"]) > .pp-header .pp-header-end { color: #b3c9dc; }
+.pp-app:has(.pp-evidence-os[data-appearance="dark"]) > .pp-header .pp-text-button { color: #91b2ff; }
+.pp-evidence-os .xw { width: 100%; color: var(--eos-text); padding: clamp(24px, 3vw, 43px); }
+.pp-evidence-os .xw :is(h1,h2,h3), .pp-evidence-os .pf :is(h1,h2,h3) { color: var(--eos-text); }
+.pp-evidence-os .xw :is(p, small), .pp-evidence-os .pf :is(p, small) { color: var(--eos-muted); }
+.pp-evidence-os .xw :is(.xw-card,.xw-search,.xw-settings),
+.pp-evidence-os .pf :is(.pf-context,.pf-card,.pf-dialog,.pf-inset) {
+  background: var(--eos-surface);
+  color: var(--eos-text);
+  border-color: var(--eos-border);
+  box-shadow: var(--eos-panel-shadow);
+}
+.pp-evidence-os .xw :is(.xw-orderrow,.xw-review,.xw-choice) { color: var(--eos-text); }
+.pp-evidence-os .xw :is(.xw-orderrow,.xw-review,.xw-choice):hover,
+.pp-evidence-os .xw-reviewmini button:hover { background: var(--eos-hover); }
+.pp-evidence-os .xw :is(.xw-customer,.xw-update,.xw-reviewtext small,.xw-reviewtext > span,.xw-colheads) { color: var(--eos-muted); }
+.pp-evidence-os .xw .xw-order-identity > strong,
+.pp-evidence-os .xw .xw-link,
+.pp-evidence-os .xw .xw-cta { color: var(--eos-blue); }
+.pp-evidence-os .xw .xw-orderrow,
+.pp-evidence-os .xw .xw-reviewmini > button:not(.xw-link),
+.pp-evidence-os .xw .xw-context-file,
+.pp-evidence-os .pf .pf-context { border-color: var(--eos-border); }
+.pp-evidence-os .xw .xw-search { padding: 8px 14px; }
+.pp-evidence-os .xw .xw-search input,
+.pp-evidence-os .pf :is(.pf-search, .pf-search input, .pf-scope select, .pf-sectionhead select) {
+  color: var(--eos-text);
+  background: var(--eos-surface-raised);
+}
+.pp-evidence-os .xw .xw-search input { background: transparent; }
+.pp-evidence-os .xw .xw-badge.xw-warn { background: #54412b; color: #ffd18b; }
+.pp-evidence-os .xw .xw-badge.xw-green { background: #174d49; color: #69eed5; }
+.pp-evidence-os .xw .xw-badge.xw-blue { background: var(--eos-surface-raised); color: var(--eos-blue); }
+.pp-evidence-os[data-appearance="light"] .xw .xw-badge.xw-warn { background: #fff2dc; color: #8b560a; }
+.pp-evidence-os[data-appearance="light"] .xw .xw-badge.xw-green { background: #e4f9f1; color: #087568; }
+.pp-evidence-os .xw .xw-warning { background: #4b3534; color: #ffd1b0; }
+.pp-evidence-os .xw .xw-notice { background: var(--eos-surface-raised); color: var(--eos-muted); }
+.pp-evidence-os .xw .xw-banner { background: #12453f; color: #b2fff0; }
+.pp-evidence-os .xw .xw-banner-warn { background: #573d2c; color: #ffe3b4; }
+.pp-evidence-os .xw-banner p { color: inherit; }
+.pp-evidence-os .xw .xw-secondary,
+.pp-evidence-os .xw .xw-choice,
+.pp-evidence-os .xw .xw-context-file { background: var(--eos-surface-raised); color: var(--eos-text); border-color: var(--eos-border); }
+.pp-evidence-os .xw .xw-primary { background: var(--eos-blue); border-color: var(--eos-blue); color: #fff; }
+.pp-evidence-os .xw .xw-tile { background: var(--eos-surface-raised); }
+.pp-evidence-os .pf { color: var(--eos-text); }
+.pp-evidence-os .pf :is(.pf-tabs button,.pf-scope,.pf-link) { color: var(--eos-muted); }
+.pp-evidence-os .pf .pf-tabs button[aria-selected="true"] { background: var(--eos-surface-raised); color: var(--eos-blue); }
+.pp-evidence-os .pf .pf-tag { background: var(--eos-surface-raised); color: var(--eos-blue); }
+.pp-evidence-os .pf .pf-muted { color: var(--eos-muted); }
+.pp-evidence-os :is(button,input,summary,select):focus-visible { outline: 3px solid #6594ff; outline-offset: 3px; }
+@keyframes eos-pulse { 0%,100% { box-shadow: 0 0 0 3px #36e8c526; } 50% { box-shadow: 0 0 0 9px #36e8c500; } }
+@media (max-width: 1050px) {
+  .pp-evidence-os { grid-template-columns: 206px minmax(0,1fr); }
+  .pp-evidence-os .pp-sidebar { padding-inline: 9px; }
+  .pp-evidence-os .pp-eos-nav-hint { display: none; }
+  .pp-evidence-os .xw { padding-inline: 20px; }
+}
+@media (max-width: 760px) {
+  .pp-evidence-os { display: block; }
+  .pp-evidence-os .pp-sidebar { border-right: 0; border-bottom: 1px solid var(--eos-border); padding: 10px; gap: 10px; }
+  .pp-evidence-os .pp-eos-brand { display: none; }
+  .pp-evidence-os .pp-sidebar nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 3px; }
+  .pp-evidence-os .pp-sidebar nav button { min-height: 62px; padding: 4px 2px; font-size: 10px; flex-direction: column; justify-content: center; gap: 2px; text-align: center; }
+  .pp-evidence-os .pp-sidebar-foot, .pp-evidence-os .pp-nav-label { display: none; }
+  .pp-app:has(.pp-evidence-os) > .pp-header .pp-brand { visibility: visible; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-evidence-os *, .pp-evidence-os *::before, .pp-evidence-os *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .pp-evidence-os .pp-sidebar nav button:hover { transform: none; }
+}
+@media (forced-colors: active) {
+  .pp-evidence-os .pp-sidebar nav button[aria-current="page"] { outline: 2px solid Highlight; }
+  .pp-evidence-os .pp-eos-health-dot { border: 2px solid CanvasText; }
+}
