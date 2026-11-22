@@ -103,8 +103,8 @@ it("resumes browser approval and opens the committed proof revision from the wor
   current = active({ orders: [order] });
   fireEvent.focus(window);
   await clickButton("Open my workspace");
-  expect(await screen.findByRole("heading", { name: "Workspace overview" })).toBeVisible();
-  await clickButton(/SO10482/);
+  expect(await screen.findByRole("heading", { name: "Operations, at a glance." })).toBeVisible();
+  fireEvent.click(within(screen.getByRole("region", { name: "Recent order evidence" })).getByRole("button", { name: /SO10482/ }));
   expect(await screen.findByRole("heading", { name: "Proof p1" })).toBeVisible();
   expect(screen.getByRole("heading", { name: discrepancy })).toBeVisible();
   expect(bridge.workspaceOrderDetail).toHaveBeenCalledWith("p1", 3);
@@ -154,7 +154,7 @@ it("finds an order outside the recent list and opens the authorized revision onl
     workspaceOrderDetail: vi.fn(async () => ({ ...order, lines: [], evidence: [], events: [] })),
   });
   render(<WorkspaceApp bridge={bridge}/>);
-  await clickButton("Orders");
+  await clickButton("Orders & proofs");
   fireEvent.change(screen.getByRole("searchbox", { name: "Order reference" }), { target: { value: "000120" } });
   await clickButton("Find order");
   await clickButton(/000120/);
