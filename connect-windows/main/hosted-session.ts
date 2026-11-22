@@ -82,7 +82,7 @@ export class HostedSession {
       if (method !== 'choices' && !enrollment.has(method)) throw Error('Connect this computer to a facility first.');
       return {...base,mode:'enrollment',scopeKey:'null',offline:false,canConfigure:false,canReadOrders:false};
     }
-    if (scope?.locationId) {
+    if (scope) {
       try {
         const access = await this.verify(scope,user,method); stable();
         return {...base,mode:'facility',scopeKey:JSON.stringify(scope),scope,offline:access.offline,

@@ -13,7 +13,7 @@ function fixture(fresh=false) {
   let user='admin';
   const current={installationId:ids.installationId,environment:'development',state:'needs_approval',
     binding:{organizationId:ids.organizationId,locationId:null},health:{serviceOnline:true}} as ConnectStatus;
-  const human={user:()=>user,access:vi.fn(),setupAccess:vi.fn(async()=>structuredClone(details)),
+  const human={user:()=>user,access:vi.fn(async()=>{throw Object.assign(Error('This workspace is unavailable.'),{status:404});}),setupAccess:vi.fn(async()=>structuredClone(details)),
     dashboardIdentity:vi.fn(),suggest:vi.fn(),review:vi.fn()};
   const session=new HostedSession(human,async()=>current,'https://example.test');
   const renewed={...ids,proposalSha256:next,approvalPath:'https://untrusted.invalid'};
