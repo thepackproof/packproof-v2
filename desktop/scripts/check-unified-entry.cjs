@@ -9,7 +9,7 @@ const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {createHash}=require('node:crypto');
 const {setTimeout:wait}=require('node:timers/promises');
-const {app,BrowserWindow,ipcMain,protocol,net}=require('electron');
+const {app,BrowserWindow,ipcMain,protocol,net,nativeImage}=require('electron');
 
 const root=path.resolve(__dirname,'../..');
 // Inspect the bytes inside the actual electron-builder app.asar, not a
@@ -64,18 +64,78 @@ async function measure(page,w,h){
  assert.deepEqual(measured.clipped,[],'Clipped buttons: '+JSON.stringify(measured));
  return measured;
 }
-async function shoot(page,name,w,h,scale=1,atScroll=false){
- await page.executeJavaScript('document.fonts.ready.then(()=>true)');
- const origin=atScroll?await page.executeJavaScript('({x:scrollX,y:scrollY})'):{x:0,y:0};
- const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{...origin,width:w,height:h,scale:1}});
- const png=Buffer.from(shot.data,'base64');
- assert.ok(png.length>24,'Empty screenshot');
- const actual={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
- fs.mkdirSync(out,{recursive:true});
- fs.writeFileSync(path.join(out,name+'.png'),png);
- assert.deepEqual(actual,{width:Math.round(w*scale),height:Math.round(h*scale)},'Mislabelled packaged screenshot '+name);
- return {...actual,cssWidth:w,cssHeight:h,scale,...(atScroll?{scrollY:origin.y}:{})};
+function repeatedSurface(bitmap,width,height,nativeContent,scale){
+ assert.equal(bitmap.length,width*height*4,'Unexpected decoded screenshot buffer');
+ const stride=width*4,repeats=[];
+ const varied=new Set();
+ for(let offset=0;offset<bitmap.length&&varied.size<32;offset+=4)varied.add(bitmap.readUInt32LE(offset));
+ if(varied.size<32)return repeats;
+ // Inspect the actual native/emulated surface sizes first, then other large
+ // periods so a stale surface from an earlier resize cannot evade the check.
+ for(const [axis,size,native]of[['x',width,nativeContent.width],['y',height,nativeContent.height]]){
+  const periods=new Set([Math.round(native),Math.round(native*scale)]);
+  for(let n=256;n<=size-128;n++)periods.add(n);
+  for(const period of periods){
+   if(period<256||period>size-128)continue;
+   const cols=axis==='x'?width-period:width,rows=axis==='y'?height-period:height;
+   const offset=axis==='x'?period*4:period*stride;
+   const sameRow=y=>bitmap.subarray(y*stride,y*stride+cols*4).equals(bitmap.subarray(y*stride+offset,y*stride+offset+cols*4));
+   if(![0,Math.floor(rows/3),Math.floor(rows*2/3),rows-1].every(sameRow))continue;
+   let equal=true;
+   for(let y=0;y<rows&&equal;y++)equal=sameRow(y);
+   if(!equal)continue;
+   // Uniform backgrounds are common. Reject only substantial exact repeated
+   // content, with varied colors and at least 2% non-dominant pixels.
+   const colors=new Map();let dominant=0;
+   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const color=bitmap.readUInt32LE(y*stride+x*4),count=(colors.get(color)||0)+1;
+    colors.set(color,count);dominant=Math.max(dominant,count);
+   }
+   if(colors.size>=32&&dominant<=cols*rows*.98){repeats.push({axis,period});break;}
+  }
+ }
+ return repeats;
 }
+async function shoot(page,name,w,h,scale=1,atScroll=false){
+ const rejectedSurfaces=[];
+ for(let attempt=0;attempt<2;attempt++){
+  await page.executeJavaScript(`(async()=>{
+   await document.fonts.ready;
+   await Promise.all([...document.images].filter(e=>e.checkVisibility()).map(e=>e.decode()));
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,0))));
+   return true;
+  })()`);
+  const viewport=await page.executeJavaScript('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})');
+  assert.deepEqual(viewport,{width:w,height:h,dpr:scale},'Capture viewport changed');
+  const {width:nativeWidth,height:nativeHeight}=BrowserWindow.fromWebContents(page).getContentBounds();
+  const nativeContent={width:nativeWidth,height:nativeHeight};
+  const origin=atScroll?await page.executeJavaScript('({x:scrollX,y:scrollY})'):{x:0,y:0};
+  const shot=await page.debugger.sendCommand('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:{...origin,width:w,height:h,scale:1}});
+  const png=Buffer.from(shot.data,'base64');
+  assert.ok(png.length>24,'Empty screenshot');
+  const actual={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};
+  fs.mkdirSync(out,{recursive:true});
+  const filename=path.join(out,name+'.png');
+  fs.writeFileSync(filename,png);
+  assert.deepEqual(actual,{width:Math.round(w*scale),height:Math.round(h*scale)},'Mislabelled packaged screenshot '+name);
+  const raster=nativeImage.createFromBuffer(png);
+  assert.deepEqual(raster.getSize(),actual,'Screenshot decoding changed its dimensions');
+  const repeated=repeatedSurface(raster.toBitmap(),actual.width,actual.height,nativeContent,scale);
+  if(repeated.length&&attempt===0){
+   // The first surface read can expose a pre-resize compositor frame. Retain
+   // that rejected evidence, wait for paint again, then permit exactly one
+   // recapture. No other failed assertion is retried or converted to success.
+   const rejected=name+'-rejected-surface.png';
+   fs.renameSync(filename,path.join(out,rejected));
+   rejectedSurfaces.push({file:rejected,nativeContent,repeated});
+   console.warn('Rejected tiled screenshot; one paint-synchronized recapture:',JSON.stringify(rejectedSurfaces[0]));
+   continue;
+  }
+  assert.deepEqual(repeated,[],'Repeated compositor surface in '+name+'; original PNG retained; native='+JSON.stringify(nativeContent));
+  return {...actual,cssWidth:w,cssHeight:h,scale,nativeContent,captureAttempts:attempt+1,rejectedSurfaces,...(atScroll?{scrollY:origin.y}:{})};
+ }
+}
+
 async function checkBootstrap(parent){
  assert.ok(fs.existsSync(setupPreload),'Packaged Connect preload missing');
  assert.ok(fs.existsSync(path.join(setupRenderer,'index.html')),'Packaged Connect setup renderer missing');
