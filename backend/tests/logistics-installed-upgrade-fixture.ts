@@ -22,11 +22,14 @@ const h=await createHarness();
 // changing its authority or original. Observe immutable request identity, never
 // persist request bodies, credentials or headers other than the idempotency key.
 let holdObservations=false,witnessEnabled=false,witnessInvalid=false;
+let observationAttempts=0,forwardedObservationAttempts=0,lastObservationHttpStatus:number|null=null;
 const pendingOriginals=new Map<string,string>(),acceptedOriginals=new Set<string>();
 const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passphrase:'disposable'},(req,res)=>{
   const observation=req.method==='POST' && req.url==='/v1/partner/agent/order-workspace/observations';
   const held=observation && holdObservations;
   if(observation && witnessEnabled) {
+    observationAttempts++;
+    if(!held)forwardedObservationAttempts++;
     const key=req.headers['idempotency-key'],hash=createHash('sha256');
     let bytes=0,digest:string|undefined;
     const validKey=typeof key==='string' && /^[a-f0-9]{32}$/.test(key);
@@ -43,7 +46,10 @@ const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passp
         res.end(JSON.stringify({error:{code:'FIXTURE_UPLOAD_HELD',message:'Disposable upgrade fixture is holding this original.'}}));
       }
     });
-    res.on('finish',()=>{if(!held && res.statusCode>=200 && res.statusCode<300 && validKey && digest && pendingOriginals.get(key)===digest)acceptedOriginals.add(key);});
+    res.on('finish',()=>{
+      if(!held)lastObservationHttpStatus=res.statusCode;
+      if(!held && res.statusCode>=200 && res.statusCode<300 && validKey && digest && pendingOriginals.get(key)===digest)acceptedOriginals.add(key);
+    });
   }
   if(!held)h.app(req,res);
 });
@@ -100,6 +106,7 @@ try {
     } else if(body.command==='collectionState' && witnessEnabled) {
       if(witnessInvalid)throw Error('The pending original request identity changed.');
       await signal(sequence+'.result',{pendingOriginals:pendingOriginals.size,acceptedOriginals:acceptedOriginals.size,
+        observationAttempts,forwardedObservationAttempts,lastObservationHttpStatus,
         requestIdentitySha256:createHash('sha256').update(JSON.stringify([...pendingOriginals].sort())).digest('hex')});
     } else if(body.command==='pilotOn' || body.command==='pilotOff') {
       process.env.PACKPROOF_GUIDED_FACILITIES=body.command==='pilotOn'?org+':sandbox:upgrade':'';

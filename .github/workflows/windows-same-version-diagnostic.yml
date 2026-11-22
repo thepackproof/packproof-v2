@@ -1,0 +1,115 @@
+name: Diagnostic Windows same-version replacement
+
+# This branch-only investigation reuses reviewed installer bytes. It does not
+# qualify a release or replace any of the normal candidate/installed gates.
+on:
+  push:
+    branches: [diagnostics/windows-same-version-20261122]
+    paths:
+      - .github/workflows/windows-same-version-diagnostic.yml
+      - connect-windows/scripts/smoke-logistics-upgrade.ps1
+      - backend/tests/logistics-installed-upgrade-fixture.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-same-version-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  same-version:
+    name: Diagnostic only / SameVersion / hosted Server payload
+    if: github.ref == 'refs/heads/diagnostics/windows-same-version-20261122'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      APP_ENV: development
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the exact existing candidate and prior artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $inputs = @(
+            @{ Id=14731871621; Run=44965627705; Head='91d68ddea387bc9dbe1dd60d3618a24d5ce406cc'; Name='packproof-unified-DEVELOPMENT-win32-x64-26842868529372c828750480a5f4e45c094b26a0'; Digest='sha256:3269c219bb4a8bbf6d2657147dc776c89dd3acda076f77bf1c9c917e64aeac43' },
+            @{ Id=14679037204; Run=44836162283; Head='617a58b883328ad04513a48564d33c573b9b7c78'; Name='packproof-unified-DEVELOPMENT-win32-x64-617a58b883328ad04513a48564d33c573b9b7c78'; Digest='sha256:97805b3e61a688498943903229929e80ac6a3c2d0055c7edbdeffcda399677da' }
+          )
+          foreach ($inputArtifact in $inputs) {
+            $metadata = Invoke-RestMethod -Uri "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/actions/artifacts/$($inputArtifact.Id)" -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+            if ($metadata.id -ne $inputArtifact.Id -or $metadata.expired -or $metadata.name -ne $inputArtifact.Name -or
+                $metadata.workflow_run.id -ne $inputArtifact.Run -or $metadata.workflow_run.head_sha -ne $inputArtifact.Head -or
+                $metadata.digest -ne $inputArtifact.Digest) { throw 'Pinned diagnostic artifact identity changed.' }
+          }
+      - name: Download the exact already-built unified candidate
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '14731871621'
+          merge-multiple: true
+          run-id: 44965627705
+          github-token: ${{ github.token }}
+          path: candidate
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Obtain the frozen prior Commerce queue writer
+        uses: actions/checkout@v4
+        with:
+          ref: 617a58b883328ad04513a48564d33c573b9b7c78
+          path: previous
+      - name: Download the exact qualified prior unified 0.7.0 installer
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '14679037204'
+          merge-multiple: true
+          run-id: 44836162283
+          github-token: ${{ github.token }}
+          path: previous-unified
+      - name: Install the exact prior Commerce queue writer dependencies
+        working-directory: previous/desktop
+        run: npm ci --no-audit --no-fund
+      - name: Prepare the isolated real enrollment and collection fixture
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Parse the unchanged rehearsal with bounded diagnostics
+        run: |
+          $tokens = $null; $syntaxErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'connect-windows/scripts/smoke-logistics-upgrade.ps1').Path, [ref]$tokens, [ref]$syntaxErrors)
+          if ($syntaxErrors.Count) { $syntaxErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+      - name: Diagnose the exact retained collector request
+        run: |
+          $arguments = @{
+            Mode = 'SameVersion'
+            CandidateDirectory = (Resolve-Path 'candidate').Path
+            CandidateCommit = '26842868529372c828750480a5f4e45c094b26a0'
+            PriorUnifiedDirectory = (Resolve-Path 'previous-unified').Path
+            PriorCommerceSource = (Resolve-Path 'previous/desktop').Path
+          }
+          try {
+            ./connect-windows/scripts/smoke-logistics-upgrade.ps1 @arguments
+          } finally {
+            $receiptPath = Join-Path (Resolve-Path 'candidate').Path 'logistics-install-SameVersion.json'
+            if (Test-Path -LiteralPath $receiptPath) {
+              $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+              $receipt | Add-Member -NotePropertyName purpose -NotePropertyValue 'diagnostic_only'
+              $receipt | Add-Member -NotePropertyName qualifiesRelease -NotePropertyValue $false
+              $receipt | Add-Member -NotePropertyName builtArtifactId -NotePropertyValue 14731871621
+              $receipt | Add-Member -NotePropertyName builtRunId -NotePropertyValue 44965627705
+              $receipt | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'candidate/logistics-diagnostic-SameVersion.json' -Encoding utf8NoBOM
+            }
+          }
+      - name: Preserve diagnostic evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-same-version-${{ github.sha }}
+          path: candidate/logistics-diagnostic-SameVersion.json
+          if-no-files-found: ignore
+          retention-days: 7

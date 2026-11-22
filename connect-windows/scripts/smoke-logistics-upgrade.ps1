@@ -316,7 +316,25 @@ try {
      $completed=$null
      for($i=0;$i -lt 90;$i++) {
        $completed=Control @{command='collectionState'}
-       if($completed.acceptedOriginals -eq 1 -and (Bridge status).workspace.sources[0].queued -eq 0) {break}
+       $completionStatus=Bridge status
+       $completionSources=@($completionStatus.workspace.sources | Where-Object id -eq $source.id)
+       if($completionSources.Count -ne 1) {throw 'The retained collector source disappeared while awaiting its exact receipt.'}
+       $completionSource=$completionSources[0]
+       $completionIssue=[string]$completionSource.issue
+       if($completionIssue -and $completionIssue -cnotmatch '^[A-Z][A-Z0-9_]{0,63}$') {$completionIssue='UNRECOGNIZED_ERROR'}
+       $completionState=[string]$completionSource.state
+       if($completionState -cnotmatch '^[a-z][a-z_]{0,31}$') {$completionState='unrecognized'}
+       # Only fixed counts, booleans, a bounded code and HTTP status enter the
+       # receipt. Never serialize source paths, records, credentials or bodies.
+       $receipt.collectorCompletion=[ordered]@{
+         pendingOriginals=[int]$completed.pendingOriginals;acceptedOriginals=[int]$completed.acceptedOriginals;
+         observationAttempts=[int]$completed.observationAttempts;forwardedObservationAttempts=[int]$completed.forwardedObservationAttempts;
+         lastObservationHttpStatus=$completed.lastObservationHttpStatus;
+         retainedRequestMatches=$completed.requestIdentitySha256 -eq $held.requestIdentitySha256;
+         queuedOriginals=[int]$completionSource.queued;sourceState=$completionState;sourceIssue=$completionIssue;
+         canReadOrders=[bool]$completionStatus.workspace.canReadOrders;serviceOnline=[bool]$completionStatus.health.serviceOnline
+       }
+       if($completed.acceptedOriginals -eq 1 -and $completionSource.queued -eq 0) {break}
        Start-Sleep -Seconds 1
      }
      if(!$completed -or $completed.acceptedOriginals -ne 1 -or $completed.requestIdentitySha256 -ne $held.requestIdentitySha256 -or
