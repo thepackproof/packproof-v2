@@ -7,7 +7,7 @@ import {startUpdates} from './updates';
 import {preparedExportPath,canOfferPreparedFolder} from './source-choice';
 import {discoverWorkspaceFolders} from './workspace-discovery';
 import {distinctLocations,WorkspaceFolderOffers,type FolderOption} from './workspace-folder-offers';
-import {workspaceParams,currentApprovalPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
+import {workspaceParams,enrollmentReviewPath,currentSubscriptionApprovalPath,currentBackfillApprovalPath,verifiedDetailPath,submitConfigurationForReview} from './approval-target';
 import {backfillFileNames} from './backfill-files';
 import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,type Method} from './security';
 import type {SourceRole,WorkspaceFolderSuggestion} from '../ui/workspace-types';
@@ -32,6 +32,13 @@ function safeError(error:unknown){const message=error instanceof Error?error.mes
 async function open(url:string){const u=new URL(url);if(u.origin!==new URL(config.webBaseUrl).origin||u.protocol!=='https:')throw Error('Only trusted PackProof pages can open.');await shell.openExternal(u.href);}
 function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:${name}`,async(event,...args)=>{try{if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame||!trustedRenderer(event.senderFrame.url))throw Error('Untrusted application request.');const parsed=argumentsByMethod[name].parse(args);
  const started = host ? await host.guard(name) : null;
+ if(name==='refreshPendingFileReview') {
+   if(!host || !started)throw Error('Open the saved file review from the signed-in PackProof application.');
+   const [input]=parsed as [{wholeFileUploadApproved:boolean;expectedProposalSha256:string}];
+   await host.openPendingFileReview(started,input,payload=>bridge.request('refreshPendingFileReview',payload),
+     path=>open(approvalUrl(path,config.webBaseUrl)));
+   return {ok:true};
+ }
  if (host && (name === 'openWorkspaceOrder' || name === 'openWorkspaceReview')) {
    const [proofId, revision, subject] = parsed as unknown[];
    await host.daily(name === 'openWorkspaceOrder' ? { proofId: String(proofId), revision: Number(revision), ...(typeof subject === 'string' ? {subject} : {}) } : undefined);
@@ -52,7 +59,7 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
   return {ok:true,value:host && ended ? host.present(name,value,{...ended,offline:!!started?.offline || ended.offline}) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
 async function openWorkspaceApproval(current:ConnectStatus) {
  if (!current.installationId && current.enrollment?.state === 'pending') {
-   await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl));
+   await open(approvalUrl(enrollmentReviewPath(current,embedded),config.webBaseUrl));
   return;
  }
  const path = current.workspace?.approvalPath;
@@ -83,6 +90,7 @@ async function availableFolderOptions(role: SourceRole, scan: boolean): Promise<
  return distinctLocations([...discovered, ...selected, ...fallback]);
 }
 function setup(){
+ bind('refreshPendingFileReview',()=>{throw Error('Open the saved file review from the signed-in PackProof application.');});
  bind('getFacilityDraft',()=>bridge.request('getFacilityDraft'));
  bind('saveFacilityDraft',(expectedRevision,changes)=>bridge.request('saveFacilityDraft',{expectedRevision,changes}));
  bind('saveFacilityNotes',(expectedRevision,changes)=>bridge.request('saveFacilityNotes',{expectedRevision,changes}));
@@ -158,7 +166,7 @@ function setup(){
  bind('activateWorkspace', async (pending?:true) => {
   const current = await mutate('activateWorkspace', pending ? {allowPendingOutput:true} : {});
   if (!current.installationId && current.enrollment?.state === 'pending') {
-   try { await open(approvalUrl(currentApprovalPath(current),config.webBaseUrl)); }
+   try { await open(approvalUrl(enrollmentReviewPath(current,embedded),config.webBaseUrl)); }
    catch { return {...current,authorizationNotice:'Open the browser review to connect this computer.'}; }
   } else if (current.workspace?.phase === 'awaiting_approval' && current.workspace.approvalPath) {
    try { await openWorkspaceApproval(current); }
@@ -212,7 +220,7 @@ function setup(){
  bind('openSubscriptionCase',async id=>open(new URL(verifiedDetailPath(await mutate('refresh'),id),config.webBaseUrl).href));
  // A failed policy refresh does not erase the saved local review or canonical
  // receipt. The service's timestamped observation owns current remote readiness.
- bind('getStatus',async()=>{try{await bridge.request('refresh');}catch{/* Return preserved local state with the service's failed transport observation. */}return status();});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');try{await open(approvalUrl(currentApprovalPath(value),config.webBaseUrl));}catch{return {...value,authorizationNotice:'Your sign-in request was saved. Open the browser review to continue.'};}return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown;transport?:unknown;versions?:unknown};return {...await status(),checks:result.checks,transport:result.transport,versions:result.versions};});
+ bind('getStatus',async()=>{try{await bridge.request('refresh');}catch{/* Return preserved local state with the service's failed transport observation. */}return status();});bind('recoverEnrollment',consent=>mutate('recoverEnrollment',consent));bind('beginEnrollment',async()=>{const value=await mutate('beginEnrollment');try{await open(approvalUrl(enrollmentReviewPath(value,embedded),config.webBaseUrl));}catch{return {...value,authorizationNotice:'Your sign-in request was saved. Open the browser review to continue.'};}return value;});bind('checkComputer',async()=>{const result=rendererSafe(await bridge.request('preflight')) as {checks:unknown;transport?:unknown;versions?:unknown};return {...await status(),checks:result.checks,transport:result.transport,versions:result.versions};});
  for(const [method,operation] of Object.entries({pollEnrollment:'pollEnrollment',verifyImport:'verify',proposeActivation:'proposeActivation',activate:'activate',pause:'pause',resume:'resume',refresh:'refresh'}))bind(method as Method,()=>mutate(operation));
  bind('chooseFolder',async()=>{
   const prepared=preparedExportPath(config.channel,process.env.ProgramData);
@@ -231,7 +239,7 @@ function setup(){
  bind('previewLocal',fileName=>mutate('localPreview',{fileName}));
  bind('proposeConfiguration',value=>submitConfigurationForReview(()=>mutate('proposeConfiguration',value),open,config.webBaseUrl));
  bind('previewCloud',consent=>mutate('preview',consent));bind('commitBatch',consent=>mutate('commit',consent));
- bind('openApproval',async()=>open(approvalUrl(currentApprovalPath(await status()),config.webBaseUrl)));
+ bind('openApproval',async()=>open(approvalUrl(enrollmentReviewPath(await status(),embedded),config.webBaseUrl)));
  bind('openRecord',async id=>{const s=await mutate('refresh');if(!id)id=s.verification?.recordId;if(!id||!s.verification?.complete||id!==s.verification.recordId)throw Error('Verify the completed record before opening it.');await open(new URL(verifiedDetailPath(s),config.webBaseUrl).href);});
  bind('openPortal',()=>open(new URL('/app/connections',config.webBaseUrl).href));
  bind('exportDiagnostics',async()=>{const report=rendererSafe(await bridge.request('diagnostics'));const answer=await dialog.showMessageBox(win!,{type:'info',title:'Review diagnostic export',message:'Export a redacted support report?',detail:'Review this redacted report before saving. Shipment rows, service credentials and source paths are excluded. You choose whether to share it.\n\n'+JSON.stringify(report,null,2).slice(0,12000),buttons:['Cancel','Save report'],defaultId:0,cancelId:0});if(answer.response!==1)return {saved:false};const target=await dialog.showSaveDialog(win!,{title:'Save redacted diagnostics',defaultPath:'PackProof-Connect-diagnostics.json',filters:[{name:'JSON report',extensions:['json']}]});if(target.canceled||!target.filePath)return {saved:false};await writeFile(target.filePath,JSON.stringify(report,null,2),{mode:0o600});return {saved:true};});

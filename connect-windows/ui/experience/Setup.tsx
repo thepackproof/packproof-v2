@@ -76,7 +76,10 @@ function stamp(value?: string) {
 }
 
 export function Setup(props: SetupProps) {
-  if (props.status.setupAccess) return <InstallationRecovery key={props.status.installationId} {...props} />;
+  if (props.status.setupAccess) {
+    const key = JSON.stringify([props.status.installationId, props.status.environment, props.status.setupAccess.pendingFileReview?.proposalSha256]);
+    return <InstallationRecovery key={key} {...props} />;
+  }
   if (props.status.workspace?.guidedSetupAvailable || props.status.workspace?.offlineDraftOnly) {
     const { installationId, environment, binding, locationId, operatorMembershipId, integrationAccountId } = props.status;
     const scope = JSON.stringify([installationId, environment, binding?.organizationId, binding?.operatorMembershipId ?? operatorMembershipId,
@@ -91,6 +94,16 @@ export function Setup(props: SetupProps) {
  * discovery, sample success, or facility reassignment is available in this state. */
 function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps) {
   const [consent,setConsent] = useState(false), [busy,setBusy] = useState(false), [error,setError] = useState('');
+  const [confirmReview, setConfirmReview] = useState(false), [reviewOpened, setReviewOpened] = useState(false);
+  const [, updateReviewTime] = useState(0);
+  const fileReview = status.setupAccess?.pendingFileReview;
+  const reviewDeadline = Date.parse(fileReview?.expiresAt ?? '');
+  useEffect(() => {
+    const remaining = reviewDeadline - Date.now();
+    if (!(remaining > 0)) return;
+    const timer = window.setTimeout(() => updateReviewTime(value => value + 1), remaining + 1);
+    return () => window.clearTimeout(timer);
+  }, [reviewDeadline]);
   const alive = useRef(true), pending = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const needsFacility = status.setupAccess?.reason === 'facility_required';
@@ -104,6 +117,44 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
     catch (e) { if (alive.current) setError(message(e)); }
     finally { pending.current = false; if (alive.current) setBusy(false); onBusyChange?.(false); }
   }
+  if (fileReview && status.installationId && !canRecover) {
+    const renew = bridge.refreshPendingFileReview;
+    const current = reviewDeadline > Date.now();
+    return <main className="setup-experience step-welcome" data-setup-screen="pending-file-review" aria-label="Export file review">
+      <div className="setup-left">
+        <span className="setup-tag">Export file review</span>
+        <h1>{reviewOpened ? 'Continue in your browser.' : current ? 'Your export file review is ready.' : 'Renew your export file review.'}</h1>
+        <p className="setup-lead">{reviewOpened
+          ? <>Check the file details and permissions for <strong>{fileReview.fileName}</strong> in your browser.</>
+          : current ? <>Open the current browser review for <strong>{fileReview.fileName}</strong> to check the file details and permissions.</>
+          : <>The review for <strong>{fileReview.fileName}</strong> expired. PackProof can check the saved file again and open a new review. Your current connection stays in place.</>}</p>
+        <div className="setup-actions">
+          {current && <button className="setup-primary" disabled={busy || !renew} onClick={() => renew && void run(() =>
+            renew({ wholeFileUploadApproved: false, expectedProposalSha256: fileReview.proposalSha256 }))}>Open current file review</button>}
+          {!current && !reviewOpened && <button className="setup-primary" disabled={busy || !renew || !Number.isFinite(reviewDeadline)} onClick={() => setConfirmReview(true)}>Request a fresh file review</button>}
+          <button className="setup-secondary" disabled={busy} onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
+        </div>
+        {!renew && <p role="status">Update PackProof on this computer to request a fresh review.</p>}
+        {renew && !Number.isFinite(reviewDeadline) && <p role="status">Check the connection again to get the latest review details.</p>}
+        {busy && <p role="status">Checking this computer’s review…</p>}
+        {error && <p className="setup-error" role="alert">{error}</p>}
+      </div>
+      <Context label="Your saved report" title="You choose what to approve."
+        intro="PackProof reads the selected file on this computer. Upload and collection permissions are reviewed separately in your browser.">
+        <Row icon="records" title="Selected file" detail={fileReview.fileName} />
+      </Context>
+      {confirmReview && renew && <SetupDialog title="Recheck the saved export file?" onClose={() => setConfirmReview(false)}>
+        <p>PackProof will recheck the entire original <strong>{fileReview.fileName}</strong> on this computer and send a new configuration proposal for browser review. The file stays on this computer during this step.</p>
+        <div className="setup-actions"><button className="setup-primary" onClick={() => {
+          setConfirmReview(false);
+          void run(async () => {
+            await renew({ wholeFileUploadApproved: true, expectedProposalSha256: fileReview.proposalSha256 });
+            if (alive.current) setReviewOpened(true);
+          });
+        }}>Recheck file and open review</button></div>
+      </SetupDialog>}
+    </main>;
+  }
   return <main className="setup-experience step-welcome" data-setup-screen="installation-recovery" aria-label="Connection setup">
     <div className="setup-left">
       <span className="setup-tag">Facility connection</span>
@@ -114,7 +165,7 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
         : canRecover
         ? 'Preserve the former pending work, then approve this computer again in your browser. Choose the intended facility from your authorized locations.'
         : needsFacility
-          ? 'The current approval does not name a facility. Review this installation in your browser, revoke only its current service access, then return here to reconnect it to the intended facility.'
+          ? 'This computer has no assigned facility. Open its browser review to check which facilities are available. Your current connection stays in place while you review your options.'
           : status.setupAccess?.reason === 'reapproval_required'
             ? 'This computer needs a new approval. Check the connection again after the service has received the change.'
             : 'The facility is connected, but guided setup is not available for this installation. Review its approval or ask your workspace administrator to check this facility’s setup access.'}</p>

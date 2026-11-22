@@ -34,6 +34,7 @@ const facilityInputs = z.object({
   toSpace:localText.min(1),toId:localText.min(1)}).strict()).max(24).optional()
 }).strict();
 export const argumentsByMethod={
+ refreshPendingFileReview:z.tuple([z.object({expectedProposalSha256:sha256,wholeFileUploadApproved:z.boolean()}).strict()]),
  getFacilityDraft:z.tuple([]),
  saveFacilityDraft:z.tuple([z.number().int().positive(),facilityInputs]),
  saveFacilityNotes:z.tuple([z.number().int().positive(),facilityInputs.pick({steps:true,examples:true})]),
