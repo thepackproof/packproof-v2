@@ -19,6 +19,18 @@
 
 The design is approved. Do **not** ask the founder to re-approve it or invent another visual layout from a written development plan.
 
+## Latest visual direction — Evidence OS, November 22, 2026
+
+After the approval documented above, the founder approved a **new 14-screen PackProof Windows Evidence OS visual target**: https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1 . This newer visual direction controls the proposed appearance, motion, layout, navigation language and workspace presentation; the earlier Figma remains the detailed **functional** authority for existing setup consent, source review and original/evidence lifecycle semantics until each replacement path is fully accepted.
+
+- New dashboard frame `3:262`; real runtime `connect-windows/ui/experience/OperationalSignal.tsx` and pure scope-aware service projection `operations-overview.ts`.
+- Unified per-order Proof visual `4:122`; existing real owner remains `connect-windows/ui/experience/Proof.tsx`.
+- Discovery `3:97`, source approval `3:168`, matching `4:230`, exceptions `4:322`, recovery `4:410`, integrity `5:190`, outputs `5:286`, finalization `5:381`, light mode `8:258`; scope and incomplete status are recorded in `connect-windows/design/windows-ux-contract.json`.
+- Figma values such as 2,407 orders and 98.2% coverage are **fictional**. Never show them in the real app unless actual service data proves them. Unknown totals must remain unknown.
+- Native animation, editable Figma components, and clickable navigation prove the design—not backend connectivity. Continue using live LocalService and authenticated APIs; do not recreate another unconnected desktop renderer.
+
+**Release evidence for this visual extension remains outstanding:** compiled package, installed 100%/125% visual acceptance, security review, end-to-end folder-to-Proof acceptance, full error/restart/recovery, and legitimate backend receipts. A draft design/implementation PR is not a customer release.
+
 ## Where development currently lives
 
 Active Logistics-enabled Windows release baseline: `release/logistics-129-pilot`. The default `main` branch **is not by itself evidence of the most recent Logistics Windows implementation**. Identify the current release/source commit before any changes.
