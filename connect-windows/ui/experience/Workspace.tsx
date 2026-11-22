@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AttentionReport, OrderSummary, WorkspaceStep } from "../workspace-types";
 import type { ConnectStatus } from "../types";
 import { Icon } from "./Icon";
-import { CollectionBanner, Connections } from "./WorkspaceConnections";
+import { Connections } from "./WorkspaceConnections";
+import { OperationalSignal } from "./OperationalSignal";
 import { OrderRows, OrdersView } from "./WorkspaceOrdersView";
 import {
   reportError,
@@ -305,35 +306,14 @@ function WorkspaceView(props: WorkspaceProps) {
       )}
       {section === "home" && (
         <>
-          <header className="xw-heading">
-            <div>
-              <h1>Workspace overview</h1>
-              <p>Follow an order or review the items that need your team.</p>
-            </div>
-          </header>
-          <CollectionBanner status={status} open={() => onSection("connections")} />
-          <div className="xw-metrics">
-            <button className="xw-card xw-metric" onClick={() => onSection("orders")}>
-              <Icon name="records" size={40} />
-              <strong>{readable ? (ws.totalOrders ?? (recent.length || "—")) : "—"}</strong>
-              <b>{ws.totalOrders != null ? "Orders organized" : "Recent orders"}</b>
-              <small>{ws.totalOrders != null ? "In this workspace" : "In the latest order list"}</small>
-            </button>
-            <div className="xw-card xw-metric">
-              <Icon name="activity" size={40} />
-              <strong className="xw-blue-ink">
-                {readable ? (ws.updatedToday ?? ws.updatedLast24Hours ?? "—") : "—"}
-              </strong>
-              <b>{ws.updatedToday != null ? "Updated today" : "Updated in 24 hours"}</b>
-              <small>Orders with new records</small>
-            </div>
-            <button className="xw-card xw-metric" onClick={() => onSection("attention")}>
-              <Icon name="attention" size={40} />
-              <strong className="xw-warn-ink">{countLabel}</strong>
-              <b>Need your attention</b>
-              <small>Orders and connections to review</small>
-            </button>
-          </div>
+          <OperationalSignal
+            status={status}
+            needsAttention={countLabel}
+            onOrders={() => onSection("orders")}
+            onAttention={() => onSection("attention")}
+            onConnections={() => onSection("connections")}
+            onProof={onProof}
+          />
           <div className="xw-homecols">
             <section className="xw-card xw-recent">
               <div className="xw-cardhead">
