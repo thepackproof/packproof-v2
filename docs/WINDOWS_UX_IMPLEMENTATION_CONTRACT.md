@@ -46,3 +46,15 @@ The Figma design's **UX acceptance charter** (node `6:116`) is binding, not comm
 ## Work currently outside this patch's proof of completion
 
 The initial route/error correction and static build contract do not by themselves establish full pixel-level parity, signed installer readiness, or successful live facility authorization. Those remain explicit release gates, not implied claims.
+
+## Commerce regression acceptance — authorized repair (2026-11-21, Eastern)
+
+Keeping the existing Commerce renderer and its CSS preserves implementation ownership. It does not require retaining known contrast, spacing, hierarchy or responsive-layout defects. Repair those defects within the Commerce owner while keeping Logistics owned by the existing Connect experience. Shared shell or branding changes must remain legible in their actual light and dark callsites.
+
+Reuse the current approved angular PackProof symbol at `web/public/brand/connect/packproof.png` (Git blob `5224892f4b09263e486751ae3848a92aba7ca560`), matching Figma node `28:1174` and the existing Connect `Brand` component, with the established sans-serif PackProof lockup. Preserve the artwork and its aspect ratio; use a light backing where needed for legibility on the navy sidebar, verify the packaged asset path, and record its exact repository source. Do not recreate or recolor the symbol, substitute the obsolete Signal arrow, or treat the repository's old hexagon/serif assets as the current approved identity.
+
+The packaged unified Windows acceptance evidence must include **Commerce Home, Packing Station, Orders and Settings**, in **both light and dark appearance**, at **1440×900 / 100%** and **1280×800 / 125%**. Review the actual full-size captures for readable profile/account text, usable headings and actions, appropriate content widths, aligned controls, paired date filters and absence of clipped or overlapping content. These captures supplement every existing Logistics frame and functional acceptance requirement; they do not replace them.
+
+Settings evidence must show both workstation preferences and the **complete optional timing-study statement**. In the not-enrolled scenario, the consent checkbox starts unchecked, the acknowledgment remains adjacent to its control, and joining requires the existing explicit acknowledgment and action. Reordering or restyling Settings must not shorten or hide the statement, preselect consent, change collection behavior, or change withdrawal and retention semantics. Existing consent is not reset to manufacture an unchecked screenshot.
+
+Record source and artifact identity with the visual evidence. A separate preview, a screenshot from an older source, or a passing layout assertion alone does not establish acceptance of the delivered executable. Preserve all existing authorization, source access, original-evidence, protected-queue, installation/upgrade and live-facility requirements above.

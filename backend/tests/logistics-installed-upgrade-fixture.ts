@@ -2,7 +2,8 @@
 // The installed LocalService makes its own TLS requests to the real application.
 import {createServer} from 'node:https';
 import {readFile,writeFile,rename} from 'node:fs/promises';
-import {randomBytes} from 'node:crypto';
+import {createHash,randomBytes} from 'node:crypto';
+import {EventEmitter} from 'node:events';
 import path from 'node:path';
 import {setTimeout as wait} from 'node:timers/promises';
 import request from 'supertest';
@@ -18,7 +19,37 @@ process.env.PACKPROOF_GUIDED_FACILITIES='';
 process.env.PACKPROOF_WEBHOOK_ENCRYPTION_KEY=randomBytes(32).toString('base64');
 process.env.PACKPROOF_EVENT_CURSOR_KEY=randomBytes(32).toString('base64');
 const h=await createHarness();
-const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passphrase:'disposable'},h.app);
+// Same-version rehearsal only: keep a real collector upload pending without
+// changing its authority or original. Observe immutable request identity, never
+// persist request bodies, credentials or headers other than the idempotency key.
+let holdObservations=false,witnessEnabled=false,witnessInvalid=false;
+const pendingOriginals=new Map<string,string>(),acceptedOriginals=new Set<string>();
+const tls=createServer({pfx:await readFile(path.join(root,'loopback.pfx')),passphrase:'disposable'},(req,res)=>{
+  const observation=req.method==='POST' && req.url==='/v1/partner/agent/order-workspace/observations';
+  const held=observation && holdObservations;
+  if(observation && witnessEnabled) {
+    const key=req.headers['idempotency-key'],hash=createHash('sha256');
+    let bytes=0,digest:string|undefined;
+    const validKey=typeof key==='string' && /^[a-f0-9]{32}$/.test(key);
+    // Observe bytes without starting flow before the real app attaches its parser.
+    EventEmitter.prototype.on.call(req,'data',(chunk:Buffer)=>{bytes+=chunk.length;hash.update(chunk);if(bytes>2*1024*1024)witnessInvalid=true;});
+    req.on('end',()=>{
+      digest=hash.digest('hex');
+      if(!validKey || bytes===0 || bytes>2*1024*1024)witnessInvalid=true;
+      else if(held) {
+        if(pendingOriginals.size>0 && !pendingOriginals.has(key) || pendingOriginals.has(key) && pendingOriginals.get(key)!==digest)witnessInvalid=true;
+        else pendingOriginals.set(key,digest);
+      } else if(pendingOriginals.get(key)!==digest)witnessInvalid=true;
+      if(held) {
+        res.writeHead(503,{'Content-Type':'application/json','Retry-After':'1'});
+        res.end(JSON.stringify({error:{code:'FIXTURE_UPLOAD_HELD',message:'Disposable upgrade fixture is holding this original.'}}));
+      }
+    });
+    res.on('finish',()=>{if(!held && res.statusCode>=200 && res.statusCode<300 && validKey && digest && pendingOriginals.get(key)===digest)acceptedOriginals.add(key);});
+  }
+  if(held)req.resume();
+  else h.app(req,res);
+});
 async function signal(name:string,value:unknown) {
   const target=path.join(root,name+'.json');
   await writeFile(target+'.tmp',JSON.stringify(value));
@@ -62,6 +93,17 @@ try {
       const reply=await api.post(url+'/decision').set(auth(owner)).send({...scope,decision:'approve',scopeDigest:review.body.scopeDigest});
       if(reply.status!==200 || reply.body.state!=='active') throw Error('Source approval failed.');
       await signal(sequence+'.result',{scopeDigest:review.body.scopeDigest});
+    } else if(body.command==='holdObservations' && installationId && !witnessEnabled) {
+      holdObservations=true;witnessEnabled=true;
+      await signal(sequence+'.result',{holding:true});
+    } else if(body.command==='releaseObservations' && witnessEnabled && holdObservations) {
+      if(witnessInvalid || pendingOriginals.size!==1 || acceptedOriginals.size!==0)throw Error('The exact pending original was not retained.');
+      holdObservations=false;
+      await signal(sequence+'.result',{released:true});
+    } else if(body.command==='collectionState' && witnessEnabled) {
+      if(witnessInvalid)throw Error('The pending original request identity changed.');
+      await signal(sequence+'.result',{pendingOriginals:pendingOriginals.size,acceptedOriginals:acceptedOriginals.size,
+        requestIdentitySha256:createHash('sha256').update(JSON.stringify([...pendingOriginals].sort())).digest('hex')});
     } else if(body.command==='pilotOn' || body.command==='pilotOff') {
       process.env.PACKPROOF_GUIDED_FACILITIES=body.command==='pilotOn'?org+':sandbox:upgrade':'';
       await signal(sequence+'.result',{updated:true});
@@ -72,3 +114,4 @@ try {
   if(tls.listening) await new Promise<void>(resolve=>tls.close(()=>resolve()));
   await h.close();
 }
+

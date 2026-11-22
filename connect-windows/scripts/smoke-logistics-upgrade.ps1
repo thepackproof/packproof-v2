@@ -1,10 +1,11 @@
 param(
- [Parameter(Mandatory)][ValidateSet('Clean','Upgrade')][string]$Mode,
+ [Parameter(Mandatory)][ValidateSet('Clean','Upgrade','SameVersion')][string]$Mode,
  [Parameter(Mandatory)][string]$CandidateDirectory,
  [ValidatePattern('^[a-fA-F0-9]{40}$')][string]$CandidateCommit=$env:GITHUB_SHA,
  [string]$PriorConnectArchive,
  [string]$PriorCommerceDirectory,
- [string]$PriorCommerceSource
+ [string]$PriorCommerceSource,
+ [string]$PriorUnifiedDirectory
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -31,8 +32,9 @@ $sequence=0
 $fixture=$null
 $cert=$null
 $firewall=$null
-$receipt=[ordered]@{schemaVersion=1;mode=$Mode;candidateCommit=$CandidateCommit;rehearsalCommit=$env:GITHUB_SHA;osBuild=[Environment]::OSVersion.Version.ToString();
+$receipt=[ordered]@{schemaVersion=2;mode=$Mode;candidateCommit=$CandidateCommit;rehearsalCommit=$env:GITHUB_SHA;osBuild=[Environment]::OSVersion.Version.ToString();
  connectInstallation=if($isWorkstation){'Windows 11 NSIS'}else{'hosted Server NSIS payload and packaged service lifecycle'};
+ windows11Nsis='not_run';
  checks=@();result='failed'}
 function Passed([string]$test) { $receipt.checks+=@($test) }
 function Release([string]$dir,[string]$pattern,[string]$commit) {
@@ -54,7 +56,9 @@ function Run-Installer([string]$exe,[string[]]$options) {
 }
 function Install-Connect([string]$exe,[string]$version,[string]$commit) {
  if ($isWorkstation) {
+   $receipt.windows11Nsis='attempted'
    Run-Installer $exe @('/S','/allusers')
+   $receipt.windows11Nsis='executed'
    $entries=@(Get-ChildItem 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
      ForEach-Object {Get-ItemProperty $_.PSPath} | Where-Object { $_.PSObject.Properties['DisplayName'] -and
        $_.DisplayName -like 'PackProof Connect Development*' -and $_.DisplayVersion -eq $version })
@@ -139,6 +143,30 @@ function Bind-Fixture([string]$origin) {
  . (Join-Path $program 'resources\installer\storage-health.ps1')
  [void](Wait-ConnectReadiness $serviceName 'PackProofConnect-development-v1' $native)
 }
+function Stop-ConnectChecked {
+ $registered=Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+ Stop-Service -Name $serviceName -ErrorAction Stop
+ (Get-Service -Name $serviceName).WaitForStatus('Stopped',[TimeSpan]::FromSeconds(45))
+ if($registered.ProcessId -ne 0) {
+   $process=Get-Process -Id $registered.ProcessId -ErrorAction SilentlyContinue
+   if($null -ne $process -and !$process.WaitForExit(5000)) {throw 'The stopped rehearsal helper has not released its pending originals.'}
+ }
+}
+function Pending-SpoolSnapshot {
+ if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {throw 'Stop the rehearsal service before comparing its pending encrypted originals.'}
+ $spool=Join-Path $data 'spool'
+ [PackProofStorageNative]::AssertOrdinary($spool,$true)
+ $key=Join-Path $data 'spool-key.bin'
+ [PackProofStorageNative]::AssertOrdinary($key,$false)
+ $files=@(Get-ChildItem -LiteralPath $spool -Force | Sort-Object Name)
+ if ($files.Count -ne 1) {throw 'The same-version fixture requires exactly one retained encrypted collector original.'}
+ $snapshot=[ordered]@{spoolKey=(Get-FileHash -LiteralPath $key -Algorithm SHA256).Hash;originals=[ordered]@{}}
+ foreach ($file in $files) {
+   [PackProofStorageNative]::AssertOrdinary($file.FullName,$false)
+   $snapshot.originals[$file.Name]=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+ }
+ return ($snapshot | ConvertTo-Json -Depth 4 -Compress)
+}
 try {
  foreach ($entry in @($program,$data,$profile,'HKLM:\SOFTWARE\PackProofConnect\development')) {
    if (Test-Path -LiteralPath $entry) {throw 'Existing workstation state detected. Use a fresh, disposable test image.'}
@@ -159,29 +187,48 @@ try {
    if ((Get-FileHash -LiteralPath $vault).Hash -ne $before) {throw 'The clean Commerce host replaced its installation credential.'}
    Passed 'Clean unified host launched and reopened the Windows-protected Commerce identity; installed LocalService has no enrollment or collection scope.'
  } else {
-   $base='63843c5616dce4ce5824015f975fd0ac6327012d'
-   $priorMerge='3d1e58a4dfbc9dff4506f3bb15eb32f13aa65c37'
-   if ((Get-FileHash -LiteralPath $PriorConnectArchive).Hash -ne '00279cff2fc00e14fdaba0126a1c9b7c356b93ed41ed982a60f34ea04dea001e') {throw 'Previous Connect archive digest differs from the verified PR 175 build.'}
-   Expand-Archive -LiteralPath $PriorConnectArchive -DestinationPath (Join-Path $scratch 'previous')
-   $prior=Release (Join-Path $scratch 'previous') 'PackProof-Connect-development-Setup-0.6.0.exe' $priorMerge
+   $sameVersion=$Mode -eq 'SameVersion'
+   $base=if($sameVersion){'617a58b883328ad04513a48564d33c573b9b7c78'}else{'63843c5616dce4ce5824015f975fd0ac6327012d'}
+   $priorMerge=if($sameVersion){$base}else{'3d1e58a4dfbc9dff4506f3bb15eb32f13aa65c37'}
+   $priorVersion=if($sameVersion){'0.7.0'}else{'0.6.0'}
+   if($sameVersion) {
+     $prior=Release $PriorUnifiedDirectory 'PackProof-Connect-development-Setup-0.7.0.exe' $priorMerge
+     $priorManifest=Get-Content -LiteralPath (Join-Path $PriorUnifiedDirectory 'release-evidence.json') -Raw | ConvertFrom-Json
+     $priorHash='87c99ba8af8a9c831b9a675d39dc3a3894d80b63bf34cfb2910ea55c14ab3dba'
+     if (!$priorManifest.application.unifiedWindows -or (Get-FileHash -LiteralPath $prior -Algorithm SHA256).Hash -ne $priorHash -or
+         $CandidateCommit -eq $priorMerge -or (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash -eq $priorHash) {
+       throw 'Same-version input must be the exact qualified unified 0.7.0 build and the candidate must contain different reviewed source.'
+     }
+     $receipt.previousCommit=$priorMerge;$receipt.previousInstallerSha256=$priorHash
+     $receipt.previousArtifactId=14679037204;$receipt.previousRunId=44836162283
+   } else {
+     if ((Get-FileHash -LiteralPath $PriorConnectArchive).Hash -ne '00279cff2fc00e14fdaba0126a1c9b7c356b93ed41ed982a60f34ea04dea001e') {throw 'Previous Connect archive digest differs from the verified PR 175 build.'}
+     Expand-Archive -LiteralPath $PriorConnectArchive -DestinationPath (Join-Path $scratch 'previous')
+     $prior=Release (Join-Path $scratch 'previous') 'PackProof-Connect-development-Setup-0.6.0.exe' $priorMerge
+   }
    if ((& git -C $PriorCommerceSource rev-parse HEAD).Trim() -ne $base) {throw 'Commerce baseline writer source differs from the verified revision.'}
-   $commerceVersion=(Get-Content -LiteralPath (Join-Path $PriorCommerceSource 'package.json') -Raw | ConvertFrom-Json).version
-   $commerce=Release $PriorCommerceDirectory ('PackProof-Dev-Setup-'+$commerceVersion+'.exe') $base
-   Run-Installer $commerce @('/S','/currentuser')
-   $items=@(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | ForEach-Object {Get-ItemProperty $_.PSPath} |
-     Where-Object {$_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq ('PackProof Dev '+$commerceVersion) -and $_.DisplayVersion -eq $commerceVersion})
-   if ($items.Count -ne 1 -or $items[0].PSChildName -notmatch '^[{]?[a-fA-F0-9-]{36}[}]?$') {throw 'Prior Commerce install registration missing.'}
-   $commercePath=(Get-ItemProperty -LiteralPath ('HKCU:\Software\'+$items[0].PSChildName)).InstallLocation
-   $oldUi=Join-Path $commercePath 'PackProof Dev.exe'
+   # No real hosted endpoint may receive a rehearsal service request, including
+   # while either unchanged installer restores its own packaged API origin.
+   $firewall=New-NetFirewallRule -DisplayName ('PackProof disposable rehearsal '+[Guid]::NewGuid()) -Direction Outbound -Action Block -Program $native -Profile Any -RemoteAddress @('0.0.0.0-126.255.255.255','128.0.0.0-255.255.255.255','::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
+   if($sameVersion) {
+     Install-Connect $prior $priorVersion $priorMerge
+     $oldUi=$ui
+   } else {
+     $commerceVersion=(Get-Content -LiteralPath (Join-Path $PriorCommerceSource 'package.json') -Raw | ConvertFrom-Json).version
+     $commerce=Release $PriorCommerceDirectory ('PackProof-Dev-Setup-'+$commerceVersion+'.exe') $base
+     Run-Installer $commerce @('/S','/currentuser')
+     $items=@(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | ForEach-Object {Get-ItemProperty $_.PSPath} |
+       Where-Object {$_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq ('PackProof Dev '+$commerceVersion) -and $_.DisplayVersion -eq $commerceVersion})
+     if ($items.Count -ne 1 -or $items[0].PSChildName -notmatch '^[{]?[a-fA-F0-9-]{36}[}]?$') {throw 'Prior Commerce install registration missing.'}
+     $commercePath=(Get-ItemProperty -LiteralPath ('HKCU:\Software\'+$items[0].PSChildName)).InstallLocation
+     $oldUi=Join-Path $commercePath 'PackProof Dev.exe'
+   }
    Launch-Commerce $oldUi
    Commerce-Queue 'seed' $PriorCommerceSource
    $vault=Join-Path $profile 'Credentials\installation.vault'
    $commerceIdentity=(Get-FileHash -LiteralPath $vault).Hash
-   Passed 'Previous standalone Commerce NSIS installed, generated its own DPAPI identity and wrote a staged encrypted recording using the previous queue writer.'
-   # Prohibit this test service from contacting any non-loopback network, even
-   # during the moment the unchanged candidate installer restores its packaged origin.
-   $firewall=New-NetFirewallRule -DisplayName ('PackProof disposable rehearsal '+[Guid]::NewGuid()) -Direction Outbound -Action Block -Program $native -Profile Any -RemoteAddress @('0.0.0.0-126.255.255.255','128.0.0.0-255.255.255.255','::2-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff')
-   Install-Connect $prior '0.6.0' $priorMerge
+   Passed $(if($sameVersion){'The pinned unified 0.7.0 host generated its own DPAPI identity; its exact Commerce writer staged an encrypted recording.'}else{'Previous standalone Commerce NSIS installed, generated its own DPAPI identity and wrote a staged encrypted recording using the previous queue writer.'})
+   if(!$sameVersion) {Install-Connect $prior $priorVersion $priorMerge}
    $rsa=[Security.Cryptography.RSA]::Create(2048)
    try {
      $certRequest=[Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=PackProof Disposable Loopback',$rsa,[Security.Cryptography.HashAlgorithmName]::SHA256,[Security.Cryptography.RSASignaturePadding]::Pkcs1)
@@ -215,7 +262,9 @@ try {
    [void](Bridge setWorkspaceOutput @{folder=$out})
    $pending=(Bridge activateWorkspace).workspace
    if ($pending.approvalPath -notmatch '[?&]workspaceSession=([^&]+)') {throw 'Missing independent source approval request.'}
-   $grant=Control @{command='approveSources';id=$Matches[1];source=$source.id}
+   $workspaceSession=$Matches[1]
+   if($sameVersion) {[void](Control @{command='holdObservations'})}
+   $grant=Control @{command='approveSources';id=$workspaceSession;source=$source.id}
    for ($i=0;$i -lt 30;$i++) {
      $approved=(Bridge status).workspace
      if ($approved.phase -eq 'active') {break}
@@ -225,7 +274,24 @@ try {
    $spoolHash=(Get-FileHash -LiteralPath (Join-Path $data 'spool-key.bin')).Hash
    $original=(Get-FileHash -LiteralPath $orderFile).Hash
    $operatorBefore=(Get-ItemProperty 'HKLM:\SOFTWARE\PackProofConnect\development').OperatorsSid
-   Passed 'Verified PR 175 LocalService enrolled, redeemed and acknowledged its credential against a loopback backend; a separate human approval enabled the exact source scope.'
+   Passed 'The verified prior LocalService enrolled, redeemed and acknowledged its credential against a loopback backend; a separate human approval enabled the exact source scope.'
+   if($sameVersion) {
+     $held=$null
+     for($i=0;$i -lt 90;$i++) {
+       $held=Control @{command='collectionState'}
+       if($held.pendingOriginals -eq 1) {break}
+       Start-Sleep -Seconds 1
+     }
+     $paused=(Bridge pauseWorkspaceSource @{sourceId=$source.id}).workspace.sources[0]
+     if(!$held -or $held.pendingOriginals -ne 1 -or $held.acceptedOriginals -ne 0 -or $paused.state -ne 'paused' -or $paused.queued -ne 1) {
+       throw 'The previous installed collector must retain exactly one real, unaccepted original before replacement.'
+     }
+     [void](Bridge checkpoint)
+     Stop-ConnectChecked
+     $pendingSpool=Pending-SpoolSnapshot
+     $receipt.pendingCollectorRequestSha256=$held.requestIdentitySha256
+     Passed 'The prior unified 0.7.0 LocalService captured a real source original, retained its pending upload and paused collection without changing its approved source.'
+   }
    Install-Connect $candidate '0.7.0' $CandidateCommit
    Bind-Fixture $origin
    $upgraded=Bridge refresh
@@ -237,6 +303,26 @@ try {
      throw 'The upgrade did not preserve the enrolled credential, source scope, generation, operator, output, original or spool key.'
    }
    Passed 'Upgraded service authenticated with its persisted installation credential and retained its approved scope, source generation, output, source bytes and spool key.'
+   if($sameVersion) {
+     if($upgraded.workspace.sources[0].state -ne 'paused' -or $upgraded.workspace.sources[0].queued -ne 1) {throw 'Same-version replacement did not retain the paused pending original.'}
+     [void](Bridge checkpoint)
+     Stop-ConnectChecked
+     if((Pending-SpoolSnapshot) -ne $pendingSpool) {throw 'Same-version replacement changed the encrypted pending original or its spool key.'}
+     Start-Service -Name $serviceName
+     . (Join-Path $program 'resources\installer\storage-health.ps1')
+     [void](Wait-ConnectReadiness $serviceName 'PackProofConnect-development-v1' $native)
+     [void](Control @{command='releaseObservations'})
+     [void](Bridge resumeWorkspaceSource @{sourceId=$source.id})
+     $completed=$null
+     for($i=0;$i -lt 90;$i++) {
+       $completed=Control @{command='collectionState'}
+       if($completed.acceptedOriginals -eq 1 -and (Bridge status).workspace.sources[0].queued -eq 0) {break}
+       Start-Sleep -Seconds 1
+     }
+     if(!$completed -or $completed.acceptedOriginals -ne 1 -or $completed.requestIdentitySha256 -ne $held.requestIdentitySha256 -or
+        (Bridge status).workspace.sources[0].queued -ne 0) {throw 'The replacement did not complete the exact retained collector request.'}
+     Passed 'Different-source 0.7.0 replacement preserved the encrypted collector original byte-for-byte and replayed its identical request and idempotency key to an accepted receipt.'
+   }
    [void](Control @{command='pilotOn'})
    if (!(Bridge refresh).workspace.guidedSetupAvailable) {throw 'Pilot did not become available for the enrolled facility.'}
    $draft=Bridge getFacilityDraft
@@ -268,3 +354,4 @@ try {
  }
  $receipt | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $CandidateDirectory ('logistics-install-'+$Mode+'.json')) -Encoding utf8NoBOM
 }
+

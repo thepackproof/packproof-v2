@@ -9,15 +9,26 @@ import type { FacilityDraft } from '../ui/guided-workflow-types';
 
 export interface FacilityScope { installationId: string; organizationId: string; environment: string }
 interface Access { canConfigure: boolean; organizationId: string; environment: string; locationId: string | null; userId: string }
+interface SetupAccess extends FacilityScope { locationId: string | null; userId: string; state: string }
+interface BoundScope extends FacilityScope { locationId: string | null; operatorMembershipId: string; integrationAccountId: string }
+interface Authority {
+  user: string; epoch: number; scopeKey: string; offline: boolean;
+  mode: 'enrollment' | 'bootstrap' | 'facility'; canConfigure: boolean; canReadOrders: boolean;
+  installationId?: string; enrollmentId?: string; scope?: BoundScope; setup?: SetupAccess; canRecover?: boolean;
+}
 interface HumanSession {
   user(): string | null;
   dashboardIdentity(): HumanDashboardIdentity;
   access(scope: FacilityScope): Promise<Access>;
+  setupAccess(locator: { installationId: string; environment: 'sandbox' | 'live'; organizationId?: string }): Promise<SetupAccess>;
   suggest(scope: FacilityScope, input: unknown): Promise<unknown>;
   review(scope: FacilityScope, input: unknown): Promise<void>;
 }
 type LocalRead = (operation: string) => Promise<unknown>;
-const enrollment = new Set(['getStatus','beginEnrollment','pollEnrollment','refresh','openApproval','openWorkspaceApproval']);
+const enrollment = new Set(['getStatus','getWorkspaceStatus','beginEnrollment','pollEnrollment','refresh','openApproval','openWorkspaceApproval']);
+const bootstrap = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh','openApproval','openWorkspaceApproval','recoverEnrollment']);
+const completingEnrollment = new Set(['pollEnrollment','getStatus','refresh']);
+const isMissing = (error: unknown) => !!error && typeof error === 'object' && 'status' in error && error.status === 404;
 export class HostedSession {
   private lease=new FacilityDraftLease();
   private sessionEpoch=0;
@@ -27,17 +38,17 @@ export class HostedSession {
     if (!user) {this.lease.clear();throw Error('Sign in to PackProof to open Logistics.');}
     return user;
   }
-  async scope() {
-    const current = await this.read('status') as ConnectStatus;
+  private localScope(current: ConnectStatus): BoundScope | null {
     if (!current.installationId) {this.lease.clear();return null;}
-    if (!current.binding || ['revoked','permission_required'].includes(current.state)) {this.lease.clear();throw Error('Reconnect this computer to its authorized facility.');}
+    if (!current.binding || ['revoked','permission_required'].includes(current.state)) {this.lease.clear();return null;}
     const query = workspaceParams(current);
     const organizationId = query.get('organizationId'), environment = query.get('environment');
     if (!organizationId || !environment) throw Error('Reconnect the installation to its facility.');
     return { installationId: current.installationId, organizationId, environment,locationId:current.binding.locationId,
       operatorMembershipId:current.binding.operatorMembershipId,integrationAccountId:current.binding.integrationAccountId };
   }
-  async verify(scope: NonNullable<Awaited<ReturnType<HostedSession['scope']>>>, user:string,method:string) {
+  async scope() { return this.localScope(await this.read('status') as ConnectStatus); }
+  async verify(scope: BoundScope, user:string,method:string) {
     const binding={user,...scope};
     const epoch=this.sessionEpoch;
     try {
@@ -52,48 +63,96 @@ export class HostedSession {
       throw error;
     }
   }
+  private async authority(method: string): Promise<Authority> {
+    const user = this.signedIn(), epoch = this.sessionEpoch;
+    const current = await this.read('status') as ConnectStatus, scope = this.localScope(current);
+    const stable = () => { if (this.human.user() !== user || this.sessionEpoch !== epoch) throw Error('Your session changed.'); };
+    stable();
+    const base = {user,epoch,installationId:current.installationId,enrollmentId:current.enrollment?.id};
+    if (!current.installationId) {
+      if (method !== 'choices' && !enrollment.has(method)) throw Error('Connect this computer to a facility first.');
+      return {...base,mode:'enrollment',scopeKey:'null',offline:false,canConfigure:false,canReadOrders:false};
+    }
+    if (scope) {
+      try {
+        const access = await this.verify(scope,user,method); stable();
+        return {...base,mode:'facility',scopeKey:JSON.stringify(scope),scope,offline:access.offline,
+          canConfigure:access.canConfigure,canReadOrders:!access.offline};
+      } catch (error) {
+        stable();
+        if (!isMissing(error) || !bootstrap.has(method)) throw error;
+      }
+    }
+    this.lease.clear();
+    if (!bootstrap.has(method)) throw Error('Review this computer’s connection before choosing records.');
+    if (!['development','staging','sandbox','live','production'].includes(current.environment)) throw Error('Refresh this computer’s connection.');
+    const environment = current.environment === 'live' || current.environment === 'production' ? 'live' : 'sandbox';
+    const setup = await this.human.setupAccess({installationId:current.installationId,environment,...(scope ? {organizationId:scope.organizationId} : {})});
+    stable();
+    if (setup.userId !== user || setup.installationId !== current.installationId || setup.environment !== environment ||
+        (scope && (setup.organizationId !== scope.organizationId || setup.locationId !== scope.locationId))) throw Error('Your workspace changed. Open Logistics again.');
+    const canRecover = current.recoveryAvailable === true;
+    if (method === 'recoverEnrollment' && !canRecover) throw Error('Review this installation in PackProof before replacing its approval.');
+    return {...base,mode:'bootstrap',scopeKey:JSON.stringify([setup.installationId,setup.organizationId,setup.environment,setup.locationId]),
+      offline:false,canConfigure:false,canReadOrders:false,setup,canRecover};
+  }
   async choices() {
-    const user = this.signedIn(), scope = await this.scope();
-    if (!scope) return { setup: true, orders: false };
-    const access = await this.verify(scope, user,'choices');
-    return { setup: access.canConfigure, orders: !access.offline };
+    const access = await this.authority('choices');
+    return {setup:access.mode !== 'facility' || access.canConfigure,orders:access.canReadOrders};
   }
   async guard(method: string) {
-    const user = this.signedIn(), scope = await this.scope();
-    let offline=false;
-    if (!scope) {
-      if (!enrollment.has(method)) throw Error('Connect this computer to a facility first.');
-    } else {
-      const access=await this.verify(scope,user,method);
-      if(!access.canConfigure) throw Error('Facility setup requires an authorized administrator.');
-      offline=access.offline;
-    }
-    if (this.human.user() !== user) throw Error('Your session changed.');
-    return {user,scopeKey:JSON.stringify(scope),offline};
+    const access = await this.authority(method);
+    if (access.mode === 'facility' && !access.canConfigure) throw Error('Facility setup requires an authorized administrator.');
+    return access;
   }
-  present(method: string, value: unknown,offline=false) {
+  assertTransition(method: string, started: Authority, ended: Authority) {
+    if (started.user !== ended.user || this.human.user() !== started.user || started.epoch !== ended.epoch ||
+        this.sessionEpoch !== started.epoch) throw Error('Your account changed.');
+    if (started.scopeKey === ended.scopeKey && (started.enrollmentId === ended.enrollmentId || method === 'beginEnrollment')) return;
+    // These are the only expected identity changes in the native enrollment protocol.
+    if (method === 'recoverEnrollment' && started.mode === 'bootstrap' && started.canRecover &&
+        ended.mode === 'enrollment' && !ended.installationId && !ended.enrollmentId) return;
+    if (completingEnrollment.has(method) && started.mode === 'enrollment' && started.enrollmentId &&
+        ended.installationId && ended.enrollmentId === started.enrollmentId) return;
+    throw Error('Your workspace changed. Open Logistics again.');
+  }
+  installationReviewPath(access: Authority) {
+    if (access.mode !== 'bootstrap' || !access.setup || access.epoch !== this.sessionEpoch || this.human.user() !== access.user)
+      throw Error('Refresh this computer’s connection before opening its review.');
+    const {installationId,organizationId,environment} = access.setup;
+    return '/app/records/connect/approve?' + new URLSearchParams({installationId,organizationId,environment});
+  }
+  present(method: string, value: unknown, authority: Authority) {
+    const offline = authority.offline;
     if(offline && (method==='getFacilityDraft' || method==='saveFacilityNotes')) {
       const d=value as FacilityDraft;
       return {id:d.id,revision:d.revision,scopeKey:d.scopeKey,steps:d.steps,examples:d.examples,rules:[],excludedSourceIds:[],replay:null,notesOnly:true};
     }
     if (!value || typeof value !== 'object' || !('health' in value && 'state' in value)) return value;
     const current = value as ConnectStatus;
+    if (current.installationId !== authority.installationId) throw Error('The installation changed. Open Logistics again.');
+    if (authority.mode === 'bootstrap') return {state:current.state,installationId:current.installationId,environment:current.environment,
+      installedVersion:current.installedVersion,recoveryAvailable:authority.canRecover,
+      setupAccess:{reason:authority.canRecover || authority.setup?.state === 'revoked' ? 'reapproval_required' :
+        authority.setup?.locationId === null ? 'facility_required' : 'facility_unavailable'},
+      health:{serviceOnline:current.health.serviceOnline,queueCount:null},
+      workspace:{phase:'draft',step:'order',sources:[],canReadOrders:false}};
     if(offline) return {state:current.state,installationId:current.installationId,environment:current.environment,
       health:{serviceOnline:current.health.serviceOnline,queueCount:null},workspace:{phase:'draft',step:'order',sources:[],
       guidedSetupAvailable:current.workspace?.guidedSetupAvailable,offlineDraftOnly:true}};
     if (!current.installationId) {
-      if (!enrollment.has(method)) throw Error('Enroll this computer first.');
+      if (!enrollment.has(method) && method !== 'recoverEnrollment') throw Error('Enroll this computer first.');
       return {state:current.state, environment:current.environment, enrollment:current.enrollment,
+        setupAccess:{reason:'enrollment_required'},
         health:{serviceOnline:current.health.serviceOnline,queueCount:null}, workspace:{phase:'draft',step:'order',sources:[]}};
     }
     // Daily records are returned by the human session. Setup only needs collection configuration.
     return {...current,workspace: current.workspace && {...current.workspace,orders:[],canReadOrders:false}};
   }
   async daily(target?: { proofId?: string; revision?: number; subject?: string }) {
-    const user = this.signedIn(), scope = await this.scope();
-    if (!scope) throw Error('Connect this computer to a facility first.');
-    const access = await this.verify(scope, user,'daily');
-    return openHumanDashboard(this.portal, { ...scope, locationId: access.locationId, expectedUserId: user }, target, this.human.dashboardIdentity(), this.parentWindow?.()??undefined);
+    const access = await this.authority('daily');
+    if (!access.canReadOrders || access.mode !== 'facility' || !access.scope) throw Error('Connect this computer to an authorized facility before opening orders.');
+    return openHumanDashboard(this.portal, { ...access.scope, expectedUserId: access.user }, target, this.human.dashboardIdentity(), this.parentWindow?.()??undefined);
   }
   bindAssistant(window: () => BrowserWindow | null) {
     for (const action of ['suggest','review'] as const) ipcMain.handle('host:'+action, async (event, input: { draftId?: unknown; revision?: unknown }) => {

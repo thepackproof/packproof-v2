@@ -20,7 +20,7 @@ const paths: Record<string,string> = {
 export function Icon({name, size=20}: {name:string;size?:number}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.proofs}/></svg>;
 }
-export function Brand() { if(SIGNAL_ENABLED)return <div className="brand signal-brand"><img src="/signal/mark.svg" alt="" width="32" height="32"/><span>packproof</span></div>; return <div className="brand"><span className="brand-mark"><Icon name="shield" size={25}/><span/></span><span>PackProof<span className="brand-sub">DESKTOP WORKSTATION</span></span></div>; }
+export function Brand() { if(SIGNAL_ENABLED)return <div className="brand packproof-brand" aria-label="PackProof"><span className="packproof-brand-mark"><img src="/brand/connect/packproof.png" alt="" width="65" height="65" draggable={false}/></span><span>PackProof</span></div>; return <div className="brand"><span className="brand-mark"><Icon name="shield" size={25}/><span/></span><span>PackProof<span className="brand-sub">DESKTOP WORKSTATION</span></span></div>; }
 export function Empty({icon='proofs', title, children, action}: {icon?:string;title:string;children?:ReactNode;action?:ReactNode}) {
   return <div className="empty"><span className="empty-icon"><Icon name={icon} size={27}/></span><h3>{title}</h3><p>{children}</p>{action}</div>;
 }
