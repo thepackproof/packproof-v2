@@ -175,7 +175,7 @@ export interface WorkspaceBridge {
   activateWorkspace(allowPendingOutput?: true): Promise<ConnectStatus>;
   pauseWorkspaceSource(sourceId: string): Promise<ConnectStatus>;
   resumeWorkspaceSource(sourceId: string): Promise<ConnectStatus>;
-  refreshPendingFileReview?(input: {expectedProposalSha256:string;wholeFileUploadApproved:boolean}): Promise<void>;
+  refreshPendingFileReview?(input: {expectedProposalSha256:string;wholeFileUploadApproved:boolean}): Promise<{proposalSha256:string}>;
   openWorkspaceApproval(): Promise<void>;
   openWorkspaceOutput(): Promise<void>;
 }

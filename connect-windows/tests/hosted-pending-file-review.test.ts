@@ -31,7 +31,8 @@ describe('saved shipment review in an installation without a named facility',()=
     const f=fixture(true);
     const start=await f.session.guard('refreshPendingFileReview');
     expect(f.session.present('getStatus',f.current,start)).toMatchObject({setupAccess:{pendingFileReview:f.details.pendingFileReview}});
-    await f.session.openPendingFileReview(start,{...input,wholeFileUploadApproved:false},f.renew,f.open);
+    await expect(f.session.openPendingFileReview(start,{...input,wholeFileUploadApproved:false},f.renew,f.open))
+      .resolves.toStrictEqual({proposalSha256:prior});
     expect(f.renew).not.toHaveBeenCalled();
     expect(f.human.setupAccess).toHaveBeenCalledTimes(2);
     expect(f.open).toHaveBeenCalledWith('/app/records/connect/approve?installationId=computer-1&organizationId=org-1&environment=sandbox');
@@ -39,7 +40,8 @@ describe('saved shipment review in an installation without a named facility',()=
   });
   it('checks current native and administrator identities before opening the new verified proposal',async()=>{
     const f=fixture(),start=await f.session.guard('refreshPendingFileReview');
-    await f.session.openPendingFileReview(start,input,f.renew,f.open);
+    await expect(f.session.openPendingFileReview(start,input,f.renew,f.open))
+      .resolves.toStrictEqual({proposalSha256:next});
     expect(f.renew).toHaveBeenCalledExactlyOnceWith({...input,...ids});
     expect(f.human.setupAccess).toHaveBeenCalledTimes(2);
     expect(f.open).toHaveBeenCalledOnce();
@@ -51,6 +53,13 @@ describe('saved shipment review in an installation without a named facility',()=
     await expect(f.session.openPendingFileReview(start,{...input,expectedProposalSha256:next},f.renew,f.open)).rejects.toThrow();
     await expect(f.session.guard('previewLocal')).rejects.toThrow();
     expect(f.renew).not.toHaveBeenCalled();expect(f.open).not.toHaveBeenCalled();
+  });
+  it('returns no receipt when the browser cannot open the verified review',async()=>{
+    const f=fixture(true),start=await f.session.guard('refreshPendingFileReview');
+    f.open.mockRejectedValueOnce(new Error('Browser unavailable'));
+    await expect(f.session.openPendingFileReview(start,{...input,wholeFileUploadApproved:false},f.renew,f.open))
+      .rejects.toThrow('Browser unavailable');
+    expect(f.renew).not.toHaveBeenCalled();
   });
   it.each(['digest','account','freshness','revocation','scope','filename'])('refuses to open when the new admin read disagrees on %s',async what=>{
     const f=fixture(),start=await f.session.guard('refreshPendingFileReview');

@@ -143,15 +143,20 @@ async function checkBootstrap(parent){
    setupAccess:{reason:'facility_required'},health:{serviceOnline:true,queueCount:null},
    workspace:{phase:'draft',step:'order',sources:[],canReadOrders:false}};
  const fileName='Fixture dispatch.csv',expiredDigest='a'.repeat(64),freshDigest='b'.repeat(64);
- for(const method of ['getStatus','getWorkspaceStatus','pollEnrollment'])ipcMain.handle('connect:'+method,async()=>({ok:true,value:state}));
+ let freshStatusReads=0;
+ for(const method of ['getStatus','getWorkspaceStatus','pollEnrollment'])ipcMain.handle('connect:'+method,async()=>{
+   if(state.setupAccess?.pendingFileReview?.proposalSha256===freshDigest)freshStatusReads++;
+   return {ok:true,value:state};
+ });
  ipcMain.handle('connect:refreshPendingFileReview',async(_event,...args)=>{
    const first=bootstrapCalls.fileReview===0;
    assert.ok(bootstrapCalls.fileReview<2,'A fresh review must not be requested twice');
    assert.equal(state.installationId,'installation_fixture');
    assert.deepEqual(args,[{wholeFileUploadApproved:first,expectedProposalSha256:first?expiredDigest:freshDigest}]);
    bootstrapCalls.fileReview++;
-   state={...state,setupAccess:{...state.setupAccess,pendingFileReview:{fileName,proposalSha256:freshDigest,expiresAt:'2099-01-01T00:00:00Z'}}};
-   return {ok:true};
+   if(first)state={...state,setupAccess:{...state.setupAccess,pendingFileReview:{fileName,proposalSha256:freshDigest,
+     expiresAt:new Date(Date.now()+30*60_000).toISOString()}}};
+   return {ok:true,value:{proposalSha256:freshDigest}};
  });
  ipcMain.handle('connect:openWorkspaceApproval',async()=>{bootstrapCalls.review++;return{ok:true};});
  ipcMain.handle('connect:recoverEnrollment',async(_event,consent)=>{
@@ -212,8 +217,11 @@ async function checkBootstrap(parent){
    await until(page,"document.querySelector('[role=dialog],dialog')?.textContent.includes('Recheck the saved export file?')");
    assert.equal(bootstrapCalls.fileReview,0,'Opening the confirmation must not send a file-review command');
    await pressFileReview('Recheck file and open review');
-   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Continue in your browser.'");
+   // The immediate status read must show the replacement review while still acknowledging the exact browser handoff.
+   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Continue in your browser.' && [...document.querySelectorAll('button')].some(e=>e.textContent==='Open current file review'&&!e.disabled)");
    assert.equal(bootstrapCalls.fileReview,1);
+   assert.ok(freshStatusReads>0,'Packaged UI must read the replacement proposal before restart');
+   await capture('logistics-file-review-opened');
    // Opening a still-current proposal after restarting uses the replacement digest without renewal consent.
    await page.loadURL('packproof-connect://app/index.html?facilitySetup=1');
    await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Your export file review is ready.'");
@@ -234,6 +242,16 @@ async function checkBootstrap(parent){
    await click('Reopen facility sign-in');await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Reopen facility sign-in'&&!e.disabled)");
    assert.equal(bootstrapCalls.review,2);assert.equal(bootstrapCalls.enroll,1);assert.equal(bootstrapCalls.source,0);
    return screenshots;
+ }catch(error){
+   // Report only the synthetic fixture's visible controls and IPC counters, including failures after a real pointer click.
+   const screen=await page.executeJavaScript(`({heading:document.querySelector('h1')?.textContent,
+     buttons:[...document.querySelectorAll('button')].filter(b=>b.checkVisibility()).map(b=>({label:b.textContent.trim(),disabled:b.disabled})),
+     alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent.trim())})`).catch(()=>null);
+   const failure={screen,bootstrapCalls,freshStatusReads};
+   fs.mkdirSync(out,{recursive:true});
+   fs.writeFileSync(path.join(out,'bootstrap-failure.json'),JSON.stringify(failure,null,2));
+   console.error('Packaged bootstrap failure:',JSON.stringify(failure));
+   throw error;
  }finally{if(page.debugger.isAttached())page.debugger.detach();if(!win.isDestroyed())win.destroy();}
 }
 async function verifyCommerceControls(page,route){

@@ -4,25 +4,51 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, expect, it, vi } from 'vitest';
 import { bridgeFor, selected } from '../test-fixtures';
 import type { ConnectStatus } from '../types';
+import { WorkspaceApp } from '../WorkspaceApp';
 import { Setup } from './Setup';
 
 afterEach(cleanup);
 
 const digest = 'a'.repeat(64);
+const replacement = 'b'.repeat(64);
 const fileName = 'Shipments.csv';
 function status(proposalSha256: string, expiresAt = new Date(Date.now() - 60000).toISOString()): ConnectStatus {
-  return { ...selected, installationId: 'installation_test', setupAccess: {
+  return { ...selected, installationId: 'installation_test', workspace: { phase: 'draft', step: 'order', sources: [] }, setupAccess: {
     reason: 'facility_required', pendingFileReview: { proposalSha256, fileName, expiresAt },
   } };
 }
 const actions = { onStatus: vi.fn(), onComplete: vi.fn(), onSample: vi.fn() };
 
+it('retains the browser-open receipt through the real post-command workspace poll only for the current verified replacement', async () => {
+  const future = new Date(Date.now() + 30 * 60000).toISOString();
+  let live = status(digest);
+  const refresh = vi.fn(async () => {
+    live = status(replacement, future);
+    return {proposalSha256: replacement};
+  });
+  const bridge = bridgeFor(live, { getStatus: vi.fn(async () => live), getWorkspaceStatus: vi.fn(async () => live), refreshPendingFileReview: refresh });
+  const screenSession = render(<WorkspaceApp bridge={bridge} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Request a fresh file review' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Recheck file and open review' }));
+  expect(await screen.findByRole('button', { name: 'Open current file review' })).toBeEnabled();
+  expect(screen.getByRole('heading', { name: 'Continue in your browser.' })).toBeVisible();
+  expect(bridge.getWorkspaceStatus).toHaveBeenCalled();
+  live = status('c'.repeat(64), future);
+  fireEvent.click(screen.getByRole('button', { name: 'Check connection again' }));
+  expect(await screen.findByRole('heading', { name: 'Your export file review is ready.' })).toBeVisible();
+  live = status(replacement, future);
+  screenSession.unmount();
+  render(<WorkspaceApp bridge={bridge} />);
+  expect(await screen.findByRole('heading', { name: 'Your export file review is ready.' })).toBeVisible();
+  expect(refresh).toHaveBeenCalledTimes(1);
+});
+
 it('requires fresh confirmation for the named file and opens one review through the guarded bridge', async () => {
-  let finish!: () => void;
-  const refresh = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  let finish!: (receipt: {proposalSha256: string}) => void;
+  const refresh = vi.fn(() => new Promise<{proposalSha256: string}>(resolve => { finish = resolve; }));
   const s = status(digest);
   const bridge = bridgeFor(s, { refreshPendingFileReview: refresh });
-  render(<Setup status={s} bridge={bridge} {...actions} />);
+  const {rerender} = render(<Setup status={s} bridge={bridge} {...actions} />);
   expect(screen.getByText(/Your current connection stays in place/)).toBeVisible();
   expect(screen.queryByText(/revoke/i)).not.toBeInTheDocument();
   const request = screen.getByRole('button', { name: 'Request a fresh file review' });
@@ -36,13 +62,15 @@ it('requires fresh confirmation for the named file and opens one review through 
   expect(refresh).toHaveBeenCalledExactlyOnceWith({ expectedProposalSha256: digest, wholeFileUploadApproved: true });
   expect(request).toBeDisabled();
   expect(bridge.openWorkspaceApproval).not.toHaveBeenCalled();
-  await act(async () => { finish(); });
+  await act(async () => { finish({proposalSha256: replacement}); });
+  expect(screen.getByRole('heading', {name: 'Checking your updated review.'})).toBeVisible();
+  rerender(<Setup status={status(replacement, new Date(Date.now() + 60000).toISOString())} bridge={bridge} {...actions} />);
   expect(screen.getByRole('heading', { name: 'Continue in your browser.' })).toBeVisible();
   expect(refresh).toHaveBeenCalledTimes(1);
 });
 
 it('opens a current review in one click with no consent to renew it', async () => {
-  const refresh = vi.fn(async () => {});
+  const refresh = vi.fn(async () => ({proposalSha256: digest}));
   const s = status(digest, new Date(Date.now() + 60000).toISOString());
   const bridge = bridgeFor(s, { refreshPendingFileReview: refresh });
   render(<Setup status={s} bridge={bridge} {...actions} />);
@@ -52,24 +80,26 @@ it('opens a current review in one click with no consent to renew it', async () =
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-it('switches an open window to explicit renewal at expiry without invoking the bridge', () => {
+it('clears success and requires fresh confirmation when a previously opened review expires', async () => {
   vi.useFakeTimers();
   try {
-    const refresh = vi.fn(async () => {});
+    const refresh = vi.fn(async () => ({proposalSha256: digest}));
     const s = status(digest, new Date(Date.now() + 1000).toISOString());
     render(<Setup status={s} bridge={bridgeFor(s, { refreshPendingFileReview: refresh })} {...actions} />);
-    expect(screen.getByRole('button', { name: 'Open current file review' })).toBeEnabled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Open current file review' })); });
+    expect(screen.getByRole('heading', { name: 'Continue in your browser.' })).toBeVisible();
     act(() => { vi.advanceTimersByTime(1100); });
     expect(screen.getByRole('button', { name: 'Request a fresh file review' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Open current file review' })).not.toBeInTheDocument();
-    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Continue in your browser.' })).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledExactlyOnceWith({wholeFileUploadApproved: false, expectedProposalSha256: digest});
   } finally {
     vi.useRealTimers();
   }
 });
 
 it('discards an open confirmation when the pending proposal changes', () => {
-  const refresh = vi.fn(async () => {});
+  const refresh = vi.fn(async () => ({proposalSha256: replacement}));
   const s = status(digest);
   const bridge = bridgeFor(s, { refreshPendingFileReview: refresh });
   const { rerender } = render(<Setup status={s} bridge={bridge} {...actions} />);
