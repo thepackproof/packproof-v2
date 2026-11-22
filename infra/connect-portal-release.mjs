@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { verifyHostedApproval } from '../connect-windows/scripts/verify-hosted-approval.mjs';
 import { digest } from '../web/scripts/write-connect-release.mjs';
+import { verifyRuntimeInputs } from './connect-portal-runtime.mjs';
 
 const execute = promisify(execFile);
 const repo = fileURLToPath(new URL('../', import.meta.url));
@@ -179,28 +180,40 @@ export async function switchOrigin(previous, next, store, heartbeat = async () =
     await store.put(asset, path.join(next.dir, asset.path), existing?.etag);
   }
 }
-async function switchRelease(mode, source, destination) {
+export async function verifyApiTarget(commit, image, fetcher = request) {
+  const response = await fetcher(target.api + '/meta');
+  const meta = response.ok && await response.json();
+  if (meta?.environment !== 'production' || meta.commit !== commit || (image && meta.image !== image)) {
+    throw Error('The production API identity differs from the reviewed source or image');
+  }
+  const readiness = await fetcher(target.api + '/ready');
+  if (!readiness.ok || (await readiness.json()).status !== 'ready') throw Error('Release API is not ready');
+  const auth = await fetcher(target.api + '/me/records/agent-installations/release-route-check/order-workspace/release-route-check', { headers: { Origin: target.web } });
+  if (auth.status !== 401 || auth.headers.get('access-control-allow-origin') !== target.web) throw Error('The approval API does not enforce login and allow the web origin');
+}
+
+async function switchRelease(mode, source, destination, apiCommit, apiImage) {
   const rollback = mode === 'rollback';
   const previous = await readBundle(source, rollback), next = await readBundle(destination, !rollback);
+  const compatibility = mode === 'promote-portal' ? verifyRuntimeInputs(repo, apiCommit, next.manifest.commit, apiImage) : null;
   const dist = (await aws(['cloudfront', 'get-distribution', '--id', target.distribution])).Distribution;
   const config = dist.DistributionConfig;
   const origin = config.Origins.Items.find(o => o.Id === config.DefaultCacheBehavior.TargetOriginId);
   if (dist.DomainName !== new URL(target.web).host || !dist.ARN.includes('::' + target.owner + ':') || origin?.DomainName !== newOrigin ||
       origin.OriginPath || !config.Enabled) throw Error('CloudFront is not serving the selected release bucket');
-  if (!rollback) {
-    const r = await request(target.api + '/meta');
-    const meta = r.ok && await r.json();
-    if (meta?.environment !== 'production' || meta.commit !== next.manifest.commit) throw Error('Promote the matching API and worker before this portal');
-    const readiness = await request(target.api + '/ready');
-    if (!readiness.ok || (await readiness.json()).status !== 'ready') throw Error('Release API is not ready');
-    const auth = await request(target.api + '/me/records/agent-installations/release-route-check/order-workspace/release-route-check', { headers: { Origin: target.web } });
-    if (auth.status !== 401 || auth.headers.get('access-control-allow-origin') !== target.web) throw Error('The approval API does not enforce login and allow the web origin');
-  }
+  if (!rollback) await verifyApiTarget(compatibility?.apiCommit ?? next.manifest.commit, compatibility?.apiImage);
   const temp = await mkdtemp(path.join(tmpdir(), 'portal-switch-'));
   try {
     const store = originStore(temp);
-    await withOriginLease(store, temp, heartbeat => switchOrigin(previous, next, store, heartbeat));
+    await withOriginLease(store, temp, async heartbeat => {
+      if (compatibility) await verifyApiTarget(compatibility.apiCommit, compatibility.apiImage);
+      await switchOrigin(previous, next, store, heartbeat);
+    });
     const result = await aws(['cloudfront', 'create-invalidation', '--distribution-id', target.distribution, '--paths', '/*']);
+    if (compatibility) {
+      assert.ok(result.Invalidation?.Id, 'CloudFront must acknowledge the invalidation');
+      return { status: 'invalidation-requested', distribution: target.distribution, invalidation: result.Invalidation.Id, ...compatibility };
+    }
     await aws(['cloudfront', 'wait', 'invalidation-completed', '--distribution-id', target.distribution, '--id', result.Invalidation.Id]);
     return { ...await verifyPublic(next), invalidation: result.Invalidation.Id };
   } finally { await rm(temp, { recursive: true, force: true }); }
@@ -218,10 +231,19 @@ function build() {
   if (result.status !== 0) throw Error('Connect portal build failed');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [mode, a, b] = process.argv.slice(2);
+  const [mode, a, b, c, d] = process.argv.slice(2);
   if (mode === 'build' && !a) build();
   else if (mode === 'snapshot' && a && !b) console.log(await snapshot(a));
   else if (mode === 'verify' && a && !b) console.log(await verifyPublic(await readBundle(a, false)));
-  else if (['promote', 'rollback'].includes(mode) && a && b) console.log(await switchRelease(mode, path.resolve(a), path.resolve(b)));
-  else throw Error('Usage: connect-portal-release.mjs build | snapshot NEW_DIR | verify DIR | promote PREVIOUS CANDIDATE | rollback CANDIDATE PREVIOUS');
+  else if (['promote', 'rollback'].includes(mode) && a && b && !c) console.log(await switchRelease(mode, path.resolve(a), path.resolve(b)));
+  else if (mode === 'promote-portal' && process.argv.length === 7) {
+    console.log(JSON.stringify(await switchRelease(mode, path.resolve(a), path.resolve(b), c, d)));
+  } else if (mode === 'verify-portal' && process.argv.length === 6) {
+    const bundle = await readBundle(path.resolve(a), true);
+    const compatibility = verifyRuntimeInputs(repo, b, bundle.manifest.commit, c);
+    await verifyApiTarget(b, c);
+    const hosted = await verifyPublic(bundle);
+    await verifyApiTarget(b, c);
+    console.log(JSON.stringify({ status: 'public-release-verified', ...compatibility, ...hosted }));
+  } else throw Error('Usage: connect-portal-release.mjs build | snapshot NEW_DIR | verify DIR | promote PREVIOUS CANDIDATE | rollback CANDIDATE PREVIOUS | promote-portal PREVIOUS CANDIDATE API_COMMIT API_IMAGE | verify-portal CANDIDATE API_COMMIT API_IMAGE');
 }
