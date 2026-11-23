@@ -80,7 +80,7 @@ describe('finite historical backfill authority and receipt accounting',()=>{
   await commit(prior.service,captured.body,'retained-122');
   await processPendingTypedImports(deps,10);
   expect((await read(prior,priorJob.id)).body.state).toBe('completed');
-  for(const version of ['0.4.1','0.4.0','0.5.0','0.6.0','0.7.0']){
+  for(const version of ['0.4.1','0.4.0','0.5.0','0.6.0','0.7.0','0.7.1']){
    expect((await heartbeat(version)).status).toBe(200);
    const original=file('after-'+version+'.csv',16,'4');
    const result=await propose(prior,[original],'after-'+version);

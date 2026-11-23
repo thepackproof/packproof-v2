@@ -477,6 +477,10 @@ async function main(){
   assert.equal(active,true,'Official logo failed to render');
   await until(page,"[...document.querySelectorAll('.logistics-entry-primary')].some(e=>e.textContent.trim()==='Discover my systems'&&!e.disabled)");
   assert.equal(await page.executeJavaScript("document.body.innerText.includes('Order #10482')"),false,'First-run entry must not substitute an example order for the approved systems setup');
+  await viewport(page,1024,640,1.25);
+  await measure(page,1024,640);
+  const firstRunScaledImage=await shoot(page,'logistics-first-run-1280x800-125pct',1024,640,1.25);
+  await viewport(page,1440,900,1);
   await page.executeJavaScript("[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Discover my systems')?.click()");
   for(let i=0;i<30&&calls.setup<1;i++)await wait(50);
   assert.equal(calls.setup,1,'The approved first-run action must invoke the authorized setup bridge');
@@ -517,7 +521,7 @@ async function main(){
    scope:'packaged unified renderer and production preload; synthetic IPC only',sourceCommit:process.env.GITHUB_SHA||null,
    designFile:'nNnkgTZOBNkG8muy8AkIv1',entryNode:'3:15',setupNode:'3:15',sourceApprovalNode:'3:168',recoveryNode:'4:410',
    functionalDesignFile:'PZ8dfCcXe2D8SMtmF497v3',functionalCharterNode:'6:116',
-   screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
+   screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-first-run-1280x800-125pct.png':firstRunScaledImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
     commerceCoverage:{scope:'Explicitly selected Commerce with scoped defect repairs; no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'full statement; synthetic ungranted GET only',logoBlob,updaterStates:['unavailable','available','ready']},
    verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions',
      'packaged Connect renderer and preload','missing-facility review','missing facility stays primary with an expired report in both appearances and scales','saved report is explicitly secondary and can return to facility connection','fresh export review after restart and explicit file confirmation','current export review reopens without renewal','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',

@@ -887,19 +887,32 @@ export function joinUrl(baseUrl: string, path: string): string {
 async function errorFromResponse(response: Response): Promise<ApiError> {
   let code = "HTTP_ERROR";
   let message = `HTTP ${response.status}`;
+  let operationId: string | undefined;
+  let nextAction: string | undefined;
+  let retryable: boolean | undefined;
+  const safeIdentifier = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : undefined;
   try {
     const payload = (await response.json()) as {
-      error?: { code?: string; message?: string };
+      error?: { code?: string; message?: string; operationId?: unknown; nextAction?: unknown; retryable?: unknown };
       code?: string;
       title?: string;
       detail?: string;
+      operationId?: unknown;
+      nextAction?: unknown;
+      retryable?: unknown;
     };
     const suppliedCode = payload.error?.code ?? payload.code ?? payload.title;
     const suppliedMessage = payload.error?.message ?? payload.detail;
     if (typeof suppliedCode === 'string' && suppliedCode) code = suppliedCode;
     if (typeof suppliedMessage === 'string' && suppliedMessage) message = suppliedMessage;
+    operationId = safeIdentifier(payload.error?.operationId ?? payload.operationId);
+    const action = payload.error?.nextAction ?? payload.nextAction;
+    if (typeof action === 'string' && action.length <= 500) nextAction = action;
+    const retry = payload.error?.retryable ?? payload.retryable;
+    if (typeof retry === 'boolean') retryable = retry;
   } catch {
     // Keep the HTTP fallback.
   }
-  return new ApiError(code, message, response.status);
+  operationId ??= safeIdentifier(response.headers.get('X-PackProof-Operation-Id') ?? response.headers.get('X-Request-Id'));
+  return new ApiError(code, message, response.status, operationId, nextAction, retryable);
 }

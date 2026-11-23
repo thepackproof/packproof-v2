@@ -29,9 +29,14 @@ interface HumanSession {
 type LocalRead = (operation: string) => Promise<unknown>;
 const enrollment = new Set(['getStatus','getWorkspaceStatus','beginEnrollment','pollEnrollment','refresh','openApproval','openWorkspaceApproval']);
 const bootstrap = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh','openApproval','openWorkspaceApproval','recoverEnrollment','refreshPendingFileReview']);
+const initialFacilityRefresh = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh']);
 const completingEnrollment = new Set(['pollEnrollment','getStatus','refresh']);
 const workspaceReads = new Set(['getStatus','getWorkspaceStatus','refresh','workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention','openWorkspaceOrder','openWorkspaceReview']);
 const isMissing = (error: unknown) => !!error && typeof error === 'object' && 'status' in error && error.status === 404;
+const validLocation = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
+class AssignedFacilityObserved extends Error {
+  constructor(readonly locationId: string) { super('Refresh this computer’s newly assigned facility.'); }
+}
 function reviewMetadata(authority:Authority):PendingFileReview|undefined {
   const setup=authority.setup, review=setup?.pendingFileReview;
   if(authority.mode!=='bootstrap'||authority.offline||authority.canRecover||setup?.state!=='setup'||setup.locationId!==null||!review||
@@ -65,7 +70,12 @@ export class HostedSession {
     try {
       const access=await this.human.access(scope);
       if (this.sessionEpoch!==epoch || access.userId!==user || this.human.user()!==user || scope.organizationId!==access.organizationId ||
-          scope.environment!==access.environment || scope.locationId!==access.locationId) throw Error('Your workspace changed. Open Logistics again.');
+          scope.environment!==access.environment) throw Error('Your workspace changed. Open Logistics again.');
+      if (scope.locationId!==access.locationId) {
+        if (scope.locationId===null && validLocation(access.locationId) && access.canConfigure && initialFacilityRefresh.has(method))
+          throw new AssignedFacilityObserved(access.locationId);
+        throw Error('Your workspace changed. Open Logistics again.');
+      }
       this.lease.observe(binding,access.canConfigure);
       return {...access,offline:false};
     } catch(error) {
@@ -74,16 +84,20 @@ export class HostedSession {
       throw error;
     }
   }
-  private async authority(method: string): Promise<Authority> {
+  private async authority(method: string, expected?: {scope: BoundScope; environment: string; enrollmentId?: string}): Promise<Authority> {
     const user = this.signedIn(), epoch = this.sessionEpoch;
     const current = await this.read('status') as ConnectStatus, scope = this.localScope(current);
     const stable = () => { if (this.human.user() !== user || this.sessionEpoch !== epoch) throw Error('Your session changed.'); };
     stable();
+    if (expected && (JSON.stringify(scope)!==JSON.stringify(expected.scope) || current.environment!==expected.environment ||
+        current.enrollment?.id!==expected.enrollmentId || !current.health.serviceOnline || current.transport?.state!=='compatible' ||
+        current.recoveryAvailable || current.configRevision!==0 || current.config)) throw Error('Your workspace changed. Open Logistics again.');
     const base = {user,epoch,installationId:current.installationId,enrollmentId:current.enrollment?.id};
     if (!current.installationId) {
       if (method !== 'choices' && !enrollment.has(method)) throw Error('Connect this computer to a facility first.');
       return {...base,mode:'enrollment',scopeKey:'null',offline:false,canConfigure:false,canReadOrders:false};
     }
+    let assignedLocation: string | undefined;
     if (scope) {
       try {
         const access = await this.verify(scope,user,method); stable();
@@ -91,7 +105,8 @@ export class HostedSession {
           canConfigure:access.canConfigure,canReadOrders:!access.offline};
       } catch (error) {
         stable();
-        if (!isMissing(error) || !bootstrap.has(method)) throw error;
+        if (error instanceof AssignedFacilityObserved) assignedLocation=error.locationId;
+        else if (!isMissing(error) || !bootstrap.has(method)) throw error;
       }
     }
     this.lease.clear();
@@ -101,7 +116,22 @@ export class HostedSession {
     const setup = await this.human.setupAccess({installationId:current.installationId,environment,...(scope ? {organizationId:scope.organizationId} : {})});
     stable();
     if (setup.userId !== user || setup.installationId !== current.installationId || setup.environment !== environment ||
-        (scope && (setup.organizationId !== scope.organizationId || setup.locationId !== scope.locationId))) throw Error('Your workspace changed. Open Logistics again.');
+        (scope && setup.organizationId !== scope.organizationId) ||
+        (assignedLocation!==undefined && assignedLocation!==setup.locationId)) throw Error('Your workspace changed. Open Logistics again.');
+    if (scope && setup.locationId!==scope.locationId) {
+      if (expected || !initialFacilityRefresh.has(method) || scope.locationId!==null || !validLocation(setup.locationId) ||
+          !['setup','ready'].includes(setup.state) ||
+          !current.health.serviceOnline || current.recoveryAvailable || current.configRevision!==0 || current.config ||
+          ['forbidden','unauthenticated'].includes(current.transport?.state ?? '')) throw Error('Your workspace changed. Open Logistics again.');
+      // Only the existing authenticated service heartbeat applies the assignment.
+      // It preserves the old facility's local work. Do not synthesize a binding
+      // from a human response or expose orders until both authorities agree.
+      await this.read('refresh'); stable();
+      const refreshed=await this.authority(method,{scope:{...scope,locationId:setup.locationId},
+        environment:current.environment,enrollmentId:current.enrollment?.id});
+      stable();
+      return refreshed;
+    }
     const canRecover = current.recoveryAvailable === true;
     const localDenied=['revoked','permission_required'].includes(current.state) ||
       current.transport?.state==='forbidden' || current.transport?.state==='unauthenticated';
@@ -162,6 +192,8 @@ export class HostedSession {
   assertTransition(method: string, started: Authority, ended: Authority) {
     if (started.user !== ended.user || this.human.user() !== started.user || started.epoch !== ended.epoch ||
         this.sessionEpoch !== started.epoch) throw Error('Your account changed.');
+    if (started.mode==='facility' && ended.mode==='facility' && started.canConfigure!==ended.canConfigure)
+      throw Error('Your workspace permissions changed. Open Logistics again.');
     if (started.scopeKey === ended.scopeKey && (started.enrollmentId === ended.enrollmentId || method === 'beginEnrollment')) return;
     // These are the only expected identity changes in the native enrollment protocol.
     if (method === 'recoverEnrollment' && started.mode === 'bootstrap' && started.canRecover &&

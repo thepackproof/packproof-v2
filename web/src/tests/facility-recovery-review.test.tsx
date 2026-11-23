@@ -64,16 +64,57 @@ it('uses the existing scoped revoke only after consent and returns the user to W
     { organizationId: 'org-a', environment: 'sandbox', action: 'revoke' }, { 'Idempotency-Key': expect.any(String) });
 });
 
-it('leaves a current unmarked file review in place and routes a marked installation directly to its facility', async () => {
+it('keeps facility connection primary after a saved file review is renewed, including an unmarked old link', async () => {
   const request = vi.fn(async () => ({ ...installed, pendingProposal: { ...proposal, sourceContract: {
     ...proposal.sourceContract, historyPolicy: { ...proposal.sourceContract.historyPolicy, observedAt: new Date().toISOString() },
   } } }));
   open(legacy, request);
-  expect(await screen.findByRole('button', { name: 'Approve configuration' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Reconnect this computer to a facility' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Approve configuration' })).not.toBeInTheDocument();
   cleanup();
   open(legacy + '&intent=facility', request);
   expect(await screen.findByRole('heading', { name: 'Reconnect this computer to a facility' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Approve configuration' })).not.toBeInTheDocument();
+});
+
+it('offers the guarded first connection without revocation and submits only the explicitly chosen facility',async()=>{
+  const current={...installed,configSha256:null,facilityConnection:{canAssign:true,canCreate:false,locations:[{id:'site-a',name:'Warehouse A',guidedSetupAvailable:true}]}};
+  let connected=false;
+  const request=vi.fn(async (_path:string,method?:string,_body?:unknown,_headers?:unknown)=>{
+    if(method==='POST')connected=true;
+    return connected?{...current,locationId:'site-a',facilityConnection:undefined,pendingProposal:undefined,pendingProposalSha256:undefined}:current;
+  });
+  open(legacy,request);
+  await screen.findByRole('heading',{name:'Choose this computer’s facility'});
+  const connect=screen.getByRole('button',{name:'Connect this computer'});
+  expect(connect).toBeDisabled();
+  expect(screen.queryByRole('button',{name:'Disconnect and continue'})).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Facility')).toHaveValue('');
+  fireEvent.change(screen.getByLabelText('Facility'),{target:{value:'site-a'}});
+  expect(connect).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(connect);
+  await waitFor(()=>expect(request).toHaveBeenCalledWith('/agent-installations/agent-a/actions?organizationId=org-a&environment=sandbox','POST',{
+    organizationId:'org-a',environment:'sandbox',action:'connect_facility',configRevision:0,configSha256:null,proposalSha256:'a'.repeat(64),locationId:'site-a',
+  },{'Idempotency-Key':expect.any(String)}));
+  expect(await screen.findByRole('heading',{name:'This computer is connected'})).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('Return to PackProof on Windows');
+  expect(screen.queryByRole('button',{name:'Disconnect and continue'})).not.toBeInTheDocument();
+});
+
+it('lets an authorized owner name the first facility and requires a new consent when its name changes',async()=>{
+  const current={...installed,configSha256:null,facilityConnection:{canAssign:true,canCreate:true,locations:[]}};
+  const request=vi.fn(async (_path:string,_method?:string,_body?:unknown,_headers?:unknown)=>current);
+  open(legacy,request,true,[]);
+  await screen.findByRole('heading',{name:'Name your facility'});
+  const name=screen.getByLabelText('Facility name'),connect=screen.getByRole('button',{name:'Connect this computer'});
+  fireEvent.change(name,{target:{value:'Columbus test facility'}});
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.change(name,{target:{value:'Columbus warehouse'}});
+  expect(screen.getByRole('checkbox')).not.toBeChecked();expect(connect).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(connect);
+  await waitFor(()=>expect(request).toHaveBeenCalledWith(expect.any(String),'POST',expect.objectContaining({action:'connect_facility',facilityName:'Columbus warehouse'}),expect.any(Object)));
+  expect(request.mock.calls.find(([,method])=>method==='POST')?.[2]).not.toHaveProperty('locationId');
 });
 
 it('requires an authorized facility for new facility enrollment and never selects one automatically', async () => {

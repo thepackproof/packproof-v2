@@ -669,6 +669,9 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status: number,
+    public readonly operationId?: string,
+    public readonly nextAction?: string,
+    public readonly retryable?: boolean,
   ) {
     super(message);
     this.name = "ApiError";

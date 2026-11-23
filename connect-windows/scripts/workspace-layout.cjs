@@ -156,11 +156,14 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         if(scene.action==='proof')await press(visibleButton(summary.orderReference));
         await heading(scene.heading);
         if(scene.action==='proof') {
-          const styles=await page.executeJavaScript("({cards:[...document.querySelectorAll('.pf-quantities button')].map(x=>getComputedStyle(x).backgroundColor),brand:(()=>{const n=document.querySelector('.pp-eos-brand');if(!n)return null;const b=n.getBoundingClientRect();return {top:b.top,bottom:b.bottom};})()})");
+          const styles=await page.executeJavaScript("({cards:[...document.querySelectorAll('.pf-quantities button')].map(x=>getComputedStyle(x).backgroundColor),brand:(()=>{const n=document.querySelector('.pp-eos-brand');if(!n)return null;const b=n.getBoundingClientRect();return {top:b.top,bottom:b.bottom,left:b.left,right:b.right,width:b.width,height:b.height,visible:n.checkVisibility()};})()})");
           if(theme==='dark') assert.ok(styles.cards.length>0 &&
             styles.cards.every(c=>c!=='rgb(255, 255, 255)' && c!=='rgb(246, 248, 252)'),
             'Dark Proof quantity cards must not retain light theme backgrounds');
-          if(cssWidth>=1000) assert.ok(styles.brand && styles.brand.top>=65 && styles.brand.bottom<=height/scale,
+          // The persistent shell owns the sidebar from the top of the viewport;
+          // its brand no longer sits beneath the former full-width header.
+          if(cssWidth>=1000) assert.ok(styles.brand?.visible && styles.brand.width>0 && styles.brand.height>0 &&
+            styles.brand.top>=0 && styles.brand.left>=0 && styles.brand.right<=cssWidth && styles.brand.bottom<=height/scale,
             'Sidebar branding must remain visible after navigation to a Proof');
         }
         if(scene.guided){

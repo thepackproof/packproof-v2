@@ -1,22 +1,34 @@
-import { ConfigurationApproval, configurationReviewDeadline } from './ConfigurationApproval';
+import { ConfigurationApproval } from './ConfigurationApproval';
 import { FacilityRecoveryReview } from './FacilityRecoveryReview';
 import { FacilityConnectionHelp } from './FacilityConnectionHelp';
+import { FacilityConnectionForm } from './FacilityConnectionForm';
 import { ColumnChangeReview } from './ColumnChangeReview';
 import { useEffect, useRef, useState } from 'react';
 import { SourceSubscriptionApproval } from './SourceSubscriptions';
 import { OrderWorkspaceApproval } from './OrderWorkspaceApproval';
 import type { PackProofApi } from '../api/client';
+import { ApiError } from '../api/types';
 import { randomId } from '../random-id';
 import { useWorkflowCommand } from './workflow';
 import { connectApprovalReturnPath } from '../auth/connect-approval-return';
 import { displayState } from './model';
 import './agents.css';
 export interface AgentConfiguration { sourceName?: string; integrationAccountId?: string; operatorMembershipId?: string; locationId?: string | null; folderDigest?: string; mapping?: Record<string, string>; timeZone?: string; importValidRows?: boolean; offlineWindowHours?: number; sourceContract?: { schema: 'packproof.scheduled-csv/v1'|'packproof.scheduled-csv/v2'; exporterName: string|null; exporterVersion: string|null; headerPolicy?: string; expectedHeaders: string[]; expectedIntervalSeconds: number|null; backfillFrom: string; rulesVersion?:string; historyPolicy?:{mode:'selected_then_new';initialFileName:string;initialFileSha256:string;observedAt:string} } }
-export interface AgentInstallation { capabilities?: { sourceSetupApproval?: boolean; typedSourceSubscriptions?: boolean }; id: string; state: string; organizationName?:string; deviceName: string; version: string; sourceName?: string; integrationAccountId?: string; locationId?: string | null; configRevision: number; configSha256?: string | null; config?: AgentConfiguration | null; pendingProposal?: AgentConfiguration; pendingProposalSha256?: string; testImportId?: string; verifiedImportId?: string; lastSeenAt?: string; credentialExpiresAt?: string; testCandidate?: { id: string; state: string; counts: Record<string, number>; original?: { sha256: string; byteSize: number }; rows?: Array<{ rowNumber: number; status?: string; errors?: string[]; normalized?:Record<string,unknown>|null }> }; health?: { serviceOnline: boolean; lastFolderScanAt?: string; lastObservedExportAt?: string; lastCompletedImportAt?: string; completedImports?: number; sourceFreshness?: 'unknown' | 'current' | 'delayed'; lastReceiptReconciledAt?: string | null; sourceWatermarkAt?: string | null; queueCount?: number | null; lastErrorCode?: string | null; conditions?: Array<{ code: string; repair: string }>; history?: Array<{ observedAt: string; configRevision: number; codes: string[] }>; expectedIntervalSeconds?: number | null; sourceAccounting?: { receivedExports: number; acceptedRows: number; duplicateRows: number; rejectedRows: number; pendingRows: number; linkedProofs: number } } }
+export interface AgentInstallation { facilityConnection?: { canAssign: boolean; canCreate: boolean; locations: Array<{ id: string; name: string; guidedSetupAvailable: boolean }> }; capabilities?: { sourceSetupApproval?: boolean; typedSourceSubscriptions?: boolean }; id: string; state: string; organizationName?:string; deviceName: string; version: string; sourceName?: string; integrationAccountId?: string; locationId?: string | null; configRevision: number; configSha256?: string | null; config?: AgentConfiguration | null; pendingProposal?: AgentConfiguration; pendingProposalSha256?: string; testImportId?: string; verifiedImportId?: string; lastSeenAt?: string; credentialExpiresAt?: string; testCandidate?: { id: string; state: string; counts: Record<string, number>; original?: { sha256: string; byteSize: number }; rows?: Array<{ rowNumber: number; status?: string; errors?: string[]; normalized?:Record<string,unknown>|null }> }; health?: { serviceOnline: boolean; lastFolderScanAt?: string; lastObservedExportAt?: string; lastCompletedImportAt?: string; completedImports?: number; sourceFreshness?: 'unknown' | 'current' | 'delayed'; lastReceiptReconciledAt?: string | null; sourceWatermarkAt?: string | null; queueCount?: number | null; lastErrorCode?: string | null; conditions?: Array<{ code: string; repair: string }>; history?: Array<{ observedAt: string; configRevision: number; codes: string[] }>; expectedIntervalSeconds?: number | null; sourceAccounting?: { receivedExports: number; acceptedRows: number; duplicateRows: number; rejectedRows: number; pendingRows: number; linkedProofs: number } } }
 const NEW_LOCAL_SOURCE = '__new_file_connection__';
 interface EnrollmentView { capabilities?: { createLocalSource?: boolean }; id: string; comparisonCode: string; deviceName: string; version: string; state: string; expiresAt: string; choices?: { integrationAccounts: Array<{id:string;name:string;sourceSystem?:string}>; operators: Array<{id:string;name:string;role:string}>; locations: Array<{id:string;name:string}> } }
 const stamp = (value?: string | null) => value ? new Date(value).toLocaleString() : 'Not reported';
-function errorText(caught: unknown) { return caught instanceof Error ? caught.message : 'Current installation authorization could not be confirmed. Refresh and try again.'; }
+function errorText(caught: unknown, decision = false) {
+  if (caught instanceof ApiError) {
+    const message = caught.code === 'INTERNAL' || caught.status >= 500
+      ? decision
+        ? 'PackProof could not save this decision because the server encountered an error. Your approval has not been confirmed. Retry this action; your current connection and saved files stay in place.'
+        : 'PackProof could not confirm this computer’s current authorization because the server encountered an error. Refresh this page to try again; your current connection and saved files stay in place.'
+      : caught.message;
+    return `${message}${caught.nextAction && caught.status < 500 ? ` ${caught.nextAction}` : ''}${caught.operationId ? ` Support reference: ${caught.operationId}.` : ''}`;
+  }
+  return caught instanceof Error ? caught.message : 'Current installation authorization could not be confirmed. Refresh and try again.';
+}
 function repairInstruction(code: string) {
   if (code === 'NETWORK_UNAVAILABLE') return 'Check the network connection on this computer. Preserved work can retry when the service reconnects.';
   if (code === 'SPOOL_CAPACITY_REACHED' || code === 'SOURCE_CAPACITY_REACHED') return 'Open PackProof Connect diagnostics and restore available storage capacity while preserving queued originals.';
@@ -114,11 +126,11 @@ function LegacyAgentApproval({ api, organizationId, environment, params, canMana
       setAbandonConsent(false);
       setFeedback({ ...target, kind: 'success', message: action === 'configure'
         ? 'Configuration approved. Return to PackProof Connect to continue.'
+        : action === 'connect_facility' ? 'Facility connected. Return to PackProof on Windows and select Check connection again.'
         : 'Your decision was recorded. Return to PackProof Connect to continue.' });
       setRevision(value => value + 1);
     } catch (caught) {
-      if (current === generation.current) setFeedback({ ...target, kind: 'error', message: caught instanceof Error
-        ? caught.message : 'PackProof could not confirm your decision. Check your connection and try again.' });
+      if (current === generation.current) setFeedback({ ...target, kind: 'error', message: errorText(caught, true) });
     } finally {
       if (command.current === receipt) pendingCommand.current = false;
     }
@@ -139,11 +151,16 @@ function LegacyAgentApproval({ api, organizationId, environment, params, canMana
     notice={configurationFeedback && configurationFeedback.kind !== 'error' ? configurationFeedback.message : null}
     onApprove={() => void submit('configure', { action: 'configure', proposalSha256: installation.pendingProposalSha256 })}/>
 </>;
-  const deadline = configurationReviewDeadline(installation?.pendingProposal?.sourceContract);
-  const oldFacilityLink = environment === 'sandbox' && !importId && !params.has('action') &&
-    installation?.locationId === null && (installation.state === 'setup' || installation.state === 'revoked') &&
-    deadline !== null && Date.now() > deadline;
-  const facilityRecovery = facilityIntent || oldFacilityLink || facilityDisconnectRequested;
+  const missingFacility = !importId && !params.has('action') && installation?.locationId === null &&
+    ['setup', 'ready', 'revoked'].includes(installation.state);
+  const facilityRecovery = facilityIntent || missingFacility || facilityDisconnectRequested;
+  if (feedback?.action === 'connect_facility' && feedback.kind === 'success' && canManage && locatorValid && installation?.locationId && !error) {
+    return <section className="records-panel agent-approval" aria-label="Facility connected">
+      <h1>This computer is connected</h1><p>{installation.deviceName}</p>
+      <p role="status">{feedback.message}</p>
+      <p>You can now continue setting up this facility’s sources on that computer. Connecting the facility has not uploaded any files or started collection.</p>
+    </section>;
+  }
   if (facilityRecovery && showFileReview && canManage && locatorValid && installation && !error) {
     return <section className="records-panel agent-approval" aria-label="File configuration review">
       <h1>Review the export file</h1><p>{installation.deviceName}</p>
@@ -152,6 +169,13 @@ function LegacyAgentApproval({ api, organizationId, environment, params, canMana
     </section>;
   }
   if (facilityRecovery && !showFileReview && canManage && locatorValid && installation && !error) {
+    if (installation.facilityConnection?.canAssign) return <FacilityConnectionForm
+      key={JSON.stringify([installation.id, installation.pendingProposalSha256, installation.facilityConnection.locations])}
+      installation={installation} workspace={installation.organizationName || organizationId} busy={busy}
+      error={feedback?.action === 'connect_facility' && feedback.kind === 'error' ? feedback.message : undefined}
+      onConnect={choice => void submit('connect_facility', { action: 'connect_facility', configRevision: installation.configRevision,
+        configSha256: installation.configSha256 ?? null, proposalSha256: installation.pendingProposalSha256 ?? null, ...choice })}
+      onReviewFiles={() => setShowFileReview(true)}/>;
     return <FacilityRecoveryReview key={JSON.stringify([installation.id, facilityLocations?.map(site => site.id)])} locations={facilityLocations} installation={installation} workspace={installation.organizationName || organizationId}
       environment={environment} busy={busy} disconnected={feedback?.action === 'revoke' && feedback.kind === 'success'}
       error={feedback?.action === 'revoke' && feedback.kind === 'error' ? feedback.message : undefined}

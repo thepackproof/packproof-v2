@@ -44,7 +44,9 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       await opened.db.query('CREATE TABLE preserved_sample(id integer PRIMARY KEY, original bytea NOT NULL)');
       await opened.db.query('INSERT INTO preserved_sample(id,original) VALUES(1,$1)',[Buffer.from('kept original')]);
       await opened.db.query(`GRANT SELECT ON preserved_sample TO ${apiRole}`);
-      const inventory=await migrationInventory();
+      // This test qualifies the frozen 122→129 owner protocol, independently of
+      // the newer recovery release and its separately reviewed role additions.
+      const inventory=(await migrationInventory()).filter(row=>Number(row.id.slice(0,3))<=129);
       const candidate=inventory.filter(row=>row.id<=collectorMigration.id);
       // Exercise the 122→123 restorer with its original release inventory before the
       // candidate migrator sees the exact 123 predecessor and the single new file.
@@ -113,7 +115,7 @@ describe.skipIf(!connection)('PostgreSQL 16 restored workspace migration',()=>{
       const latest=129;
       expect(additions.at(-1)?.id).toBe("129_unified_collector_version");
       const logisticsPolicy=options(latest,(await recordsMigrationInventory(latest)).migrationSha256);
-      const deps129={migrationInventory,splitSqlStatements,planRecordsRuntimePrivileges,verifyPlannedRecordsPrivileges};
+      const deps129={migrationInventory:async()=>inventory,splitSqlStatements,planRecordsRuntimePrivileges,verifyPlannedRecordsPrivileges};
       const reviewed129={...params,target:{database:identity.database},inventorySha256:logisticsInventory,expectedLedger:collectorInventory};
       const upgrade=(mode:string)=>opened.db.transaction(tx=>runLogisticsOwnerTransaction(tx,reviewed129,mode,deps129,schema));
       expect(await upgrade('inspect')).toMatchObject({through:124,finalLedger:collectorInventory,applied:[],grantStatementCount:0});

@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),backend=path.join(root,'backend');
-const expectedMigrationCount=128;
-const expectedInventorySha256='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc';
+const expectedMigrationCount=129;
+const expectedInventorySha256='13f05713808a4c077b9388d5609d99ad1bfa16b9ded82b2e447bc1c076d5896e';
 let directory:string;
 afterAll(async()=>{if(directory)await rm(directory,{recursive:true,force:true});});
 it('keeps the backend locked install independent of the parent application package',async()=>{
@@ -25,14 +25,14 @@ it('keeps the backend locked install independent of the parent application packa
 });
 it('keeps the order workspace migration and every predecessor byte-identical to the reviewed Git index with LF endings',async()=>{
  const files=(await readdir(path.join(backend,'migrations'))).filter(name=>name.endsWith('.sql')).sort();expect(files).toHaveLength(expectedMigrationCount);
- expect(files.slice(-5)).toEqual(['125_order_logistics.sql','126_facility_setup_requests.sql','127_order_revision_packets.sql','128_order_source_health.sql','129_unified_collector_version.sql']);
+ expect(files.slice(-6)).toEqual(['125_order_logistics.sql','126_facility_setup_requests.sql','127_order_revision_packets.sql','128_order_source_health.sql','129_unified_collector_version.sql','130_connect_recovery_collector_version.sql']);
  const output=execFileSync('git',['ls-files','--stage','--','backend/migrations'],{cwd:root,encoding:'utf8'});
  const indexed=new Map(output.trim().split(/\r?\n/).map(line=>{const found=/^100644 ([a-f0-9]{40}) 0\t(.+)$/.exec(line);if(!found)throw Error('Unmerged or unexpected migration index entry');return [found[2],found[1]];}));
  expect(indexed.size).toBe(expectedMigrationCount);
  const inventory:Array<{id:string;checksum:string}>=[];
  for(const name of files){const bytes=await readFile(path.join(backend,'migrations',name)),gitBlob=execFileSync('git',['cat-file','blob',indexed.get('backend/migrations/'+name)!],{cwd:root});expect(bytes.includes(13),name).toBe(false);const checksum=createHash('sha256').update(bytes).digest('hex');expect(checksum,name).toBe(createHash('sha256').update(gitBlob).digest('hex'));inventory.push({id:name.slice(0,-4),checksum});}
  expect(createHash('sha256').update(JSON.stringify(inventory)).digest('hex')).toBe(expectedInventorySha256);
- expect(createHash('sha256').update(JSON.stringify(inventory.slice(0,-5))).digest('hex')).toBe('d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60');
+ expect(createHash('sha256').update(JSON.stringify(inventory.slice(0,-6))).digest('hex')).toBe('d0161362a548b61f4cc69195ad8920fbddec36f2b9d183e5b1cd066b6f0eeb60');
 },30_000);
 it('imports the compiled server graph and resolves contracts, profile, migrations and scripts from the image layout',async()=>{
  directory=await mkdtemp(path.join(tmpdir(),'packproof-image-layout-'));const imageBackend=path.join(directory,'backend');await mkdir(imageBackend,{recursive:true});

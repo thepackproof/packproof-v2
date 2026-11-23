@@ -1,12 +1,29 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PackProofApi } from '../api/client';
+import { ApiError } from '../api/types';
 import { canonicalWorkspacePath } from '../proof-list-state';
 import { AgentApproval, AgentConnections } from '../records/AgentConnections';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const enrollment = { id: 'enroll-a', comparisonCode: 'ABC-123', deviceName: 'Warehouse PC', version: '0.1.0', state: 'pending', expiresAt: '2026-11-06T14:00:00Z', choices: { integrationAccounts: [{ id: 'source-a', name: 'Dispatch export' }], operators: [{ id: 'member-a', name: 'Collin', role: 'OWNER' }], locations: [{ id: 'site-a', name: 'Main warehouse' }] } };
 const installation = { id: 'agent-a', state: 'ready', deviceName: 'Warehouse PC', version: '0.1.0', configRevision: 4, configSha256: 'digest-a', config: { sourceName: 'Dispatch', mapping: { shipmentReference: 'Reference', itemTitle: 'Description', quantity: 'Quantity' }, timeZone: 'UTC' }, testImportId: 'import-a', verifiedImportId: null, health: { serviceOnline: true } };
 const proposal = { ...installation, pendingProposal: installation.config, pendingProposalSha256: 'a'.repeat(64) };
+
+it('explains an unconfirmed server approval and keeps the operation reference available beside the retry action', async () => {
+  const request = vi.fn(async (_path: string, method?: string) => {
+    if (method === 'POST') throw new ApiError('INTERNAL','The request could not be completed',500,'operation-approval-1');
+    return proposal;
+  });
+  render(<AgentApproval api={{recordsRequest:request} as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({installationId:installation.id})} canManage/>);
+  const approve=await screen.findByRole('button',{name:'Approve configuration'});
+  fireEvent.click(screen.getByRole('checkbox',{name:/Approve this exact configuration/}));
+  fireEvent.click(approve);
+  const failure=await screen.findByRole('alert');
+  expect(failure).toHaveTextContent('Your approval has not been confirmed');
+  expect(failure).toHaveTextContent('Support reference: operation-approval-1');
+  expect(failure.parentElement).toContainElement(approve);
+  expect(approve).toBeEnabled();
+});
 
 it('shows one configuration submission, retains its receipt across refreshes, and clears it on a different installation', async () => {
   vi.useFakeTimers();

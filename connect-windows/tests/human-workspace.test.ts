@@ -104,6 +104,24 @@ describe('human authority around local Evidence OS reads',()=>{
     await expect(f.host.guard('openWorkspaceOutput')).rejects.toThrow('administrator');
     await expect(f.host.guard('workspaceOrderDetail')).resolves.toMatchObject({canReadOrders:true});
   });
+  it('discards an administrator projection when configuration permission is removed during the human snapshot',async()=>{
+    const f=hosted();
+    f.local.source={folder:'C:\\private',folderDigest:'a'.repeat(64),accessible:true,samples:[{secret:'private-csv-value'}]};
+    f.local.subscriptionDraft={folder:'C:\\private',folderDigest:'a'.repeat(64),files:[],samples:[{secret:'private-csv-value'}]};
+    const authority=await f.host.guard('getWorkspaceStatus');
+    vi.stubGlobal('fetch',vi.fn(async()=>{
+      f.human.access.mockResolvedValue({...scope,userId:'human_test',canConfigure:false});
+      return Response.json({orders:[order],totalOrders:1,nextBefore:null});
+    }));
+    await expect(f.host.presentWorkspace('getWorkspaceStatus',f.local,authority)).rejects.toThrow('permissions changed');
+    // A fresh reader request succeeds with the reader projection. The discarded
+    // request cannot carry its earlier administrator paths or samples forward.
+    const reader=await f.host.guard('getWorkspaceStatus');
+    const value=await f.host.presentWorkspace('getWorkspaceStatus',f.local,reader) as ConnectStatus;
+    expect(value.workspace).toMatchObject({canReadOrders:true,canConfigure:false,sources:[],outputFolder:null});
+    expect(value.health.queueCount).toBeNull();
+    expect(JSON.stringify(value)).not.toMatch(/private-csv-value|C:\\\\private/);
+  });
   it('does not substitute cached service records or request human records without current compatible transport',async()=>{
     const f=hosted();
     const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
