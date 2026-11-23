@@ -57,7 +57,7 @@ test('Windows close request uses a file helper with exact owned PID/executable a
   const result = requestWindowsClose(child, executable, (...args) => { invocation = args;return { status: 0, stdout: JSON.stringify(acknowledged) }; });
   assert.equal(result.delivered, true);assert.equal(result.matchedWindows, 1);
   assert.equal(invocation[0], 'powershell.exe');assert.ok(invocation[1].includes('-File'));assert.ok(!invocation[1].includes('-Command'));
-  assert.deepEqual(invocation[1].slice(-4), ['-OwnedProcessId', '1234', '-ExpectedExecutable', executable]);assert.equal(invocation[2].timeout, 10000);
+  assert.deepEqual(invocation[1].slice(-4), ['-OwnedProcessId', '1234', '-ExpectedExecutable', executable]);assert.equal(invocation[2].timeout, 30000);
   assert.throws(() => requestWindowsClose({ pid: '1234; malicious' }, executable, () => { throw new Error('must not run'); }), /owned native process/);
 });
 test('missing, wrong-process, ambiguous, failed and timed-out Windows delivery cannot pass as a normal close', () => {

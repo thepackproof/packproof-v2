@@ -22,7 +22,11 @@ function assertCleanShutdown(child, shutdown, rows) {
 function requestWindowsClose(child, executable, run = spawnSync) {
   if (!Number.isSafeInteger(child.pid) || child.pid < 1 || !path.isAbsolute(executable)) throw new Error('An owned native process and absolute executable are required.');
   const method = 'owned-visible-window-wm-close';
-  const result = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(__dirname, 'request-native-close-windows.ps1'), '-OwnedProcessId', String(child.pid), '-ExpectedExecutable', executable], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 16384 });
+  // The first PowerShell 5.1 launch compiles the tightly scoped Win32 helper
+  // via Add-Type; on heavily loaded Windows CI this can exceed 10 seconds.
+  // Give initialization time without ever treating timeout or missing delivery
+  // acknowledgments as successful shutdown.
+  const result = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(__dirname, 'request-native-close-windows.ps1'), '-OwnedProcessId', String(child.pid), '-ExpectedExecutable', executable], { timeout: 30000, windowsHide: true, encoding: 'utf8', maxBuffer: 16384 });
   let reported;
   try { reported = JSON.parse(result.stdout || ''); } catch { /* An error is not a delivery acknowledgement. */ }
   const targetMatches = reported?.method === method && reported.processId === child.pid;
