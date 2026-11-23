@@ -203,3 +203,15 @@
 @media (prefers-reduced-motion:reduce) {
   .pp-setup-appearance *, .pp-setup-appearance *::before, .pp-setup-appearance *::after {animation:none!important;transition:none!important}
 }
+
+/* Keep the installed unified window header on the same appearance as setup,
+ * without touching Commerce or changing authorization state. */
+.pp-app:has(.pp-setup-appearance[data-appearance="dark"]) > .pp-header {
+  background: #0c1b2d;
+  color: #e9f4ff;
+  border-color: #29415b;
+}
+.pp-app:has(.pp-setup-appearance[data-appearance="dark"]) > .pp-header .pp-brand { color: #e9f4ff; }
+.pp-app:has(.pp-setup-appearance[data-appearance="dark"]) > .pp-header .pp-brand small { color: #36e8c5; }
+.pp-app:has(.pp-setup-appearance[data-appearance="dark"]) > .pp-header .pp-header-end { color: #b3c9dc; }
+.pp-app:has(.pp-setup-appearance[data-appearance="dark"]) > .pp-header .pp-text-button { color: #91b2ff; }
