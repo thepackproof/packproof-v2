@@ -116,7 +116,7 @@ export function operationsOverview(
       updatedOrders: updatedKnown
         ? String(ws?.updatedToday ?? ws?.updatedLast24Hours)
         : "—",
-      updatedCaption: ws?.updatedToday != null ? "Updated today" : "Last 24 hours, if reported",
+      updatedCaption: canRead && ws?.updatedToday != null ? "Updated today" : "Last 24 hours, if reported",
       connectedSources: !online ? "—" : `${connected}/${sources.length}`,
       connectedCaption: online ? "Approved sources collecting" : "Connection not confirmed",
     },

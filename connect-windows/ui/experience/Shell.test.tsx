@@ -61,3 +61,18 @@ it("never displays a false collecting state when the background service is offli
   expect(screen.getByText("Background service offline")).toBeVisible();
   expect(screen.queryByText("Evidence collection active")).not.toBeInTheDocument();
 });
+
+it("never displays collecting status from cached sources when permission is unknown or transport incompatible", () => {
+  const onSection = vi.fn();
+  const unauthorized: ConnectStatus[] = [
+    { ...active, workspace: { ...active.workspace!, canReadOrders: undefined } },
+    { ...active, transport: { ...active.transport!, state: "unsupported" } },
+  ];
+  for (const status of unauthorized) {
+    const view = render(<Shell status={status} section="home" onSection={onSection}>No private sources</Shell>);
+    expect(screen.getByText("Reconnection required")).toBeVisible();
+    expect(screen.queryByText("Evidence collection active")).toBeNull();
+    expect(screen.queryByText("1 approved source collecting")).toBeNull();
+    view.unmount();
+  }
+});

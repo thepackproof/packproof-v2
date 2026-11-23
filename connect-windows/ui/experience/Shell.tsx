@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Brand, Icon } from "./Icon";
 import type { ConnectStatus } from "../types";
+import { canReadWorkspace } from "./WorkspaceModel";
 import "./EvidenceOS.css";
 
 export type Section = "home" | "orders" | "attention" | "connections" | "matching" | "integrity" | "exports" | "settings";
@@ -101,13 +102,12 @@ export function Shell({
     catch { /* Reduced motion remains usable without persisted preferences. */ }
   };
   const ws = status.workspace;
-  const activeSources = ws?.sources.filter(
+  // The sidebar is part of the authorized workspace. Missing grants and
+  // incompatible hosted transport must never look like active collection.
+  const accessible = canReadWorkspace(status);
+  const activeSources = accessible ? (ws?.sources.filter(
     (source) => source.roles.length > 0 && source.state === "active",
-  ).length ?? 0;
-  const accessible =
-    status.health.serviceOnline &&
-    ws?.canReadOrders !== false &&
-    !["unauthenticated", "forbidden", "unreachable"].includes(status.transport?.state || "");
+  ).length ?? 0) : 0;
   const running = accessible && ws?.phase === "active" && activeSources > 0;
   const statusLabel = !status.health.serviceOnline
     ? "Background service offline"
