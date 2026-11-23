@@ -109,3 +109,46 @@ it("redacts cached source identity, folder paths and open source details when fa
   expect(screen.queryByText(privateFolder)).toBeNull();
   expect(screen.queryByText("Restricted shipment feed")).toBeNull();
 });
+
+
+it("keeps the canonical Proof ID and selects the newest revision across recent and paged correction rows", async () => {
+  const order = (revision: number) => ({
+    proofId: "stable-proof", revision, orderReference: "SO-CORRECTED",
+    latestKind: revision > 4 ? "correction" : "packing",
+  });
+  const s = status({ orders: [order(2), order(4)], nextBefore: 170 });
+  const b = bridgeFor(s, { workspaceOrderPage: vi.fn(async () => ({
+    orders: [order(6), order(3)], nextBefore: null,
+  })) });
+  const onProof = vi.fn();
+  render(<Workspace status={s} bridge={b} onStatus={vi.fn()}
+    onProof={onProof} onSection={vi.fn()} section="orders" />);
+  expect(screen.getAllByRole("button", { name: /SO-CORRECTED/ })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: /SO-CORRECTED/ }));
+  expect(onProof).toHaveBeenLastCalledWith("stable-proof", 4);
+  fireEvent.click(screen.getByRole("button", { name: /Load earlier orders/ }));
+  await waitFor(() => expect(b.workspaceOrderPage).toHaveBeenCalledWith(170));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /SO-CORRECTED/ })).toHaveLength(1));
+  fireEvent.click(screen.getByRole("button", { name: /SO-CORRECTED/ }));
+  expect(onProof).toHaveBeenLastCalledWith("stable-proof", 6);
+});
+
+it("does not open an outdated Proof revision from duplicate search results", async () => {
+  const order = (revision: number) => ({
+    proofId: "stable-search-proof", revision, orderReference: "SO-SEARCHED",
+  });
+  const s = status({ orders: [order(8), order(5)] });
+  const b = bridgeFor(s, { workspaceSearchOrders: vi.fn(async () => [
+    order(3), order(9), order(7),
+  ]) });
+  const onProof = vi.fn();
+  render(<Workspace status={s} bridge={b} onStatus={vi.fn()}
+    onProof={onProof} onSection={vi.fn()} section="orders" />);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Order reference" }),
+    { target: { value: "SO-SEARCHED" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find order" }));
+  await waitFor(() => expect(b.workspaceSearchOrders).toHaveBeenCalledWith("SO-SEARCHED"));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /SO-SEARCHED/ })).toHaveLength(1));
+  fireEvent.click(screen.getByRole("button", { name: /SO-SEARCHED/ }));
+  expect(onProof).toHaveBeenCalledWith("stable-search-proof", 9);
+});

@@ -77,10 +77,20 @@ export function OrdersView({
   );
   const readable = canReadWorkspace(status),
     recent = readable ? ws.orders || [] : [];
+  // An order keeps the same canonical Proof ID as corrections and late records
+  // append revisions. Pagination and search may return overlapping snapshots:
+  // always open the newest observed revision, never the first row encountered.
+  const latestRecent = new Map<string, OrderSummary>();
+  for (const row of recent) {
+    const previous = latestRecent.get(row.proofId);
+    if (!previous || row.revision > previous.revision) latestRecent.set(row.proofId, row);
+  }
   const deduped = new Map<string, OrderSummary>();
   for (const row of query ? found || [] : [...recent, ...older]) {
-    const current = recent.find((s) => s.proofId === row.proofId && s.revision > row.revision) || row;
-    if (!deduped.has(current.proofId)) deduped.set(current.proofId, current);
+    const recentVersion = latestRecent.get(row.proofId);
+    const current = recentVersion && recentVersion.revision > row.revision ? recentVersion : row;
+    const previous = deduped.get(current.proofId);
+    if (!previous || current.revision > previous.revision) deduped.set(current.proofId, current);
   }
   const display = [...deduped.values()],
     cursor = after === undefined ? ws.nextBefore : after;
