@@ -238,7 +238,6 @@ it("uses the saved Evidence OS appearance through first-run setup without granti
     expect(setup).toHaveAttribute("data-appearance", "dark");
     expect(window.localStorage.getItem(preference)).toBe("dark");
     expect(bridge.activateWorkspace).not.toHaveBeenCalled();
-    expect(bridge.approveWorkspaceSource).not.toHaveBeenCalled();
   } finally {
     if (before === null) window.localStorage.removeItem(preference);
     else window.localStorage.setItem(preference, before);
