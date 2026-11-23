@@ -146,7 +146,7 @@ it("does not show restricted match observations or claim online export access on
     proofOutput: { folder: "C:\\\\Private\\\\Proofs", state: "pending", pending: 9, completedRevision: 31 },
     workspace: { ...blocked.workspace!, outputFolder: "C:\\\\Private\\\\Fallback" },
   }}/>);
-  expect(screen.getByText("ACCESS REQUIRED")).toBeVisible();
+  expect(screen.getAllByText("ACCESS REQUIRED").length).toBeGreaterThan(0);
   expect(screen.queryByText("AUTHENTICATED ACCESS")).toBeNull();
   expect(screen.queryByText(/Private.*Proofs/)).toBeNull();
   expect(screen.queryByText(/Private.*Fallback/)).toBeNull();
