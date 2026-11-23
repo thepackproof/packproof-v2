@@ -3,7 +3,7 @@ import type { OrderSummary, WorkspaceSource, WorkspaceStep } from "../workspace-
 import { roles, shortFolder } from "./SetupParts";
 import { eventTitle } from "./ProofModel";
 
-export type WorkspaceSection = "home" | "orders" | "attention" | "connections";
+export type WorkspaceSection = "home" | "orders" | "attention" | "connections" | "matching" | "integrity" | "exports" | "settings";
 export interface WorkspaceProps {
   section: WorkspaceSection;
   status: ConnectStatus;
