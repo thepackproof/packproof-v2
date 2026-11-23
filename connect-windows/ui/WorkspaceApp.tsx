@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectApp } from "./ConnectApp";
 import { getBridge, type ConnectBridge, type ConnectStatus } from "./types";
 import type { DraftPreview, OrderDetail, WorkspaceStep } from "./workspace-types";
-import { Header, Shell, type Section } from "./experience/Shell";
+import { Header, Shell, initialAppearance, persistEvidenceAppearance, type Appearance, type Section } from "./experience/Shell";
 import { Workspace } from "./experience/Workspace";
 import { canReadWorkspace } from "./experience/WorkspaceModel";
 import { Setup } from "./experience/Setup";
@@ -99,6 +99,7 @@ function Experience({
   const ws = status.workspace!;
   const facilitySetup = new URLSearchParams(window.location.search).get("facilitySetup") === "1";
   const [setup, setSetup] = useState(() => facilitySetup || ws.step !== "overview" || ws.phase !== "active");
+  const [setupAppearance, setSetupAppearance] = useState<Appearance>(initialAppearance);
   const [section, setSection] = useState<Section>("home");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [tour, setTour] = useState(false);
@@ -121,6 +122,16 @@ function Experience({
   const liveDraft =
     draft?.identity === identity && status.state !== "revoked" && !serviceUnavailable ? draft.data : null;
   const showSetup = setup || ws.phase !== "active" || ws.step !== "overview";
+  // The shell is intentionally unmounted during first-run setup. Re-read its
+  // saved preference when returning to setup, rather than reverting to light.
+  useEffect(() => {
+    if (showSetup) setSetupAppearance(initialAppearance());
+  }, [showSetup]);
+  const toggleSetupAppearance = () => {
+    const next: Appearance = setupAppearance === "dark" ? "light" : "dark";
+    persistEvidenceAppearance(next);
+    setSetupAppearance(next);
+  };
   const selected =
     selection?.scope === scope && accessConfirmed ? selection : null;
   const latest = selected && ws.orders?.find((o) => o.proofId === selected.id);
@@ -221,7 +232,14 @@ function Experience({
         </div>
       )}
       {showSetup && (
-        <div hidden={overlay}>
+        <div className="pp-setup-appearance" data-appearance={setupAppearance} hidden={overlay}>
+          <div className="pp-setup-theme-controls">
+            <span>Facility connection · appearance only</span>
+            <button type="button" onClick={toggleSetupAppearance}
+              aria-label={setupAppearance === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}>
+              {setupAppearance === "dark" ? "Light appearance" : "Dark appearance"}
+            </button>
+          </div>
           <Setup
             key={identity}
             status={status}
