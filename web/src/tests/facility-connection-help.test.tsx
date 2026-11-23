@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { PackProofApi } from '../api/client';
 import { AgentApproval } from '../records/AgentConnections';
 
@@ -18,22 +18,17 @@ function openInstallation(state: string, locationId: string | null | undefined, 
   return request;
 }
 
-it('opens the existing service-access review and leaves revocation for a separate explicit decision', async () => {
+it('opens facility recovery for an older unlocated installation and keeps disconnection an explicit decision', async () => {
   const request = openInstallation('setup', null);
-  const review = await screen.findByRole('button', { name: 'Review service access' });
-  const summary = screen.getByText('Revoke this installation', { selector: 'summary' });
-  expect(summary.closest('details')).not.toHaveAttribute('open');
-  fireEvent.click(review);
-  expect(summary.closest('details')).toHaveAttribute('open');
-  expect(summary).toHaveFocus();
-  expect(screen.getByRole('checkbox', { name: /revoke only this installation/i })).not.toBeChecked();
-  expect(screen.getByRole('button', { name: 'Revoke installation' })).toBeDisabled();
+  await screen.findByRole('heading',{name:'Reconnect this computer to a facility'});
+  expect(screen.getByRole('checkbox', { name: /disconnect the current service access/i })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Disconnect and continue' })).toBeDisabled();
   expect(request.mock.calls.some(([, method]) => method === 'POST')).toBe(false);
 });
 
 it('directs a revoked facility-less installation back to preservation and enrollment on Windows', async () => {
   openInstallation('revoked', null);
-  const steps = await screen.findByRole('region', { name: 'Reconnect this computer to a facility' });
+  const steps = await screen.findByRole('region', { name: 'Facility connection' });
   expect(steps).toHaveTextContent('Preserve work and reconnect');
   expect(steps).toHaveTextContent('Approved location');
   expect(screen.queryByRole('button', { name: 'Review service access' })).not.toBeInTheDocument();

@@ -220,25 +220,78 @@ export async function readAgentDetail(deps:Deps,w:RecordWorkspace,id:string,impo
  if(i.organization_id!==w.organizationId||i.environment!==w.environment)fail('INSTALLATION_NOT_FOUND','Installation not found',404);
  let candidate=importId;
  if(!candidate&&i.approved_config?.sourceContract?.schema==='packproof.scheduled-csv/v2')candidate=(await deps.db.query<{id:string}>('SELECT id FROM partner_import_jobs WHERE agent_installation_id=$1 AND agent_config_revision=$2 AND original_sha256=$3 ORDER BY received_at DESC,id DESC LIMIT 1',[i.id,i.config_revision,i.approved_config.sourceContract.historyPolicy!.initialFileSha256])).rows[0]?.id;
- return {...await agentView(deps,i),...(candidate?{testCandidate:await ownedImport(deps.db,i,candidate)}:{})};
+ const facilityConnection=await initialFacilityConnection(deps.db,w,i);
+ return {...await agentView(deps,i),...(facilityConnection?{facilityConnection}:{}),...(candidate?{testCandidate:await ownedImport(deps.db,i,candidate)}:{})};
+}
+async function initialFacilityConnection(db:Database,w:RecordWorkspace,i:Installation) {
+ // This is a one-time completion of an unconfigured enrollment, never a move of
+ // an existing source, accepted record, or operating collector to another site.
+ if(i.location_id!==null||!['setup','ready'].includes(i.status)||i.config_revision!==0||i.approved_config||i.config_sha256||
+    i.test_import_id||i.verified_import_id||!i.enrollment_acknowledged_at||i.renewal_credential_id||!supportsOrderWorkspace(i.version))return null;
+ const used=(await db.query<{used:boolean}>(`SELECT EXISTS(SELECT 1 FROM partner_import_jobs WHERE principal_id=$1)
+  OR EXISTS(SELECT 1 FROM record_source_subscriptions WHERE installation_id=$2)
+  OR EXISTS(SELECT 1 FROM record_order_sessions WHERE installation_id=$2) AS used`,[i.principal_id,i.id])).rows[0];
+ if(used?.used)return null;
+ const locations=await listRecordLocations(db,w);
+ const operator=(await db.query<{location_scoped:boolean}>(`SELECT m.location_scoped FROM platform_memberships m JOIN users u ON u.id=m.user_id
+  WHERE m.id=$1 AND m.organization_id=$2 AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND u.status='ACTIVE'`,[i.operator_membership_id,w.organizationId])).rows[0];
+ const operatorLocations=operator?.location_scoped?new Set((await db.query<{location_id:string}>(
+  'SELECT location_id FROM record_membership_locations WHERE membership_id=$1 AND organization_id=$2',[i.operator_membership_id,w.organizationId])).rows.map(row=>row.location_id)):null;
+ // A selectable facility must satisfy the same current human and enrolled
+ // operator grants checked by validateBinding when the choice is submitted.
+ const eligibleLocations=operator?locations.filter(location=>!operatorLocations||operatorLocations.has(location.id)):[];
+ return {canAssign:!!operator,canCreate:locations.length===0&&['OWNER','ADMIN'].includes(w.role)&&!w.locationScoped&&operator?.location_scoped===false,
+  locations:eligibleLocations.map(location=>({...location,guidedSetupAvailable:facilityEnabled('guided',w.organizationId,w.environment,location.id)}))};
 }
 export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:string,input:unknown,requestId:string){
  w=await currentAdministrator(tx,w);
- const b=strictBody(input,['organizationId','environment','action','proposalSha256','importId','configRevision','configSha256']),i=await loadInstallation(tx,id,true),now=deps.clock.now().toISOString();
+ const b=strictBody(input,['organizationId','environment','action','proposalSha256','importId','configRevision','configSha256','locationId','facilityName']),i=await loadInstallation(tx,id,true),now=deps.clock.now().toISOString();
  if(i.organization_id!==w.organizationId||i.environment!==w.environment)fail('INSTALLATION_NOT_FOUND','Installation not found',404);
  if(i.status==='revoked')fail('INSTALLATION_REVOKED','Enroll again to restore this connection');
- if(['authorize_test','abandon_preview','activate','resume','approve_source_setup'].includes(String(b.action))&&(b.configRevision!==i.config_revision||b.configSha256!==i.config_sha256))fail('CONFIGURATION_CHANGED','Refresh and review the exact current configuration before approving');
+ if(['authorize_test','abandon_preview','activate','resume','approve_source_setup','connect_facility'].includes(String(b.action))&&(b.configRevision!==i.config_revision||b.configSha256!==i.config_sha256))fail('CONFIGURATION_CHANGED','Refresh and review the exact current configuration before approving');
  if(b.action==='revoke'){
   await tx.query("UPDATE record_agent_installations SET status='revoked',renewal_response=NULL,updated_at=$2 WHERE id=$1",[id,now]);
   await tx.query('UPDATE platform_credentials SET revoked_at=COALESCE(revoked_at,$3) WHERE id IN ($1,$2)',[i.credential_id,i.renewal_credential_id,now]);
+ }else if(b.action==='connect_facility'){
+  const available=await initialFacilityConnection(tx,w,i);
+  if(!available)throw new DomainError('FACILITY_RECONNECT_REQUIRED','This computer already has source history or its setup changed. Preserve pending work and reconnect it through the existing connection review.',409);
+  if(!available.canAssign)fail('OPERATOR_NOT_AUTHORIZED','Choose an active responsible teammate',403);
+  if((b.proposalSha256??null)!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','The saved source review changed. Refresh this connection before choosing its facility.');
+  const creating=b.facilityName!==undefined;
+  if(creating&&(b.locationId!=null||!available.canCreate))fail('FACILITY_CREATE_DENIED','An unrestricted workspace owner or administrator must create the first facility for this unconfigured computer.',403);
+  let locationId:string;
+  if(creating){
+   const name=textField(b.facilityName,'facilityName',120).trim();
+   if(!name||/[\u0000-\u001f\u007f]/.test(name))fail('INVALID_LOCATION','Enter the name of this computer’s facility.',400);
+   // Serialize first-location creation across different computers in the workspace.
+   await tx.query('SELECT pg_advisory_xact_lock(1347438147,hashtext($1))',[`first-facility:${w.organizationId}`]);
+   if((await listRecordLocations(tx,w)).length)fail('FACILITY_LIST_CHANGED','A facility is now available. Refresh and choose the intended facility.');
+   locationId=newId('location');
+   await tx.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$3,$4)',[locationId,w.organizationId,name,now]);
+   await auditOrganization(tx,deps.clock,{userId:w.userId,merchantId:w.organizationId,requestId,operation:'FACILITY_CREATED',resourceId:locationId});
+  }else{
+   locationId=textField(b.locationId,'locationId');
+   if(!available.locations.some(location=>location.id===locationId))fail('LOCATION_NOT_FOUND','Choose one of your authorized facilities.',404);
+  }
+  await validateBinding(tx,w,{integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId,sourceName:i.source_name});
+  // No previously approved configuration or accepted source exists. The selected
+  // original stays on the computer; its old unapproved, unlocated review is not
+  // silently authorized under the new location and must be proposed again.
+  await tx.query('UPDATE record_agent_installations SET location_id=$2,pending_proposal=NULL,pending_proposal_sha256=NULL,approval_user_id=$3,updated_at=$4 WHERE id=$1',[id,locationId,w.userId,now]);
+  await auditOrganization(tx,deps.clock,{userId:w.userId,merchantId:w.organizationId,requestId,operation:'AGENT_FACILITY_ASSIGNED',resourceId:locationId});
  }else if(b.action==='approve_source_setup'){
   if(!typedSetupEnabled(i.version)||i.status!=='setup'||!i.enrollment_acknowledged_at||i.renewal_credential_id)fail('SOURCE_SETUP_UNAVAILABLE','Review a current matching installation before enabling source setup',409);
   await validateBinding(tx,w,{integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name});
   await tx.query("UPDATE record_agent_installations SET status='ready',approval_user_id=$2,updated_at=$3 WHERE id=$1",[id,w.userId,now]);
  }else if(b.action==='configure'){
+  if(supportsOrderWorkspace(i.version)&&i.location_id===null&&i.config_revision===0&&!i.approved_config)
+   fail('FACILITY_REQUIRED','Connect this computer to its intended facility before approving a saved file. The saved file and pending review are unchanged.',409);
   if(!i.pending_proposal||b.proposalSha256!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','Refresh and review the exact proposed configuration');
-  if(i.pending_proposal!.sourceContract?.schema==='packproof.scheduled-csv/v2'&&deps.clock.now().getTime()>Date.parse(i.pending_proposal!.sourceContract!.historyPolicy!.observedAt)+30*60000)fail('APPROVAL_EXPIRED','This source review expired. Reopen the selected local report and request a fresh review.');
-  checkSourceProposal(validateAgentConfig(i.pending_proposal,i),i);
+  // Stored proposals can outlive a client upgrade. Validate their complete shape
+  // before reading nested history metadata so an incomplete review is actionable.
+  const proposed=validateAgentConfig(i.pending_proposal,i);
+  if(proposed.sourceContract?.schema==='packproof.scheduled-csv/v2'&&deps.clock.now().getTime()>Date.parse(proposed.sourceContract.historyPolicy!.observedAt)+30*60000)fail('APPROVAL_EXPIRED','This source review expired. Reopen the selected local report and request a fresh review.');
+  checkSourceProposal(proposed,i);
   await validateBinding(tx,w,i.pending_proposal as unknown as Record<string,unknown>);
   if((await tx.query("SELECT 1 FROM partner_import_jobs WHERE principal_id=$1 AND state IN ('queued','running') LIMIT 1",[i.principal_id])).rows[0])fail('IMPORTS_PENDING','Wait for accepted imports before changing configuration');
   // Configuration approval explicitly supersedes only uncommitted previews.

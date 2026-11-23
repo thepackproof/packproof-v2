@@ -1,12 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {inspectionInput,inspectFacilities,runFacilityInspection} from './logistics-facility-inspect.mjs';
+import {brotliCompressSync,brotliDecompressSync} from 'node:zlib';
+import {createHash,generateKeyPairSync} from 'node:crypto';
+import {inspectionInput,inspectFacilities,runFacilityInspection,facilityEnvelopeHeader,decryptFacilityReceipt} from './logistics-facility-inspect.mjs';
 import {verifierTaskDefinition} from './backend-release-requests.mjs';
 
 const source='a'.repeat(40),inventory='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc';
 const {ledger}=JSON.parse(await readFile(new URL('./logistics-facility-inspect.fixture.json',import.meta.url),'utf8'));
+const recoveryInventory='13f05713808a4c077b9388d5609d99ad1bfa16b9ded82b2e447bc1c076d5896e';
+const recoverySql=await readFile(new URL('../../backend/migrations/130_connect_recovery_collector_version.sql',import.meta.url));
+const recoveryLedger=[...ledger,{id:'130_connect_recovery_collector_version',checksum:createHash('sha256').update(recoverySql).digest('hex')}];
 const subject='11111111-2222-4333-8444-555555555555',user='user_01TESTONLY';
+const subjectSha256=createHash('sha256').update(subject).digest('hex');
+const recipient=generateKeyPairSync('x25519');
+const recipientPublicKeySpki=recipient.publicKey.export({type:'spki',format:'der'}).toString('base64');
+const privateKey=recipient.privateKey.export({type:'pkcs8',format:'pem'});
 const repository='784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api';
 const image=repository+'@sha256:'+'b'.repeat(64),digest=image.split('@')[1];
 const task='arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/'+'c'.repeat(32);
@@ -32,6 +41,7 @@ function connection(options={}) {
     if(sql.includes('FROM pg_roles')) return {rows:[options.who??databaseIdentity()]};
     if(sql.includes('public.schema_migrations')) return {rows:options.ledger??ledger};
     if(sql.includes('public.auth_identities')) return {rows:options.users??[{user_id:user,status:'ACTIVE',service_principal:false}]};
+    if(sql.includes('eligible_location_id')) return {rows:options.locations??[]};
     if(sql.includes('public.record_agent_installations')) return {rows:options.installations??[installation()]};
     assert.match(sql,/^(BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY|SET LOCAL (statement_timeout='5s'|lock_timeout='2s'|idle_in_transaction_session_timeout='10s')|ROLLBACK)$/);
     return {rows:[]};
@@ -49,6 +59,7 @@ test('requires exact trusted subject and reviewed source/image/runtime; no free 
   assert.deepEqual(inspectionInput([source,inventory,subject],environment()),{source,inventory,subject,image});
   assert.equal(inspectionInput([source,inventory,subject],{...environment(),PACKPROOF_DB_CA_FILE:'/app/certs/rds-us-east-1-bundle.pem'}).image,image);
   assert.equal(inspectionInput([source,inventory,'11111111-2222-70e5-d3c9-333333333333'],environment()).image,image);
+  assert.equal(inspectionInput([source,recoveryInventory,subject],environment()).inventory,recoveryInventory);
   for(const args of [[source,inventory,'person@example.invalid'],[source,inventory,subject+'\n'],
     [source,inventory,"x'; SELECT * FROM platform_credentials;--"],[source,inventory,subject,'SELECT 1'],
     [source,'0'.repeat(64),subject],['main',inventory,subject]]) {
@@ -89,6 +100,16 @@ test('only subject identity and current scoped admin metadata are queried; outpu
   assert.equal(receipt.userId,user);assert.equal(receipt.readOnly,true);assert.equal(receipt.rolledBack,true);
   assert.equal(receipt.image,image);assert.equal(receipt.actualTask,task);assert.equal(receipt.installations.length,1);
   assert.equal(receipt.truncated,false);assert.equal(receipt.totalMatchingInstallations,1);
+  const choices=client.calls.find(c=>c.sql.includes('eligible_location_id'));
+  assert.deepEqual(choices.params,[user,row.installation_id,row.organization_id,row.environment]);
+  assert.match(choices.sql,/actor\.user_id=\$1/);
+  assert.match(choices.sql,/operator\.id=i\.operator_membership_id AND operator\.organization_id=o\.id/);
+  assert.match(choices.sql,/operator\.revoked_at IS NULL AND operator\.role IN \('OWNER','ADMIN','OPERATOR'\)/);
+  assert.match(choices.sql,/teammate\.id=operator\.user_id AND teammate\.status='ACTIVE'/);
+  assert.match(choices.sql,/g\.organization_id=o\.id AND g\.location_id=l\.id AND g\.membership_id=actor\.id/);
+  assert.match(choices.sql,/g\.organization_id=o\.id AND g\.location_id=l\.id AND g\.membership_id=operator\.id/);
+  assert.match(choices.sql,/i\.id=\$2 AND i\.organization_id=\$3 AND i\.environment=\$4/);
+  assert.match(choices.sql,/LIMIT 21$/);
   assert.doesNotMatch(JSON.stringify(receipt),/DO_NOT_EMIT|renewal_response|credential_id|approved_config|11111111-2222/);
   assert.ok(client.calls.every(c=>!/^\s*(INSERT|UPDATE|DELETE|ALTER|CREATE|GRANT|COMMIT)\b/i.test(c.sql)));
 });
@@ -135,6 +156,46 @@ test('observes the real pinned ledger; missing, changed, reordered and extra mig
     assert.equal(client.calls.at(-1).sql,'ROLLBACK');
     assert.ok(!client.calls.some(c=>c.sql.includes('public.auth_identities')));
   }
+  const current=connection({ledger:recoveryLedger});
+  assert.equal((await inspectFacilities(current,subject,recoveryInventory)).userId,user);
+  assert.match(current.calls.find(c=>c.sql.includes('public.schema_migrations')).sql,/LIMIT 130$/);
+  for(const rows of [ledger,[...recoveryLedger,{id:'131_unreviewed',checksum:'0'.repeat(64)}]]) {
+    const client=connection({ledger:rows});
+    await assert.rejects(inspectFacilities(client,subject,recoveryInventory),/FACILITY_INSPECT_LEDGER/);
+    assert.ok(!client.calls.some(c=>c.sql.includes('public.auth_identities')));
+  }
+});
+
+test('guided and assistant status uses only the actual exact workspace allowlists and never exposes them',async()=>{
+  const location=(id,name)=>({eligible_location_id:id,location_name:name,total_eligible_locations:'2'});
+  const locations=[location('location_example','Example'),location('location_other','Other')];
+  const flags={PACKPROOF_ORDER_WORKSPACE_ENABLED:'true',
+    PACKPROOF_GUIDED_FACILITIES:'foreign:live:DO_NOT_EMIT, organization_example:sandbox:location_example ',
+    PACKPROOF_SETUP_AI_FACILITIES:'organization_example:sandbox:location_other,organization_example:sandbox:location_example'};
+  const run=env=>inspectFacilities(connection({locations}),subject,inventory,env);
+  const receipt=await run(flags),installation=receipt.installations[0];
+  assert.equal(installation.guidedSetupAvailable,true);assert.equal(installation.assistantSetupAvailable,true);
+  assert.deepEqual(installation.eligibleLocations,[{id:'location_example',name:'Example',guidedSetupAvailable:true,assistantSetupAvailable:true},
+    {id:'location_other',name:'Other',guidedSetupAvailable:false,assistantSetupAvailable:false}]);
+  assert.equal(installation.totalEligibleLocations,2);assert.equal(installation.eligibleLocationsTruncated,false);
+  assert.doesNotMatch(JSON.stringify(receipt),/DO_NOT_EMIT|PACKPROOF_GUIDED|PACKPROOF_SETUP_AI/);
+  for(const changed of [{PACKPROOF_ORDER_WORKSPACE_ENABLED:'false'},{PACKPROOF_ORDER_WORKSPACE_ENABLED:'TRUE'},
+    {PACKPROOF_GUIDED_FACILITIES:'organization_example:live:location_example'},{PACKPROOF_GUIDED_FACILITIES:'other:sandbox:location_example'}])
+    assert.ok((await run({...flags,...changed})).installations[0].eligibleLocations.every(row=>!row.guidedSetupAvailable&&!row.assistantSetupAvailable));
+  const guidedOnly=(await run({...flags,PACKPROOF_SETUP_AI_FACILITIES:''})).installations[0].eligibleLocations[0];
+  assert.equal(guidedOnly.guidedSetupAvailable,true);assert.equal(guidedOnly.assistantSetupAvailable,false);
+});
+
+test('eligible choices are bounded, explicit about truncation and reject inconsistent or duplicate rows',async()=>{
+  const locations=Array.from({length:21},(_,i)=>({eligible_location_id:'location_'+i,location_name:'Location '+i,total_eligible_locations:'40'}));
+  const output=(await inspectFacilities(connection({locations}),subject,inventory)).installations[0];
+  assert.equal(output.eligibleLocations.length,21);assert.equal(output.totalEligibleLocations,40);assert.equal(output.eligibleLocationsTruncated,true);
+  for(const rows of [[locations[0],locations[0]],locations.map((row,i)=>i?row:{...row,total_eligible_locations:'no'}),
+    [...locations,{...locations[0],eligible_location_id:'location_extra'}]]) {
+    const client=connection({locations:rows});
+    await assert.rejects(inspectFacilities(client,subject,inventory),/FACILITY_INSPECT_LOCATIONS_SHAPE/);
+    assert.equal(client.calls.at(-1).sql,'ROLLBACK');
+  }
 });
 
 test('query and rollback failures close the connection and cannot emit success',async()=>{
@@ -145,14 +206,48 @@ test('query and rollback failures close the connection and cannot emit success',
   }
 });
 
-test('reviewed compact module preserves inspection and fits unchanged one-shot command limit',async()=>{
+test('workflow mode looks up only the exact verified subject digest and emits encrypted account metadata',async()=>{
+  const client=connection();
+  const envelope=await runFacilityInspection({args:[source,inventory,subjectSha256,recipientPublicKeySpki],env:environment(),request:requests(),open:async()=>client});
+  const lookup=client.calls.find(c=>c.sql.includes('public.auth_identities'));
+  assert.deepEqual(lookup.params,[subjectSha256]);
+  assert.match(lookup.sql,/encode\(sha256\(convert_to\(ai\.provider_subject,'UTF8'\)\),'hex'\)=\$1/);
+  assert.ok(!JSON.stringify(client.calls).includes(subject));
+  const report=decryptFacilityReceipt(envelope,privateKey,{source,image,inventorySha256:inventory,actualTask:task,subjectSha256});
+  assert.equal(report.userId,user);assert.equal(report.installations[0].device_name,'Example workstation');
+  const encoded=JSON.stringify(envelope),header=facilityEnvelopeHeader(envelope);
+  assert.doesNotMatch(encoded,/user_01TESTONLY|installation_example|organization_example|Example workstation|DO_NOT_EMIT/);
+  assert.doesNotMatch(JSON.stringify(header),/user_|organization_|location_|installation_/);
+  assert.equal(header.subjectSha256,subjectSha256);
+  const missing=connection({users:[]});
+  await assert.rejects(runFacilityInspection({args:[source,inventory,'0'.repeat(64),recipientPublicKeySpki],env:environment(),request:requests(),open:async()=>missing}),/UNIQUE_ACTIVE_HUMAN/);
+  assert.equal(missing.calls.at(-1).sql,'ROLLBACK');
+});
+
+test('encrypted receipt authentication rejects tampering, another recipient and every source/task/subject binding mismatch',async()=>{
+  const envelope=await runFacilityInspection({args:[source,inventory,subjectSha256,recipientPublicKeySpki],env:environment(),request:requests(),open:async()=>connection()});
+  const expected={source,image,inventorySha256:inventory,actualTask:task,subjectSha256};
+  const second=generateKeyPairSync('x25519').privateKey.export({type:'pkcs8',format:'pem'});
+  assert.throws(()=>decryptFacilityReceipt(envelope,second,expected),/RECIPIENT_KEY/);
+  for(const name of Object.keys(expected))assert.throws(()=>decryptFacilityReceipt(envelope,privateKey,{...expected,[name]:'changed'}),/ENVELOPE_BINDING/);
+  for(const name of ['ciphertext','tag']) {
+    const changed=structuredClone(envelope),bytes=Buffer.from(changed[name],'base64');bytes[0]^=1;changed[name]=bytes.toString('base64');
+    assert.throws(()=>decryptFacilityReceipt(changed,privateKey,expected));
+  }
+  const changed=structuredClone(envelope),header=facilityEnvelopeHeader(changed);
+  header.completedAt='2026-11-23T00:00:00Z';changed.protected=Buffer.from(JSON.stringify(header)).toString('base64');
+  assert.throws(()=>decryptFacilityReceipt(changed,privateKey,expected));
+  const swapped=structuredClone(envelope),swappedHeader=facilityEnvelopeHeader(swapped);
+  swappedHeader.actualTask=task.replace(/c{32}$/,'d'.repeat(32));swapped.protected=Buffer.from(JSON.stringify(swappedHeader)).toString('base64');
+  assert.throws(()=>decryptFacilityReceipt(swapped,privateKey,{...expected,actualTask:swappedHeader.actualTask}));
+  assert.throws(()=>decryptFacilityReceipt({...envelope,plaintext:'unreviewed'},privateKey,expected),/ENVELOPE_SHAPE/);
+});
+
+test('the exact compressed module preserves inspection and fits the unchanged one-shot command limit',async()=>{
   const text=await readFile(new URL('./logistics-facility-inspect.mjs',import.meta.url),'utf8');
-  // Fixed source formatting only. SQL AS is optional; names and bindings stay intact.
-  const compact=text.split('\n').map(s=>s.trim()).filter(s=>s&&!s.startsWith('//')).join(' ')
-    .replaceAll(' && ','&&').replaceAll(' || ','||').replaceAll(' = ','=').replaceAll(' => ','=>')
-    .replaceAll(' AS ',' ').replaceAll('; ',';').replaceAll(' {','{').replaceAll('} ','}')
-    .replaceAll(') ',')').replaceAll(' ,',',').replaceAll(' }','}').replaceAll(', ',',').replaceAll(' [','[');
-  const module=await import('data:text/javascript;base64,'+Buffer.from(compact).toString('base64'));
+  const compressed=brotliCompressSync(Buffer.from(text)).toString('base64');
+  assert.equal(brotliDecompressSync(Buffer.from(compressed,'base64')).toString(),text);
+  const module=await import('data:text/javascript;base64,'+brotliDecompressSync(Buffer.from(compressed,'base64')).toString('base64'));
   const checkRun=async(fn)=>{
     const receipt=await fn({args:[source,inventory,subject],env:environment(),request:requests(),open:async()=>connection()});
     delete receipt.completedAt;return receipt;
@@ -163,7 +258,9 @@ test('reviewed compact module preserves inspection and fits unchanged one-shot c
     taskRoleArn:'arn:aws:iam::784514617543:role/runtime',executionRoleArn:'arn:aws:iam::784514617543:role/execute',
     containerDefinitions:[{name:'api',image,environment:Object.entries(env).map(([name,value])=>({name,value})),
       logConfiguration:{logDriver:'awslogs',options:{'awslogs-group':'/test','awslogs-stream-prefix':'test','awslogs-region':'us-east-1'}}}]};
-  const script='process.argv.push('+JSON.stringify(subject)+');\n'+compact+'\nawait facilityInspectionMain();';
+  const script='process.argv.push('+JSON.stringify(subjectSha256)+','+JSON.stringify(recipientPublicKeySpki)+');\n'+
+    "const {brotliDecompressSync}=await import('node:zlib');const inspector=await import('data:text/javascript;base64,'+brotliDecompressSync(Buffer.from("+
+    JSON.stringify(compressed)+",'base64')).toString('base64'));await inspector.facilityInspectionMain();";
   const prepared=verifierTaskDefinition(taskDefinition,{sourceSha:source,image,version:'test-only',script,inventorySha256:inventory,runId:'1'});
   assert.ok(Buffer.byteLength(JSON.stringify(prepared.request.containerDefinitions[0].command))<7800);
 });

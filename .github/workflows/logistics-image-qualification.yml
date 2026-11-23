@@ -1,7 +1,7 @@
 name: Logistics schema 129 image qualification
 on:
   push:
-    branches: [feature/logistics-129-compatibility, release/logistics-129-pilot]
+    branches: [main, feature/logistics-129-compatibility, release/logistics-129-pilot]
   pull_request:
     paths:
       - 'backend/Dockerfile*'
@@ -9,6 +9,9 @@ on:
       - 'backend/scripts/logistics-forward-guard.mjs'
       - 'backend/scripts/verify-logistics-images.mjs'
       - 'infra/backend-release/logistics-*.mjs'
+      - 'backend/scripts/recovery-*.mjs'
+      - 'backend/scripts/verify-recovery-images.mjs'
+      - 'infra/backend-release/recovery-*.mjs'
       - '.github/workflows/logistics-image-qualification.yml'
 permissions:
   contents: read
@@ -26,17 +29,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Qualify source, tags, input pins and the five forward-compatible receipts
-        run: node --test infra/backend-release/logistics-image-builds.test.mjs
-      - name: Check out the immutable schema-124 CI application
+      - name: Qualify source, tags, input pins and exact forward-compatible receipts
+        run: node --test infra/backend-release/logistics-image-builds.test.mjs infra/backend-release/recovery-image-builds.test.mjs
+      - name: Select the separately reviewed source boundary
+        id: profile
+        run: |
+          if test -f backend/migrations/130_connect_recovery_collector_version.sql; then
+            echo 'previous=617a58b883328ad04513a48564d33c573b9b7c78' >> "$GITHUB_OUTPUT"
+            echo 'previous_profile=logistics-v1' >> "$GITHUB_OUTPUT"
+            echo 'profile=recovery-v1' >> "$GITHUB_OUTPUT"
+            echo 'recipe=recovery' >> "$GITHUB_OUTPUT"
+          else
+            echo 'previous=63843c5616dce4ce5824015f975fd0ac6327012d' >> "$GITHUB_OUTPUT"
+            echo 'previous_profile=reconstruction-v11' >> "$GITHUB_OUTPUT"
+            echo 'profile=logistics-v1' >> "$GITHUB_OUTPUT"
+            echo 'recipe=logistics' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out the immutable previous CI application
         if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
         uses: actions/checkout@v4
         with:
-          ref: 63843c5616dce4ce5824015f975fd0ac6327012d
+          ref: ${{ steps.profile.outputs.previous }}
           path: logistics-previous
           persist-credentials: false
       - name: Build the previous, fallback and candidate images from exact source archives
         if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
+        env:
+          PREVIOUS_SOURCE: ${{ steps.profile.outputs.previous }}
+          PREVIOUS_PROFILE: ${{ steps.profile.outputs.previous_profile }}
+          CANDIDATE_PROFILE: ${{ steps.profile.outputs.profile }}
+          RECIPE: ${{ steps.profile.outputs.recipe }}
         run: |
           set -euo pipefail
           make_context() {
@@ -48,14 +70,14 @@ jobs:
             mkdir "$target"
             unzip -q "$target.zip" -d "$target"
           }
-          make_context logistics-previous 63843c5616dce4ce5824015f975fd0ac6327012d reconstruction-v11 "$RUNNER_TEMP/logistics-base"
-          make_context . "$(git rev-parse HEAD)" logistics-v1 "$RUNNER_TEMP/logistics-source"
+          make_context logistics-previous "$PREVIOUS_SOURCE" "$PREVIOUS_PROFILE" "$RUNNER_TEMP/logistics-base"
+          make_context . "$(git rev-parse HEAD)" "$CANDIDATE_PROFILE" "$RUNNER_TEMP/logistics-source"
           # The previous application keeps its exact Git sources. The same build recipe supplies its vendored dependencies.
           docker build -f backend/Dockerfile -t logistics-test-previous "$RUNNER_TEMP/logistics-base"
           docker build -f backend/Dockerfile -t logistics-test-runtime "$RUNNER_TEMP/logistics-source"
-          docker build --build-arg CANDIDATE_BASE=logistics-test-runtime -f backend/Dockerfile.logistics-candidate -t logistics-test-candidate "$RUNNER_TEMP/logistics-source"
-          docker build --build-arg PREDECESSOR_IMAGE=logistics-test-previous -f backend/Dockerfile.logistics-fallback -t logistics-test-fallback "$RUNNER_TEMP/logistics-source"
-          node backend/scripts/verify-logistics-images.mjs logistics-test-previous logistics-test-candidate logistics-test-fallback
+          docker build --build-arg CANDIDATE_BASE=logistics-test-runtime -f "backend/Dockerfile.$RECIPE-candidate" -t logistics-test-candidate "$RUNNER_TEMP/logistics-source"
+          docker build --build-arg PREDECESSOR_IMAGE=logistics-test-previous -f "backend/Dockerfile.$RECIPE-fallback" -t logistics-test-fallback "$RUNNER_TEMP/logistics-source"
+          node "backend/scripts/verify-$RECIPE-images.mjs" logistics-test-previous logistics-test-candidate logistics-test-fallback
       - name: Open the same migrated PostgreSQL database with both qualified readers
         if: github.ref != 'refs/heads/feature/logistics-129-compatibility'
         run: |
