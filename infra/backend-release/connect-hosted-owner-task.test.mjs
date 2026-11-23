@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ownerRegistration,ownerRunRequest,ownerExecutionRoleTemplate,ownerSecurityGroupTemplate} from './connect-hosted-owner-task.mjs';
+import {ownerRegistration,ownerRunRequest,ownerExecutionRoleTemplate,ownerSecurityGroupTemplate,ownerReadFailureCode} from './connect-hosted-owner-task.mjs';
 import {collectorInventory,hostedCollectorTarget as target,reconstructionDigest} from './reconstruction-v11-release-review.mjs';
 import {backfillMigrationInventorySha256} from './reconstruction-v8-release-review.mjs';
 
@@ -11,6 +11,31 @@ const role='arn:aws:iam::'+account+':role/packproof-connect-hosted-owner-executi
 const tdArn=family=>'arn:aws:ecs:'+region+':'+account+':task-definition/'+family+':17';
 const taskArn=c=>cluster.replace(':cluster/',':task/')+'/'+c.repeat(32);
 const asRegistered=def=>({...structuredClone(def),taskDefinitionArn:tdArn(def.family),status:'ACTIVE',revision:17,volumes:[],placementConstraints:[]});
+test('owner read diagnostics retain only known AWS exception codes from the CLI envelope',()=>{
+  assert.equal(ownerReadFailureCode({stderr:'An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: private resource details'}),'ACCESSDENIED');
+  assert.equal(ownerReadFailureCode({stderr:Buffer.from('An error occurred (InvalidInput) when calling the SimulatePrincipalPolicy operation: private request details')}),'INVALIDINPUT');
+});
+test('owner read diagnostics redact unknown errors, values disguised as codes and arbitrary exception messages',()=>{
+  const privateValue='syntheticSecretValueNeverPrint';
+  for(const error of [
+    {message:privateValue,stderr:'unknown raw error '+privateValue+' arn:aws:secretsmanager:example:secret:private'},
+    {stderr:'An error occurred ('+privateValue+') when calling the SimulatePrincipalPolicy operation: AccessDenied'},
+    {stderr:'An error occurred (AccessDenied_'+privateValue+') when calling the SimulatePrincipalPolicy operation: details'},
+    {stderr:'('+privateValue+') when calling'},
+    {message:'An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: '+privateValue},
+    {stderr:{message:privateValue}},null,undefined,
+  ])assert.equal(ownerReadFailureCode(error),'FAILED');
+});
+test('owner read diagnostics report a closed timeout code without forwarding process details',()=>{
+  assert.equal(ownerReadFailureCode({code:'ETIMEDOUT',message:'private process arguments',stderr:'private captured output'}),'TIMEOUT');
+  assert.equal(ownerReadFailureCode({code:'ETIMEDOUT',stderr:'An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: stale output'}),'TIMEOUT');
+  assert.equal(ownerReadFailureCode({code:'ENOENT',message:'private executable path'}),'FAILED');
+  assert.equal(ownerReadFailureCode({signal:'SIGTERM',message:'private process state'}),'FAILED');
+});
+test('owner read diagnostics bound the parsed input and exception-code length',()=>{
+  assert.equal(ownerReadFailureCode({stderr:'x'.repeat(8192)+'\nAn error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: details'}),'FAILED');
+  assert.equal(ownerReadFailureCode({stderr:'An error occurred ('+'A'.repeat(65)+') when calling the SimulatePrincipalPolicy operation: details'}),'FAILED');
+});
 function service(kind) {
   const isApi=kind==='api', name=isApi?'packproof-v2-staging-api':'packproof-records-worker',arn=cluster.replace(':cluster/',':service/')+'/'+name;
   const taskDefinitionArn=tdArn(name);
