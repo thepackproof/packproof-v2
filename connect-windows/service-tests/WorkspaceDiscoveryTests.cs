@@ -113,7 +113,7 @@ public sealed class WorkspaceDiscoveryTests
         Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick+"\n"),".jsonl")?.Label);
         Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick),".jsonl")?.Label);
         Assert.Null(WorkspaceDiscovery.StructuredLayout("picking",Bytes(
-            """{"kind":"picking","eventId":"pick-1","version":1,"occurredAt":"2026-11-17T12:01:00Z",\n"entityNamespace":"WMS","entityId":"WO01"}"""),".jsonl"));
+            pick.Replace(",\"entityNamespace\"", ",\n\"entityNamespace\"")),".jsonl"));
     }
 
     [WindowsFact]
