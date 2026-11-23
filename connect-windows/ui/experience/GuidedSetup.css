@@ -83,3 +83,123 @@
 @keyframes pp-discovery-beacon {0%,100% {opacity:.5;transform:scale(.8)} 50% {opacity:1;transform:scale(1.2)}}
 @media (max-width:690px){.pp-discovery-activity{grid-template-columns:1fr}.pp-discovery-radar{min-height:180px}.pp-discovery-radar .pp-discovery-orbit-one{width:175px}}
 @media (prefers-reduced-motion:reduce){.pp-discovery-activity *{animation:none!important}}
+
+
+/* PackProof setup appearance: shared with the authenticated Evidence OS shell.
+ * Figma nNnkgTZOBNkG8muy8AkIv1 nodes 3:15, 3:97, 3:168.
+ * This is a visual-only preference. Approval, source grants and replay remain
+ * controlled by the existing native LocalService/hosted backend.
+ */
+.pp-setup-appearance {
+  --setup-bg: #f6f8fc;
+  --setup-panel: #ffffff;
+  --setup-elevated: #edf4fc;
+  --setup-text: #13243b;
+  --setup-muted: #506479;
+  --setup-border: #dce5ef;
+  --setup-action: #3265f5;
+  background: var(--setup-bg);
+  color: var(--setup-text);
+  color-scheme: light;
+  min-height: calc(100vh - 76px);
+}
+.pp-setup-appearance[data-appearance="dark"] {
+  --setup-bg: #071321;
+  --setup-panel: #12253d;
+  --setup-elevated: #1c3552;
+  --setup-text: #e9f4ff;
+  --setup-muted: #adbed3;
+  --setup-border: #29415b;
+  --setup-action: #547fff;
+  color-scheme: dark;
+}
+.pp-setup-theme-controls {
+  min-height: 44px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 7px clamp(24px,4vw,64px);
+  border-bottom: 1px solid var(--setup-border);
+  color: var(--setup-muted);
+  background: var(--setup-bg);
+  font-size: 12px;
+}
+.pp-setup-theme-controls button {
+  color: var(--setup-text);
+  background: var(--setup-panel);
+  border: 1px solid var(--setup-border);
+  border-radius: 9px;
+  padding: 6px 13px;
+  min-height: 30px;
+  cursor: pointer;
+}
+.pp-setup-theme-controls button:focus-visible {outline:3px solid #6594ff;outline-offset:2px}
+.pp-setup-appearance .setup-experience,
+.pp-setup-appearance .guided-experience,
+.pp-setup-appearance .pp-system-state {
+  background: var(--setup-bg);
+  color: var(--setup-text);
+}
+.pp-setup-appearance .guided-progress {
+  background: var(--setup-panel);
+  color: var(--setup-text);
+  border-color: var(--setup-border);
+}
+.pp-setup-appearance .guided-progress li { color: var(--setup-muted); }
+.pp-setup-appearance .guided-progress li span {
+  background: var(--setup-elevated);
+  color: var(--setup-text);
+  border-color: var(--setup-border);
+}
+.pp-setup-appearance .guided-progress li[aria-current] {color:var(--setup-text)}
+.pp-setup-appearance .guided-progress li[aria-current] span {background:var(--setup-action);color:#fff;border-color:var(--setup-action)}
+.pp-setup-appearance :is(.setup-experience,.pp-system-state) :is(h1,h2,h3),
+.pp-setup-appearance .setup-row-text strong,
+.pp-setup-appearance .guided-form label { color: var(--setup-text); }
+.pp-setup-appearance .setup-experience :is(p,.setup-lead,.setup-intro,.setup-subtle),
+.pp-setup-appearance .setup-row-text small,
+.pp-setup-appearance .guided-form small,
+.pp-setup-appearance .guided-compare dt { color: var(--setup-muted); }
+.pp-setup-appearance :is(.setup-card,.setup-sample-table,.setup-select select,.setup-dialog,.setup-clarify),
+.pp-setup-appearance .guided-form :is(input:not([type=checkbox]),select) {
+  background: var(--setup-panel);
+  border-color: var(--setup-border);
+  color: var(--setup-text);
+}
+.pp-setup-appearance button.setup-secondary,
+.pp-setup-appearance .setup-dialog .setup-click,
+.pp-setup-appearance .setup-partner input {
+  background: var(--setup-elevated);
+  color: var(--setup-text);
+  border-color: var(--setup-border);
+}
+.pp-setup-appearance button.setup-link, .pp-setup-appearance .setup-row .setup-chevron {color:#91b2ff}
+.pp-setup-appearance[data-appearance="light"] button.setup-link {color:#264eb3}
+.pp-setup-appearance .setup-progress > span { color: var(--setup-muted); }
+.pp-setup-appearance .setup-progress i { background: var(--setup-border); }
+.pp-setup-appearance .setup-progress i.filled { background: var(--setup-action); }
+.pp-setup-appearance .setup-select, .pp-setup-appearance .setup-partner { color: var(--setup-muted); }
+.pp-setup-appearance[data-appearance="dark"] .setup-context-footer {background:#203d54;color:#d2e4ed!important}
+.pp-setup-appearance[data-appearance="dark"] .setup-experience .setup-context {
+  background: #142e44;
+  border-color: #29415b;
+  color: #e9f4ff;
+}
+.pp-setup-appearance[data-appearance="dark"] .setup-context :is(h2,h3,.setup-row-text strong) {color:#e9f4ff}
+.pp-setup-appearance[data-appearance="dark"] .setup-context :is(p,small,.setup-intro,.setup-row-text small) {color:#bdd1e1}
+.pp-setup-appearance[data-appearance="dark"] .setup-experience .setup-error {
+  color:#ffe0b4;
+  background:#483427;
+  border-color:#8c663b;
+}
+.pp-setup-appearance[data-appearance="dark"] .setup-experience .setup-context .setup-tile {background:#203d54}
+.pp-setup-appearance[data-appearance="dark"] .guided-steps li {border-color:var(--setup-border)}
+.pp-setup-appearance[data-appearance="dark"] .guided-arrow {background:var(--setup-elevated);color:#91b2ff;border-color:var(--setup-border)}
+.pp-setup-appearance[data-appearance="dark"] :is(.setup-sample-table, .setup-card) {background:var(--setup-panel);color:var(--setup-text)}
+.pp-setup-appearance[data-appearance="dark"] .setup-sample-table th {color:var(--setup-muted)}
+.pp-setup-appearance[data-appearance="dark"] :is(input,select,textarea):focus-visible {outline:3px solid #6594ff;outline-offset:2px}
+@media (prefers-reduced-motion:reduce) {
+  .pp-setup-appearance *, .pp-setup-appearance *::before, .pp-setup-appearance *::after {animation:none!important;transition:none!important}
+}
