@@ -60,3 +60,26 @@
   .guided-pair { grid-template-columns: 1fr }
   .guided-progress li:not([aria-current]) { display: none }
 }
+
+
+/* Evidence OS discovery: genuine in-progress source scan, not a fake completion timer. */
+.pp-discovery-activity {position:relative;display:grid;grid-template-columns:minmax(0,.85fr) minmax(200px,1fr);min-height:306px;gap:10px;margin:16px 0 20px;padding:27px;background:#10263e;color:#e9f4ff;border:1px solid #25415b;border-radius:19px;overflow:hidden}
+.pp-discovery-information {position:relative;z-index:1}
+.pp-discovery-information > span {color:#36e8c5;font-size:10px;font-weight:750;letter-spacing:.13em}
+.pp-discovery-information h3 {color:#e9f4ff;font-size:clamp(20px,2.2vw,28px);font-weight:700;margin:18px 0 10px}
+.pp-discovery-activity .pp-discovery-information p {color:#acc4d7;font-size:13px;line-height:1.5;max-width:250px}
+.pp-discovery-radar {display:grid;place-items:center;position:relative;width:100%;min-height:212px}
+.pp-discovery-radar > img {position:relative;z-index:2;width:44px;height:44px}
+.pp-discovery-orbit {position:absolute;border-radius:50%;aspect-ratio:1;left:50%;top:50%;transform:translate(-50%,-50%);background:#1a3d60;animation:pp-discovery-breathe 4.2s ease-in-out infinite}
+.pp-discovery-orbit-one {width:min(210px,90%);background:#1b4564}
+.pp-discovery-orbit-two {width:min(155px,68%);background:#215878;animation-delay:.4s}
+.pp-discovery-orbit-three {width:min(105px,46%);background:#286884;animation-delay:.8s}
+.pp-discovery-beacon {position:absolute;z-index:3;display:block;width:13px;height:13px;border-radius:50%;background:#36e8c5;box-shadow:0 0 16px #36e8c57a;animation:pp-discovery-beacon 3.5s ease-in-out infinite}
+.pp-discovery-beacon-one {top:11%;left:48%}
+.pp-discovery-beacon-two {top:49%;left:8%;background:#b596ff;animation-delay:.7s}
+.pp-discovery-beacon-three {top:49%;right:6%;background:#547fff;animation-delay:1.2s}
+.pp-discovery-activity .pp-discovery-boundary {grid-column:1/-1;border-top:1px solid #294963;padding-top:16px;color:#9bb5ca;font-size:11px;line-height:1.45;margin:0}
+@keyframes pp-discovery-breathe {0%,100% {opacity:.64;transform:translate(-50%,-50%) scale(.92)} 50% {opacity:1;transform:translate(-50%,-50%) scale(1.1)}}
+@keyframes pp-discovery-beacon {0%,100% {opacity:.5;transform:scale(.8)} 50% {opacity:1;transform:scale(1.2)}}
+@media (max-width:690px){.pp-discovery-activity{grid-template-columns:1fr}.pp-discovery-radar{min-height:180px}.pp-discovery-radar .pp-discovery-orbit-one{width:175px}}
+@media (prefers-reduced-motion:reduce){.pp-discovery-activity *{animation:none!important}}

@@ -52,7 +52,9 @@
         "operationalDashboard": "connect-windows/ui/experience/OperationalSignal.tsx",
         "operationalProjection": "connect-windows/ui/experience/operations-overview.ts",
         "navigationShell": "connect-windows/ui/experience/Shell.tsx",
-        "themeStyles": "connect-windows/ui/experience/EvidenceOS.css"
+        "themeStyles": "connect-windows/ui/experience/EvidenceOS.css",
+        "evolvingProofTimeline": "connect-windows/ui/experience/ProofJourney.tsx",
+        "liveDiscoveryAnimation": "connect-windows/ui/experience/FolderSuggestions.tsx"
       },
       "unfinished": [
         "Native Windows visual qualification",

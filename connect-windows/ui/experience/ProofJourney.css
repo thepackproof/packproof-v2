@@ -1,0 +1,40 @@
+/* PackProof Evidence OS — real-data evolving Proof, Figma 4:122. */
+.pp-evidence-os .pf-eos-journey {grid-column:1/-1;min-width:0;display:grid;gap:17px;color:var(--eos-text)}
+.pp-evidence-os .pf-eos-journey-grid {display:grid;grid-template-columns:minmax(0,1.36fr) minmax(275px,.9fr);gap:18px}
+.pp-evidence-os .pf-eos-chronology,.pp-evidence-os .pf-eos-sources {background:var(--eos-surface);border:1px solid var(--eos-border);border-radius:20px;min-width:0;padding:25px}
+.pp-evidence-os .pf-eos-block-heading {display:flex;justify-content:space-between;align-items:flex-start;gap:13px;margin-bottom:20px}
+.pp-evidence-os .pf-eos-block-heading h2 {font-size:20px;line-height:1.3;letter-spacing:-.02em}
+.pp-evidence-os .pf-eos-block-heading p {font-size:12px;margin-top:7px;color:var(--eos-muted)}
+.pp-evidence-os .pf-eos-eyebrow {font-size:10px;letter-spacing:.12em;color:var(--eos-green);font-weight:750;display:block;margin-bottom:9px}
+.pp-evidence-os .pf-eos-timeline {list-style:none;padding:0 0 0 10px;margin:0 0 15px;display:grid;gap:8px}
+.pp-evidence-os .pf-eos-timeline li {display:grid;grid-template-columns:15px minmax(85px,.42fr) minmax(0,1fr);gap:13px;position:relative;align-items:center;min-height:55px;animation:pf-eos-appear .48s ease-out both}
+.pp-evidence-os .pf-eos-timeline li::before {content:"";position:absolute;top:33px;bottom:-24px;left:7px;width:1px;background:var(--eos-border)}
+.pp-evidence-os .pf-eos-timeline li:last-child::before {display:none}
+.pp-evidence-os .pf-eos-timeline-dot {width:14px;height:14px;border-radius:50%;background:var(--eos-green);position:relative;z-index:1;box-shadow:0 0 0 3px #36e8c522}
+.pp-evidence-os .pf-eos-timeline li:first-child .pf-eos-timeline-dot {background:var(--eos-blue)}
+.pp-evidence-os .pf-eos-when {font-size:11px;color:var(--eos-muted);line-height:1.3;overflow-wrap:anywhere}
+.pp-evidence-os .pf-eos-event {min-width:0;display:grid;gap:5px}
+.pp-evidence-os .pf-eos-event strong {font-size:13px;line-height:1.3;color:var(--eos-text);font-weight:650}
+.pp-evidence-os .pf-eos-event small {font-size:11px;line-height:1.35;overflow-wrap:anywhere;color:var(--eos-muted)}
+.pp-evidence-os .pf-eos-source-rows {display:grid;gap:9px}
+.pp-evidence-os .pf-eos-source-entry {display:grid;grid-template-columns:11px minmax(0,1fr) 13px;align-items:center;gap:14px;background:var(--eos-surface-raised);border:1px solid var(--eos-border);border-radius:12px;color:var(--eos-text);min-height:59px;text-align:left;padding:12px;cursor:pointer;animation:pf-eos-appear .5s ease-out both}
+.pp-evidence-os .pf-eos-source-entry:hover {border-color:var(--eos-blue);background:var(--eos-hover)}
+.pp-evidence-os .pf-eos-source-light {width:10px;height:10px;border-radius:50%;background:var(--eos-green)}
+.pp-evidence-os .pf-eos-source-entry:nth-child(3n+1) .pf-eos-source-light {background:var(--eos-blue)}
+.pp-evidence-os .pf-eos-source-entry strong {display:block;font-size:13px;font-weight:650;overflow-wrap:anywhere}
+.pp-evidence-os .pf-eos-source-entry small {display:block;color:var(--eos-muted);font-size:11px;line-height:1.4;margin-top:5px;overflow-wrap:anywhere}
+.pp-evidence-os .pf-eos-chevron {color:var(--eos-blue);font-size:22px}
+.pp-evidence-os .pf-eos-trust {display:flex;align-items:center;gap:15px;background:var(--eos-surface-raised);border:1px solid var(--eos-border);border-radius:17px;padding:18px 22px}
+.pp-evidence-os .pf-eos-trust > div {flex:1;min-width:0}
+.pp-evidence-os .pf-eos-trust strong {color:var(--eos-text);font-weight:700;font-size:15px}
+.pp-evidence-os .pf-eos-trust p {font-size:12px;line-height:1.45;margin-top:5px;color:var(--eos-muted)}
+.pp-evidence-os .pf-eos-link {color:var(--eos-blue);background:transparent;border:0;padding:8px 0;cursor:pointer;font:650 12px/1.3 Inter,"Segoe UI",sans-serif;text-align:left}
+.pp-evidence-os .pf-eos-link:hover {text-decoration:underline}
+.pp-evidence-os .pf-eos-link:focus-visible,.pp-evidence-os .pf-eos-source-entry:focus-visible {outline:3px solid #75a4ff;outline-offset:3px}
+.pp-evidence-os .pf-eos-empty,.pp-evidence-os .pf-eos-extra {font-size:13px;color:var(--eos-muted);line-height:1.5}
+.pp-evidence-os .pf-eos-extra {padding:7px}
+@keyframes pf-eos-appear {from {opacity:0;transform:translateY(12px)}to {opacity:1;transform:translateY(0)}}
+@media (max-width:1050px){.pp-evidence-os .pf-eos-journey-grid{grid-template-columns:1fr}}
+@media (max-width:650px){.pp-evidence-os .pf-eos-timeline li{grid-template-columns:14px minmax(0,1fr);gap:6px 12px}.pp-evidence-os .pf-eos-when{grid-column:2}.pp-evidence-os .pf-eos-event{grid-column:2}.pp-evidence-os .pf-eos-trust{align-items:flex-start;flex-direction:column}}
+@media (prefers-reduced-motion:reduce){.pp-evidence-os .pf-eos-journey *{animation:none!important;transition:none!important}}
+.pp-evidence-os[data-motion="reduced"] .pf-eos-journey *{animation:none!important;transition:none!important}

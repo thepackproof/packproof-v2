@@ -263,3 +263,9 @@
   .pp-evidence-os .pp-sidebar nav button[aria-current="page"] { outline: 2px solid Highlight; }
   .pp-evidence-os .pp-eos-health-dot { border: 2px solid CanvasText; }
 }
+
+
+/* Extended Logistics sections must remain usable at Windows display scaling. */
+.pp-evidence-os > .pp-sidebar {position:sticky;top:0;max-height:calc(100vh - 76px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--eos-border) transparent}
+.pp-evidence-os[data-motion="reduced"] *, .pp-evidence-os[data-motion="reduced"] *::before, .pp-evidence-os[data-motion="reduced"] *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media (max-width:760px){.pp-evidence-os > .pp-sidebar{position:relative;max-height:none;overflow-y:visible}}

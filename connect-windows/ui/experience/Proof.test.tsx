@@ -8,6 +8,7 @@ import { originalFocusRange } from "./ProofOriginal";
 import type { OrderDetail } from "../workspace-types";
 
 afterEach(cleanup);
+it("keeps the one-order evidence journey data-bound and navigable",()=>{render(<Proof detail={detail} onBack={vi.fn()} />);expect(screen.getByRole("heading",{name:"What happened to this order"})).toBeVisible();expect(screen.getByText(/source records have an original SHA-256 digest recorded/)).toBeVisible();fireEvent.click(screen.getByRole("button",{name:/View complete journey/}));expect(screen.getByRole("tab",{name:"Journey"})).toHaveAttribute("aria-selected","true");});
 const ship = (id: string) => ({ type: "shipment", id, namespace: "wms" });
 const event = (id: string, ref: string, qty: string, unit: string) => ({
   eventKey: id,

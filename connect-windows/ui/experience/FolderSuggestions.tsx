@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SourceRole, WorkspaceBridge, WorkspaceFolderSuggestion } from "../workspace-types";
 import { Row, shortFolder } from "./SetupParts";
+import { Icon } from "./Icon";
 
 const folderHint: Record<WorkspaceFolderSuggestion["kind"], string> = {
   discovered: "Matched export",
@@ -52,7 +53,25 @@ export function FolderSuggestions({ role, bridge, busy, onChoose }: Props) {
       </div>
     );
   }
-  if (!folders) return <p role="status">Looking in common export folders…</p>;
+  if (!folders) return (
+    <div className="pp-discovery-activity" role="status" data-design-file="nNnkgTZOBNkG8muy8AkIv1" data-design-node="3:97">
+      <div className="pp-discovery-information">
+        <span>READ-ONLY DISCOVERY</span>
+        <h3>Finding your systems.</h3>
+        <p>Looking in common export folders…</p>
+      </div>
+      <div className="pp-discovery-radar" aria-hidden="true">
+        <span className="pp-discovery-orbit pp-discovery-orbit-one" />
+        <span className="pp-discovery-orbit pp-discovery-orbit-two" />
+        <span className="pp-discovery-orbit pp-discovery-orbit-three" />
+        <Icon name="scan" size={44} />
+        <span className="pp-discovery-beacon pp-discovery-beacon-one" />
+        <span className="pp-discovery-beacon pp-discovery-beacon-two" />
+        <span className="pp-discovery-beacon pp-discovery-beacon-three" />
+      </div>
+      <p className="pp-discovery-boundary">Only accessible known locations are checked. A suggested source must still be reviewed and approved before collection.</p>
+    </div>
+  );
 
   const matches = folders.filter((item) => item.kind === "discovered");
   const existing = folders.filter((item) => item.kind !== "discovered");

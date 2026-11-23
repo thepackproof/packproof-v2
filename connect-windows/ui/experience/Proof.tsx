@@ -26,6 +26,7 @@ import {
   type Source,
 } from "./ProofModel";
 import "./Proof.css";
+import { ProofJourney } from "./ProofJourney";
 
 const sections = [
   ["Overview", "layers"],
@@ -367,6 +368,16 @@ function ProofRevision({
           </section>
         ) : section === "Overview" ? (
           <div className="pf-overview">
+            {mode === "live" && (
+              <ProofJourney
+                orderReference={detail.orderReference}
+                revision={detail.revision}
+                events={events}
+                records={records}
+                onJourney={() => chooseTab("Journey")}
+                onEvidence={() => chooseTab("Evidence")}
+              />
+            )}
             <section className="pf-card pf-summary">
               <div className="pf-titleicon">
                 <Icon name={issueCount ? "attention" : "records"} size={36} />
