@@ -208,3 +208,27 @@ test('only the exact project and canonical hexadecimal build UUID may enter publ
     assert.ok(!fake.calls.some(([action])=>action==='start'));
   }
 });
+
+test('historical Git builds of this commit are same-source conflicts even without recovery environment pins',async()=>{
+  for(const versions of [{sourceVersion:pins.source},{sourceVersion:'main',resolvedSourceVersion:pins.source}]) {
+    const historical=build(2,{...versions,buildStatus:'SUCCEEDED',buildComplete:true,
+      source:{type:'GITHUB',location:'https://github.com/thepackproof/packproof-v2',buildspec:'buildspec.yml'},
+      environment:{environmentVariables:[]}});
+    assert.throws(()=>selectRecoveryBuild(prepared,[historical]),/SAME_SOURCE_CONFLICT/);
+    const fake=io([{ids:[historical.id]}],[historical]);
+    await assert.rejects(startOrResumeRecoveryBuild(prepared,fake),/SAME_SOURCE_CONFLICT/);
+    assert.deepEqual(fake.discoveries[0].matchingBuilds,[{id:historical.id,status:'SUCCEEDED'}]);
+    assert.ok(!fake.calls.some(([action])=>action==='start'));
+  }
+});
+
+test('an unresolved moving Git reference cannot establish unrelated history; a resolved different commit can',async()=>{
+  const moving=build(2,{sourceVersion:'main',
+    source:{type:'GITHUB',location:'https://github.com/thepackproof/packproof-v2'},
+    environment:{environmentVariables:[]}});
+  const fake=io([{ids:[moving.id]}],[moving]);
+  await assert.rejects(startOrResumeRecoveryBuild(prepared,fake),/DISCOVERY_UNCLASSIFIABLE/);
+  assert.equal(fake.discoveries[0].complete,false);
+  assert.ok(!fake.calls.some(([action])=>action==='start'));
+  assert.equal(selectRecoveryBuild(prepared,[{...moving,resolvedSourceVersion:'d'.repeat(40)}]),null);
+});

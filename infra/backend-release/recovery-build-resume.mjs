@@ -10,12 +10,14 @@ const validId=id=>typeof id==='string'&&id.startsWith(TARGET.serviceName+':')&&
   /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id.slice(TARGET.serviceName.length+1));
 const variables=build=>Array.isArray(build?.environment?.environmentVariables)?build.environment.environmentVariables:[];
 const sourceTypes=new Set(['BITBUCKET','CODECOMMIT','CODEPIPELINE','GITHUB','GITHUB_ENTERPRISE','GITLAB','GITLAB_SELF_MANAGED','NO_SOURCE','S3']);
+const gitSourceTypes=new Set(['BITBUCKET','CODECOMMIT','GITHUB','GITHUB_ENTERPRISE','GITLAB','GITLAB_SELF_MANAGED']);
 function classifiable(build) {
   const source=build?.source,values=build?.environment?.environmentVariables;
   return sourceTypes.has(source?.type)&&
     (['NO_SOURCE','CODEPIPELINE'].includes(source.type)?
       source.location===undefined||typeof source.location==='string':
       typeof source.location==='string'&&source.location.length>0)&&
+    (!gitSourceTypes.has(source.type)||/^[a-f0-9]{40}$/.test(build.sourceVersion??'')||/^[a-f0-9]{40}$/.test(build.resolvedSourceVersion??''))&&
     Array.isArray(values)&&values.every(v=>typeof v?.name==='string'&&v.name.length>0&&
       typeof v.value==='string'&&['PLAINTEXT','PARAMETER_STORE','SECRETS_MANAGER'].includes(v.type));
 }
@@ -32,7 +34,8 @@ function validatePrepared(prepared) {
 }
 function claimsSource(build,prepared) {
   const p=prepared.receipt;
-  return (typeof build?.source?.location==='string'&&build.source.location.includes('/security-release/'+p.source+'/'))||
+  return build?.sourceVersion===p.source||build?.resolvedSourceVersion===p.source||
+    (typeof build?.source?.location==='string'&&build.source.location.includes('/security-release/'+p.source+'/'))||
     variables(build).some(v=>v?.name==='REVIEWED_SOURCE_SHA'&&v.value===p.source||
       v?.name==='CANDIDATE_TAG'&&v.value===p.candidateTag||v?.name==='FALLBACK_TAG'&&v.value===p.fallbackTag);
 }
