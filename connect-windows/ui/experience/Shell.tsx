@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Brand, Icon } from "./Icon";
 import type { ConnectStatus } from "../types";
 import "./EvidenceOS.css";
@@ -8,17 +8,43 @@ export type Section = "home" | "orders" | "attention" | "connections" | "matchin
 const sections = [
   ["home", "Overview", "home"],
   ["orders", "Orders & proofs", "records"],
-  ["attention", "Exceptions", "attention"],
   ["connections", "Connected systems", "connection"],
+  ["matching", "Match intelligence", "records"],
+  ["attention", "Exceptions", "attention"],
+  ["integrity", "Evidence integrity", "records"],
+  ["exports", "Exports & destinations", "folder"],
+  ["settings", "Settings", "settings"],
 ] as const;
 
-type Appearance = "dark" | "light";
+export type Appearance = "dark" | "light";
+export type MotionPreference = "normal" | "reduced";
+type ExperiencePreferences = {
+  appearance: Appearance;
+  motion: MotionPreference;
+  selectAppearance: (value: Appearance) => void;
+  selectMotion: (value: MotionPreference) => void;
+};
+const PreferencesContext = createContext<ExperiencePreferences | null>(null);
+export function useEvidencePreferences() {
+  const preferences = useContext(PreferencesContext);
+  if (!preferences) throw new Error("Evidence OS settings require the connected Logistics shell.");
+  return preferences;
+}
 const themePreference = "packproof.connect.appearance.v1";
+const motionPreference = "packproof.connect.motion.v1";
 function initialAppearance(): Appearance {
   try {
     return window.localStorage.getItem(themePreference) === "light" ? "light" : "dark";
   } catch {
     return "dark";
+  }
+}
+
+function initialMotion(): MotionPreference {
+  try {
+    return window.localStorage.getItem(motionPreference) === "reduced" ? "reduced" : "normal";
+  } catch {
+    return "normal";
   }
 }
 
@@ -63,6 +89,17 @@ export function Shell({
   children: ReactNode;
 }) {
   const [appearance, setAppearance] = useState<Appearance>(initialAppearance);
+  const [motion, setMotion] = useState<MotionPreference>(initialMotion);
+  const selectAppearance = (next: Appearance) => {
+    setAppearance(next);
+    try { window.localStorage.setItem(themePreference, next); }
+    catch { /* A blocked local preference store must not block the workspace. */ }
+  };
+  const selectMotion = (next: MotionPreference) => {
+    setMotion(next);
+    try { window.localStorage.setItem(motionPreference, next); }
+    catch { /* Reduced motion remains usable without persisted preferences. */ }
+  };
   const ws = status.workspace;
   const activeSources = ws?.sources.filter(
     (source) => source.roles.length > 0 && source.state === "active",
@@ -84,17 +121,10 @@ export function Shell({
     : accessible
       ? "Check your current connections"
       : "Open connections to investigate";
-  const toggleAppearance = () => {
-    const next = appearance === "dark" ? "light" : "dark";
-    setAppearance(next);
-    try {
-      window.localStorage.setItem(themePreference, next);
-    } catch {
-      // A blocked local preference store must not block the live workspace.
-    }
-  };
+  const toggleAppearance = () => selectAppearance(appearance === "dark" ? "light" : "dark");
   return (
-    <div className="pp-window pp-evidence-os" data-appearance={appearance}>
+    <PreferencesContext.Provider value={{appearance, motion, selectAppearance, selectMotion}}>
+    <div className="pp-window pp-evidence-os" data-appearance={appearance} data-motion={motion}>
       <aside className="pp-sidebar" aria-label="PackProof navigation">
         <div className="pp-eos-brand">
           <Brand />
@@ -139,5 +169,6 @@ export function Shell({
       </aside>
       <div className="pp-canvas">{children}</div>
     </div>
+    </PreferencesContext.Provider>
   );
 }
