@@ -31,7 +31,7 @@
       "url": "https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1",
       "status": "founder-approved-visual-target",
       "approvedOn": "2026-11-22",
-      "note": "14-screen high-fidelity UX prototype; animations are design references, not evidence of Windows runtime functionality.",
+      "note": "14-screen approved high-fidelity target. Guided setup light/dark at 100%/125% is checked in packaged synthetic-IPC renderer; full Figma pixel parity, user-machine approval, and signed live customer release remain unqualified.",
       "nodeReferences": {
         "cover": "2:79",
         "firstRun": "3:15",
@@ -55,12 +55,17 @@
         "themeStyles": "connect-windows/ui/experience/EvidenceOS.css",
         "evolvingProofTimeline": "connect-windows/ui/experience/ProofJourney.tsx",
         "liveDiscoveryAnimation": "connect-windows/ui/experience/FolderSuggestions.tsx",
-        "recoveryPanel": "connect-windows/ui/experience/RecoveryPanel.tsx"
+        "recoveryPanel": "connect-windows/ui/experience/RecoveryPanel.tsx",
+        "guidedSetupAppearance": "connect-windows/ui/experience/GuidedSetup.css",
+        "guidedSetupPreferences": "connect-windows/ui/experience/Shell.tsx",
+        "guidedSetupOwner": "connect-windows/ui/experience/GuidedSetup.tsx",
+        "guidedSetupNativeVisualTests": "connect-windows/scripts/workspace-layout.cjs"
       },
       "unfinished": [
-        "Native Windows visual qualification",
-        "Figma parity outside active operations shell",
-        "Full installed end-to-end approval, ingest, order joining, proof updates, export and recovery receipts"
+        "Native user-machine visual approval against Figma",
+        "Figma pixel parity outside active operations shell and guided appearance",
+        "Full installed real-facility approval, ingest, stable Proof revision, export and outage/reboot receipts",
+        "Production signing and permission verification"
       ]
     }
   },
