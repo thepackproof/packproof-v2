@@ -51,3 +51,18 @@ it('accepts a local media sample only for evidence and rejects relative paths in
   bridge.request.mockResolvedValue([{...sample, sampleFile: '../other/packing.jpeg'}]);
   await expect(discoverWorkspaceFolders('evidence', {exclude: []}, bridge)).rejects.toThrow();
 });
+
+it('accepts supported structured JSON, JSONL and NDJSON discovery without bypassing source review', async () => {
+  const bridge = { request: vi.fn(async () => [
+    {...sales, sampleFile: 'orders.json'},
+    {...sales, folder: 'C:\\Exports\\Warehouse', sampleFile: 'events.jsonl'},
+    {...sales, folder: 'C:\\Exports\\Shipping', sampleFile: 'labels.ndjson'},
+  ]) };
+  const results = await discoverWorkspaceFolders('order', {exclude: ['C:\\Proofs']}, bridge);
+  expect(results.map(result => result.sampleFile)).toEqual(['orders.json','events.jsonl','labels.ndjson']);
+  expect(bridge.request).toHaveBeenCalledWith('discoverWorkspaceFolders', {role:'order', exclude:['C:\\Proofs']});
+  bridge.request.mockResolvedValue([{...sales, sampleFile:'payload.exe'}]);
+  await expect(discoverWorkspaceFolders('order', {exclude:[]}, bridge)).rejects.toThrow();
+  bridge.request.mockResolvedValue([{...sales, sampleFile:'..\\orders.json'}]);
+  await expect(discoverWorkspaceFolders('order', {exclude:[]}, bridge)).rejects.toThrow();
+});
