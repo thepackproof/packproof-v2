@@ -1,0 +1,12 @@
+{
+  "phase": "inspect",
+  "source": "5d3fa44ca846104f1e22d6308c7be44c7cff1409",
+  "owner": {
+    "executionRoleArn": "arn:aws:iam::784514617543:role/packproof-v2-staging-execution",
+    "network": {
+      "subnets": ["subnet-0d7611419ad695536", "subnet-002790f4a22ef84ee"],
+      "securityGroups": ["sg-0fbfe8871eef85488"],
+      "assignPublicIp": "ENABLED"
+    }
+  }
+}
