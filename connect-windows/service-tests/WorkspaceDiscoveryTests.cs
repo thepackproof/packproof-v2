@@ -107,12 +107,13 @@ public sealed class WorkspaceDiscoveryTests
             """;
         Assert.Equal("Shipping records",WorkspaceDiscovery.StructuredLayout("shipping",Bytes(label),".json")?.Label);
         Assert.Null(WorkspaceDiscovery.StructuredLayout("order",Bytes(label),".json"));
-        var pick = """
-            {"kind":"picking","eventId":"pick-1","version":1,"occurredAt":"2026-11-17T12:01:00Z",
-             "entityNamespace":"WMS","entityId":"WO01"}
-            """;
+        // JSONL is one complete JSON object per line; indented multiline JSON
+        // is valid .json but must not be classified as .jsonl during discovery.
+        var pick = """{"kind":"picking","eventId":"pick-1","version":1,"occurredAt":"2026-11-17T12:01:00Z","entityNamespace":"WMS","entityId":"WO01"}""";
         Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick+"\n"),".jsonl")?.Label);
         Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick),".jsonl")?.Label);
+        Assert.Null(WorkspaceDiscovery.StructuredLayout("picking",Bytes(
+            """{"kind":"picking","eventId":"pick-1","version":1,"occurredAt":"2026-11-17T12:01:00Z",\n"entityNamespace":"WMS","entityId":"WO01"}"""),".jsonl"));
     }
 
     [WindowsFact]
