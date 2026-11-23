@@ -18,7 +18,9 @@ export async function discoverWorkspaceFolders(
 ): Promise<DiscoveredFolder[]> {
   const result = await bridge.request('discoverWorkspaceFolders', {role, exclude: options.exclude});
   if (!Array.isArray(result) || result.length > 8) throw Error('The folder check could not be completed.');
-  const sampleExtension = role === 'evidence' ? /\.(csv|tsv|psv|jpg|jpeg|png|pdf)$/i : /\.(csv|tsv|psv)$/i;
+  const sampleExtension = role === 'evidence'
+    ? /\.(csv|tsv|psv|jpg|jpeg|png|pdf)$/i
+    : /\.(csv|tsv|psv|json|jsonl|ndjson)$/i;
   return result.map((item: unknown) => {
     if (!item || typeof item !== 'object' || !('kind' in item) || item.kind !== 'discovered' ||
         !('folder' in item) || typeof item.folder !== 'string' || !/^[A-Za-z]:\\/.test(item.folder) ||
