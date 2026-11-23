@@ -33,12 +33,18 @@ export function useEvidencePreferences() {
 }
 const themePreference = "packproof.connect.appearance.v1";
 const motionPreference = "packproof.connect.motion.v1";
-function initialAppearance(): Appearance {
+export function initialAppearance(): Appearance {
   try {
     return window.localStorage.getItem(themePreference) === "light" ? "light" : "dark";
   } catch {
     return "dark";
   }
+}
+
+/** Keep guided setup and the active shell on one local presentation preference. */
+export function persistEvidenceAppearance(next: Appearance): void {
+  try { window.localStorage.setItem(themePreference, next); }
+  catch { /* A blocked local preference store cannot interrupt evidence operations. */ }
 }
 
 function initialMotion(): MotionPreference {
@@ -93,8 +99,7 @@ export function Shell({
   const [motion, setMotion] = useState<MotionPreference>(initialMotion);
   const selectAppearance = (next: Appearance) => {
     setAppearance(next);
-    try { window.localStorage.setItem(themePreference, next); }
-    catch { /* A blocked local preference store must not block the workspace. */ }
+    persistEvidenceAppearance(next);
   };
   const selectMotion = (next: MotionPreference) => {
     setMotion(next);
