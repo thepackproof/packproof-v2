@@ -1,0 +1,124 @@
+name: Connect exact facility activation
+on:
+  push:
+    branches: [main]
+    paths: ['infra/connect-rollout/guided-promotion.json']
+  workflow_dispatch:
+    inputs:
+      request:
+        description: Reviewed digest-only exact facility activation or scoped rollback request
+        required: true
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: packproof-backend-release
+  cancel-in-progress: false
+jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+  activate:
+    needs: rnd-release-policy
+    if: needs.rnd-release-policy.outputs.allowed == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bind exact reviewed tooling and original runtime to successful main CI
+        id: request
+        uses: actions/github-script@v7
+        env:
+          MANUAL_REQUEST: ${{ inputs.request }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const cp = require('node:child_process');
+            const path = require('node:path');
+            const {pathToFileURL} = require('node:url');
+            if (context.repo.owner !== 'thepackproof' || context.repo.repo !== 'packproof-v2' || context.ref !== 'refs/heads/main') throw Error('MAIN_SOURCE_REQUIRED');
+            const raw = context.eventName === 'workflow_dispatch' ? process.env.MANUAL_REQUEST : fs.readFileSync('infra/connect-rollout/guided-promotion.json','utf8');
+            const request = JSON.parse(raw);
+            const tool = await import(pathToFileURL(path.join(process.cwd(),'infra/backend-release/recovery-guided-activation.mjs')).href);
+            const runner = await import(pathToFileURL(path.join(process.cwd(),'infra/backend-release/recovery-guided-activation-runner.mjs')).href);
+            tool.validateGuidedRequest(request);
+            cp.execFileSync('git',['merge-base','--is-ancestor',request.source,context.sha],{stdio:'pipe'});
+            cp.execFileSync('git',['diff','--quiet',request.source,context.sha,'--',...runner.guidedToolingPaths],{stdio:'pipe'});
+            const {data:runs} = await github.rest.actions.listWorkflowRuns({...context.repo,workflow_id:'ci.yml',head_sha:request.source,status:'success',per_page:100});
+            const valid = (run,source) => run.name === 'CI' && run.head_sha === source && run.head_branch === 'main' && run.path === '.github/workflows/ci.yml' && ['push','workflow_dispatch'].includes(run.event) && run.status === 'completed' && run.conclusion === 'success';
+            const ci = runs.workflow_runs.find(run => valid(run,request.source));
+            const {data:runtimeCi} = await github.rest.actions.getWorkflowRun({...context.repo,run_id:request.build.ciRunId});
+            if (!ci || !valid(runtimeCi,request.build.source)) throw Error('EXACT_TOOLING_AND_RUNTIME_MAIN_CI_REQUIRED');
+            const {verifyRuntimeInputs} = await import(pathToFileURL(path.join(process.cwd(),'infra/connect-portal-runtime.mjs')).href);
+            verifyRuntimeInputs(process.cwd(),request.build.source,request.source,request.build.candidate);
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'guided-request.json'),JSON.stringify({...request,ci,runtimeCi}),{mode:0o600});
+            core.setOutput('source',request.source);
+            core.setOutput('operation',request.operation);
+      - name: Test exact scope, privacy and preservation before acquiring credentials
+        run: node --test infra/backend-release/recovery-guided-activation.test.mjs infra/backend-release/recovery-facility-inspection.test.mjs infra/backend-release/logistics-facility-inspect.test.mjs
+      - name: Restrict actual runtime and build verification to reads
+        id: observe-policy
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs policy-observe "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: guided-observe-${{ github.run_id }}
+          inline-session-policy: ${{ steps.observe-policy.outputs.policy }}
+      - name: Verify actual candidate build, both live services and unchanged runtime source inputs
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs observe "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - name: Restrict current facility resolution to the fixed API-role inspection task
+        id: precheck-policy
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs policy-precheck "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: guided-precheck-${{ github.run_id }}
+          inline-session-policy: ${{ steps.precheck-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Authenticate the encrypted current bound facility and create a private one-setting plan
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs precheck "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - name: Restrict the configuration update to the existing API service and roles
+        id: apply-policy
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs policy-apply "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: guided-apply-${{ github.run_id }}
+          inline-session-policy: ${{ steps.apply-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Change only the exact guided allowlist entry and verify the actual new API revision
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs apply "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - name: Restrict the final encrypted observation to its distinct API-role inspection task
+        id: postcheck-policy
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs policy-postcheck "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: guided-postcheck-${{ github.run_id }}
+          inline-session-policy: ${{ steps.postcheck-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Observe the final facility status encrypted to the operator's local key
+        run: node infra/backend-release/recovery-guided-activation-runner.mjs postcheck "$RUNNER_TEMP/guided-request.json" "$RUNNER_TEMP/guided-private"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connect-guided-${{ steps.request.outputs.operation }}-${{ steps.request.outputs.source }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/guided-private/receipts/*.json
+          if-no-files-found: warn
+          retention-days: 30
