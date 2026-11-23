@@ -3,7 +3,7 @@ import { Brand, Icon } from "./Icon";
 import type { ConnectStatus } from "../types";
 import "./EvidenceOS.css";
 
-export type Section = "home" | "orders" | "attention" | "connections";
+export type Section = "home" | "orders" | "attention" | "connections" | "matching" | "integrity" | "exports" | "settings";
 
 const sections = [
   ["home", "Overview", "home"],
