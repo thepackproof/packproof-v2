@@ -217,3 +217,30 @@ it("closes a loaded private Proof when live transport is incompatible and requir
   expect(await screen.findByRole("heading",{name:"Proof private-proof"})).toBeVisible();
   expect(bridge.workspaceOrderDetail).toHaveBeenCalledTimes(2);
 });
+
+it("uses the saved Evidence OS appearance through first-run setup without granting source access", async () => {
+  const preference = "packproof.connect.appearance.v1";
+  const before = window.localStorage.getItem(preference);
+  try {
+    window.localStorage.setItem(preference, "dark");
+    const bridge = bridgeFor(status());
+    const view = render(<WorkspaceApp bridge={bridge} />);
+    const setup = await waitFor(() => {
+      const node = view.container.querySelector(".pp-setup-appearance");
+      expect(node).toHaveAttribute("data-appearance", "dark");
+      return node!;
+    });
+    expect(screen.getByRole("button", {name:"Switch to light appearance"})).toBeVisible();
+    fireEvent.click(screen.getByRole("button", {name:"Switch to light appearance"}));
+    expect(setup).toHaveAttribute("data-appearance", "light");
+    expect(window.localStorage.getItem(preference)).toBe("light");
+    fireEvent.click(screen.getByRole("button", {name:"Switch to dark appearance"}));
+    expect(setup).toHaveAttribute("data-appearance", "dark");
+    expect(window.localStorage.getItem(preference)).toBe("dark");
+    expect(bridge.activateWorkspace).not.toHaveBeenCalled();
+    expect(bridge.approveWorkspaceSource).not.toHaveBeenCalled();
+  } finally {
+    if (before === null) window.localStorage.removeItem(preference);
+    else window.localStorage.setItem(preference, before);
+  }
+});
