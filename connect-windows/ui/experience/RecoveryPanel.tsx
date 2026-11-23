@@ -12,6 +12,7 @@ type Props = {
   run: RunAction;
   bridge: WorkspaceProps["bridge"];
   onSource: (id: string) => void;
+  onOutputSetup?: () => void;
 };
 const dateTime = (value?:string|null) => {
   if(!value || !Number.isFinite(Date.parse(value))) return null;
@@ -23,7 +24,7 @@ const dateTime = (value?:string|null) => {
  * "Retrying", "healthy", queued count and reconnect time must be justified
  * by service observations. Never replace a blocked source with a green badge.
  */
-export function RecoveryPanel({status,sources,busy,run,bridge,onSource}:Props) {
+export function RecoveryPanel({status,sources,busy,run,bridge,onSource,onOutputSetup}:Props) {
   const canInspect = canReadWorkspace(status);
   // Queue and output observations may belong to a previously authorized facility.
   // Keep the collector service state actionable without exposing cached counts
@@ -97,6 +98,10 @@ export function RecoveryPanel({status,sources,busy,run,bridge,onSource}:Props) {
             <span><strong>Collector service</strong><small>{status.health.lastErrorCode || "No service error code reported"}</small></span>
             <b>{status.health.serviceOnline ? "Online" : "Offline"}</b>
           </div>
+          {canInspect && needsOutput && onOutputSetup && (
+            <button type="button" className="eo-recovery-refresh eo-recovery-output"
+              disabled={busy} onClick={onOutputSetup}>Review Proof folder</button>
+          )}
           {!canInspect && <p className="eo-recovery-disclosure" role="status">Recovery counts and local output details are hidden until current facility access is confirmed. The service connection can still be checked above.</p>}
           <p className="eo-recovery-disclosure">A queued item is not a completed Proof. Exact source authority and successful backend receipt are required before evidence is accepted.</p>
         </section>

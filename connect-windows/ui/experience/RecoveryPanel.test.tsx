@@ -20,7 +20,9 @@ it("shows real pending queue and source errors, not mock recovery success",async
  const bridge=bridgeFor(st,{getWorkspaceStatus:vi.fn(async()=>st)});
  const run=vi.fn(async(fn:()=>Promise<unknown>)=>{await fn();});
  const onSource=vi.fn();
- render(<RecoveryPanel status={st} sources={[ship]} busy={false} run={run} bridge={bridge} onSource={onSource}/>);
+ const onOutputSetup=vi.fn();
+ render(<RecoveryPanel status={st} sources={[ship]} busy={false} run={run} bridge={bridge}
+   onSource={onSource} onOutputSetup={onOutputSetup}/>);
  expect(screen.getByText("One connection needs attention")).toBeVisible();
  expect(screen.getByText("5")).toBeVisible();
  expect(screen.getByText("2")).toBeVisible();
@@ -28,18 +30,22 @@ it("shows real pending queue and source errors, not mock recovery success",async
  expect(screen.queryByText("Recovered successfully")).toBeNull();
  fireEvent.click(screen.getByRole("button",{name:/Shipping/}));
  expect(onSource).toHaveBeenCalledWith("ship");
+ fireEvent.click(screen.getByRole("button",{name:"Review Proof folder"}));
+ expect(onOutputSetup).toHaveBeenCalledOnce();
  fireEvent.click(screen.getByRole("button",{name:"Refresh actual status"}));
  await waitFor(()=>expect(bridge.getWorkspaceStatus).toHaveBeenCalledOnce());
 });
 it("redacts old facility source identity on access loss",()=>{
  const st=status(false);
- render(<RecoveryPanel status={st} sources={[ship]} busy={false} run={vi.fn()} bridge={bridgeFor(st)} onSource={vi.fn()}/>);
+ render(<RecoveryPanel status={st} sources={[ship]} busy={false} run={vi.fn()}
+   bridge={bridgeFor(st)} onSource={vi.fn()} onOutputSetup={vi.fn()}/>);
  expect(screen.getByText("Source details are hidden while current access cannot be confirmed.")).toBeVisible();
  expect(screen.queryByText("Shipping")).toBeNull();
  expect(screen.queryByText("5")).toBeNull();
  expect(screen.queryByText("2")).toBeNull();
  expect(screen.queryByText("Output state: pending")).toBeNull();
  expect(screen.getByText(/Recovery counts and local output details are hidden/)).toBeVisible();
+ expect(screen.queryByRole("button",{name:"Review Proof folder"})).toBeNull();
 });
 
 it("does not reveal cached source identity if hosted transport is incompatible or permission unknown",()=>{

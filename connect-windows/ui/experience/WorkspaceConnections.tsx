@@ -125,7 +125,8 @@ export function Connections({
         </button>
       </header>
       <CollectionBanner status={status} />
-      <RecoveryPanel status={status} sources={srcs} busy={busy} run={run} bridge={bridge} onSource={onSource}/>
+      <RecoveryPanel status={status} sources={srcs} busy={busy} run={run} bridge={bridge}
+        onSource={onSource} onOutputSetup={() => edit("output")}/>
       <div className="xw-connection-list">
         {srcs.map((s) => (
           <article key={s.id} className="xw-card xw-sourcecard">

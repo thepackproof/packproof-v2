@@ -9,6 +9,7 @@
 .eo-recovery .eo-recovery-copy p{margin:7px 0;color:var(--eos-muted,#94aec7);font-size:13px;line-height:1.5}
 .eo-recovery .eo-recovery-copy small{display:block;color:var(--eos-muted,#94aec7);margin-top:9px;font-size:11px}
 .eo-recovery-refresh{font:650 12px/1.4 Inter,"Segoe UI",sans-serif;background:var(--eos-surface-raised,#1b3450);border:1px solid var(--eos-border,#29415b);color:var(--eos-text,#e9f4ff);padding:10px 14px;border-radius:10px;cursor:pointer;flex:none}
+.eo-recovery-output{display:block;margin-top:14px}
 .eo-recovery-refresh:hover{border-color:var(--eos-blue,#547fff)}
 .eo-recovery-refresh:disabled{cursor:default;opacity:.55}
 .eo-recovery-grids{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
