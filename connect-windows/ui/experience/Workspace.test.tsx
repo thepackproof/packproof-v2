@@ -152,3 +152,34 @@ it("does not open an outdated Proof revision from duplicate search results", asy
   fireEvent.click(screen.getByRole("button", { name: /SO-SEARCHED/ }));
   expect(onProof).toHaveBeenCalledWith("stable-search-proof", 9);
 });
+
+
+it("keeps exact search subject matches when a newer canonical revision has no matching metadata", async () => {
+  const order = { proofId: "stable-carton-proof", orderReference: "SO-CARTON" };
+  const subject = { id: "CTN-42", namespace: "warehouse", type: "carton" };
+  const granted = status({ orders: [{ ...order, revision: 8 }] });
+  const openWorkspaceOrder = vi.fn(async () => undefined);
+  const b = bridgeFor(granted, {
+    workspaceSearchOrders: vi.fn(async () => [
+      { ...order, revision: 3, matchedSubjects: [subject] },
+      { ...order, revision: 6, matchedSubjects: [subject] },
+      { ...order, revision: 7 },
+    ]),
+    openWorkspaceOrder,
+  });
+  const onProof = vi.fn();
+  const props = { bridge: b, onStatus: vi.fn(), onProof, onSection: vi.fn(), section: "orders" as const };
+  const view = render(<Workspace {...props} status={granted} />);
+  fireEvent.change(screen.getByRole("searchbox", { name: "Order reference" }),
+    { target: { value: "CTN-42" } });
+  fireEvent.click(screen.getByRole("button", { name: "Find order" }));
+  const match = await screen.findByRole("button", { name: "CTN-42 on SO-CARTON" });
+  expect(screen.getAllByRole("button", { name: "CTN-42 on SO-CARTON" })).toHaveLength(1);
+  expect(screen.getByText(/Matched revision 6.*newer Proof revision available/)).toBeVisible();
+  fireEvent.click(match);
+  expect(openWorkspaceOrder).toHaveBeenCalledWith("stable-carton-proof", 6, "CTN-42");
+  fireEvent.click(screen.getByRole("button", { name: /^SO-CARTON/ }));
+  expect(onProof).toHaveBeenCalledWith("stable-carton-proof", 8);
+  view.rerender(<Workspace {...props} status={status({canReadOrders: false})} />);
+  expect(screen.queryByText("CTN-42 on SO-CARTON")).toBeNull();
+});

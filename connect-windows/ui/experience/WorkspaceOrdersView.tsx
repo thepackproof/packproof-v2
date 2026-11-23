@@ -94,6 +94,20 @@ export function OrdersView({
   }
   const display = [...deduped.values()],
     cursor = after === undefined ? ws.nextBefore : after;
+  // Search matches belong to the exact revision returned by the authorized
+  // search API. A newer order summary may omit these query-specific subjects;
+  // it must not erase a match or silently promote it to an unverified revision.
+  const subjectMatches = new Map<string, {order: OrderSummary; subject: NonNullable<OrderSummary["matchedSubjects"]>[number]}>();
+  if (readable && query) {
+    for (const order of found || []) {
+      for (const subject of order.matchedSubjects || []) {
+        const key = JSON.stringify([order.proofId, subject.namespace, subject.type, subject.id]);
+        const previous = subjectMatches.get(key);
+        if (!previous || order.revision > previous.order.revision)
+          subjectMatches.set(key, {order, subject});
+      }
+    }
+  }
   async function search(value: string) {
     const id = ++seq.current;
     setQuery(value);
@@ -185,11 +199,13 @@ export function OrdersView({
           )}
           <section className="xw-card xw-table">
             <OrderRows orders={display} onProof={onProof} />
-            {query && display.flatMap(order => (order.matchedSubjects || []).map(subject =>
-              <p key={JSON.stringify([order.proofId,subject])}><button type="button" className="xw-link"
+            {[...subjectMatches].map(([key, {order, subject}]) =>
+              <p key={key}><button type="button" className="xw-link"
                 onClick={() => void bridge.openWorkspaceOrder(order.proofId,order.revision,subject.id)
                   .catch(e => setError(reportError(e,"Could not open this matched subject.")))}>
-                {subject.id} on {order.orderReference}</button> · {subject.namespace} · Revision {order.revision}</p>))}
+                {subject.id} on {order.orderReference}</button> · {subject.namespace} · Matched revision {order.revision}
+                {(deduped.get(order.proofId)?.revision ?? order.revision) > order.revision &&
+                  " (newer Proof revision available)"}</p>)}
             {!display.length && !error && (
               <p className="xw-empty" role="status">
                 {pending
