@@ -71,6 +71,10 @@ assert.match(desktop, /onCommerce=\{\(\)=>setWorkspaceMode\('commerce'\)\}/, 'Co
 assert.match(entry, /bridge\.choices\(\)/, 'Entry must query the authorized host');
 assert.match(entry, /bridge\[destination\]\(\)/, 'Entry must navigate to real orders/setup actions');
 assert.match(entry, /role="alert"/, 'Entry must show recoverable access errors');
+assert.match(entry, /<FirstRunContent\b/, 'Entry must use the approved Evidence OS first-run content');
+const firstRun = source(contract.runtime.evidenceOsFirstRun);
+assert.match(firstRun, /data-design-file="nNnkgTZOBNkG8muy8AkIv1"/, 'First-run content must identify the approved Evidence OS design');
+assert.match(firstRun, /data-design-node="3:15"/, 'First-run content must map to the actual approved first-run frame');
 assert.doesNotMatch(menu, /Logistics is unavailable for this account or facility/, 'Do not hide access error causes');
 assert.match(host, /this\.human\.access\(scope\)/, 'Logistics access must remain facility-scoped');
 assert.match(build, /PACKPROOF_UNIFIED_WINDOWS/, 'Unified distribution must be explicit');
@@ -83,7 +87,7 @@ if (compiled) {
   const assets = dir => fs.readdirSync(path.join(dir, 'assets')).filter(file => /\.(js|css)$/.test(file)).map(file => fs.readFileSync(path.join(dir, 'assets', file), 'utf8')).join('\n');
   const commerceBundle = assets(commerce);
   const logisticsBundle = assets(logistics);
-  for (const phrase of ['Your orders.', 'One clear story.', 'Connect my records', 'Open my orders', 'ORDER PREVIEW']) {
+  for (const phrase of ['Your facility. Connected.', 'Start with your existing systems.', 'Discover my systems', 'Open my orders', 'Three simple steps']) {
     assert.ok(commerceBundle.includes(phrase), `Unified Commerce renderer does not include Logistics-first entry: ${phrase}`);
   }
   assert.ok(commerceBundle.includes('.logistics-entry'), 'Missing approved entry layout in unified CSS');

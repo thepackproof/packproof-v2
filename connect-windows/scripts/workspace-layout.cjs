@@ -18,7 +18,7 @@ const folder = 'C:\\Sample operation\\Proofs';
 const home = 'Operations, at a glance.';
 const roleHeadings = {picking:'picking records',packing:'packing records',shipping:'shipping records',evidence:'photos and documents',handoff:'carrier handoffs',delivery:'delivery confirmations',returns:'returns'};
 const scenes = [
-  {name:'welcome',step:'order',heading:'Your orders. One clear story.'},
+  {name:'welcome',step:'order',heading:'Your facility. Connected.'},
   {name:'order',step:'order',heading:'Your order files are ready to review.',contains:summary.orderReference},
   ...Object.entries(roleHeadings).map(([step,role])=>({name:step,step,heading:'Find your '+role+'.',contains:'Search again'})),
   {name:'review',step:'review',heading:'Review your first order',contains:'packages.xml'},
@@ -122,7 +122,7 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
             await press(target);
           }
           await waitFor(page,"document.querySelector('.pp-setup-appearance')?.getAttribute('data-appearance') === "+JSON.stringify(theme));
-          const setupSurface=await page.executeJavaScript("getComputedStyle(document.querySelector('.pp-setup-appearance main.setup-experience')).backgroundColor");
+          const setupSurface=await page.executeJavaScript("getComputedStyle(document.querySelector('.pp-setup-appearance main')).backgroundColor");
           assert.ok(setupSurface,'Packaged guided setup must render a real theme surface');
           if(theme==='dark') assert.notEqual(setupSurface,'rgb(255, 255, 255)','Dark guided setup cannot retain a white background');
           (report.guidedThemeBackgrounds??={})[theme]=setupSurface;

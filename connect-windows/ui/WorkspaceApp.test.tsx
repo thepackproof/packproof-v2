@@ -40,7 +40,7 @@ it("saves the source step, displays inspected business fields and reuses the cho
     reuseWorkspaceFolder: vi.fn(async () => current = status({ ...current.workspace, sources: [{ ...folder, roles: ["order", "picking"] }] })),
   });
   render(<WorkspaceApp bridge={bridge}/>);
-  await clickButton("Connect my records");
+  await clickButton("Discover my systems");
   await clickButton(/In a spreadsheet or folder/);
   await clickButton(/Choose a folder myself/);
   expect(await screen.findByText("SO10482")).toBeVisible();
@@ -125,6 +125,53 @@ it("checks approval immediately after activation returns pending", async () => {
   expect(bridge.getWorkspaceStatus).toHaveBeenCalled();
 });
 
+it("keeps the facility recovery return inside the desktop workspace with its persistent navigation", async () => {
+  const before = window.location.href;
+  const close = vi.spyOn(window, "close").mockImplementation(() => undefined);
+  window.history.replaceState({}, "", "/?facilitySetup=1");
+  try {
+    let current: ConnectStatus = {...status(), setupAccess:{reason:"facility_required", pendingFileReview:{
+      proposalSha256:"a".repeat(64), fileName:"Saved-shipments.csv", expiresAt:new Date(Date.now()-60_000).toISOString(),
+    }}};
+    const bridge = bridgeFor(current, {getStatus:async () => current, getWorkspaceStatus:async () => current});
+    render(<WorkspaceApp bridge={bridge}/>);
+    await clickButton("Choose a facility");
+    expect(screen.getByRole("navigation",{name:"Workspace"})).toBeVisible();
+    expect(screen.queryByRole("heading",{name:"Renew your export file review."})).toBeNull();
+    current = active();
+    fireEvent.focus(window);
+    await clickButton("Open my workspace");
+    expect(await screen.findByRole("heading",{name:"Operations, at a glance."})).toBeVisible();
+    expect(screen.getByRole("navigation",{name:"Workspace"})).toBeVisible();
+    expect(bridge.openWorkspaceApproval).toHaveBeenCalledTimes(1);
+    expect(bridge.openWorkspaceReview).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  } finally {
+    window.history.replaceState({}, "", before);
+    close.mockRestore();
+  }
+});
+
+it("opens authorized readers' orders without promoting collection or exposing configuration controls", async () => {
+  const order = {proofId:"reader-proof",revision:2,orderReference:"READ-120"};
+  let current = status({phase:"draft",step:"order",canConfigure:false,canReadOrders:true,viewKey:"reader-view",orders:[order]});
+  const bridge = bridgeFor(current,{getStatus:async () => current,getWorkspaceStatus:async () => current});
+  render(<WorkspaceApp bridge={bridge}/>);
+  expect(await screen.findByRole("heading",{name:"Operations, at a glance."})).toBeVisible();
+  expect(screen.queryByText("Evidence collection active")).toBeNull();
+  await clickButton("Connected systems");
+  expect(await screen.findByRole("heading",{name:"Your Proofs are available"})).toBeVisible();
+  expect(screen.queryByRole("button",{name:"Discover my systems"})).toBeNull();
+  expect(bridge.activateWorkspace).not.toHaveBeenCalled();
+  expect(bridge.saveWorkspaceStep).not.toHaveBeenCalled();
+  expect(current.workspace?.phase).toBe("draft");
+  current = {...current,health:{...current.health,serviceOnline:false}};
+  fireEvent.focus(window);
+  await waitFor(() => expect(screen.queryByRole("heading",{name:"Your Proofs are available"})).toBeNull());
+  expect(screen.queryByRole("button",{name:"Discover my systems"})).toBeNull();
+  expect(screen.getByRole("navigation",{name:"Workspace"})).toBeVisible();
+});
+
 it("asks which source owns an ambiguous reference before confirming a profile", async () => {
   const current = status({ sources: [{ ...folder, recognition: { state: "ambiguous", message: "Read picking references.",
     relatedChoices: [{ role: "order", options: [{ id: "sales1", displayName: "Sales East" }, { id: "sales2", displayName: "Sales West" }] }] } }] });
@@ -138,7 +185,7 @@ it("asks which source owns an ambiguous reference before confirming a profile", 
 it("adds a direct order system to the draft without requesting folder access", async () => {
   const bridge = bridgeFor(status());
   render(<WorkspaceApp bridge={bridge}/>);
-  await clickButton("Connect my records");
+  await clickButton("Discover my systems");
   await clickButton(/In our order software/);
   fireEvent.click(screen.getByText("Use an existing PackProof Partner API integration"));
   await clickButton("Connect PackProof Partner API");

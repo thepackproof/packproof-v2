@@ -6,6 +6,7 @@ import { openHumanDashboard, closeHumanDashboard } from './human-dashboard';
 import type { HumanDashboardIdentity } from './dashboard-grant';
 import { FacilityDraftLease } from './facility-draft-lease';
 import type { FacilityDraft } from '../ui/guided-workflow-types';
+import { HumanWorkspaceClient, type HumanWorkspaceRead, type HumanWorkspaceSnapshot } from './human-workspace';
 
 export interface FacilityScope { installationId: string; organizationId: string; environment: string }
 interface Access { canConfigure: boolean; organizationId: string; environment: string; locationId: string | null; userId: string }
@@ -29,6 +30,7 @@ type LocalRead = (operation: string) => Promise<unknown>;
 const enrollment = new Set(['getStatus','getWorkspaceStatus','beginEnrollment','pollEnrollment','refresh','openApproval','openWorkspaceApproval']);
 const bootstrap = new Set(['choices','getStatus','getWorkspaceStatus','pollEnrollment','refresh','openApproval','openWorkspaceApproval','recoverEnrollment','refreshPendingFileReview']);
 const completingEnrollment = new Set(['pollEnrollment','getStatus','refresh']);
+const workspaceReads = new Set(['getStatus','getWorkspaceStatus','refresh','workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention','openWorkspaceOrder','openWorkspaceReview']);
 const isMissing = (error: unknown) => !!error && typeof error === 'object' && 'status' in error && error.status === 404;
 function reviewMetadata(authority:Authority):PendingFileReview|undefined {
   const setup=authority.setup, review=setup?.pendingFileReview;
@@ -113,8 +115,49 @@ export class HostedSession {
   }
   async guard(method: string) {
     const access = await this.authority(method);
-    if (access.mode === 'facility' && !access.canConfigure) throw Error('Facility setup requires an authorized administrator.');
+    if (access.mode === 'facility' && !access.canConfigure && !workspaceReads.has(method)) throw Error('Facility setup requires an authorized administrator.');
     return access;
+  }
+  async workspaceAccess() {
+    const access = await this.authority('daily');
+    if (!access.canReadOrders || access.mode !== 'facility' || !access.scope?.locationId) throw Error('Connect this computer to an authorized facility before opening orders.');
+    return access;
+  }
+  async readWorkspace(method: HumanWorkspaceRead, args: unknown[] = [], expected?: Authority) {
+    const started = await this.workspaceAccess();
+    if (expected) this.assertTransition('daily',expected,started);
+    const identity = this.human.dashboardIdentity();
+    if (identity.userId !== started.user) throw Error('Your signed-in account changed. Open your workspace again.');
+    const result = await new HumanWorkspaceClient(identity,started.scope!).read(method,args);
+    const ended = await this.workspaceAccess();
+    this.assertTransition('daily',started,ended);
+    return result;
+  }
+  async presentWorkspace(method: string, value: unknown, authority: Authority) {
+    const presented = this.present(method,value,authority);
+    if (!presented || typeof presented !== 'object' || !('health' in presented && 'state' in presented)) return presented;
+    const current = presented as ConnectStatus;
+    if (authority.mode !== 'facility' || authority.offline || !current.workspace) return current;
+    // Collector state is operational state, never the signed-in user's record grant.
+    // Always discard its order cards and replace them only after a human API read.
+    let base: ConnectStatus = {...current,workspace:{...current.workspace,orders:[],canReadOrders:false,canConfigure:authority.canConfigure,
+      totalOrders:null,updatedToday:null,updatedLast24Hours:null,nextBefore:null,viewKey:null}};
+    if (!authority.canConfigure) {
+      // A human order-reader grant does not authorize the collector's drafts,
+      // CSV samples, pending receipts, local paths or operational queue.
+      base = {state:current.state,installationId:current.installationId,environment:current.environment,
+        installedVersion:current.installedVersion,transport:current.transport,
+        binding:current.binding && {...current.binding,sourceName:''},
+        health:{serviceOnline:current.health.serviceOnline,queueCount:null},
+        workspace:{phase:current.workspace.phase,step:current.workspace.step,sources:[],orders:[],
+          canConfigure:false,canReadOrders:false,syncState:current.workspace.syncState,
+          totalOrders:null,updatedToday:null,updatedLast24Hours:null,nextBefore:null,viewKey:null,
+          outputFolder:null,outputState:'unselected'}};
+    }
+    if (!current.health.serviceOnline || current.transport?.state !== 'compatible') return base;
+    const snapshot = await this.readWorkspace('snapshot',[],authority) as HumanWorkspaceSnapshot;
+    return {...base,workspace:{...base.workspace!,...snapshot,canReadOrders:true,
+      viewKey:JSON.stringify([authority.user,authority.epoch,authority.scopeKey])}} satisfies ConnectStatus;
   }
   assertTransition(method: string, started: Authority, ended: Authority) {
     if (started.user !== ended.user || this.human.user() !== started.user || started.epoch !== ended.epoch ||

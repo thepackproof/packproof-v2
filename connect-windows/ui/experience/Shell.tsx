@@ -89,11 +89,13 @@ export function Shell({
   section,
   onSection,
   children,
+  setupMode = false,
 }: {
   status: ConnectStatus;
   section: Section;
   onSection: (section: Section) => void;
   children: ReactNode;
+  setupMode?: boolean;
 }) {
   const [appearance, setAppearance] = useState<Appearance>(initialAppearance);
   const [motion, setMotion] = useState<MotionPreference>(initialMotion);
@@ -117,7 +119,7 @@ export function Shell({
   const statusLabel = !status.health.serviceOnline
     ? "Background service offline"
     : !accessible
-      ? "Reconnection required"
+      ? setupMode ? "Connection setup" : "Reconnection required"
       : running
         ? "Evidence collection active"
         : "Connection status";
@@ -125,7 +127,7 @@ export function Shell({
     ? `${activeSources} approved ${activeSources === 1 ? "source" : "sources"} collecting`
     : accessible
       ? "Check your current connections"
-      : "Open connections to investigate";
+      : setupMode ? "Connect this computer to begin" : "Open connections to investigate";
   const toggleAppearance = () => selectAppearance(appearance === "dark" ? "light" : "dark");
   return (
     <PreferencesContext.Provider value={{appearance, motion, selectAppearance, selectMotion}}>
@@ -141,6 +143,8 @@ export function Shell({
               key={id}
               type="button"
               aria-current={id === section ? "page" : undefined}
+              disabled={setupMode && id !== "connections" && id !== "settings"}
+              title={setupMode && id !== "connections" && id !== "settings" ? "Connect this computer to open this workspace." : undefined}
               onClick={() => onSection(id)}
             >
               <Icon name={icon} size={25} />
@@ -148,6 +152,7 @@ export function Shell({
             </button>
           ))}
         </nav>
+        {setupMode && <p className="pp-setup-nav-guidance">Connect this computer to unlock your workspace. Appearance settings are available now.</p>}
         <div className="pp-eos-nav-hint">
           <span>INSIDE EVERY PROOF</span>
           <p>Matching decisions, original evidence, integrity and history.</p>

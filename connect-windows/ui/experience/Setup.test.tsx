@@ -10,14 +10,14 @@ import { Setup } from "./Setup";
 
 afterEach(cleanup);
 
-it('shows only browser review and retry for an installation without a facility',async()=>{
+it('prioritizes the authorized facility connection for an installation without a facility',async()=>{
   const state:ConnectStatus={...selected,installationId:'installation_test',setupAccess:{reason:'facility_required'},workspace:{phase:'draft',step:'order',sources:[]}};
   const bridge=bridgeFor(state);
   render(<Harness initial={state} bridge={bridge}/>);
   expect(screen.getByRole('heading',{name:'Choose this computer’s facility.'})).toBeVisible();
-  expect(screen.queryByRole('button',{name:'Connect my records'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Discover my systems'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Try a sample order'})).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'Review this computer in browser'}));
+  fireEvent.click(screen.getByRole('button',{name:'Choose a facility'}));
   await waitFor(()=>expect(bridge.openWorkspaceApproval).toHaveBeenCalledTimes(1));
   expect(bridge.recoverEnrollment).not.toHaveBeenCalled();
   expect(bridge.chooseWorkspaceFolder).not.toHaveBeenCalled();
@@ -35,7 +35,7 @@ it('requires explicit preservation consent before existing recovery and returns 
   await waitFor(()=>expect(bridge.recoverEnrollment).toHaveBeenCalledWith({preservePendingWorkApproved:true}));
   expect(await screen.findByRole('heading',{name:'Connect this computer to a facility.'})).toBeVisible();
   expect(bridge.beginEnrollment).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button',{name:'Connect this computer to a facility'}));
+  fireEvent.click(screen.getByRole('button',{name:'Connect this computer'}));
   await waitFor(()=>expect(bridge.beginEnrollment).toHaveBeenCalledTimes(1));
 });
 
@@ -45,7 +45,7 @@ it('reopens the exact pending approval with its comparison code without creating
   const bridge=bridgeFor(state);
   render(<Harness initial={state} bridge={bridge}/>);
   expect(screen.getByText('A1B2C3')).toBeVisible();
-  expect(screen.queryByRole('button',{name:'Connect my records'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Discover my systems'})).toBeNull();
   fireEvent.click(screen.getByRole('button',{name:'Reopen facility sign-in'}));
   await waitFor(()=>expect(bridge.openWorkspaceApproval).toHaveBeenCalledTimes(1));
   expect(bridge.beginEnrollment).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ it("takes a real selected source through local proof, destination selection and 
   });
   const openDraft = vi.fn();
   render(<Harness initial={state} bridge={bridge} openDraft={openDraft} />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   fireEvent.click(screen.getByRole("button", { name: /In a spreadsheet or folder/ }));
   fireEvent.click(screen.getByRole("button", { name: /Choose a folder myself/ }));
   const openOrder = await screen.findByRole("button", { name: "Open order REAL-37" });
@@ -167,7 +167,7 @@ it("keeps software exports distinct from direct partner integration", async () =
   const initial = init();
   const bridge = bridgeFor(initial);
   render(<Harness initial={initial} bridge={bridge} />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   fireEvent.click(screen.getByRole("button", { name: /In our order software/ }));
   fireEvent.click(screen.getByRole("button", { name: /Microsoft Dynamics 365/ }));
   expect(screen.getByRole("heading", { name: "Connect your Microsoft Dynamics 365 orders." })).toBeVisible();
@@ -188,7 +188,7 @@ it("finds multiple order exports and previews only the folder the operator choos
   });
   render(<Harness initial={initial} bridge={bridge} />);
   expect(bridge.discoverWorkspaceFolders).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   expect(await screen.findByRole("button", { name: /Shopify orders.*Matched order and line item columns.*Sales/ })).toBeVisible();
   expect(bridge.discoverWorkspaceFolders).toHaveBeenCalledWith("order");
   expect(bridge.useWorkspaceFolderSuggestion).not.toHaveBeenCalled();
@@ -209,7 +209,7 @@ it("separates a prepared folder from matches and keeps manual setup available af
     useWorkspaceFolderSuggestion: vi.fn(),
   });
   render(<Harness initial={initial} bridge={bridge} />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("couldn’t finish checking");
   expect(screen.getByRole("button", { name: "Choose a folder myself" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -241,7 +241,7 @@ it("keeps a delayed scan from interrupting software setup", async () => {
   const initial = init();
   const bridge = bridgeFor(initial, { discoverWorkspaceFolders: vi.fn(() => discovery) });
   render(<Harness initial={initial} bridge={bridge} />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   expect(screen.getByRole("status")).toHaveTextContent("Looking in common export folders");
   fireEvent.click(screen.getByRole("button", { name: "Choose my software" }));
   await act(async () => { finish([{ kind: "discovered", folder: "C:\\Late" }]); });
@@ -256,7 +256,7 @@ it("supports older desktops that provide a single suggestion", async () => {
     useWorkspaceFolderSuggestion: vi.fn(async () => init({ sources: [folder] })),
   });
   render(<Harness initial={initial} bridge={bridge} />);
-  fireEvent.click(screen.getByRole("button", { name: "Connect my records" }));
+  fireEvent.click(screen.getByRole("button", { name: "Discover my systems" }));
   fireEvent.click(screen.getByRole("button", { name: /Help me find my records/ }));
   const suggested = await screen.findByRole("button", { name: /Sales.*Previously selected/ });
   expect(bridge.useWorkspaceFolderSuggestion).not.toHaveBeenCalled();

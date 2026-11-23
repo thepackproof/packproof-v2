@@ -59,7 +59,11 @@
         "guidedSetupAppearance": "connect-windows/ui/experience/GuidedSetup.css",
         "guidedSetupPreferences": "connect-windows/ui/experience/Shell.tsx",
         "guidedSetupOwner": "connect-windows/ui/experience/GuidedSetup.tsx",
-        "guidedSetupNativeVisualTests": "connect-windows/scripts/workspace-layout.cjs"
+        "guidedSetupNativeVisualTests": "connect-windows/scripts/workspace-layout.cjs",
+        "firstRunContent": "connect-windows/ui/experience/FirstRunContent.tsx",
+        "firstRunStyles": "connect-windows/ui/experience/FirstRunContent.css",
+        "firstRunGateway": "desktop/src/renderer/LogisticsGateway.tsx",
+        "connectionRecovery": "connect-windows/ui/experience/Setup.tsx"
       },
       "unfinished": [
         "Native user-machine visual approval against Figma",
@@ -82,7 +86,8 @@
     "unifiedPackageRenderer": "connect-windows/dist/commerce/renderer",
     "evidenceOsOverview": "connect-windows/ui/experience/OperationalSignal.tsx",
     "evidenceOsProjection": "connect-windows/ui/experience/operations-overview.ts",
-    "evidenceOsTheme": "connect-windows/ui/experience/EvidenceOS.css"
+    "evidenceOsTheme": "connect-windows/ui/experience/EvidenceOS.css",
+    "evidenceOsFirstRun": "connect-windows/ui/experience/FirstRunContent.tsx"
   },
   "acceptance": {
     "unifiedStartsIn": "logistics",
@@ -108,6 +113,8 @@
       "source-recovery"
     ],
     "packagedVisualApproval": "required-before-production-or-pilot-release",
-    "visualReference": "nNnkgTZOBNkG8muy8AkIv1"
+    "visualReference": "nNnkgTZOBNkG8muy8AkIv1",
+    "facilityBeforeSavedFileReview": true,
+    "setupRemainsInEvidenceOsShell": true
   }
 }

@@ -1,0 +1,39 @@
+/* Approved Evidence OS first-run content, Figma nNnkgTZOBNkG8muy8AkIv1 / 3:15.
+ * Shared by the signed-in desktop entry and the authorized Connect setup owner. */
+.pp-first-run {color:var(--eos-text,#e9f4ff);padding:34px clamp(24px,3vw,46px) 44px;font:400 14px/1.5 Inter,"Segoe UI",sans-serif;min-width:0}
+.pp-first-run * {box-sizing:border-box}
+.pp-first-run-heading {margin-bottom:34px}
+.pp-first-run-heading h1 {margin:0 0 6px;color:var(--eos-text,#e9f4ff);font-size:clamp(27px,2.6vw,36px);font-weight:750;line-height:1.35;letter-spacing:-.025em}
+.pp-first-run-heading p {margin:0;color:var(--eos-muted,#95aac3);font-size:14px;line-height:1.65}
+.pp-first-run-hero {display:flex;align-items:center;justify-content:space-between;gap:30px;min-height:250px;padding:27px 32px;border-radius:22px;background:var(--eos-setup-hero,#15304c)}
+.pp-first-run-copy {flex:1;min-width:0}
+.pp-first-run-copy h2 {margin:0 0 18px;font-size:clamp(24px,2.35vw,34px);line-height:1.35;letter-spacing:-.025em;font-weight:750;color:var(--eos-text,#e9f4ff)}
+.pp-first-run-copy>p {font-size:17px;line-height:1.6;color:var(--eos-muted,#afc2d7);margin:0 0 25px;max-width:790px}
+.pp-first-run-actions {display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pp-first-run-primary {font:650 13px/1.4 Inter,"Segoe UI",sans-serif;border:1px solid var(--eos-blue,#547fff);background:var(--eos-blue,#547fff);color:#fff;border-radius:12px;min-height:48px;min-width:220px;padding:12px 18px;cursor:pointer;transition:filter .18s ease,transform .18s ease;display:inline-flex;align-items:center;justify-content:center}
+.pp-first-run-primary:hover:enabled {filter:brightness(1.12);transform:translateY(-1px)}
+.pp-first-run-primary:disabled {opacity:.62;cursor:not-allowed}
+.pp-first-run-primary:focus-visible {outline:3px solid #a6c3ff;outline-offset:4px}
+.pp-first-run-readonly {background:#1b4948;color:#36e8c5;padding:6px 15px;border-radius:20px;min-width:113px;text-transform:uppercase;font-size:10px;font-weight:650;letter-spacing:.03em}
+.pp-first-run-systems {height:197px;width:231px;position:relative;flex:none;border-radius:25px;background:var(--eos-setup-illustration,#1d4363)}
+.pp-first-run-systems img {display:block;position:absolute;max-width:none}
+.pp-first-run-data {left:71px;top:37px}
+.pp-first-run-link {left:29px;top:129px}
+.pp-first-run-box {right:20px;top:129px}
+.pp-first-run-state {margin-top:20px;color:var(--eos-muted,#95aac3)}
+.pp-first-run-state p {margin:8px 0;line-height:1.6}
+.pp-first-run-steps {margin-top:38px}
+.pp-first-run-steps>h2 {margin:0 0 30px;font-size:12px;letter-spacing:.04em;font-weight:650;text-transform:uppercase;color:var(--eos-green,#36e8c5)}
+.pp-first-run-steps ol {list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.pp-first-run-steps li {background:var(--eos-surface,#11243a);border-radius:19px;min-height:227px;padding:22px 25px}
+.pp-first-run-steps li>div {display:flex;align-items:center;justify-content:space-between;color:var(--eos-green,#36e8c5);font-size:12px;font-weight:650}
+.pp-first-run-steps li img {display:block;flex:none;max-width:none}
+.pp-first-run-steps h3 {color:var(--eos-text,#e9f4ff);margin:31px 0 22px;font-size:19px;line-height:1.4;font-weight:650}
+.pp-first-run-steps p {color:var(--eos-muted,#8ea4be);font-size:13px;line-height:1.5;margin:0}
+.pp-first-run-footer {display:flex;gap:28px;align-items:center;margin-top:50px}
+.pp-first-run-footer>span {flex:none;border-radius:16px;padding:6px 13px;background:var(--eos-surface-raised,#213951);color:var(--eos-green,#36e8c5);font-size:10px;font-weight:650;text-transform:uppercase}
+.pp-first-run-footer p {font-size:13px;color:var(--eos-muted,#8ea4be);margin:0}
+[data-appearance="light"] .pp-first-run {--eos-setup-hero:#e5eefc;--eos-setup-illustration:#d0e2f6}
+@media(max-width:1100px){.pp-first-run-hero{padding:25px;gap:22px}.pp-first-run-systems{width:197px}.pp-first-run-data{left:62px}.pp-first-run-steps ol{gap:16px}.pp-first-run-steps li{padding:20px}.pp-first-run-steps h3{font-size:17px}.pp-first-run-footer{gap:20px}}
+@media(max-width:840px){.pp-first-run-hero{align-items:flex-start}.pp-first-run-systems{display:none}.pp-first-run-steps ol{grid-template-columns:1fr}.pp-first-run-steps li{min-height:0}.pp-first-run-steps h3{margin:12px 0}.pp-first-run-footer{align-items:flex-start;flex-direction:column;gap:12px;margin-top:30px}}
+@media(prefers-reduced-motion:reduce){.pp-first-run *{animation:none!important;transition:none!important}.pp-first-run-primary:hover:enabled{transform:none}}

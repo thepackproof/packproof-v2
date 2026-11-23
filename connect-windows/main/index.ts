@@ -13,6 +13,8 @@ import {APP_ORIGIN,trustedRenderer,argumentsByMethod,approvalUrl,rendererSafe,ty
 import type {SourceRole,WorkspaceFolderSuggestion} from '../ui/workspace-types';
 import type {ConnectStatus} from '../ui/types';
 import { HostedSession } from './hosted-session';
+import { loadWorkspaceWindow } from './workspace-window';
+import type { HumanWorkspaceRead } from './human-workspace';
 declare const __PACKPROOF_HOSTED__: boolean;
 const embedded = typeof __PACKPROOF_HOSTED__ !== 'undefined' && __PACKPROOF_HOSTED__;
 let host: HostedSession | null = null;
@@ -21,6 +23,7 @@ if (!embedded) {
   app.enableSandbox();
 }
 let win:BrowserWindow|null=null;
+let openingWorkspace:Promise<void>|null=null;
 // Hosted Logistics setup belongs to the same unified application window. The
 // standalone Connect installer still owns its own top-level window.
 let parentWindow: (()=>BrowserWindow|null)|null=null;
@@ -44,8 +47,10 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
    await host.daily(name === 'openWorkspaceOrder' ? { proofId: String(proofId), revision: Number(revision), ...(typeof subject === 'string' ? {subject} : {}) } : undefined);
    return {ok:true};
  }
- if (host && ['workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention','openWorkspaceOutput'].includes(name))
-   throw Error('Open Orders and exceptions from the Logistics menu to view your authorized records.');
+ if (host && started && ['workspaceOrderDetail','workspaceSourceRecord','workspaceSearchOrders','workspaceOrderPage','workspaceAttention'].includes(name)) {
+   const value = await host.readWorkspace(name as HumanWorkspaceRead,parsed as unknown[],started);
+   return {ok:true,value:rendererSafe(value)};
+ }
   let value: unknown;
   if (host && started?.mode === 'bootstrap' && (name === 'openApproval' || name === 'openWorkspaceApproval')) {
     await open(approvalUrl(host.installationReviewPath(started), config.webBaseUrl));
@@ -56,7 +61,7 @@ function bind(name:Method,fn:(...args:any[])=>unknown){ipcMain.handle(`connect:$
   } else value = await fn(...parsed);
   const ended = host ? await host.guard(name === 'recoverEnrollment' ? 'getStatus' : name) : null;
   if (host && started && ended) host.assertTransition(name,started,ended);
-  return {ok:true,value:host && ended ? host.present(name,value,{...ended,offline:!!started?.offline || ended.offline}) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
+  return {ok:true,value:host && ended ? await host.presentWorkspace(name,value,{...ended,offline:!!started?.offline || ended.offline}) : value};}catch(error){return {ok:false,error:safeError(error)};}});}
 async function openWorkspaceApproval(current:ConnectStatus) {
  if (!current.installationId && current.enrollment?.state === 'pending') {
    await open(approvalUrl(enrollmentReviewPath(current,embedded),config.webBaseUrl));
@@ -252,13 +257,20 @@ async function initialize(){
   protocol.handle('packproof-connect',async request=>{const u=new URL(request.url);if(!trustedRenderer(request.url))return new Response('',{status:403});let pathname;try{pathname=decodeURIComponent(u.pathname);}catch{return new Response('',{status:400});}const file=resolve(root,'.'+pathname);if(file!==root&&!file.startsWith(root+sep))return new Response('',{status:403});try{if(!(await stat(file)).isFile())return new Response('',{status:404});const response=await net.fetch(pathToFileURL(file).href);const headers=new Headers(response.headers);headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");headers.set('X-Content-Type-Options','nosniff');return new Response(response.body,{status:response.status,headers});}catch{return new Response('',{status:404});}});
   setup();
 }
-async function showSetup(){
-  if (win && !win.isDestroyed()) { win.show(); win.focus(); return; }
+async function showSetup(setup = true){
+  if (win && !win.isDestroyed()) {
+    if (openingWorkspace) await openingWorkspace;
+    if (win && !win.isDestroyed()) { win.show(); win.focus(); }
+    return;
+  }
   const parent=embedded?parentWindow?.()??null:null;
-  win=new BrowserWindow({...(parent?{parent,modal:true}:{}),width:1180,height:820,minWidth:560,minHeight:600,title:'PackProof Connect',show:false,backgroundColor:'#f7f9fc',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
-  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.webContents.on('will-attach-webview',event=>event.preventDefault());win.once('ready-to-show',()=>win?.show());win.on('closed',()=>{win=null;});
-  await win.loadURL(APP_ORIGIN+'/index.html'+(embedded?'?facilitySetup=1':''));
-  if (!embedded) startUpdates(win,bridge,config);
+  const current=new BrowserWindow({...(parent && !parent.isDestroyed()?parent.getBounds():{width:1440,height:960}),minWidth:560,minHeight:600,title:embedded?'PackProof':'PackProof Connect',show:false,backgroundColor:'#071321',webPreferences:{preload:join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,allowRunningInsecureContent:false,devTools:!app.isPackaged,spellcheck:false}});
+  win=current;
+  current.webContents.setWindowOpenHandler(()=>({action:'deny'}));current.webContents.on('will-navigate',event=>event.preventDefault());current.webContents.on('will-attach-webview',event=>event.preventDefault());current.on('closed',()=>{if(win===current)win=null;});
+  const opening=loadWorkspaceWindow(current,parent,APP_ORIGIN+'/index.html'+(embedded && setup?'?facilitySetup=1':''));
+  openingWorkspace=opening;
+  try { await opening; } finally { if(openingWorkspace===opening)openingWorkspace=null; }
+  if (!embedded) startUpdates(current,bridge,config);
 }
 export async function attachHumanSession(human: ConstructorParameters<typeof HostedSession>[0], parent?:()=>BrowserWindow|null) {
   parentWindow=parent??null;
@@ -269,8 +281,9 @@ export async function attachHumanSession(human: ConstructorParameters<typeof Hos
   return {
     choices: () => current.choices(),
     readyForUpgrade: async () => { await bridge.request('status'); },
-    orders: () => current.daily(),
+    orders: async () => { await current.workspaceAccess(); await showSetup(false); },
     setup: async () => { await current.guard('getStatus'); await showSetup(); },
+    focus: () => { if (openingWorkspace || !win || win.isDestroyed() || win.webContents.isLoadingMainFrame()) return false; win.show(); win.focus(); return true; },
     close: () => { current.close(); if (win && !win.isDestroyed()) win.destroy(); }
   };
 }

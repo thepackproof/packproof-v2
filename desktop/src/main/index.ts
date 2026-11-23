@@ -26,7 +26,7 @@ import type {DesktopEvent,DesktopSettings,SessionView,SystemView} from '../share
 
 declare const __PACKPROOF_UNIFIED__: boolean;
 const unified = typeof __PACKPROOF_UNIFIED__ !== 'undefined' && __PACKPROOF_UNIFIED__;
-type LogisticsHost = {choices(): Promise<{setup:boolean;orders:boolean}>; orders():Promise<void>; setup():Promise<void>; readyForUpgrade():Promise<void>; close():void};
+type LogisticsHost = {choices(): Promise<{setup:boolean;orders:boolean}>; orders():Promise<void>; setup():Promise<void>; readyForUpgrade():Promise<void>; focus():boolean; close():void};
 let logistics: LogisticsHost | undefined;
 protocol.registerSchemesAsPrivileged([...(unified ? [{scheme:'packproof-connect',privileges:{standard:true,secure:true,supportFetchAPI:true}}] : []),{scheme:'packproof-app',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}},{scheme:'packproof-media',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 app.enableSandbox();
@@ -37,7 +37,8 @@ let installationId='',vault:SecureStore,logs:Diagnostics,updates:Updates,reporti
 let settings:DesktopSettings={cameraId:'',microphoneId:'',audio:false,resolution:'1080p',frameRate:30,retentionHours:24,notifications:true,scannerSuffix:'Enter',theme:'light'};
 const pendingLinks:string[]=[];
 app.on('open-url',(event,url)=>{event.preventDefault();pendingLinks.push(url);flushLinks();});
-app.on('second-instance',(_event,args)=>{win?.show();win?.focus();pendingLinks.push(...args);flushLinks();});
+function showCurrentWindow(){if(logistics?.focus())return;win?.show();win?.focus();}
+app.on('second-instance',(_event,args)=>{showCurrentWindow();pendingLinks.push(...args);flushLinks();});
 let rendererReady=false;
 function flushLinks(){if(!rendererReady)return;const scheme=config?.research?'packproof-research':environment==='production'?'packproof':environment==='staging'?'packproof-staging':'packproof-dev';while(pendingLinks.length){const path=parseDeepLink(pendingLinks.shift()!,scheme);if(path){win?.show();emit({type:'navigate',path});}}}
 const mediaGrants=new Map<string,{accountId:string;proofId:string;evidenceId:string;stageId?:string;sidecarId?:string;analysisId?:string;artifactIndex?:number;localJobId?:string;thumbnailId?:string;expires:number}>();
@@ -219,7 +220,7 @@ async function ready(){
  }
  setupIpc();await createWindow();
  let icon=nativeImage.createFromPath((app.isPackaged?join(process.resourcesPath,'icon.png'):join(__dirname,'../../build/icon.png')));if(icon.isEmpty())icon=nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
- tray=new Tray(icon.resize({width:18,height:18}));tray.setToolTip('PackProof');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open PackProof',click:()=>{win?.show();win?.focus();}},{label:'Quit and resume next time',click:()=>{if(engine?.activeCapture)win?.show();else void quitSafely();}}]));tray.on('click',()=>win?.show());
+ tray=new Tray(icon.resize({width:18,height:18}));tray.setToolTip('PackProof');tray.setContextMenu(Menu.buildFromTemplate([{label:'Open PackProof',click:showCurrentWindow},{label:'Quit and resume next time',click:()=>{if(engine?.activeCapture)win?.show();else void quitSafely();}}]));tray.on('click',showCurrentWindow);
  const scheme=config?.research?'packproof-research':environment==='production'?'packproof':environment==='staging'?'packproof-staging':'packproof-dev';app.setAsDefaultProtocolClient(scheme);
  pendingLinks.push(...process.argv);flushLinks();
  powerMonitor.on('suspend',()=>{void engine?.interruptActiveCapture('Computer went to sleep. The partial recording was retained.');});
@@ -235,7 +236,7 @@ else {
     dialog.showErrorBox('PackProof could not start','Your local evidence has been retained. Reopen PackProof or contact support.');
     await quitSafely();
   });
-  app.on('activate',()=>win?.show());
+  app.on('activate',showCurrentWindow);
   app.on('will-quit',()=>{logs?.record('SYSTEM','APP_WILL_QUIT');workspaceNotifications.stop();});
   app.on('before-quit',event=>{logs?.record('SYSTEM','APP_BEFORE_QUIT');if(!shutdown.closeAllowed){event.preventDefault();win?.close();}});
   app.on('window-all-closed',()=>{});

@@ -102,6 +102,17 @@ export function Connections({
       </div>
     </>
   );
+  if (ws.canConfigure === false) return (
+    <>
+      <header className="xw-heading"><div><h1>Your connections</h1>
+        <p>This computer’s sources are managed by a facility administrator.</p></div></header>
+      <div className="xw-card xw-empty" role="status">
+        <Icon name="connection" size={32}/><h2>Your Proofs are available</h2>
+        <p>Your account can read facility records. Source folders, collection controls and local output settings require administrator access.</p>
+        <button className="xw-primary" onClick={() => onSection("orders")}>Open orders & proofs</button>
+      </div>
+    </>
+  );
   if (source)
     return (
       <SourceView

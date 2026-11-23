@@ -84,7 +84,7 @@ module.exports = async function workspaceWalkthrough({
   stage('keyboard: connect sales folder and resume the observed order');
   publish({});
   await page.loadURL(appUrl); await setup('welcome');
-  await press('Connect my records'); await setup('discover'); await includes('Matching exports');
+  await press('Discover my systems'); await setup('discover'); await includes('Matching exports');
   await press('Sales reports', true); await setup('checked');
   await press('Open order ' + order.orderReference); await setup('first');
   await page.loadURL(appUrl); await setup('first'); await includes(order.orderReference);

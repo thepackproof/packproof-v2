@@ -64,6 +64,8 @@ export interface WorkspaceStatus {
   updatedLast24Hours?:number|null;
   syncState?: string;
   canReadOrders?: boolean;
+  /** Current human-session authority, independently verified by the host. */
+  canConfigure?: boolean;
   viewKey?: string | null;
   attention?: string | null;
   expiresAt?: string | null;

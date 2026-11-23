@@ -12,7 +12,6 @@ import {
   Progress,
   Row,
   SetupDialog,
-  WelcomeExample,
   eligible,
   kindNames,
   roles,
@@ -22,6 +21,7 @@ import {
 import { FolderSuggestions } from "./FolderSuggestions";
 import { Clarify } from "./SourceClarification";
 import { GuidedSetup } from "./GuidedSetup";
+import { FirstRunContent } from "./FirstRunContent";
 import "./Setup.css";
 import "./GuidedSetup.css";
 
@@ -94,6 +94,8 @@ export function Setup(props: SetupProps) {
  * discovery, sample success, or facility reassignment is available in this state. */
 function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps) {
   const [consent,setConsent] = useState(false), [busy,setBusy] = useState(false), [error,setError] = useState('');
+  const [reviewSavedFile, setReviewSavedFile] = useState(false);
+  const [waitingForApproval, setWaitingForApproval] = useState(false);
   const [confirmDigest, setConfirmDigest] = useState<string>();
   const [receipt, setReceipt] = useState<{ original?: string; opened: string }>();
   const [, updateReviewTime] = useState(0);
@@ -127,13 +129,16 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
     catch (e) { if (alive.current) setError(message(e)); }
     finally { pending.current = false; if (alive.current) setBusy(false); onBusyChange?.(false); }
   }
-  if (fileReview && status.installationId && !canRecover) {
+  // A CSV review cannot assign this installation to a facility. The connection
+  // prerequisite stays primary; an earlier report is explicitly secondary.
+  if (reviewSavedFile && fileReview && status.installationId && !canRecover) {
     const renew = bridge.refreshPendingFileReview;
     const current = reviewDeadline > Date.now();
     const reviewOpened = current && receipt?.opened === digest;
     const awaitingStatus = !!receipt?.original && receipt.original === digest && receipt.opened !== digest;
     return <main className="setup-experience step-welcome" data-setup-screen="pending-file-review" aria-label="Export file review">
       <div className="setup-left">
+        <button className="setup-link" disabled={busy} onClick={() => setReviewSavedFile(false)}>‹ Back to facility connection</button>
         <span className="setup-tag">Export file review</span>
         <h1>{reviewOpened ? 'Continue in your browser.' : awaitingStatus ? 'Checking your updated review.' : current ? 'Your export file review is ready.' : 'Renew your export file review.'}</h1>
         <p className="setup-lead">{awaitingStatus
@@ -171,39 +176,52 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
       </SetupDialog>}
     </main>;
   }
-  return <main className="setup-experience step-welcome" data-setup-screen="installation-recovery" aria-label="Connection setup">
-    <div className="setup-left">
-      <span className="setup-tag">Facility connection</span>
-      <h1>{needsEnrollment ? enrolling ? 'Finish connecting this computer.' : 'Connect this computer to a facility.'
-        : canRecover ? 'Reconnect this computer.' : needsFacility ? 'Choose this computer’s facility.' : 'Review this computer’s connection.'}</h1>
-      <p className="setup-lead">{needsEnrollment
-        ? 'In your browser, select this computer’s intended facility from your authorized locations and approve the matching installation. Return here to continue with your records.'
-        : canRecover
-        ? 'Preserve the former pending work, then approve this computer again in your browser. Choose the intended facility from your authorized locations.'
-        : needsFacility
-          ? 'This computer has no assigned facility. Open its browser review to check which facilities are available. Your current connection stays in place while you review your options.'
-          : status.setupAccess?.reason === 'reapproval_required'
-            ? 'This computer needs a new approval. Check the connection again after the service has received the change.'
-            : 'The facility is connected, but guided setup is not available for this installation. Review its approval or ask your workspace administrator to check this facility’s setup access.'}</p>
-      {enrolling && <p className="setup-hint">Match this code in your browser · <strong>{status.enrollment?.comparisonCode}</strong></p>}
-      {canRecover && <div className="guided-form"><label className="guided-checkbox"><input type="checkbox" checked={consent} disabled={busy}
-        onChange={event => setConsent(event.target.checked)} />Preserve former pending work and begin new browser approval.</label></div>}
-      <div className="setup-actions">
-        {needsEnrollment
-          ? <button className="setup-primary" disabled={busy || !bridge.beginEnrollment} onClick={() => void run(() => enrolling ? bridge.openWorkspaceApproval() : bridge.beginEnrollment!())}>{enrolling ? 'Reopen facility sign-in' : 'Connect this computer to a facility'}</button>
-          : canRecover
-          ? <button className="setup-primary" disabled={busy || !consent} onClick={() => void run(() => bridge.recoverEnrollment!({preservePendingWorkApproved:true}))}>Preserve work and reconnect</button>
-          : <button className="setup-primary" disabled={busy} onClick={() => void run(() => bridge.openWorkspaceApproval())}>Review this computer in browser</button>}
-        <button className="setup-secondary" disabled={busy} onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
-      </div>
+  const heading = needsEnrollment
+    ? enrolling ? 'Finish connecting this computer.' : 'Connect this computer to a facility.'
+    : canRecover ? 'Reconnect this computer.'
+      : needsFacility ? 'Choose this computer’s facility.' : 'Review this computer’s connection.';
+  const primaryLabel = needsEnrollment
+    ? enrolling ? 'Reopen facility sign-in' : 'Connect this computer'
+    : canRecover ? 'Preserve work and reconnect' : needsFacility ? 'Choose a facility' : 'Review connection';
+  const description = needsEnrollment
+    ? 'Choose your facility and confirm this computer in the secure sign-in window. PackProof will continue here when you finish.'
+    : canRecover
+      ? 'Your pending records stay protected. Reconnect this computer, then continue setting up your sources.'
+      : needsFacility
+        ? 'Choose where this computer works. Your saved report and pending records stay in place while you connect.'
+        : 'Review this computer’s access to your facility so PackProof can continue with your records.';
+  const connect = () => void run(async () => {
+    if (needsEnrollment && !enrolling) {
+      const next = await bridge.beginEnrollment!();
+      if (alive.current) setWaitingForApproval(true);
+      return next;
+    }
+    if (canRecover) return bridge.recoverEnrollment!({preservePendingWorkApproved:true});
+    await bridge.openWorkspaceApproval();
+    if (alive.current) setWaitingForApproval(true);
+  });
+  return <main className="eo-connection-recovery" data-setup-screen="installation-recovery" aria-label="Connection setup">
+    <FirstRunContent heading={heading}
+      intro="Connect this computer once. Then bring your existing order records together."
+      title={needsFacility ? 'Choose where this computer works.' : canRecover ? 'Pick up where you left off.' : 'Start with your facility.'}
+      description={description}
+      primaryLabel={primaryLabel} primaryClassName="setup-primary" onPrimary={connect}
+      disabled={canRecover && !consent || needsEnrollment && !enrolling && !bridge.beginEnrollment}
+      busy={busy}
+      secondaryAction={<button className="pp-first-run-secondary" disabled={busy}
+        onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>}>
+      {enrolling && <p className="eo-connection-code">Match this code in your browser <strong>{status.enrollment?.comparisonCode}</strong></p>}
+      {canRecover && <label className="eo-connection-consent"><input type="checkbox" checked={consent} disabled={busy}
+        onChange={event => setConsent(event.target.checked)} />Preserve former pending work and begin new browser approval.</label>}
       {busy && <p role="status">Checking this computer’s connection…</p>}
+      {!busy && waitingForApproval && <p role="status">Finish the connection in your browser. PackProof checks automatically and will continue here when approval is complete.</p>}
       {error && <p className="setup-error" role="alert">{error}</p>}
-    </div>
-    <Context label={needsEnrollment ? 'Facility approval' : 'Your existing work'} title={needsEnrollment ? 'You choose the facility.' : 'Preserved through reconnection.'}
-      intro={needsEnrollment ? 'Review the exact computer, workspace and location before approving its connection.' : 'The existing recovery process keeps former queued originals and receipt ownership protected.'}>
-      <Row icon="records" title="Current approval" detail="Review the exact computer and workspace in PackProof before replacing its connection." />
-      <Row icon="location" title="Explicit facility" detail="Choose the intended authorized location in the browser. Setup remains incomplete until that facility is available." />
-    </Context>
+      {fileReview && !canRecover && <details className="eo-saved-report">
+        <summary>Saved report</summary>
+        <p><strong>{fileReview.fileName}</strong> is still available. Connecting this computer comes first; renewing a report does not assign its facility.</p>
+        <button className="pp-first-run-secondary" disabled={busy} onClick={() => setReviewSavedFile(true)}>Review saved report separately</button>
+      </details>}
+    </FirstRunContent>
   </main>;
 }
 
@@ -402,24 +420,9 @@ function StandardSetup({
   let title: ReactNode, intro: string | undefined, left: ReactNode, right: ReactNode, eyebrow: ReactNode;
 
   if (stage === "welcome") {
-    title = (
-      <>
-        Your orders.
-        <br />
-        One clear story.
-      </>
-    );
-    eyebrow = <span className="setup-accent" />;
-    intro =
-      bridge.discoverWorkspaceFolders
-        ? "Bring the order, packing list, and shipment together. Start by checking common export folders on this computer. You choose which records to preview."
-        : "Bring the order, packing list, and shipment together. Start with the records your team already uses. We’ll look for a matched order before you turn on updates.";
+    title = "Your facility. Connected.";
     left = (
       <>
-        <div className="setup-actions">
-          {act("Connect my records", () => setStage(bridge.discoverWorkspaceFolders ? "discover" : "start"))}
-          {act("Try a sample order", onSample, true)}
-        </div>
         {!status.installationId && bridge.beginEnrollment && (
           <section className="setup-card">
             <h3>{enrolling ? "Finish connecting this computer" : "Set up a warehouse facility"}</h3>
@@ -430,10 +433,8 @@ function StandardSetup({
               void run("Opening facility sign-in", () => enrolling ? bridge.openWorkspaceApproval().then(() => status) : bridge.beginEnrollment!(), accept),true)}
           </section>
         )}
-        <p className="setup-hint">The sample opens immediately. You can start setup whenever you’re ready.</p>
       </>
     );
-    right = <WelcomeExample />;
   } else if (stage === "start") {
     title = (
       <>
@@ -1181,11 +1182,20 @@ function StandardSetup({
   }
   return (
     <main
-      className={"setup-experience step-" + stage}
+      className={stage === "welcome" ? "eo-connection-recovery step-welcome" : "setup-experience step-" + stage}
       data-setup-screen={stage}
       aria-label="Connection setup"
     >
-      <div className="setup-left">
+      {stage === "welcome" ? <FirstRunContent
+        primaryLabel="Discover my systems"
+        onPrimary={() => setStage(bridge.discoverWorkspaceFolders ? "discover" : "start")}
+        busy={!!busy}
+        secondaryAction={<button type="button" className="pp-first-run-secondary" onClick={onSample}>Try a sample order</button>}
+      >
+        {left}
+        {busy && <p role="status">{busy}…</p>}
+        {error && <p className="setup-error" role="alert">{error}</p>}
+      </FirstRunContent> : <div className="setup-left">
         {eyebrow}
         <h1 ref={heading} tabIndex={-1}>
           {title}
@@ -1224,7 +1234,7 @@ function StandardSetup({
             {error}
           </p>
         )}
-      </div>
+      </div>}
       {right}
       {overlay && (
         <SetupDialog

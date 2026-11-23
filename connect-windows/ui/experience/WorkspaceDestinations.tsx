@@ -253,9 +253,10 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
           {!readable && <p className="eo-route-warning" role="status">Local destination and revision details are hidden until current facility access is restored.</p>}
           {issue && <p className="eo-route-warning">The output folder needs attention or has pending work. Previously completed originals and proofs must remain preserved.</p>}
           <div className="eo-route-buttons">
-            <button className="eo-route-action" disabled={busy || !readable} onClick={onOutputSetup}>Change Proof folder</button>
-            <button className="eo-route-subaction" disabled={busy || !readable || !folder} onClick={() => void run(() => bridge.openWorkspaceOutput())}>Open local archive</button>
+            <button className="eo-route-action" disabled={busy || !readable || status.workspace?.canConfigure === false} onClick={onOutputSetup}>Change Proof folder</button>
+            <button className="eo-route-subaction" disabled={busy || !readable || !folder || status.workspace?.canConfigure === false} onClick={() => void run(() => bridge.openWorkspaceOutput())}>Open local archive</button>
           </div>
+          {status.workspace?.canConfigure === false && <p className="eo-route-context">An administrator manages this computer’s local Proof folder. Your authorized online Proofs remain available.</p>}
         </article>
         <article className="eo-route-panel eo-output-state">
           <h2>Versioning & recovery</h2>

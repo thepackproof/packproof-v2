@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ConnectApp } from "./ConnectApp";
 import { getBridge, type ConnectBridge, type ConnectStatus } from "./types";
 import type { DraftPreview, OrderDetail, WorkspaceStep } from "./workspace-types";
-import { Header, Shell, initialAppearance, persistEvidenceAppearance, type Appearance, type Section } from "./experience/Shell";
+import { Header, Shell, useEvidencePreferences, type Section } from "./experience/Shell";
 import { Workspace } from "./experience/Workspace";
 import { canReadWorkspace } from "./experience/WorkspaceModel";
 import { Setup } from "./experience/Setup";
 import { Proof } from "./experience/Proof";
 import { draftProof, northSample, riversideSample, sampleOriginal } from "./experience/preview";
 import "./experience/experience.css";
+import "./experience/SetupShell.css";
 
 type Selection = { id: string; revision: number; scope: string };
 type Draft = DraftPreview["examples"][number];
@@ -98,8 +99,7 @@ function Experience({
 }) {
   const ws = status.workspace!;
   const facilitySetup = new URLSearchParams(window.location.search).get("facilitySetup") === "1";
-  const [setup, setSetup] = useState(() => facilitySetup || ws.step !== "overview" || ws.phase !== "active");
-  const [setupAppearance, setSetupAppearance] = useState<Appearance>(initialAppearance);
+  const [setup, setSetup] = useState(() => ws.canConfigure !== false && (facilitySetup || ws.step !== "overview" || ws.phase !== "active"));
   const [section, setSection] = useState<Section>("home");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [tour, setTour] = useState(false);
@@ -121,17 +121,12 @@ function Experience({
   }, [accessConfirmed]);
   const liveDraft =
     draft?.identity === identity && status.state !== "revoked" && !serviceUnavailable ? draft.data : null;
-  const showSetup = setup || ws.phase !== "active" || ws.step !== "overview";
-  // The shell is intentionally unmounted during first-run setup. Re-read its
-  // saved preference when returning to setup, rather than reverting to light.
-  useEffect(() => {
-    if (showSetup) setSetupAppearance(initialAppearance());
-  }, [showSetup]);
-  const toggleSetupAppearance = () => {
-    const next: Appearance = setupAppearance === "dark" ? "light" : "dark";
-    persistEvidenceAppearance(next);
-    setSetupAppearance(next);
-  };
+  // Viewing a facility does not grant permission to configure this computer.
+  // A reader's real collection phase stays unchanged while their authorized
+  // order workspace remains available.
+  const showSetup = ws.canConfigure === false
+    ? false
+    : setup || ws.phase !== "active" || ws.step !== "overview";
   const selected =
     selection?.scope === scope && accessConfirmed ? selection : null;
   const latest = selected && ws.orders?.find((o) => o.proofId === selected.id);
@@ -145,10 +140,6 @@ function Experience({
     ]),
   );
   const open = (id: string, rev: number) => {
-    if (facilitySetup) {
-      void bridge.openWorkspaceOrder(id,rev).catch(e => setError(e instanceof Error ? e.message : "Could not open the signed-in order."));
-      return;
-    }
     if (!accessConfirmed) {
       setSelection(null);
       setError("Restore your approved facility connection before opening order records.");
@@ -168,6 +159,10 @@ function Experience({
     setSelection(null);
   };
   async function edit(step: WorkspaceStep) {
+    if (ws.canConfigure === false) {
+      setError("You can view this facility’s Proofs. An administrator manages its sources and output folder.");
+      return;
+    }
     onBusyChange(true);
     setError("");
     try {
@@ -183,7 +178,7 @@ function Experience({
   }
   const overlay = tour || !!liveDraft || !!selected;
   return (
-    <>
+    <Shell status={status} section={showSetup ? section === "settings" ? "settings" : "connections" : selected ? "orders" : section} onSection={nav} setupMode={showSetup}>
       <Header
         workspace={
           tour
@@ -232,14 +227,7 @@ function Experience({
         </div>
       )}
       {showSetup && (
-        <div className="pp-setup-appearance" data-appearance={setupAppearance} hidden={overlay}>
-          <div className="pp-setup-theme-controls">
-            <span>Facility connection · appearance only</span>
-            <button type="button" onClick={toggleSetupAppearance}
-              aria-label={setupAppearance === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}>
-              {setupAppearance === "dark" ? "Light appearance" : "Dark appearance"}
-            </button>
-          </div>
+        <SetupSurface hidden={overlay || section === "settings"}>
           <Setup
             key={identity}
             status={status}
@@ -254,17 +242,16 @@ function Experience({
             onOpenDraftProof={(data) => setDraft({ data, identity })}
             onOpenProof={(o) => open(o.proofId, o.revision)}
             onComplete={() => {
-              if (facilitySetup) {
-                void bridge.openWorkspaceReview().then(() => window.close())
-                  .catch(e => setError(e instanceof Error ? e.message : "Could not open your signed-in workspace."));
-                return;
-              }
               setSetup(false);
               nav("home");
             }}
           />
-        </div>
+        </SetupSurface>
       )}
+      {showSetup && section === "settings" && !overlay && <Workspace
+        section="settings" status={status} bridge={bridge} onStatus={accept}
+        onSection={nav} onProof={open} onEditStep={edit} onLegacy={onLegacy} onBusyChange={onBusyChange}
+      />}
       {tour ? (
         <>
           <div className="pp-tour-picker">
@@ -293,7 +280,7 @@ function Experience({
           onBack={back}
         />
       ) : !showSetup ? (
-        <Shell status={status} section={selected ? "orders" : section} onSection={nav}>
+        <>
           {!serviceUnavailable && (
             <div hidden={!!selected}>
               <Workspace
@@ -319,10 +306,14 @@ function Experience({
               onBack={back}
             />
           ) : null}
-        </Shell>
+        </>
       ) : null}
-    </>
+    </Shell>
   );
+}
+function SetupSurface({ hidden, children }: { hidden: boolean; children: ReactNode }) {
+  const { appearance } = useEvidencePreferences();
+  return <div className="pp-setup-appearance pp-setup-integrated" data-appearance={appearance} hidden={hidden}>{children}</div>;
 }
 export function WorkspaceApp({ bridge = getBridge() }: { bridge?: ConnectBridge }) {
   const [status, setStatus] = useState<ConnectStatus | null>(null),
@@ -425,7 +416,7 @@ export function WorkspaceApp({ bridge = getBridge() }: { bridge?: ConnectBridge 
         polling = false;
         const current = displayed.current;
         const pending =
-          current?.workspace?.phase === "awaiting_approval" || current?.enrollment?.state === "pending";
+          current?.workspace?.phase === "awaiting_approval" || current?.enrollment?.state === "pending" || !!current?.setupAccess;
         schedule(
           generation !== epoch.current
             ? 100
