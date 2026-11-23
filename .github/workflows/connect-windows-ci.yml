@@ -43,6 +43,9 @@ jobs:
         with:
           dotnet-version: '10.0.403'
       - run: node ../examples/multisource-journey/journey.mjs self-check
+      - name: Self-test one-click warehouse lab without customer records
+        shell: pwsh
+        run: "& ../examples/multisource-journey/warehouse-lab.ps1 -Action SelfTest"
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

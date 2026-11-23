@@ -269,3 +269,11 @@
 .pp-evidence-os > .pp-sidebar {position:sticky;top:0;max-height:calc(100vh - 76px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--eos-border) transparent}
 .pp-evidence-os[data-motion="reduced"] *, .pp-evidence-os[data-motion="reduced"] *::before, .pp-evidence-os[data-motion="reduced"] *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media (max-width:760px){.pp-evidence-os > .pp-sidebar{position:relative;max-height:none;overflow-y:visible}}
+
+
+/* Fixed brand/navigation zones: overflow scrolls the destination list, not the logo. */
+.pp-evidence-os > .pp-sidebar {position:sticky;top:0;max-height:calc(100vh - 76px);overflow:hidden}
+.pp-evidence-os .pp-sidebar nav {overflow-y:auto;overflow-x:hidden;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:var(--eos-border) transparent}
+.pp-evidence-os .pp-sidebar-foot {flex:none;margin-top:auto}
+@media(max-height:950px) {.pp-evidence-os .pp-eos-nav-hint {display:none}}
+@media(max-width:760px) {.pp-evidence-os > .pp-sidebar{position:relative;max-height:none;overflow:visible}.pp-evidence-os .pp-sidebar nav{overflow:visible;flex:none}}

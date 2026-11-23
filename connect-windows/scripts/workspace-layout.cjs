@@ -148,6 +148,14 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         }
         if(scene.action==='proof')await press(visibleButton(summary.orderReference));
         await heading(scene.heading);
+        if(scene.action==='proof') {
+          const styles=await page.executeJavaScript("({cards:[...document.querySelectorAll('.pf-quantities button')].map(x=>getComputedStyle(x).backgroundColor),brand:(()=>{const n=document.querySelector('.pp-eos-brand');if(!n)return null;const b=n.getBoundingClientRect();return {top:b.top,bottom:b.bottom};})()})");
+          if(theme==='dark') assert.ok(styles.cards.length>0 &&
+            styles.cards.every(c=>c!=='rgb(255, 255, 255)' && c!=='rgb(246, 248, 252)'),
+            'Dark Proof quantity cards must not retain light theme backgrounds');
+          if(cssWidth>=1000) assert.ok(styles.brand && styles.brand.top>=65 && styles.brand.bottom<=height/scale,
+            'Sidebar branding must remain visible after navigation to a Proof');
+        }
         if(scene.guided){
           await waitFor(page,`!!document.querySelector('main[aria-label="Guided facility setup"]')`);
           if(scene.name==='guided-order')await waitFor(page,`[...document.querySelectorAll('.setup-context .setup-tag')].some(el=>el.checkVisibility() && el.textContent.trim()==='Order preview · Sample')`);

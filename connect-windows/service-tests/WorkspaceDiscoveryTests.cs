@@ -89,4 +89,60 @@ public sealed class WorkspaceDiscoveryTests
         }
         finally { root.Delete(true); }
     }
+    [Fact]
+    public void Structured_sample_is_bounded_and_requires_canonical_identity_for_role()
+    {
+        var order = """
+            {"kind":"order","eventId":"order-1","version":1,"occurredAt":"2026-11-17T12:00:00Z",
+             "entityNamespace":"ERP_A","entityId":"SO10482",
+             "lines":[{"lineId":"20","orderedQuantity":2,"unit":"each"}]}
+            """;
+        Assert.Equal("Order records",WorkspaceDiscovery.StructuredLayout("order",Bytes(order),".json")?.Label);
+        Assert.Null(WorkspaceDiscovery.StructuredLayout("shipping",Bytes(order),".json"));
+        Assert.Null(WorkspaceDiscovery.StructuredLayout("order",Bytes("""{"kind":"order","secret":"example"}"""),".json"));
+        Assert.Null(WorkspaceDiscovery.StructuredLayout("order",Bytes(new string('x',33000)),".json"));
+        var label = """
+            [{"kind":"label","eventId":"label-1","version":1,"occurredAt":"2026-11-17T12:04:00Z",
+              "entityNamespace":"TRACKING","entityId":"1Z123"}]
+            """;
+        Assert.Equal("Shipping records",WorkspaceDiscovery.StructuredLayout("shipping",Bytes(label),".json")?.Label);
+        Assert.Null(WorkspaceDiscovery.StructuredLayout("order",Bytes(label),".json"));
+        var pick = """
+            {"kind":"picking","eventId":"pick-1","version":1,"occurredAt":"2026-11-17T12:01:00Z",
+             "entityNamespace":"WMS","entityId":"WO01"}
+            """;
+        Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick+"\n"),".jsonl")?.Label);
+        Assert.Equal("Picking records",WorkspaceDiscovery.StructuredLayout("picking",Bytes(pick),".jsonl")?.Label);
+    }
+
+    [WindowsFact]
+    public void Finds_matching_json_exports_in_dedicated_approved_discovery_roots()
+    {
+        var root = Directory.CreateTempSubdirectory("pp-discovery-json-");
+        try
+        {
+            var docs = root.CreateSubdirectory("Documents");
+            var exports = docs.CreateSubdirectory("PackProof Exports");
+            var orders = exports.CreateSubdirectory("Orders");
+            var shipping = exports.CreateSubdirectory("Shipping");
+            File.WriteAllText(Path.Combine(orders.FullName,"not-an-order.json"),"""{"kind":"order","private":"unrelated"}""");
+            File.WriteAllText(Path.Combine(orders.FullName,"orders.json"),"""
+                {"kind":"order","eventId":"order-10482","version":1,"occurredAt":"2026-11-17T12:00:00Z",
+                 "entityNamespace":"ERP_A","entityId":"SO10482",
+                 "lines":[{"lineId":"20","orderedQuantity":2,"unit":"each"}]}
+                """);
+            File.WriteAllText(Path.Combine(shipping.FullName,"labels.json"),"""
+                [{"kind":"label","eventId":"label-1","version":1,"occurredAt":"2026-11-17T12:04:00Z",
+                  "entityNamespace":"CARRIER","entityId":"TRACK771","packageId":"PKG92"}]
+                """);
+            var orderResults = WorkspaceDiscovery.Scan("order",[docs.FullName],null,[]);
+            Assert.Contains(orderResults,s=>s.Folder==orders.FullName && s.SampleFile=="orders.json");
+            Assert.DoesNotContain(orderResults,s=>s.Folder==shipping.FullName);
+            var shippingResults = WorkspaceDiscovery.Scan("shipping",[docs.FullName],null,[]);
+            Assert.Contains(shippingResults,s=>s.Folder==shipping.FullName && s.SampleFile=="labels.json");
+            Assert.DoesNotContain(shippingResults,s=>s.Folder==orders.FullName);
+        }
+        finally { root.Delete(true); }
+    }
+
 }

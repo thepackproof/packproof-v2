@@ -116,7 +116,7 @@ internal static class WorkspaceDiscovery
         if (role=="evidence" && !evidenceSource) return null;
         var layouts = new List<(Layout Layout,string File)>();
         var samples = candidates.Where(f=>evidenceSource ?
-            WorkspaceEvidenceDiscovery.CanInspect(f.Extension) : IsDelimited(f.Extension));
+            WorkspaceEvidenceDiscovery.CanInspect(f.Extension) : IsDelimited(f.Extension) || IsStructured(f.Extension));
         foreach (var file in samples.Take(12))
         {
             if (files >= FileLimit) break;
@@ -131,9 +131,13 @@ internal static class WorkspaceDiscovery
                         layouts.Add((new("Packing or shipping evidence",false),file.Name));
                     continue;
                 }
-                var fields = Header(stream,file.Extension);
+                if (vendorFolder && !IsDelimited(file.Extension)) continue;
+                var fields = IsStructured(file.Extension) ? Array.Empty<string>() : Header(stream,file.Extension);
                 if (vendorFolder && ExportCatalogue.Match(fields)?.Id != DailyShippingProfile) continue;
-                if (fields.Length > 0 && Classify(role,fields) is { } layout) layouts.Add((layout,file.Name));
+                var layout = IsStructured(file.Extension)
+                    ? StructuredLayout(role,stream,file.Extension)
+                    : Classify(role,fields);
+                if (layout != null) layouts.Add((layout,file.Name));
             }
             catch (Exception e) when (Skippable(e)) { }
         }
@@ -168,6 +172,92 @@ internal static class WorkspaceDiscovery
 
     private static bool IsDelimited(string ext) => ext.Equals(".csv",StringComparison.OrdinalIgnoreCase) ||
         ext.Equals(".tsv",StringComparison.OrdinalIgnoreCase) || ext.Equals(".psv",StringComparison.OrdinalIgnoreCase);
+
+
+    private const int StructuredJsonBytes = 32768, StructuredLineBytes = 8192;
+    private static bool IsStructured(string extension) =>
+        extension.Equals(".json",StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".jsonl",StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".ndjson",StringComparison.OrdinalIgnoreCase);
+
+    // Read only a bounded JSON sample from an already-vetted dedicated report
+    // folder. Discovery proposes a source; it does not authorize collection,
+    // transmit original bytes or invent a relationship with an order.
+    internal static Layout? StructuredLayout(string role,Stream stream,string extension)
+    {
+        if (!IsStructured(extension) || role == "evidence") return null;
+        try
+        {
+            byte[] bytes;
+            if (extension.Equals(".json",StringComparison.OrdinalIgnoreCase))
+            {
+                if (stream.Length is <= 0 or > StructuredJsonBytes) return null;
+                bytes = new byte[(int)stream.Length];
+                stream.ReadExactly(bytes);
+            }
+            else
+            {
+                // A large JSONL export can be recognized from its first complete
+                // line, never by reading the entire file or a partial record.
+                var sample = new byte[StructuredLineBytes];
+                int length = 0;
+                bool complete = false;
+                while (length < sample.Length)
+                {
+                    var value = stream.ReadByte();
+                    if (value < 0 || value == '\n') { complete = true; break; }
+                    sample[length++] = (byte)value;
+                }
+                if (!complete || length == 0) return null;
+                bytes = sample[..length];
+            }
+            var prefix = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+            using var document = JsonDocument.Parse(bytes.AsMemory(prefix),new JsonDocumentOptions { MaxDepth = 16 });
+            var row = document.RootElement;
+            if (row.ValueKind == JsonValueKind.Array)
+            {
+                if (row.GetArrayLength() == 0) return null;
+                row = row[0];
+            }
+            if (row.ValueKind != JsonValueKind.Object) return null;
+            string? Scalar(string field) => row.TryGetProperty(field,out var value) ? value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Number => value.GetRawText(),
+                _ => null
+            } : null;
+            bool Has(string field) => !string.IsNullOrWhiteSpace(Scalar(field));
+            var kind = Scalar("kind");
+            bool kindRole = role switch
+            {
+                "order" => kind == "order",
+                "picking" => kind == "picking",
+                "packing" => kind == "packing",
+                "shipping" => kind is "shipping" or "label",
+                "handoff" => kind is "handoff" or "load",
+                "delivery" => kind is "delivery" or "receiving",
+                "returns" => kind is "return" or "returns",
+                _ => false
+            };
+            if (kind != null && !kindRole) return null;
+            if (kindRole && Has("eventId") && Has("version") && Has("occurredAt")
+                && Has("entityNamespace") && Has("entityId"))
+            {
+                if (role == "order" && (!row.TryGetProperty("lines",out var lines)
+                    || lines.ValueKind != JsonValueKind.Array || !lines.EnumerateArray().Any(line =>
+                        line.ValueKind == JsonValueKind.Object && line.TryGetProperty("lineId",out _)
+                        && line.TryGetProperty("orderedQuantity",out _) && line.TryGetProperty("unit",out _))))
+                    return null;
+                // The canonical event form has enough identity to recognize a
+                // likely source. Validation and association happen after approval.
+                return new Layout(RoleLabel(role),false);
+            }
+            if (kind != null) return null;
+            return Classify(role,row.EnumerateObject().Select(property=>property.Name).ToArray());
+        }
+        catch (JsonException) { return null; }
+        catch (ArgumentException) { return null; }
+    }
 
     internal static string[] Header(Stream stream,string extension)
     {

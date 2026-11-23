@@ -26,6 +26,7 @@ import {
   type Source,
 } from "./ProofModel";
 import "./Proof.css";
+import "./ProofTheme.css";
 import { ProofJourney } from "./ProofJourney";
 
 const sections = [
@@ -367,7 +368,7 @@ function ProofRevision({
             )}
           </section>
         ) : section === "Overview" ? (
-          <div className="pf-overview">
+          <>
             {mode === "live" && (
               <ProofJourney
                 orderReference={detail.orderReference}
@@ -378,6 +379,7 @@ function ProofRevision({
                 onEvidence={() => chooseTab("Evidence")}
               />
             )}
+            <div className="pf-overview">
             <section className="pf-card pf-summary">
               <div className="pf-titleicon">
                 <Icon name={issueCount ? "attention" : "records"} size={36} />
@@ -527,7 +529,8 @@ function ProofRevision({
                 )}
               </div>
             </section>
-          </div>
+            </div>
+          </>
         ) : section === "Items" ? (
           <section className="pf-card">
             <h2>Items and quantities</h2>

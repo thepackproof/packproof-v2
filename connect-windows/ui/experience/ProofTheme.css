@@ -1,0 +1,32 @@
+/* Evidence OS / canonical Proof theme — preserves native source actions and dialogs.
+ * Figma nNnkgTZOBNkG8muy8AkIv1, 4:122, 5:190, 5:381.
+ * Scoped to the authenticated Logistics shell; Commerce visuals remain untouched.
+ */
+.pp-evidence-os .pf {color:var(--eos-text)}
+.pp-evidence-os .pf :is(.pf-record,.pf-itemlink,.pf-control,.pf-quantities button,.pf-deliverygrid button,.pf-sectionhead select) {
+  color:var(--eos-text);
+}
+.pp-evidence-os .pf :is(.pf-quantities button,.pf-deliverygrid button,.pf-sectionhead select,.pf-inset,.pf-iconbox,.pf-control) {
+  background:var(--eos-surface-raised);
+  border-color:var(--eos-border);
+}
+.pp-evidence-os .pf .pf-quantities button:hover,
+.pp-evidence-os .pf .pf-deliverygrid button:hover {background:var(--eos-hover);border-color:var(--eos-blue)}
+.pp-evidence-os .pf :is(.pf-quantities button,.pf-deliverygrid button) strong {color:var(--eos-text)}
+.pp-evidence-os .pf :is(.pf-quantities button,.pf-deliverygrid button) small {color:var(--eos-muted)}
+.pp-evidence-os .pf :is(.pf-quantities button,.pf-deliverygrid button) span {color:var(--eos-blue)}
+.pp-evidence-os .pf .pf-inset pre {background:transparent;color:var(--eos-text)}
+.pp-evidence-os .pf .pf-record {background:transparent;border-color:var(--eos-border)}
+.pp-evidence-os .pf .pf-record:hover {background:var(--eos-hover)}
+.pp-evidence-os .pf .pf-itemlink:hover {background:var(--eos-hover)}
+.pp-evidence-os .pf .pf-follow .pf-tag.neutral {background:var(--eos-surface-raised);color:var(--eos-green)}
+.pp-evidence-os .pf .pf-follow .pf-tag.warn {background:#4e3b2d;color:#ffd49c}
+.pp-evidence-os .pf :is(.pf-timeline,.pf-history,.pf-evidence-list,.pf-row,.pf-line,.pf-claim,.pf-source) {border-color:var(--eos-border)}
+.pp-evidence-os .pf .pf-search input::placeholder {color:var(--eos-muted);opacity:.86}
+.pp-evidence-os .pf-dialog {background:var(--eos-surface);border-color:var(--eos-border);color:var(--eos-text)}
+.pp-evidence-os .pf-dialog :is(input,select,textarea,button:not(.pf-link)) {color:var(--eos-text);background:var(--eos-surface-raised);border-color:var(--eos-border)}
+.pp-evidence-os .pf-dialog :is(h2,h3,strong,dt) {color:var(--eos-text)}
+.pp-evidence-os .pf-dialog :is(small,dd,p) {color:var(--eos-muted)}
+.pp-evidence-os .pf-eos-journey {margin-bottom:18px}
+.pp-evidence-os .pf .pf-overview {align-items:start}
+@media (forced-colors:active) {.pp-evidence-os .pf :is(.pf-record,.pf-itemlink,.pf-control):focus-visible{outline:2px solid Highlight}}

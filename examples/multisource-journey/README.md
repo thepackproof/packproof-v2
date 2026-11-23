@@ -1,5 +1,36 @@
 # Controlled order journey
 
+## One-click Windows warehouse lab (preferred for installed testing)
+
+Open PowerShell in a checkout of this repository with Node.js 24 installed.
+The wrapper creates a new, isolated `PackProof Exports ...` directory in your
+**Documents** folder. Each order/picking/packing/shipping/etc. source has its
+own directory and the Proof output directory is separate. No existing files
+are overwritten.
+
+```powershell
+.\examples\multisource-journey\warehouse-lab.ps1 -Action Prepare
+# Copy the returned "lab" path into the next command:
+.\examples\multisource-journey\warehouse-lab.ps1 -Action Next -LabPath "C:\Users\YOU\Documents\PackProof Exports ..."
+# After the first order is visible in an approved PackProof workspace:
+.\examples\multisource-journey\warehouse-lab.ps1 -Action Run -LabPath "C:\Users\YOU\Documents\PackProof Exports ..." -DelaySeconds 5
+.\examples\multisource-journey\warehouse-lab.ps1 -Action Status -LabPath "C:\Users\YOU\Documents\PackProof Exports ..."
+```
+
+Start with the empty source folders, approve the sources with the **actual**
+browser/collector permission workflow, then publish events one by one.
+Watch the same order's Proof ID persist while revisions, source records and
+delivery events arrive. Some XML/media source formats still require manual
+source selection; recognizing a folder is not proof of a successful connection.
+Follow the **Packaged acceptance** checklist below to verify backend receipts,
+late corrections, restarts, outages and local export hashes.
+
+To test the wrapper without a PackProof account or backend, run
+`.\examples\multisource-journey\warehouse-lab.ps1 -Action SelfTest`.
+That only verifies disposable test file generation and publication. It cannot
+qualify the Windows application itself.
+
+
 Run from the repository root. The fixture exporter creates a new sample directory under the selected parent. The source folders and output folder start empty. The journal records publication time, source role, original size and SHA-256 for each step. Keep this operation in an isolated test tenant with no customer credentials.
 
 ~~~powershell

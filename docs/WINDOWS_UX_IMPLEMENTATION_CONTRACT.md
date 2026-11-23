@@ -49,6 +49,13 @@ The initial route/error correction and static build contract do not by themselve
 
 ## Real light/dark visual acceptance (updated after screenshot audit)
 
+The packaged Figma-aligned Proof now places the authentic event timeline and
+source summary before the legacy grid. The dark theme explicitly reskins nested
+quantity/delivery controls, and the sidebar keeps the brand fixed while only
+the navigation list scrolls. The packaged acceptance harness checks those
+specific surfaces and the brand's visible bounds rather than relying on a
+TypeScript compilation or screenshots alone.
+
 The original Windows visual runner emulated the operating-system color scheme but did not switch the actual PackProof appearance preference; the exported dark and light operations screenshots were pixel-identical. This is **not** qualified visual evidence. The corrected source runner activates the actual in-app theme, asserts the rendered theme attribute and computed background, and rejects identical light/dark overview captures. The unified installer additionally checks selected active Logistics routes in both appearances at Windows scales. Setup is currently light-only: missing dark setup variants are recorded explicitly as unqualified rather than mislabeled. Finish and verify native dark setup before claiming application-wide theme parity.
 
 ## Evidence OS extension — 2026-11-22
