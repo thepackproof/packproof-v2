@@ -54,7 +54,8 @@
         "navigationShell": "connect-windows/ui/experience/Shell.tsx",
         "themeStyles": "connect-windows/ui/experience/EvidenceOS.css",
         "evolvingProofTimeline": "connect-windows/ui/experience/ProofJourney.tsx",
-        "liveDiscoveryAnimation": "connect-windows/ui/experience/FolderSuggestions.tsx"
+        "liveDiscoveryAnimation": "connect-windows/ui/experience/FolderSuggestions.tsx",
+        "recoveryPanel": "connect-windows/ui/experience/RecoveryPanel.tsx"
       },
       "unfinished": [
         "Native Windows visual qualification",

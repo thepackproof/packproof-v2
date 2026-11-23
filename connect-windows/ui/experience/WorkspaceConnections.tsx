@@ -3,6 +3,7 @@ import { sourceRoles, type WorkspaceSource, type WorkspaceStep } from "../worksp
 import type { RunAction, WorkspaceProps } from "./WorkspaceModel";
 import { sourceIcon, sourceIssue, sourceState, sourceTitle } from "./WorkspaceModel";
 import { Icon } from "./Icon";
+import { RecoveryPanel } from "./RecoveryPanel";
 import { roles, SetupDialog } from "./SetupParts";
 
 export function CollectionBanner({ status, open }: { status: WorkspaceProps["status"]; open?: () => void }) {
@@ -100,6 +101,7 @@ export function Connections({
         </button>
       </header>
       <CollectionBanner status={status} />
+      <RecoveryPanel status={status} sources={srcs} busy={busy} run={run} bridge={bridge} onSource={onSource}/>
       <div className="xw-connection-list">
         {srcs.map((s) => (
           <article key={s.id} className="xw-card xw-sourcecard">
