@@ -47,6 +47,10 @@ The Figma design's **UX acceptance charter** (node `6:116`) is binding, not comm
 
 The initial route/error correction and static build contract do not by themselves establish full pixel-level parity, signed installer readiness, or successful live facility authorization. Those remain explicit release gates, not implied claims.
 
+## Real light/dark visual acceptance (updated after screenshot audit)
+
+The original Windows visual runner emulated the operating-system color scheme but did not switch the actual PackProof appearance preference; the exported dark and light operations screenshots were pixel-identical. This is **not** qualified visual evidence. The corrected source runner activates the actual in-app theme, asserts the rendered theme attribute and computed background, and rejects identical light/dark overview captures. The unified installer additionally checks selected active Logistics routes in both appearances at Windows scales. Setup is currently light-only: missing dark setup variants are recorded explicitly as unqualified rather than mislabeled. Finish and verify native dark setup before claiming application-wide theme parity.
+
 ## Evidence OS extension — 2026-11-22
 
 The founder-approved PackProof Evidence OS Figma file is `nNnkgTZOBNkG8muy8AkIv1` (https://www.figma.com/design/nNnkgTZOBNkG8muy8AkIv1). The new visual and interaction design supersedes the older **appearance** target for the active Logistics workspace. It does **not** supersede authenticated facility scope, consent, full-original preservation, durable ordering and versioning, or original access safety; those functional requirements remain binding.

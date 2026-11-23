@@ -53,7 +53,7 @@ const navButton = text => `[...document.querySelectorAll('nav[aria-label="Worksp
 const squash = text => text.replace(/\s+/g,'');
 
 module.exports = async function workspaceLayout({page,setStatus,register,state,waitFor,checkPage,stage,reach,keyboard,appUrl,directory,report,
-  themes=['light','dark'],displayCases=[[1280,900,1],[1280,900,1.25],[1280,900,1.5],[1280,900,2],[560,720,1]],captureViewport=false,includeGuidedSetup=false}) {
+  themes=['light','dark'],darkScenes=null,displayCases=[[1280,900,1],[1280,900,1.25],[1280,900,1.5],[1280,900,2],[560,720,1]],captureViewport=false,includeGuidedSetup=false}) {
   fs.mkdirSync(directory,{recursive:true});
   let current, activeScene, inspected;
   function publish(next){current=next;setStatus(next);return next;}
@@ -95,6 +95,13 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
       await page.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:cssWidth,height:Math.round(height/scale),deviceScaleFactor:scale,mobile:false});
       await page.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme},{name:'prefers-reduced-motion',value:'reduce'}]});
       for(const scene of [...(includeGuidedSetup?guidedScenes:[]),...scenes]) {
+        // Setup currently has a light-only renderer. Do not mislabel a light
+        // screenshot as dark simply because matchMedia was emulated.
+        if(theme==='dark' && scene.step) {
+          (report.unqualifiedThemeScreens??=[]).push({scene:scene.name,theme:'dark',reason:'Setup does not yet expose an application dark appearance state'});
+          continue;
+        }
+        if(theme==='dark' && darkScenes && !darkScenes.includes(scene.name)) continue;
         activeScene=scene.name;inspected=false;
         report.currentRun={scene:scene.name,theme,width,height,scale,cssWidth};
         stage(`packaged workspace ${theme} ${cssWidth}px ${scene.name}`);
@@ -113,6 +120,18 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
           proofOutput:{folder,pending:pending?1:0,state:pending?'pending':'ready'}});
         await page.loadURL(appUrl);
         await waitFor(page,`matchMedia('(prefers-color-scheme: ${theme})').matches && matchMedia('(prefers-reduced-motion: reduce)').matches`);
+        if(!scene.step) {
+          await waitFor(page,"!!document.querySelector('.pp-evidence-os')");
+          const observed=await page.executeJavaScript("document.querySelector('.pp-evidence-os').getAttribute('data-appearance')");
+          if(observed!==theme) {
+            const target="document.querySelector("+JSON.stringify('button[aria-label="Switch to '+theme+' appearance"]')+")";
+            await press(target);
+          }
+          await waitFor(page,"document.querySelector('.pp-evidence-os')?.getAttribute('data-appearance') === "+JSON.stringify(theme));
+          const surface=await page.executeJavaScript("getComputedStyle(document.querySelector('.pp-evidence-os')).backgroundColor");
+          if(!surface) throw Error('Could not establish actual application palette: '+scene.name);
+          (report.actualThemeBackgrounds??={})[theme]=surface;
+        }
         if(scene.nav){
           await heading(home);
           await press(navButton(scene.nav));
@@ -152,5 +171,17 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
         report.runs.push({...report.currentRun});
       }
     }
+  }
+  // Static media preferences alone are not theme verification. These are
+  // calculated application surfaces after activating the real theme control.
+  if(themes.includes('light') && themes.includes('dark') && report.actualThemeBackgrounds?.dark && report.actualThemeBackgrounds?.light) {
+    assert.notEqual(report.actualThemeBackgrounds.light,report.actualThemeBackgrounds.dark,
+      'Actual light and dark application backgrounds must differ');
+  }
+  if(!captureViewport && themes.includes('light') && themes.includes('dark')) {
+    const light=path.join(directory,'overview-light.png'),dark=path.join(directory,'overview-dark.png');
+    if(fs.existsSync(light)&&fs.existsSync(dark))
+      assert.ok(!fs.readFileSync(light).equals(fs.readFileSync(dark)),
+        'Light and dark screenshots are identical; the application theme was not actually switched');
   }
 };

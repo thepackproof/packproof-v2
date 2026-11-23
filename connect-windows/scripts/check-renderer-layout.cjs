@@ -171,7 +171,7 @@ async function main() {
     if (packaged) {
       const harness={page,state,appUrl,report,stage,reach,keyboard,waitFor,checkPage,
         directory:path.join(root,"build",unified ? "unified-ux-screens/workspace-screens" : "workspace-screens"), setStatus:next=>{ currentState=next; },
-        ...(unified ? {themes:["light"],displayCases:[[1440,900,1],[1280,800,1.25]],captureViewport:true,includeGuidedSetup:true} : {}),
+        ...(unified ? {themes:["light","dark"],darkScenes:["overview","orders","connections","assembled-order","disconnected"],displayCases:[[1440,900,1],[1280,800,1.25]],captureViewport:true,includeGuidedSetup:true} : {}),
         register:(method,data)=>{
           ipcMain.removeHandler("connect:"+method);
           ipcMain.handle("connect:"+method,async (event,...args)=>{
