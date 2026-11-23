@@ -78,3 +78,34 @@ it("repairs the selected source by identity and generation without claiming a ca
   expect(screen.getByRole("heading", { name: /Reconnect your shipping folder/ })).toBeVisible();
   expect(screen.queryByText("Connected")).toBeNull();
 });
+
+it("redacts cached source identity, folder paths and open source details when facility access is unverified", async () => {
+  const privateFolder = "C:\\Warehouse\\RestrictedShipping";
+  const granted = status({
+    sources: [{
+      id: "restricted-shipping", displayName: "Restricted shipment feed",
+      folder: privateFolder, roles: ["shipping"], generation: 2,
+      state: "active", recognition: { state: "recognized", message: "Private layout recognized." },
+    }],
+    outputFolder: "C:\\RestrictedProofs",
+  });
+  const blocked = { ...granted, transport: { ...granted.transport!, state: "unsupported" as const } };
+  const recheck = vi.fn(async () => blocked);
+  const bridge = bridgeFor(granted, { getWorkspaceStatus: recheck });
+  const props = { bridge, onStatus: vi.fn(), onSection: vi.fn(), onProof: vi.fn() };
+  const view = render(<Workspace {...props} status={granted} section="connections" />);
+  fireEvent.click(screen.getByRole("button", { name: /View connection/ }));
+  expect(screen.getByText(privateFolder)).toBeVisible();
+  view.rerender(<Workspace {...props} status={blocked} section="connections" />);
+  expect(screen.queryByText(privateFolder)).toBeNull();
+  expect(screen.queryByText("Restricted shipment feed")).toBeNull();
+  expect(screen.queryByText("Private layout recognized.")).toBeNull();
+  expect(screen.getByText("Facility access isn't confirmed")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Check connection again" }));
+  await waitFor(() => expect(recheck).toHaveBeenCalledOnce());
+  expect(props.onStatus).toHaveBeenCalledWith(blocked);
+  view.rerender(<Workspace {...props} status={{ ...granted,
+    workspace: { ...granted.workspace!, canReadOrders: undefined } }} section="connections" />);
+  expect(screen.queryByText(privateFolder)).toBeNull();
+  expect(screen.queryByText("Restricted shipment feed")).toBeNull();
+});

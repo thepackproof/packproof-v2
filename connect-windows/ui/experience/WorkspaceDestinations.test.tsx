@@ -142,10 +142,17 @@ it("does not show restricted match observations or claim online export access on
   const view = render(<MatchingWorkspace {...c} report={report} error="" onRefresh={vi.fn()}/>);
   expect(screen.queryByText("private.csv")).toBeNull();
   expect(screen.getByText("Current facility records aren't available.")).toBeVisible();
-  view.rerender(<ExportsWorkspace {...c}/>);
+  view.rerender(<ExportsWorkspace {...c} status={{ ...blocked,
+    proofOutput: { folder: "C:\\\\Private\\\\Proofs", state: "pending", pending: 9, completedRevision: 31 },
+    workspace: { ...blocked.workspace!, outputFolder: "C:\\\\Private\\\\Fallback" },
+  }}/>);
   expect(screen.getByText("ACCESS REQUIRED")).toBeVisible();
   expect(screen.queryByText("AUTHENTICATED ACCESS")).toBeNull();
+  expect(screen.queryByText(/Private.*Proofs/)).toBeNull();
+  expect(screen.queryByText(/Private.*Fallback/)).toBeNull();
   expect(screen.getByText("— PENDING")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Change Proof folder" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Open local archive" })).toBeDisabled();
 });
 
 it("invalidates the selected integrity manifest on authorization loss and does not resurrect it after recovery", async () => {

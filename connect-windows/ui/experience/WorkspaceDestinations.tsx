@@ -213,10 +213,13 @@ export function IntegrityWorkspace({ status, bridge, onSection, onProof }: Base)
 }
 
 export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutputSetup}: Base) {
-  const output = status.proofOutput;
+  // Even local output paths and revision counters can belong to a revoked
+  // facility. Do not present cached values as current authorized service state.
+  const readable = available(status);
+  const output = readable ? status.proofOutput : undefined;
   const workspace = status.workspace!;
-  const folder = output?.folder || workspace.outputFolder;
-  const state = output?.state || "not_reported";
+  const folder = readable ? output?.folder || workspace.outputFolder : undefined;
+  const state = readable ? output?.state || "not_reported" : "access_required";
   const issue = ["access_denied", "unavailable", "pending"].includes(state);
   return (
     <section className="eo-route" data-design-file="nNnkgTZOBNkG8muy8AkIv1" data-design-node="5:286">
@@ -233,7 +236,7 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
           <Icon name="records" size={34}/>
           <h2>Online Proof</h2>
           <p>Open authorized order records in the PackProof portal.</p>
-          <span className="eo-route-tag">{available(status) ? "AUTHENTICATED ACCESS" : "ACCESS REQUIRED"}</span>
+          <span className="eo-route-tag">{readable ? "AUTHENTICATED ACCESS" : "ACCESS REQUIRED"}</span>
         </article>
         <article className="eo-route-panel eo-destination">
           <Icon name="connection" size={34}/>
@@ -247,10 +250,11 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
           <div className="eo-route-panel-title"><h2>Local output status</h2><span className="eo-route-tag">{output?.pending ?? "—"} PENDING</span></div>
           <div className="eo-output-stat"><strong>{output?.completedRevision ?? "—"}</strong><span>Last locally completed revision reported</span></div>
           <div className="eo-output-stat"><strong>{output?.pending ?? "—"}</strong><span>Outstanding local copies</span></div>
+          {!readable && <p className="eo-route-warning" role="status">Local destination and revision details are hidden until current facility access is restored.</p>}
           {issue && <p className="eo-route-warning">The output folder needs attention or has pending work. Previously completed originals and proofs must remain preserved.</p>}
           <div className="eo-route-buttons">
-            <button className="eo-route-action" disabled={busy} onClick={onOutputSetup}>Change Proof folder</button>
-            <button className="eo-route-subaction" disabled={busy || !folder} onClick={() => void run(() => bridge.openWorkspaceOutput())}>Open local archive</button>
+            <button className="eo-route-action" disabled={busy || !readable} onClick={onOutputSetup}>Change Proof folder</button>
+            <button className="eo-route-subaction" disabled={busy || !readable || !folder} onClick={() => void run(() => bridge.openWorkspaceOutput())}>Open local archive</button>
           </div>
         </article>
         <article className="eo-route-panel eo-output-state">
@@ -306,7 +310,7 @@ export function WorkstationSettings({status, bridge, busy, run, onSection}: Base
           <div className="eo-runtime-details">
             <div><span>Environment</span><strong>{status.environment}</strong></div>
             <div><span>Service version</span><strong>{current?.service || "Not reported"}</strong></div>
-            <div><span>Source grants</span><strong>{ws.sources.filter(s => s.roles.length).length}</strong></div>
+            <div><span>Source grants</span><strong>{available(status) ? ws.sources.filter(s => s.roles.length).length : "—"}</strong></div>
             <div><span>Connection</span><strong>{status.transport?.state || "Unknown"}</strong></div>
           </div>
         </section>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { sourceRoles, type WorkspaceSource, type WorkspaceStep } from "../workspace-types";
 import type { RunAction, WorkspaceProps } from "./WorkspaceModel";
-import { sourceIcon, sourceIssue, sourceState, sourceTitle } from "./WorkspaceModel";
+import { canReadWorkspace, sourceIcon, sourceIssue, sourceState, sourceTitle } from "./WorkspaceModel";
 import { Icon } from "./Icon";
 import { RecoveryPanel } from "./RecoveryPanel";
 import { roles, SetupDialog } from "./SetupParts";
@@ -70,14 +70,38 @@ export function Connections({
   onSource,
 }: Props) {
   const ws = status.workspace!,
-    srcs = ws.sources.filter((s) => s.roles.length);
+    readable = canReadWorkspace(status),
+    srcs = readable ? ws.sources.filter((s) => s.roles.length) : [];
   const [adding, setAdding] = useState(false);
   const source = srcs.find((s) => s.id === sourceId);
-  const folder = status.proofOutput?.folder || ws.outputFolder;
+  const folder = readable ? status.proofOutput?.folder || ws.outputFolder : undefined;
   const edit = (step: WorkspaceStep) => {
     setAdding(false);
     if (onEditStep) void onEditStep(step);
   };
+  // A cached source list is not facility permission. An opened SourceView must
+  // disappear immediately when the service, transport or hosted scope is lost.
+  if (!readable) return (
+    <>
+      <header className="xw-heading">
+        <div>
+          <h1>Connection needs attention</h1>
+          <p>Restore your approved facility connection to inspect its sources.</p>
+        </div>
+      </header>
+      <div className="xw-card xw-empty" role="status">
+        <Icon name="attention" size={32} />
+        <h2>{status.health.serviceOnline ? "Facility access isn't confirmed" : "Background collector unavailable"}</h2>
+        <p>Saved source names, local paths and collection settings are hidden until current access is verified.</p>
+        <div className="xw-btns">
+          <button className="xw-secondary" disabled={busy}
+            onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
+          <button className="xw-secondary" disabled={busy}
+            onClick={() => void run(() => bridge.openPortal())}>Review access online</button>
+        </div>
+      </div>
+    </>
+  );
   if (source)
     return (
       <SourceView
