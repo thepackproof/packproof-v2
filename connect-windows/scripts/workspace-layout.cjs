@@ -95,12 +95,6 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
       await page.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{width:cssWidth,height:Math.round(height/scale),deviceScaleFactor:scale,mobile:false});
       await page.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme},{name:'prefers-reduced-motion',value:'reduce'}]});
       for(const scene of [...(includeGuidedSetup?guidedScenes:[]),...scenes]) {
-        // Setup currently has a light-only renderer. Do not mislabel a light
-        // screenshot as dark simply because matchMedia was emulated.
-        if(theme==='dark' && scene.step) {
-          (report.unqualifiedThemeScreens??=[]).push({scene:scene.name,theme:'dark',reason:'Setup does not yet expose an application dark appearance state'});
-          continue;
-        }
         if(theme==='dark' && darkScenes && !darkScenes.includes(scene.name)) continue;
         activeScene=scene.name;inspected=false;
         report.currentRun={scene:scene.name,theme,width,height,scale,cssWidth};
@@ -120,6 +114,19 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
           proofOutput:{folder,pending:pending?1:0,state:pending?'pending':'ready'}});
         await page.loadURL(appUrl);
         await waitFor(page,`matchMedia('(prefers-color-scheme: ${theme})').matches && matchMedia('(prefers-reduced-motion: reduce)').matches`);
+        if(scene.step) {
+          await waitFor(page,"!!document.querySelector('.pp-setup-appearance')");
+          const observed=await page.executeJavaScript("document.querySelector('.pp-setup-appearance').getAttribute('data-appearance')");
+          if(observed!==theme) {
+            const target="document.querySelector("+JSON.stringify('button[aria-label="Switch to '+theme+' appearance"]')+")";
+            await press(target);
+          }
+          await waitFor(page,"document.querySelector('.pp-setup-appearance')?.getAttribute('data-appearance') === "+JSON.stringify(theme));
+          const setupSurface=await page.executeJavaScript("getComputedStyle(document.querySelector('.pp-setup-appearance main.setup-experience')).backgroundColor");
+          assert.ok(setupSurface,'Packaged guided setup must render a real theme surface');
+          if(theme==='dark') assert.notEqual(setupSurface,'rgb(255, 255, 255)','Dark guided setup cannot retain a white background');
+          (report.guidedThemeBackgrounds??={})[theme]=setupSurface;
+        }
         if(!scene.step) {
           await waitFor(page,"!!document.querySelector('.pp-evidence-os')");
           const observed=await page.executeJavaScript("document.querySelector('.pp-evidence-os').getAttribute('data-appearance')");
@@ -185,6 +192,12 @@ module.exports = async function workspaceLayout({page,setStatus,register,state,w
   if(themes.includes('light') && themes.includes('dark') && report.actualThemeBackgrounds?.dark && report.actualThemeBackgrounds?.light) {
     assert.notEqual(report.actualThemeBackgrounds.light,report.actualThemeBackgrounds.dark,
       'Actual light and dark application backgrounds must differ');
+  }
+  if(includeGuidedSetup && themes.includes('light') && themes.includes('dark')) {
+    assert.ok(report.guidedThemeBackgrounds?.light && report.guidedThemeBackgrounds?.dark,
+      'Packaged guided setup must be exercised in both actual app appearances');
+    assert.notEqual(report.guidedThemeBackgrounds.light,report.guidedThemeBackgrounds.dark,
+      'Guided setup application light and dark backgrounds must differ');
   }
   if(!captureViewport && themes.includes('light') && themes.includes('dark')) {
     const light=path.join(directory,'overview-light.png'),dark=path.join(directory,'overview-dark.png');
