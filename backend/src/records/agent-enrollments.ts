@@ -233,9 +233,15 @@ async function initialFacilityConnection(db:Database,w:RecordWorkspace,i:Install
   OR EXISTS(SELECT 1 FROM record_order_sessions WHERE installation_id=$2) AS used`,[i.principal_id,i.id])).rows[0];
  if(used?.used)return null;
  const locations=await listRecordLocations(db,w);
- const operator=(await db.query<{location_scoped:boolean}>('SELECT location_scoped FROM platform_memberships WHERE id=$1 AND organization_id=$2 AND revoked_at IS NULL',[i.operator_membership_id,w.organizationId])).rows[0];
- return {canAssign:true,canCreate:locations.length===0&&w.role==='OWNER'&&!w.locationScoped&&operator?.location_scoped===false,
-  locations:locations.map(location=>({...location,guidedSetupAvailable:facilityEnabled('guided',w.organizationId,w.environment,location.id)}))};
+ const operator=(await db.query<{location_scoped:boolean}>(`SELECT m.location_scoped FROM platform_memberships m JOIN users u ON u.id=m.user_id
+  WHERE m.id=$1 AND m.organization_id=$2 AND m.revoked_at IS NULL AND m.role IN ('OWNER','ADMIN','OPERATOR') AND u.status='ACTIVE'`,[i.operator_membership_id,w.organizationId])).rows[0];
+ const operatorLocations=operator?.location_scoped?new Set((await db.query<{location_id:string}>(
+  'SELECT location_id FROM record_membership_locations WHERE membership_id=$1 AND organization_id=$2',[i.operator_membership_id,w.organizationId])).rows.map(row=>row.location_id)):null;
+ // A selectable facility must satisfy the same current human and enrolled
+ // operator grants checked by validateBinding when the choice is submitted.
+ const eligibleLocations=operator?locations.filter(location=>!operatorLocations||operatorLocations.has(location.id)):[];
+ return {canAssign:!!operator,canCreate:locations.length===0&&['OWNER','ADMIN'].includes(w.role)&&!w.locationScoped&&operator?.location_scoped===false,
+  locations:eligibleLocations.map(location=>({...location,guidedSetupAvailable:facilityEnabled('guided',w.organizationId,w.environment,location.id)}))};
 }
 export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:string,input:unknown,requestId:string){
  w=await currentAdministrator(tx,w);
@@ -249,9 +255,10 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
  }else if(b.action==='connect_facility'){
   const available=await initialFacilityConnection(tx,w,i);
   if(!available)throw new DomainError('FACILITY_RECONNECT_REQUIRED','This computer already has source history or its setup changed. Preserve pending work and reconnect it through the existing connection review.',409);
+  if(!available.canAssign)fail('OPERATOR_NOT_AUTHORIZED','Choose an active responsible teammate',403);
   if((b.proposalSha256??null)!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','The saved source review changed. Refresh this connection before choosing its facility.');
   const creating=b.facilityName!==undefined;
-  if(creating&&(b.locationId!=null||!available.canCreate))fail('FACILITY_CREATE_DENIED','Only the unrestricted workspace owner can create the first facility for this unconfigured computer.',403);
+  if(creating&&(b.locationId!=null||!available.canCreate))fail('FACILITY_CREATE_DENIED','An unrestricted workspace owner or administrator must create the first facility for this unconfigured computer.',403);
   let locationId:string;
   if(creating){
    const name=textField(b.facilityName,'facilityName',120).trim();
@@ -277,6 +284,8 @@ export async function actOnAgent(deps:Deps,tx:Database,w:RecordWorkspace,id:stri
   await validateBinding(tx,w,{integrationAccountId:i.integration_account_id,operatorMembershipId:i.operator_membership_id,locationId:i.location_id,sourceName:i.source_name});
   await tx.query("UPDATE record_agent_installations SET status='ready',approval_user_id=$2,updated_at=$3 WHERE id=$1",[id,w.userId,now]);
  }else if(b.action==='configure'){
+  if(supportsOrderWorkspace(i.version)&&i.location_id===null&&i.config_revision===0&&!i.approved_config)
+   fail('FACILITY_REQUIRED','Connect this computer to its intended facility before approving a saved file. The saved file and pending review are unchanged.',409);
   if(!i.pending_proposal||b.proposalSha256!==i.pending_proposal_sha256)fail('PROPOSAL_CHANGED','Refresh and review the exact proposed configuration');
   // Stored proposals can outlive a client upgrade. Validate their complete shape
   // before reading nested history metadata so an incomplete review is actionable.

@@ -1,0 +1,13 @@
+# PREDECESSOR_IMAGE is the inspected, digest-pinned running 129 image.
+ARG PREDECESSOR_IMAGE
+FROM ${PREDECESSOR_IMAGE} AS reviewed
+COPY backend/migrations /tmp/recovery-candidate-sql/
+COPY backend/scripts/recovery-forward-guard.mjs /tmp/recovery-forward-guard.mjs
+RUN node /tmp/recovery-forward-guard.mjs /app/backend/migrations /tmp/recovery-candidate-sql /tmp/recovery-guard.js
+
+FROM ${PREDECESSOR_IMAGE}
+USER root
+RUN test ! -e /app/backend/dist/db/forward-compatible-migrations.recovery129.js && \
+    mv /app/backend/dist/db/forward-compatible-migrations.js /app/backend/dist/db/forward-compatible-migrations.recovery129.js
+COPY --from=reviewed /tmp/recovery-guard.js /app/backend/dist/db/forward-compatible-migrations.js
+USER node

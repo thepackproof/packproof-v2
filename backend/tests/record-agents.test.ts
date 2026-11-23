@@ -223,14 +223,42 @@ it('rejects an incomplete persisted v2 history contract before reading its times
  expect(held.approved_config).toBeNull();expect(held.config_revision).toBe(0);expect(held.pending_proposal_sha256).toBe(digest);
 });
 
-it('allows only the unrestricted workspace owner to create and select its first facility without enabling guided collection',async()=>{
+it('allows current unrestricted owners and administrators to create the first facility while retaining role and location scope limits',async()=>{
  const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
  const a=await enroll();await heartbeatAgent(deps,a.actor,{version:'0.7.1',queueCount:0,enrollmentAcknowledged:true});
  expect((await readAgentDetail(deps,w,a.result.installationId)).facilityConnection).toMatchObject({canAssign:true,canCreate:true,locations:[]});
  const adminUser=await insertUser(opened.db,clock);
  await addOrganizationMember(opened.db,clock,owner,org,{userId:adminUser,role:'ADMIN'},'facility-test-admin');
  const adminWorkspace=await requireRecordWorkspace(opened.db,adminUser,org,'sandbox',true);
- await expect(opened.db.transaction(tx=>actOnAgent(deps,tx,adminWorkspace,a.result.installationId,{action:'connect_facility',facilityName:'First facility',proposalSha256:null,configRevision:0,configSha256:null},'facility-admin-denied'))).rejects.toMatchObject({code:'FACILITY_CREATE_DENIED'});
+ expect((await readAgentDetail(deps,adminWorkspace,a.result.installationId)).facilityConnection).toMatchObject({canAssign:true,canCreate:true,locations:[]});
+ const create={action:'connect_facility',facilityName:'First facility',proposalSha256:null,configRevision:0,configSha256:null};
+ const rollback=Error('Rollback first-facility administrator fixture');
+ await expect(opened.db.transaction(async tx=>{
+  const value=await actOnAgent(deps,tx,adminWorkspace,a.result.installationId,create,'facility-admin-allowed');
+  expect(value.locationId).toEqual(expect.any(String));expect(value.configRevision).toBe(0);expect(value.config).toBeNull();
+  expect(value.capabilities.guidedFacilitySetup).toBe(false);
+  expect((await tx.query("SELECT actor_user_id FROM platform_action_audit WHERE merchant_id=$1 AND operation='FACILITY_CREATED' AND resource_id=$2",[org,value.locationId])).rows).toEqual([{actor_user_id:adminUser}]);
+  throw rollback;
+ })).rejects.toBe(rollback);
+ for(const role of ['OPERATOR','REVIEWER']){
+  const userId=await insertUser(opened.db,clock);
+  await addOrganizationMember(opened.db,clock,owner,org,{userId,role},`facility-test-${role}`);
+  const actor=await requireRecordWorkspace(opened.db,userId,org,'sandbox');
+  await expect(opened.db.transaction(tx=>actOnAgent(deps,tx,actor,a.result.installationId,create,`facility-${role}-denied`))).rejects.toMatchObject({code:role==='REVIEWER'?'RECORD_PERMISSION_DENIED':'AGENT_ADMIN_REQUIRED'});
+ }
+ const scopedAdminUser=await insertUser(opened.db,clock),scopedOperatorUser=await insertUser(opened.db,clock);
+ const scopedAdmin=`first-facility-admin-${sequence}`,scopedOperator=`first-facility-operator-${sequence}`;
+ for(const [membership,user,role] of [[scopedAdmin,scopedAdminUser,'ADMIN'],[scopedOperator,scopedOperatorUser,'OPERATOR']])
+  await opened.db.query('INSERT INTO platform_memberships(id,organization_id,user_id,role,location_scoped,created_at) VALUES($1,$2,$3,$4,true,$5)',[membership,org,user,role,clock.now().toISOString()]);
+ const scopedWorkspace=await requireRecordWorkspace(opened.db,scopedAdminUser,org,'sandbox',true);
+ expect((await readAgentDetail(deps,scopedWorkspace,a.result.installationId)).facilityConnection?.canCreate).toBe(false);
+ await expect(opened.db.transaction(tx=>actOnAgent(deps,tx,scopedWorkspace,a.result.installationId,create,'facility-scoped-admin-denied'))).rejects.toMatchObject({code:'FACILITY_CREATE_DENIED'});
+ await expect(opened.db.transaction(async tx=>{
+  await tx.query('UPDATE record_agent_installations SET operator_membership_id=$2 WHERE id=$1',[a.result.installationId,scopedOperator]);
+  expect((await readAgentDetail({...deps,db:tx},w,a.result.installationId)).facilityConnection?.canCreate).toBe(false);
+  await expect(actOnAgent(deps,tx,w,a.result.installationId,create,'facility-scoped-operator-denied')).rejects.toMatchObject({code:'FACILITY_CREATE_DENIED'});
+  throw rollback;
+ })).rejects.toBe(rollback);
  const value=await humanAction(a.result.installationId,{action:'connect_facility',facilityName:'First facility',proposalSha256:null});
  expect(value.locationId).toEqual(expect.any(String));expect(value.state).toBe('setup');
  expect(value.capabilities.guidedFacilitySetup).toBe(false);
@@ -260,10 +288,61 @@ it('connects an unconfigured computer to an explicitly authorized facility witho
  expect((await opened.db.query('SELECT 1 FROM partner_import_jobs WHERE principal_id=$1',[a.actor.principalId])).rows).toHaveLength(0);
 });
 
-it('refuses a facility assignment after configuration approval and preserves the prior unlocated source',async()=>{
+it('offers only current human and enrolled operator facility grants and rechecks them before assignment',async()=>{
+ const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
+ const operatorUser=await insertUser(opened.db,clock),adminUser=await insertUser(opened.db,clock);
+ const a=await enroll();await heartbeatAgent(deps,a.actor,{version:'0.7.1',queueCount:0,enrollmentAcknowledged:true});
+ const operator=`facility-operator-${sequence}`,admin=`facility-admin-${sequence}`;
+ for(const [membership,user,role] of [[operator,operatorUser,'OPERATOR'],[admin,adminUser,'ADMIN']])
+  await opened.db.query('INSERT INTO platform_memberships(id,organization_id,user_id,role,location_scoped,created_at) VALUES($1,$2,$3,$4,true,$5)',[membership,org,user,role,clock.now().toISOString()]);
+ // Model a retained unassigned enrollment whose current operator is scoped;
+ // membership authority itself remains immutable throughout this fixture.
+ await opened.db.query('UPDATE record_agent_installations SET operator_membership_id=$2 WHERE id=$1',[a.result.installationId,operator]);
+ const humanOnly=`human-only-${sequence}`,shared=`shared-${sequence}`,operatorOnly=`operator-only-${sequence}`;
+ for(const site of [humanOnly,shared,operatorOnly])await opened.db.query('INSERT INTO record_locations(id,organization_id,name,created_at) VALUES($1,$2,$1,$3)',[site,org,clock.now().toISOString()]);
+ for(const [membership,site] of [[admin,humanOnly],[admin,shared],[operator,shared],[operator,operatorOnly]])
+  await opened.db.query('INSERT INTO record_membership_locations(membership_id,organization_id,location_id) VALUES($1,$2,$3)',[membership,org,site]);
+ const adminWorkspace=await requireRecordWorkspace(opened.db,adminUser,org,'sandbox',true);
+ const read=()=>readAgentDetail(deps,adminWorkspace,a.result.installationId);
+ const connect=(locationId:string)=>opened.db.transaction(tx=>actOnAgent(deps,tx,adminWorkspace,a.result.installationId,
+  {action:'connect_facility',locationId,proposalSha256:null,configRevision:0,configSha256:null},'scoped-facility-connect'));
+ expect((await read()).facilityConnection).toMatchObject({canAssign:true,canCreate:false,locations:[{id:shared,name:shared,guidedSetupAvailable:false}]});
+ expect((await readAgentDetail(deps,w,a.result.installationId)).facilityConnection?.locations.map(location=>location.id).sort()).toEqual([operatorOnly,shared].sort());
+ await expect(connect(humanOnly)).rejects.toMatchObject({code:'LOCATION_NOT_FOUND'});
+ await expect(connect(operatorOnly)).rejects.toMatchObject({code:'LOCATION_NOT_FOUND'});
+ await opened.db.query('DELETE FROM record_membership_locations WHERE membership_id=$1 AND location_id=$2',[operator,shared]);
+ expect((await read()).facilityConnection).toMatchObject({canAssign:true,canCreate:false,locations:[]});
+ await expect(connect(shared)).rejects.toMatchObject({code:'LOCATION_NOT_FOUND'});
+ expect((await loadInstallation(opened.db,a.result.installationId)).location_id).toBeNull();
+ await opened.db.query('INSERT INTO record_membership_locations(membership_id,organization_id,location_id) VALUES($1,$2,$3)',[operator,org,shared]);
+ const rollback=Error('Rollback inactive operator fixture');
+ await expect(opened.db.transaction(async tx=>{
+  await tx.query("UPDATE users SET status='DISABLED' WHERE id=$1",[operatorUser]);
+  expect((await readAgentDetail({...deps,db:tx},adminWorkspace,a.result.installationId)).facilityConnection).toMatchObject({canAssign:false,canCreate:false,locations:[]});
+  await expect(actOnAgent(deps,tx,adminWorkspace,a.result.installationId,{action:'connect_facility',locationId:shared,proposalSha256:null,configRevision:0,configSha256:null},'inactive-facility-operator')).rejects.toMatchObject({code:'OPERATOR_NOT_AUTHORIZED'});
+  throw rollback;
+ })).rejects.toBe(rollback);
+ expect((await connect(shared)).locationId).toBe(shared);
+});
+
+it('requires facility recovery before a modern initial saved-file approval can consume its unconfigured state',async()=>{
+ const {readAgentDetail}=await import('../src/records/agent-enrollments.js');
  const a=await enroll();await heartbeatAgent(deps,a.actor,{version:'0.7.1',queueCount:0,enrollmentAcknowledged:true});
  const proposed=await proposeAgentConfig(deps,a.actor,config(a.account));
+ const before=await loadInstallation(opened.db,a.result.installationId);
+ await expect(humanAction(a.result.installationId,{action:'configure',proposalSha256:proposed.proposalSha256})).rejects.toMatchObject({code:'FACILITY_REQUIRED',httpStatus:409});
+ expect(await loadInstallation(opened.db,a.result.installationId)).toMatchObject({location_id:null,config_revision:0,approved_config:null,
+  credential_id:before.credential_id,principal_id:before.principal_id,pending_proposal:before.pending_proposal,pending_proposal_sha256:proposed.proposalSha256});
+ expect((await readAgentDetail(deps,w,a.result.installationId)).facilityConnection?.canAssign).toBe(true);
+});
+
+it('refuses a facility reassignment and preserves a historical unlocated source after its collector upgrade',async()=>{
+ const a=await enroll();await ack(a);
+ const proposed=await proposeAgentConfig(deps,a.actor,config(a.account));
  await humanAction(a.result.installationId,{action:'configure',proposalSha256:proposed.proposalSha256});
+ await heartbeatAgent(deps,a.actor,{version:'0.7.1',queueCount:0});
+ const refreshed=await proposeAgentConfig(deps,a.actor,config(a.account));
+ expect((await humanAction(a.result.installationId,{action:'configure',proposalSha256:refreshed.proposalSha256})).configRevision).toBe(2);
  await expect(humanAction(a.result.installationId,{action:'connect_facility',facilityName:'Must not be created'})).rejects.toMatchObject({code:'FACILITY_RECONNECT_REQUIRED'});
  const current=await loadInstallation(opened.db,a.result.installationId);
  expect(current.location_id).toBeNull();expect(current.approved_config).not.toBeNull();

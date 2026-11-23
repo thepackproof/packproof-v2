@@ -1,0 +1,4 @@
+# Extend the exact candidate built from backend/Dockerfile with the reviewed owner CLI.
+ARG CANDIDATE_BASE
+FROM ${CANDIDATE_BASE}
+COPY infra/backend-release/recovery-hosted-migration.mjs /release/recovery-hosted-migration.mjs

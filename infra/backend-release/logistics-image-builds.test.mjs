@@ -8,7 +8,7 @@ import { prepareLogisticsImages } from './logistics-image-builds.mjs';
 import { readInventory, buildGuard, inventorySha256 } from '../../backend/scripts/logistics-forward-guard.mjs';
 
 test('the generated previous reader preserves old decisions and admits only the exact five receipts',async()=>{
-  const rows=readInventory(fileURLToPath(new URL('../../backend/migrations',import.meta.url)));
+  const rows=readInventory(fileURLToPath(new URL('../../backend/migrations',import.meta.url))).filter(row=>Number(row.id.slice(0,3))<=129);
   const root=mkdtempSync(join(tmpdir(),'logistics-guard-'));
   try {
     writeFileSync(join(root,'package.json'),'{"type":"module"}');
