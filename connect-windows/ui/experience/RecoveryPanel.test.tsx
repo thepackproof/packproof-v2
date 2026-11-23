@@ -37,3 +37,17 @@ it("redacts old facility source identity on access loss",()=>{
  expect(screen.getByText("Source details are hidden while current access cannot be confirmed.")).toBeVisible();
  expect(screen.queryByText("Shipping")).toBeNull();
 });
+
+it("does not reveal cached source identity if hosted transport is incompatible or permission unknown",()=>{
+ const granted=status();
+ for(const candidate of [
+   {...granted,transport:{...granted.transport!,state:"unsupported" as const}},
+   {...granted,workspace:{...granted.workspace!,canReadOrders:undefined}},
+ ]) {
+   const view=render(<RecoveryPanel status={candidate} sources={[ship]} busy={false}
+     run={vi.fn()} bridge={bridgeFor(candidate)} onSource={vi.fn()}/>);
+   expect(screen.queryByText("Shipping")).toBeNull();
+   expect(screen.getByText("Source details are hidden while current access cannot be confirmed.")).toBeVisible();
+   view.unmount();
+ }
+});

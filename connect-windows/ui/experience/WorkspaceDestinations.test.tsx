@@ -7,6 +7,7 @@ import type { WorkspaceStatus, OrderDetail } from "../workspace-types";
 import { selected, bridgeFor } from "../test-fixtures";
 import { MatchingWorkspace, IntegrityWorkspace, ExportsWorkspace, WorkstationSettings } from "./WorkspaceDestinations";
 import { Shell } from "./Shell";
+import { Workspace } from "./Workspace";
 
 const fixture = (data: Partial<WorkspaceStatus> = {}): ConnectStatus => ({
   ...selected,
@@ -112,4 +113,37 @@ it("settings change real local appearance and reduce motion and route diagnostic
   expect(localStorage.getItem("packproof.connect.motion.v1")).toBe("reduced");
   fireEvent.click(screen.getByRole("button",{name:"Export diagnostics"}));
   await waitFor(()=>expect(c.bridge.exportDiagnostics).toHaveBeenCalledOnce());
+});
+
+it("redacts cached orders and review panels immediately when service or facility permission becomes unverified", async () => {
+  const privateOrder = {proofId:"private-proof", revision:3, orderReference:"PRIVATE-ORDER"};
+  const granted = fixture({orders:[privateOrder]});
+  const callbacks = {
+    bridge: bridgeFor(granted), onStatus: vi.fn(), onSection: vi.fn(), onProof: vi.fn(),
+  };
+  const home = render(<Workspace {...callbacks} status={granted} section="home"/>);
+  expect(screen.getAllByText("PRIVATE-ORDER").length).toBeGreaterThan(0);
+  home.rerender(<Workspace {...callbacks}
+    status={{...granted,transport:{...granted.transport!,state:"unsupported"}}} section="home"/>);
+  expect(screen.queryByText("PRIVATE-ORDER")).toBeNull();
+  expect(screen.getByText("Reconnect to your approved workspace to see its orders.")).toBeVisible();
+  home.rerender(<Workspace {...callbacks} status={granted} section="orders"/>);
+  expect(screen.getByText("PRIVATE-ORDER")).toBeVisible();
+  home.rerender(<Workspace {...callbacks}
+    status={{...granted,workspace:{...granted.workspace!,canReadOrders:undefined}}} section="orders"/>);
+  expect(screen.queryByText("PRIVATE-ORDER")).toBeNull();
+  expect(screen.getByText("Reconnect to your approved workspace to see its orders.")).toBeVisible();
+});
+
+it("does not show restricted match observations or claim online export access on unsupported transport", () => {
+  const blocked = {...fixture(),transport:{...selected.transport!,state:"unsupported" as const}};
+  const c = callbacks(blocked);
+  const report = {items:[{sourceId:"s1",fileName:"private.csv",reason:"Unresolved"}],hasMore:false};
+  const view = render(<MatchingWorkspace {...c} report={report} error="" onRefresh={vi.fn()}/>);
+  expect(screen.queryByText("private.csv")).toBeNull();
+  expect(screen.getByText("Current facility records aren't available.")).toBeVisible();
+  view.rerender(<ExportsWorkspace {...c}/>);
+  expect(screen.getByText("ACCESS REQUIRED")).toBeVisible();
+  expect(screen.queryByText("AUTHENTICATED ACCESS")).toBeNull();
+  expect(screen.getByText("— PENDING")).toBeVisible();
 });

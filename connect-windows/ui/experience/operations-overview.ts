@@ -1,4 +1,5 @@
 import type { ConnectStatus } from "../types";
+import { canReadWorkspace } from "./WorkspaceModel";
 import type { OrderSummary } from "../workspace-types";
 
 /**
@@ -52,14 +53,11 @@ export function operationsOverview(
   now = Date.now(),
 ): OperationsOverview {
   const ws = status.workspace;
-  const online =
-    status.health.serviceOnline &&
-    ws?.canReadOrders !== false &&
-    !["unauthenticated", "forbidden", "unreachable"].includes(status.transport?.state || "");
-  const canRead = online && !!ws;
+  const online = canReadWorkspace(status);
+  const canRead = online;
   // Never retain an earlier page when the current facility scope is unavailable.
   const recent = canRead ? latestOrders(ws?.orders ?? []) : [];
-  const sources = ws?.sources.filter((s) => s.roles.length > 0) ?? [];
+  const sources = canRead ? ws!.sources.filter((s) => s.roles.length > 0) : [];
   const connected = sources.filter((s) => s.state === "active").length;
   const issues = sources.filter(
     (s) => s.state === "needs_attention" || !!s.issue || !!s.coverageGap,

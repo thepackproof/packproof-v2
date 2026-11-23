@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ConnectStatus } from "../types";
 import type { AttentionReport, OrderDetail, OrderSummary } from "../workspace-types";
 import type { RunAction, WorkspaceProps } from "./WorkspaceModel";
-import { sourceTitle, sourceIssue } from "./WorkspaceModel";
+import { canReadWorkspace, sourceTitle, sourceIssue } from "./WorkspaceModel";
 import { modelProof } from "./ProofModel";
 import { Icon } from "./Icon";
 import { useEvidencePreferences } from "./Shell";
@@ -22,10 +22,7 @@ type MatchingProps = Base & {
   error: string;
   onRefresh: () => void;
 };
-const available = (status: ConnectStatus) =>
-  status.health.serviceOnline &&
-  status.workspace?.canReadOrders !== false &&
-  !["unreachable", "unauthenticated", "forbidden"].includes(status.transport?.state || "");
+const available = canReadWorkspace;
 
 const header = (eyebrow: string, title: string, sub: string) => (
   <header className="eo-route-heading">
@@ -201,7 +198,7 @@ export function IntegrityWorkspace({ status, bridge, onSection, onProof }: Base)
                   <div className="eo-route-line eo-route-static" key={source.key}>
                     <Icon name="records" size={24}/>
                     <span><strong>{source.fileName || source.title}</strong><small>{source.origin} · {source.received || "Arrival time not reported"}</small></span>
-                    <span className="eo-route-outcome">{source.hash ? "SHA-256: " + source.hash.slice(0, 10) + "…" : "Digest unavailable"}</span>
+                    <span className="eo-route-outcome">{/^[a-f0-9]{64}$/i.test(source.hash) ? "SHA-256: " + source.hash.slice(0, 10) + "…" : "Digest unavailable"}</span>
                   </div>
                 ))}
               </div>
@@ -218,7 +215,7 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
   const output = status.proofOutput;
   const workspace = status.workspace!;
   const folder = output?.folder || workspace.outputFolder;
-  const state = output?.state || "not_configured";
+  const state = output?.state || "not_reported";
   const issue = ["access_denied", "unavailable", "pending"].includes(state);
   return (
     <section className="eo-route" data-design-file="nNnkgTZOBNkG8muy8AkIv1" data-design-node="5:286">
@@ -235,7 +232,7 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
           <Icon name="records" size={34}/>
           <h2>Online Proof</h2>
           <p>Open authorized order records in the PackProof portal.</p>
-          <span className="eo-route-tag">{workspace.canReadOrders === false ? "ACCESS REQUIRED" : "AUTHENTICATED ACCESS"}</span>
+          <span className="eo-route-tag">{available(status) ? "AUTHENTICATED ACCESS" : "ACCESS REQUIRED"}</span>
         </article>
         <article className="eo-route-panel eo-destination">
           <Icon name="connection" size={34}/>
@@ -246,7 +243,7 @@ export function ExportsWorkspace({status, bridge, run, busy, onSection, onOutput
       </div>
       <div className="eo-route-grid eo-route-grid-wide">
         <article className="eo-route-panel eo-output-state">
-          <div className="eo-route-panel-title"><h2>Local output status</h2><span className="eo-route-tag">{output?.pending ?? 0} PENDING</span></div>
+          <div className="eo-route-panel-title"><h2>Local output status</h2><span className="eo-route-tag">{output?.pending ?? "—"} PENDING</span></div>
           <div className="eo-output-stat"><strong>{output?.completedRevision ?? "—"}</strong><span>Last locally completed revision reported</span></div>
           <div className="eo-output-stat"><strong>{output?.pending ?? "—"}</strong><span>Outstanding local copies</span></div>
           {issue && <p className="eo-route-warning">The output folder needs attention or has pending work. Previously completed originals and proofs must remain preserved.</p>}

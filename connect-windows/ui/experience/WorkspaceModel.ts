@@ -16,6 +16,14 @@ export interface WorkspaceProps {
   onLegacy?: () => void;
 }
 export type RunAction = (action: () => Promise<unknown>, success?: string) => Promise<void>;
+
+/** Cached workspace pages are not authorization. Only current positive facility
+ * permission, a live collector and compatible hosted transport permit inspection. */
+export function canReadWorkspace(status: ConnectStatus): boolean {
+  return status.health.serviceOnline &&
+    status.workspace?.canReadOrders === true &&
+    status.transport?.state === "compatible";
+}
 export function sourceTitle(source: WorkspaceSource) {
   return source.displayName && source.displayName !== source.folder
     ? source.displayName

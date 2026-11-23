@@ -1,7 +1,7 @@
 import type { ConnectStatus } from "../types";
 import type { WorkspaceSource } from "../workspace-types";
 import type { RunAction, WorkspaceProps } from "./WorkspaceModel";
-import { sourceIssue, sourceTitle, sourceState } from "./WorkspaceModel";
+import { canReadWorkspace, sourceIssue, sourceTitle, sourceState } from "./WorkspaceModel";
 import { Icon } from "./Icon";
 import "./RecoveryPanel.css";
 
@@ -24,9 +24,7 @@ const dateTime = (value?:string|null) => {
  * by service observations. Never replace a blocked source with a green badge.
  */
 export function RecoveryPanel({status,sources,busy,run,bridge,onSource}:Props) {
-  const canInspect = status.health.serviceOnline &&
-    status.workspace?.canReadOrders !== false &&
-    !["unreachable","unauthenticated","forbidden"].includes(status.transport?.state || "");
+  const canInspect = canReadWorkspace(status);
   const queue = status.health.queueCount;
   const output = status.proofOutput;
   const active = canInspect ? sources.filter(s=>s.state === "active").length : 0;

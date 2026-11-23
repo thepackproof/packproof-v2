@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { OrderSummary } from "../workspace-types";
 import type { WorkspaceProps } from "./WorkspaceModel";
-import { orderUpdate, reportError } from "./WorkspaceModel";
+import { canReadWorkspace, orderUpdate, reportError } from "./WorkspaceModel";
 import { Icon } from "./Icon";
 
 export function OrderRows({
@@ -75,8 +75,8 @@ export function OrdersView({
     },
     [],
   );
-  const recent = ws.orders || [],
-    readable = ws.canReadOrders !== false;
+  const readable = canReadWorkspace(status),
+    recent = readable ? ws.orders || [] : [];
   const deduped = new Map<string, OrderSummary>();
   for (const row of query ? found || [] : [...recent, ...older]) {
     const current = recent.find((s) => s.proofId === row.proofId && s.revision > row.revision) || row;

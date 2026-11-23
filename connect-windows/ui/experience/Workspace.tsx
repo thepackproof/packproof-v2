@@ -8,6 +8,7 @@ import { MatchingWorkspace, IntegrityWorkspace, ExportsWorkspace, WorkstationSet
 import { OrderRows, OrdersView } from "./WorkspaceOrdersView";
 import {
   reportError,
+  canReadWorkspace,
   sourceTitle,
   sourceIssue,
   sourceIcon,
@@ -31,7 +32,8 @@ export function Workspace(props: WorkspaceProps) {
   if (!ws) return <p role="status">Checking your workspace…</p>;
   return (
     <WorkspaceView
-      key={JSON.stringify([props.status.installationId, ws.viewKey, ws.canReadOrders !== false])}
+      key={JSON.stringify([props.status.installationId, props.status.binding?.organizationId,
+        props.status.binding?.locationId, ws.viewKey, canReadWorkspace(props.status)])}
       {...props}
     />
   );
@@ -39,7 +41,7 @@ export function Workspace(props: WorkspaceProps) {
 function WorkspaceView(props: WorkspaceProps) {
   const { section, status, bridge, onStatus, onBusyChange, onProof, onSection } = props;
   const ws = status.workspace!,
-    readable = ws.canReadOrders !== false;
+    readable = canReadWorkspace(status);
   const [sourceId, setSourceId] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(""),
@@ -102,7 +104,7 @@ function WorkspaceView(props: WorkspaceProps) {
     setRequestedSource(id);
     onSection("connections");
   };
-  const sources = ws.sources.filter((s) => s.roles.length),
+  const sources = readable ? ws.sources.filter((s) => s.roles.length) : [],
     recent = readable ? ws.orders || [] : [];
   const wantsReview = readable && (section === "attention" || section === "home" || section === "matching");
   const revisionKey = recent.map((o) => o.proofId + "/" + o.revision).join(",");
@@ -147,9 +149,9 @@ function WorkspaceView(props: WorkspaceProps) {
   );
   const localCopies = status.proofOutput,
     outputIssue =
-      !!localCopies &&
+      readable && !!localCopies &&
       (localCopies.pending > 0 || ["access_denied", "unavailable", "pending"].includes(localCopies.state));
-  const firstPage = report?.orderIssues || recent.filter((o) => o.issue);
+  const firstPage = readable ? report?.orderIssues || recent.filter((o) => o.issue) : [];
   const ordersToReview = [
     ...firstPage,
     ...olderIssues.filter((o) => !firstPage.some((x) => x.proofId === o.proofId)),

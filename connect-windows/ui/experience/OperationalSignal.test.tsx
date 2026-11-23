@@ -69,6 +69,10 @@ it("never discloses cached records after service failure or facility permission 
     { ...cached, health: { ...cached.health, serviceOnline: false } },
     { ...cached, workspace: { ...cached.workspace!, canReadOrders: false } },
     { ...cached, transport: { ...cached.transport!, state: "forbidden" as const } },
+    { ...cached, transport: { ...cached.transport!, state: "unsupported" as const } },
+    { ...cached, transport: { ...cached.transport!, state: "outdated" as const } },
+    { ...cached, transport: undefined },
+    { ...cached, workspace: { ...cached.workspace!, canReadOrders: undefined } },
   ]) {
     const m = operationsOverview(offline, NOW);
     expect(m.canRead).toBe(false);
