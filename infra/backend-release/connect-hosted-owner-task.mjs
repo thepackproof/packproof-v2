@@ -284,12 +284,52 @@ const awsReadFailureCodes=new Set([
   'Throttling','ThrottlingException','RequestLimitExceeded','TooManyRequestsException','PolicyEvaluation',
   'ServiceFailure','ServiceUnavailable','ServiceUnavailableException','InternalFailure','InternalError',
 ]);
-export function ownerReadFailureCode(error) {
-  if(error?.code==='ETIMEDOUT')return 'TIMEOUT';
+function ownerReadStderr(error) {
   const raw=error?.stderr;
-  const stderr=typeof raw==='string'?raw.slice(0,8192):Buffer.isBuffer(raw)?raw.subarray(0,8192).toString('utf8'):'';
-  const code=stderr.match(/(?:^|\n)An error occurred \(([A-Za-z][A-Za-z0-9]{0,63})\) when calling the [A-Za-z][A-Za-z0-9]{0,79} operation:/)?.[1];
+  return typeof raw==='string'?raw.slice(0,8192):Buffer.isBuffer(raw)?raw.subarray(0,8192).toString('utf8'):'';
+}
+const ownerReadOperations=new Set(['get-caller-identity','describe-services','describe-express-gateway-service','describe-service-revisions',
+  'list-service-deployments','describe-service-deployments','describe-task-definition','list-tasks','describe-tasks','describe-db-instances',
+  'describe-security-groups','describe-subnets','describe-route-tables','get-role','list-attached-role-policies','list-role-policies',
+  'get-role-policy','simulate-principal-policy','describe-secret']);
+function ownerReadOperation(operation) {
+  return ownerReadOperations.has(operation)?operation:null;
+}
+function ownerAwsEnvelope(stderr,operation) {
+  // Accept CLI indentation, horizontal whitespace and its optional retry
+  // suffix. The exception and operation remain bounded and are never echoed.
+  const matches=[...stderr.matchAll(/^[ \t]{0,16}An[ \t]{1,16}error[ \t]{1,16}occurred[ \t]{1,16}\(([A-Za-z][A-Za-z0-9_.-]{0,63})\)[ \t]{1,16}when[ \t]{1,16}calling[ \t]{1,16}the[ \t]{1,16}([A-Za-z][A-Za-z0-9]{0,79})[ \t]{1,16}operation(?:[ \t]{1,16}\([ \t]{0,16}reached[ \t]{1,16}max[ \t]{1,16}retries:[ \t]{0,16}[0-9]{1,3}[ \t]{0,16}\))?[ \t]{0,16}:/gm)];
+  if(matches.length!==1)return null;
+  const [,code,called]=matches[0];
+  if(operation!==undefined&&(!ownerReadOperation(operation)||called.toLowerCase()!==operation.replaceAll('-','').toLowerCase()))return null;
+  return code;
+}
+export function ownerReadFailureCode(error,operation) {
+  if(error?.code==='ETIMEDOUT')return 'TIMEOUT';
+  const code=ownerAwsEnvelope(ownerReadStderr(error),operation);
   return awsReadFailureCodes.has(code)?code.toUpperCase():'FAILED';
+}
+const ownerSystemFailureCodes=new Set(['EACCES','ENOENT','ENOEXEC','ETIMEDOUT','ENOBUFS','EPIPE','ENOMEM','EAGAIN',
+  'ECONNRESET','ECONNREFUSED','ENETUNREACH','EHOSTUNREACH','EAI_AGAIN','ENOTFOUND','ERR_CHILD_PROCESS_STDIO_MAXBUFFER','ERR_INVALID_ARG_TYPE']);
+const ownerFailureSignals=new Set(['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGHUP','SIGQUIT','SIGSEGV','SIGPIPE']);
+function ownerStderrFormat(stderr,operation) {
+  if(!stderr.trim())return 'EMPTY';
+  const code=ownerAwsEnvelope(stderr,operation);
+  if(code&&!awsReadFailureCodes.has(code))return 'AWS_UNKNOWN_CODE';
+  if(/^[ \t]*(?:usage:[ \t]+aws\b|aws:[ \t]+error:|Unknown options:|Invalid choice:|Parameter validation failed:)/im.test(stderr))return 'CLI_USAGE_OPTIONS';
+  if(/^[ \t]*(?:Could not connect to the endpoint URL:|Connection was closed before we received a valid response|Connect timeout on endpoint URL:|Read timeout on endpoint URL:|SSL validation failed for|Failed to connect to proxy URL:|Could not resolve host)/im.test(stderr))return 'NETWORK_TLS';
+  if(/^[ \t]*(?:Unable to locate credentials|Partial credentials found in|Error when retrieving credentials from|Error loading SSO Token|The SSO session associated with this profile has expired)/im.test(stderr))return 'CREDENTIALS';
+  return 'OTHER';
+}
+export function ownerReadFailureMessage(error,operation) {
+  const name=ownerReadOperation(operation)?.replaceAll('-','_').toUpperCase()??'UNKNOWN_OPERATION';
+  const prefix='OWNER_TASK_READ_'+name+'_',code=ownerReadFailureCode(error,operation);
+  if(code!=='FAILED'&&code!=='TIMEOUT')return prefix+code;
+  // These are process/format observations, never a claim about IAM permission.
+  const status=Number.isInteger(error?.status)&&error.status>=0&&error.status<=255?String(error.status):error?.status==null?'NONE':'OTHER';
+  const system=error?.code==null?'NONE':ownerSystemFailureCodes.has(error.code)?error.code:'OTHER';
+  const signal=error?.signal==null?'NONE':ownerFailureSignals.has(error.signal)?error.signal:'OTHER';
+  return prefix+code+'_EXIT_'+status+'_SYSTEM_'+system+'_SIGNAL_'+signal+'_STDERR_'+ownerStderrFormat(ownerReadStderr(error),operation);
 }
 
 // The observe phase reads identities and metadata only. No secret value is requested.
@@ -297,7 +337,7 @@ function aws(service, operation, args=[]) {
   try {
     return JSON.parse(execFileSync('aws',[service,operation,...args,'--region',region,'--no-cli-pager','--output','json'],
       {encoding:'utf8',timeout:25000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']}));
-  }catch(error){throw Error('OWNER_TASK_READ_'+operation.replaceAll('-','_').toUpperCase()+'_'+ownerReadFailureCode(error));}
+  }catch(error){throw Error(ownerReadFailureMessage(error,operation));}
 }
 function one(list,code) {check(list?.length===1,code);return list[0];}
 export async function observeServices({apiOnly=false}={}) {

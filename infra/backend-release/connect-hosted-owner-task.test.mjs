@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ownerRegistration,ownerRunRequest,ownerExecutionRoleTemplate,ownerSecurityGroupTemplate,ownerReadFailureCode} from './connect-hosted-owner-task.mjs';
+import {ownerRegistration,ownerRunRequest,ownerExecutionRoleTemplate,ownerSecurityGroupTemplate,ownerReadFailureCode,ownerReadFailureMessage} from './connect-hosted-owner-task.mjs';
 import {collectorInventory,hostedCollectorTarget as target,reconstructionDigest} from './reconstruction-v11-release-review.mjs';
 import {backfillMigrationInventorySha256} from './reconstruction-v8-release-review.mjs';
 
@@ -36,6 +36,76 @@ test('owner read diagnostics bound the parsed input and exception-code length',(
   assert.equal(ownerReadFailureCode({stderr:'x'.repeat(8192)+'\nAn error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: details'}),'FAILED');
   assert.equal(ownerReadFailureCode({stderr:'An error occurred ('+'A'.repeat(65)+') when calling the SimulatePrincipalPolicy operation: details'}),'FAILED');
 });
+
+test('owner diagnostics accept bounded CLI whitespace and retry suffixes only for the observed operation',()=>{
+  const operation='simulate-principal-policy';
+  const messages=[
+    'An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: private details',
+    '\r\n \tAn  error\toccurred (AccessDenied)  when calling\tthe SimulatePrincipalPolicy operation : private details\r\n',
+    'An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation (reached max retries: 4): private details',
+    '  An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation ( reached max retries: 0 ): private details',
+  ];
+  for(const stderr of messages){
+    assert.equal(ownerReadFailureCode({stderr},operation),'ACCESSDENIED');
+    assert.equal(ownerReadFailureMessage({stderr},operation),'OWNER_TASK_READ_SIMULATE_PRINCIPAL_POLICY_ACCESSDENIED');
+  }
+  assert.equal(ownerReadFailureCode({stderr:messages[0]},'get-role'),'FAILED');
+  assert.equal(ownerReadFailureCode({stderr:messages[0]+'\n'+messages[0]},operation),'FAILED');
+  assert.equal(ownerReadFailureCode({stderr:messages[2].replace('retries: 4','retries: 1000')},operation),'FAILED');
+});
+test('unclassified owner failures expose only closed stderr-format and process categories',()=>{
+  const operation='simulate-principal-policy',prefix='OWNER_TASK_READ_SIMULATE_PRINCIPAL_POLICY_FAILED_EXIT_252_SYSTEM_NONE_SIGNAL_NONE_STDERR_';
+  const cases=[
+    ['', 'EMPTY'],[' \r\n\t','EMPTY'],
+    ['An error occurred (SyntheticPrivateValue) when calling the SimulatePrincipalPolicy operation: private details','AWS_UNKNOWN_CODE'],
+    ['usage: aws [options] <command>\nprivate arguments','CLI_USAGE_OPTIONS'],
+    ['aws: error: the following arguments are required: private arguments','CLI_USAGE_OPTIONS'],
+    ['Unknown options: --private-value','CLI_USAGE_OPTIONS'],
+    ['Invalid choice: private value','CLI_USAGE_OPTIONS'],
+    ['Parameter validation failed:\nprivate value','CLI_USAGE_OPTIONS'],
+    ['Could not connect to the endpoint URL: "https://private.invalid/token"','NETWORK_TLS'],
+    ['SSL validation failed for https://private.invalid/token','NETWORK_TLS'],
+    ['Read timeout on endpoint URL: https://private.invalid/token','NETWORK_TLS'],
+    ['Unable to locate credentials. private details','CREDENTIALS'],
+    ['Error when retrieving credentials from private-provider: private details','CREDENTIALS'],
+    ['unrecognized private message','OTHER'],
+    ['An error occurred (AccessDenied) when calling the GetRole operation: private details','OTHER'],
+  ];
+  for(const [stderr,format] of cases)assert.equal(ownerReadFailureMessage({status:252,stderr},operation),prefix+format);
+});
+test('owner process diagnostics bound numeric exits and allowlist system errors and signals',()=>{
+  const operation='simulate-principal-policy',prefix='OWNER_TASK_READ_SIMULATE_PRINCIPAL_POLICY_';
+  assert.equal(ownerReadFailureMessage({status:255,code:'ENOENT',signal:'SIGKILL',stderr:''},operation),
+    prefix+'FAILED_EXIT_255_SYSTEM_ENOENT_SIGNAL_SIGKILL_STDERR_EMPTY');
+  assert.equal(ownerReadFailureMessage({status:null,code:'ETIMEDOUT',signal:'SIGTERM',stderr:''},operation),
+    prefix+'TIMEOUT_EXIT_NONE_SYSTEM_ETIMEDOUT_SIGNAL_SIGTERM_STDERR_EMPTY');
+  assert.equal(ownerReadFailureMessage({},operation),prefix+'FAILED_EXIT_NONE_SYSTEM_NONE_SIGNAL_NONE_STDERR_EMPTY');
+  for(const status of [-1,256,1.5,NaN,Infinity,'255','PRIVATE_STATUS']){
+    assert.equal(ownerReadFailureMessage({status,code:'PRIVATE_CODE',signal:'PRIVATE_SIGNAL',stderr:''},operation),
+      prefix+'FAILED_EXIT_OTHER_SYSTEM_OTHER_SIGNAL_OTHER_STDERR_EMPTY');
+  }
+  assert.equal(ownerReadFailureMessage({status:0,code:'ENOBUFS',stderr:''},operation),
+    prefix+'FAILED_EXIT_0_SYSTEM_ENOBUFS_SIGNAL_NONE_STDERR_EMPTY');
+});
+test('full owner failure messages never reflect private stderr, properties or unknown operation input',()=>{
+  const privateValue='SYNTHETIC_PRIVATE_VALUE_DO_NOT_REFLECT';
+  const errors=[
+    {status:privateValue,code:privateValue,signal:privateValue,message:privateValue,stderr:privateValue},
+    {stderr:'An error occurred ('+privateValue+') when calling the SimulatePrincipalPolicy operation: '+privateValue},
+    {stderr:'Could not connect to the endpoint URL: "https://private.invalid/'+privateValue+'"'},
+    {stderr:Buffer.from('Unknown options: --'+privateValue)},
+    {stderr:{toString:()=>privateValue},message:privateValue},
+  ];
+  for(const error of errors)for(const operation of ['simulate-principal-policy',privateValue,privateValue.toLowerCase()]){
+    const message=ownerReadFailureMessage(error,operation);
+    assert.match(message,/^OWNER_TASK_READ_[A-Z0-9_]+$/);
+    assert.ok(!message.includes(privateValue));
+    assert.ok(!message.includes(privateValue.toLowerCase()));
+    assert.ok(!message.includes('private.invalid'));
+    assert.ok(!message.includes('ACCESSDENIED'));
+  }
+});
+
 function service(kind) {
   const isApi=kind==='api', name=isApi?'packproof-v2-staging-api':'packproof-records-worker',arn=cluster.replace(':cluster/',':service/')+'/'+name;
   const taskDefinitionArn=tdArn(name);
