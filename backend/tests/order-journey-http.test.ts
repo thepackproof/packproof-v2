@@ -267,8 +267,62 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     },12000);
     await verifier.verifyOutput(held,completed);
     await writeFile(path.join(root,'restart'),'');await poll('protected worker restart',()=>receipt('restarted.json'));
-    await publish('order','corrections.json','orders.json');mark('correctionPublished');
+    // Exercise an actual Windows sharing violation, not a simulated reader error.
+    // The producer rewrites the existing report while holding FileShare.None.
+    const lockReady=path.join(root,'correction-lock-ready.json'),lockRelease=path.join(root,'correction-lock-release');
+    const lockScript=[
+      "$ErrorActionPreference='Stop'",
+      "$bytes=[IO.File]::ReadAllBytes($env:PP_LOCK_INPUT)",
+      "$deadline=[DateTime]::UtcNow.AddSeconds(15); $stream=$null",
+      "while (!$stream) { try { $stream=[IO.File]::Open($env:PP_LOCK_TARGET,[IO.FileMode]::Open,[IO.FileAccess]::Write,[IO.FileShare]::None) } catch [IO.IOException] { if ([DateTime]::UtcNow -ge $deadline) { throw }; Start-Sleep -Milliseconds 200 } }",
+      "try {",
+      "  $stream.SetLength(0); $stream.Write($bytes,0,$bytes.Length); $stream.Flush($true)",
+      "  [IO.File]::WriteAllText($env:PP_LOCK_READY,'{\"locked\":true}')",
+      "  $deadline=[DateTime]::UtcNow.AddSeconds(90)",
+      "  while (!(Test-Path -LiteralPath $env:PP_LOCK_RELEASE)) { if ([DateTime]::UtcNow -ge $deadline) { throw 'Lock release timed out' }; Start-Sleep -Milliseconds 200 }",
+      "} finally { $stream.Dispose() }"
+    ].join('\n');
+    const writer=spawn('pwsh',['-NoProfile','-NonInteractive','-Command',lockScript],{
+      windowsHide:true,stdio:['ignore','inherit','inherit'],env:{...process.env,PP_LOCK_INPUT:path.join(fixture,'corrections.json'),
+        PP_LOCK_TARGET:path.join(root,'order','orders.json'),PP_LOCK_READY:lockReady,PP_LOCK_RELEASE:lockRelease}
+    });
+    let writerExit:number|null|undefined;
+    const writerDone=new Promise<void>((resolve)=>{
+      writer.once('exit',code=>{writerExit=code;resolve();});
+      writer.once('error',()=>{writerExit=-1;resolve();});
+    });
+    let busySourceId:string|undefined;
+    try {
+      await poll('producer holds exclusive Windows report lock',async()=>{
+        if(writerExit!==undefined)throw Error('Locked report producer exited '+writerExit);
+        return (await receipt('correction-lock-ready.json'))?.locked===true?true:undefined;
+      },20000);
+      await expect(readFile(path.join(root,'order','orders.json'))).rejects.toThrow();
+      const busy=await poll('collector reports the real sharing violation',async()=>{
+        if(writerExit!==undefined)throw Error('Locked report producer exited '+writerExit);
+        const state=await receipt('service-status.json');
+        return state?.workspace?.sources?.find((source:any)=>source.issue==='SOURCE_BUSY');
+      });
+      busySourceId=busy.id;
+      // The incomplete/locked revision must never become a committed Proof.
+      const whileLocked=await view(first.proofId);
+      expect(whileLocked.lines.find((l:any)=>l.lineId==='20')?.orderedQuantity).toBe('2');
+      expect(writerExit).toBeUndefined();
+      mark('lockedSourceObserved');
+    } finally {
+      await writeFile(lockRelease,'');
+      await Promise.race([writerDone,wait(10000)]);
+      if(writerExit===undefined){writer.kill();await writerDone;}
+    }
+    expect(writerExit).toBe(0);mark('correctionPublished');
     const final=await poll('same proof receives quantity correction',async()=>{const v=await view(first.proofId);return v.lines.find((l:any)=>l.lineId==='20')?.orderedQuantity==='3'?v:undefined;});
+    expect(final.proofId).toBe(first.proofId);
+    expect(final.revision).toBeGreaterThan(completed.revision);
+    await poll('collector recovers the locked source without another approval',async()=>{
+      const state=await receipt('service-status.json');
+      const source=state?.workspace?.sources?.find((item:any)=>item.id===busySourceId);
+      return source && source.issue!=='SOURCE_BUSY' ? true : undefined;
+    });
     const comparison = '1 EA more ordered than shipped';
     expect(final.lines.find((l:any)=>l.lineId==='20')).toMatchObject({orderedQuantity:'3',shippedQuantity:'2',unit:'each',
       orderedMinusShippedQuantity:'1',orderedShippedDiscrepancy:comparison});
@@ -316,7 +370,7 @@ it.skipIf(process.env.PACKPROOF_JOURNEY_REAL_HTTP!=='1' || process.platform!=='w
     await verifier.verifyOutput(path.join(root,'output'),final);
     const msg={benchmark,scope:'isolated application; real HTTP over Windows pipe, C# command runtime and filesystem, browser authorization endpoint, database, immutable originals, service dashboard feed and local writer',
       proofId:first.proofId,earliestRevision:firstDoc.revision,latestRevision:final.revision,verifiedFiles:checked.filesVerified,
-      activeSources:status.workspace.sources.length,browserApproval:useBrowser,cloudOrderExported:true,historicalApiProofIdPreserved:true,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,revocationClearedDesktop:true,firstRevisionPreserved:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
+      activeSources:status.workspace.sources.length,browserApproval:useBrowser,cloudOrderExported:true,historicalApiProofIdPreserved:true,originalLabelBytes:true,lateEvidence:true,priorOutputSurvivedOutage:true,lockedSourceObserved:true,lockedSourceRecovered:true,revocationClearedDesktop:true,firstRevisionPreserved:true,timings,onlineAfterCorrectionMs:Date.parse(timings.correctedOnline)-Date.parse(timings.correctionPublished),
       localAfterCommitObservedMs:Date.parse(timings.outputVerified)-Date.parse(timings.correctedOnline),routes};
     if(process.env.PACKPROOF_JOURNEY_RESULT)await writeFile(process.env.PACKPROOF_JOURNEY_RESULT,JSON.stringify(msg,null,2));
     console.log('Real HTTP journey',JSON.stringify({earliest:firstDoc.revision,latest:final.revision,verifiedFiles:checked.filesVerified,timings}));
