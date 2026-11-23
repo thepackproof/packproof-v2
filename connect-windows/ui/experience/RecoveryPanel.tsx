@@ -25,8 +25,11 @@ const dateTime = (value?:string|null) => {
  */
 export function RecoveryPanel({status,sources,busy,run,bridge,onSource}:Props) {
   const canInspect = canReadWorkspace(status);
-  const queue = status.health.queueCount;
-  const output = status.proofOutput;
+  // Queue and output observations may belong to a previously authorized facility.
+  // Keep the collector service state actionable without exposing cached counts
+  // or local archive status after scope, transport, or service authorization loss.
+  const queue = canInspect ? status.health.queueCount : null;
+  const output = canInspect ? status.proofOutput : undefined;
   const active = canInspect ? sources.filter(s=>s.state === "active").length : 0;
   const problem = canInspect ? sources.filter(s=>!!sourceIssue(s)).length : 0;
   const needsOutput = (output?.pending ?? 0)>0 || ["access_denied","unavailable"].includes(output?.state ?? "");
@@ -87,13 +90,14 @@ export function RecoveryPanel({status,sources,busy,run,bridge,onSource}:Props) {
           <div className="eo-recovery-stat">
             <span className="eo-recovery-status-icon"><Icon name="folder" size={22}/></span>
             <span><strong>Local Proof copies</strong><small>{output?.state ? "Output state: "+output.state.replaceAll("_"," ") : "Output state not reported"}</small></span>
-            <b>{output?.pending ?? "—"} <small>pending</small></b>
+            <b>{output?.pending ?? "—"} <small>{canInspect ? "pending" : "hidden"}</small></b>
           </div>
           <div className="eo-recovery-stat">
             <span className="eo-recovery-status-icon"><Icon name="sync" size={22}/></span>
             <span><strong>Collector service</strong><small>{status.health.lastErrorCode || "No service error code reported"}</small></span>
             <b>{status.health.serviceOnline ? "Online" : "Offline"}</b>
           </div>
+          {!canInspect && <p className="eo-recovery-disclosure" role="status">Recovery counts and local output details are hidden until current facility access is confirmed. The service connection can still be checked above.</p>}
           <p className="eo-recovery-disclosure">A queued item is not a completed Proof. Exact source authority and successful backend receipt are required before evidence is accepted.</p>
         </section>
       </div>

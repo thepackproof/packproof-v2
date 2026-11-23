@@ -36,6 +36,10 @@ it("redacts old facility source identity on access loss",()=>{
  render(<RecoveryPanel status={st} sources={[ship]} busy={false} run={vi.fn()} bridge={bridgeFor(st)} onSource={vi.fn()}/>);
  expect(screen.getByText("Source details are hidden while current access cannot be confirmed.")).toBeVisible();
  expect(screen.queryByText("Shipping")).toBeNull();
+ expect(screen.queryByText("5")).toBeNull();
+ expect(screen.queryByText("2")).toBeNull();
+ expect(screen.queryByText("Output state: pending")).toBeNull();
+ expect(screen.getByText(/Recovery counts and local output details are hidden/)).toBeVisible();
 });
 
 it("does not reveal cached source identity if hosted transport is incompatible or permission unknown",()=>{
@@ -50,4 +54,29 @@ it("does not reveal cached source identity if hosted transport is incompatible o
    expect(screen.getByText("Source details are hidden while current access cannot be confirmed.")).toBeVisible();
    view.unmount();
  }
+});
+
+
+it("removes recovery counters on scope, transport, or service loss and restores only with current authorization",()=>{
+ const granted=status();
+ const renderPanel=(value:ConnectStatus)=><RecoveryPanel status={value} sources={[ship]} busy={false}
+   run={vi.fn()} bridge={bridgeFor(value)} onSource={vi.fn()}/>;
+ const view=render(renderPanel(granted));
+ expect(screen.getByText("5")).toBeVisible();
+ expect(screen.getByText("2")).toBeVisible();
+ for(const blocked of [
+   status(false),
+   {...granted,transport:{...granted.transport!,state:"forbidden" as const}},
+   {...granted,health:{...granted.health,serviceOnline:false}},
+ ]) {
+   view.rerender(renderPanel(blocked));
+   expect(screen.queryByText("5")).toBeNull();
+   expect(screen.queryByText("2")).toBeNull();
+   expect(screen.queryByText("Output state: pending")).toBeNull();
+   expect(screen.getByText(/Recovery counts and local output details are hidden/)).toBeVisible();
+   expect(screen.getByRole("button",{name:"Refresh actual status"})).toBeEnabled();
+ }
+ view.rerender(renderPanel(granted));
+ expect(screen.getByText("5")).toBeVisible();
+ expect(screen.getByText("2")).toBeVisible();
 });
