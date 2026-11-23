@@ -213,7 +213,7 @@ test('recovery requires zero admitted unified work, reverses API first, and requ
 });
 
 const directory=new URL('../../backend/migrations/',import.meta.url);
-const inventory=()=>readdirSync(directory).filter(x=>x.endsWith('.sql')).sort().map(name=>{const sql=readFileSync(new URL(name,directory),'utf8');return{id:name.slice(0,-4),checksum:logisticsDigest(sql),sql};});
+const inventory=()=>readdirSync(directory).filter(x=>x.endsWith('.sql')&&Number(x.slice(0,3))<=129).sort().map(name=>{const sql=readFileSync(new URL(name,directory),'utf8');return{id:name.slice(0,-4),checksum:logisticsDigest(sql),sql};});
 test('frozen SQL inventory and exact129 backfill trigger distinguish compatible fallback from unreviewed schema',()=>{
   const rows=inventory(),before=rows.slice(0,123);
   assert.equal(verifyLogisticsInventories(rows,rows,{sourceThrough:129,ledgerThrough:129}).inventorySha256,logisticsLedgers[129].sha256);

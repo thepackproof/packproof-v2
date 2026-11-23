@@ -9,16 +9,19 @@ interface FacilityRecoveryReviewProps {
   locations?: ReadonlyArray<{ id: string; name: string }>;
   busy: boolean;
   disconnected: boolean;
+  connected?: boolean;
   error?: string;
+  onRefresh: () => void;
   onDisconnect: () => void;
   onReviewFiles: () => void;
 }
 
 export function FacilityRecoveryReview({ installation, workspace, environment, locations, busy, disconnected,
-  error, onDisconnect, onReviewFiles }: FacilityRecoveryReviewProps) {
+  connected, error, onRefresh, onDisconnect, onReviewFiles }: FacilityRecoveryReviewProps) {
   const [consent, setConsent] = useState(false);
   const revoked = disconnected || installation.state === 'revoked';
   const needsFacility = installation.locationId === null;
+  const activationPending = !!installation.locationId && !revoked && installation.capabilities?.guidedFacilitySetup !== true;
   const missingDestinations = needsFacility && !revoked && !locations?.length;
   const fileDeadline = configurationReviewDeadline(installation.pendingProposal?.sourceContract);
   const fileExpired = fileDeadline !== null && Date.now() > fileDeadline;
@@ -31,7 +34,7 @@ export function FacilityRecoveryReview({ installation, workspace, environment, l
   </section>;
   return <section className="records-panel agent-approval" aria-label="Facility connection">
     <header className="records-page-heading"><div>
-      <h1>{revoked ? 'Continue in PackProof on Windows' : missingDestinations ? 'Finish setting up this computer' : needsFacility ? 'Reconnect this computer to a facility' : 'Review this computer’s facility connection'}</h1>
+      <h1>{revoked ? 'Continue in PackProof on Windows' : activationPending ? 'Setup activation is pending' : connected ? 'This computer is connected' : missingDestinations ? 'Finish setting up this computer' : needsFacility ? 'Reconnect this computer to a facility' : 'Review this computer’s facility connection'}</h1>
       <p>{installation.deviceName} · {workspace} · {environment === 'live' ? 'Production' : 'Sandbox'}</p>
     </div></header>
     {missingDestinations && fileOption}
@@ -55,7 +58,18 @@ export function FacilityRecoveryReview({ installation, workspace, environment, l
         onChange={event => setConsent(event.target.checked)}/>Disconnect the current service access for {installation.deviceName}.</label>
       <button type="button" className="records-button" disabled={!consent || busy}
         onClick={() => { if (consent && !busy) onDisconnect(); }}>{busy ? 'Disconnecting…' : 'Disconnect and continue'}</button>
-    </> : <p>{installation.locationId ? 'This installation already has an assigned facility.' : 'The facility assignment could not be confirmed.'} Return to PackProof on Windows and select <strong>Check connection again</strong>.</p>}
+    </> : activationPending ? <>
+      <p role="status">{installation.capabilities?.guidedFacilitySetup === false
+        ? 'This computer is connected to its facility, but guided setup is not enabled for it yet.'
+        : 'The facility connection is saved, but guided setup availability has not been confirmed.'}</p>
+      <p>PackProof must confirm guided setup is enabled for this facility before source discovery is available. Keep the current connection.</p>
+      <p>This page checks for activation automatically. Once it is confirmed, you can continue in PackProof on Windows.</p>
+      <div className="records-actions">
+        <button type="button" className="records-button secondary" disabled={busy} onClick={onRefresh}>Check setup status</button>
+        <a className="records-button secondary" href="mailto:admin@thepackproof.com?subject=PackProof%20facility%20setup%20activation">Contact PackProof support</a>
+      </div>
+    </> : <p role="status">{installation.locationId ? 'This computer is connected to its facility.' : 'The facility assignment could not be confirmed.'} Return to PackProof on Windows and select <strong>Check connection again</strong>.</p>}
+    {connected && !revoked && <p>Connecting the facility has not uploaded any files or started collection.</p>}
     {error && <p role="alert" className="records-error-text">{error}</p>}
     {!missingDestinations && fileOption}
   </section>;

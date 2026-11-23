@@ -2,11 +2,15 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-// These are the two recipes used to build the running Logistics candidate.
-// A different recipe requires a new compatibility review or a coordinated release.
-const recipes = new Map([
+// Historical129 and recovery130 are distinct reviewed candidate recipes.
+// Selection follows the exact source catalogue; neither accepts an arbitrary recipe.
+const historicalRecipes = new Map([
   ['backend/Dockerfile', '4a73cf0d555184448ee25aab3c3a945ccbb81017'],
   ['backend/Dockerfile.logistics-candidate', 'ed0830bfc8dcfb79051e675dfcb4998f5ac7fec0'],
+]);
+const recoveryRecipes = new Map([
+  ['backend/Dockerfile', '4a73cf0d555184448ee25aab3c3a945ccbb81017'],
+  ['backend/Dockerfile.recovery-candidate', '9772e04e53509009793a69e03d784a80afe82370'],
 ]);
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const repository = '784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@';
@@ -18,6 +22,9 @@ function git(root, args) {
 function runtimeInputs(root, commit) {
   const sources = new Set(['.dockerignore']);
   const optional = new Set(['.dockerignore']);
+  const recoveryMigration='backend/migrations/130_connect_recovery_collector_version.sql';
+  const recovery=git(root,['ls-tree','--name-only',commit,'--',recoveryMigration]).trim()===recoveryMigration;
+  const recipes=recovery?recoveryRecipes:historicalRecipes;
   for (const [recipe, expectedBlob] of recipes) {
     assert.equal(git(root, ['rev-parse', commit + ':' + recipe]).trim(), expectedBlob, 'Unreviewed runtime Dockerfile: ' + recipe);
     sources.add(recipe);

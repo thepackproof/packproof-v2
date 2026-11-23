@@ -3,6 +3,20 @@ import { joinUrl, PackProofApi } from "../api/client";
 import { ApiError } from "../api/types";
 
 describe("API client boundary", () => {
+  it('retains safe server operation references and recovery details through an approval failure',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error:{code:'INTERNAL',message:'The request could not be completed',operationId:'790532a0-f218-44c8-9584-a4c71454ea65',nextAction:'Contact support with this reference.',retryable:false}}),{status:500,headers:{'Content-Type':'application/json'}})));
+    try{
+      const api=new PackProofApi({baseUrl:'',getToken:()=> 'fixture-token'});
+      await expect(api.recordsRequest('/agent-installations/agent-a/actions','POST',{action:'configure'})).rejects.toMatchObject({code:'INTERNAL',status:500,operationId:'790532a0-f218-44c8-9584-a4c71454ea65',nextAction:'Contact support with this reference.',retryable:false});
+    }finally{vi.unstubAllGlobals();}
+  });
+  it('uses the safe response-header reference when an upstream error has no JSON body',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response('Unavailable',{status:503,headers:{'X-Request-Id':'operation-123'}})));
+    try{
+      const api=new PackProofApi({baseUrl:'',getToken:()=> 'fixture-token'});
+      await expect(api.recordsRequest('/context')).rejects.toMatchObject({code:'HTTP_ERROR',status:503,operationId:'operation-123'});
+    }finally{vi.unstubAllGlobals();}
+  });
   it('preserves actionable records problem details as well as the retained nested error contract',async()=>{
     const replies=[
       {type:'about:blank',title:'CSV_MAPPING_REQUIRED',code:'CSV_MAPPING_REQUIRED',status:400,detail:'Choose the column that identifies the shipment.'},

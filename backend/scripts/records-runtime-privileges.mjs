@@ -176,11 +176,20 @@ const policy127 = {...policy126,record_order_packet_exports:orderAppend};
 const policy128 = {...policy127,
  record_order_source_health:{api:{...select,insert:'*',update:['checked_at','verified_read_at','received_at','state']},worker:{}},
 };
+// An exact configuration approval may supersede an uncommitted preview and
+// records why it did so. Initial facility assignment is an authenticated human
+// action restricted by the API to an unused enrollment with no accepted source.
+// Worker grants and all original/source identity columns remain unchanged.
+const policy130 = {...policy128,
+ partner_import_jobs:{...policy128.partner_import_jobs,api:{...policy128.partner_import_jobs.api,update:[...policy128.partner_import_jobs.api.update,'last_error_code']}},
+ record_agent_installations:{...policy128.record_agent_installations,api:{...policy128.record_agent_installations.api,update:[...policy128.record_agent_installations.api.update,'location_id']}},
+ record_locations:{...policy128.record_locations,api:{...policy128.record_locations.api,insert:['id','organization_id','name','created_at']}},
+};
 //119 adds only an index: its catalog columns and effective grants remain118.
 const policiesByMigration=new Map([
  [108,policy108],[109,policy],[113,policy113],[116,policy116],[117,policy117],
  [118,policy118],[119,policy118],[120,policy120],[121,policy121],[122,policy121],[123,policy123],[124,policy123],
- [125,policy125],[126,policy126],[127,policy127],[128,policy128],[129,policy128],
+ [125,policy125],[126,policy126],[127,policy127],[128,policy128],[129,policy128],[130,policy130],
 ]);
 function selectPolicy(throughMigration){
  const result=policiesByMigration.get(throughMigration);
@@ -232,7 +241,7 @@ function sourceColumns(sql,existing={}){
 export async function recordsMigrationInventory(throughMigration=109){
  const selectedPolicy=selectPolicy(throughMigration);
  const directory=new URL('../migrations/',import.meta.url);
- const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[012][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
+ const files=(await readdir(directory)).filter(name=>/^(09[6-9]|1[0-3][0-9])_[a-z0-9_]+\.sql$/.test(name)&&Number(name.slice(0,3))<=throughMigration).sort();
  if(files.length!==throughMigration-95||new Set(files.map(f=>f.slice(0,3))).size!==throughMigration-95)fail('RECORDS_SOURCE_MIGRATIONS_INCOMPLETE');
  const migrations={};let tableColumns={};for(const file of files){const sql=await readFile(new URL(file,directory),'utf8');migrations[file.slice(0,-4)]=sha(sql);tableColumns=sourceColumns(sql,tableColumns);}
  if(Object.keys(selectedPolicy).some(table=>!tableColumns[table]?.length)||Object.keys(tableColumns).some(table=>!selectedPolicy[table]))fail('RECORDS_SOURCE_POLICY_INCOMPLETE');

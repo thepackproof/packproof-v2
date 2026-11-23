@@ -51,3 +51,13 @@ test('the Logistics task family accepts only the corresponding schema 129 owner 
   fixture.messages[1]={message:JSON.stringify(fixture.report)};
   assert.deepEqual(collectTaskReceipt(fixture.taskArn,fixture.read).report,fixture.report);
 });
+
+test('the recovery130 family cannot reuse a historical owner receipt',()=>{
+  const fixture=data('inspect'),original=fixture.registered.family;
+  fixture.registered.family=original.replace('connect-owner','recovery-owner');
+  fixture.task.taskDefinitionArn=fixture.registered.taskDefinitionArn=fixture.registered.taskDefinitionArn.replace(original,fixture.registered.family);
+  assert.throws(()=>collectTaskReceipt(fixture.taskArn,fixture.read),/ONE_COMPLETED_REPORT/);
+  fixture.report.schema='packproof.hosted-recovery-owner-receipt/v1';
+  fixture.messages[1]={message:JSON.stringify(fixture.report)};
+  assert.deepEqual(collectTaskReceipt(fixture.taskArn,fixture.read).report,fixture.report);
+});

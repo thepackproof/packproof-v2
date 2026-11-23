@@ -29,7 +29,7 @@ test('a portal release rejects changes to any deployed runtime input, image reci
     await write(recipe, contents);
     for (const line of contents.split('\n').filter(l => l.startsWith('COPY ') && !l.startsWith('COPY --from='))) {
       for (let source of line.split(/\s+/).slice(1, -1)) {
-        source = source.replace('*', 'contract');
+        source = source.replaceAll('*', 'contract');
         if (!path.extname(source)) source += '/nested/fixture.ts';
         await write(source, 'runtime input\n');
       }
@@ -65,5 +65,30 @@ test('the publisher requires the exact live API image, source, readiness and aut
   for (const change of [{ meta: { image: image + '1' } }, { meta: { commit: 'b'.repeat(40) } },
     { meta: { environment: 'staging' } }, {ready: 'starting'}, {status: 200}, {origin: '*'}]) {
     await assert.rejects(verifyApiTarget(source, image, responses(change)));
+  }
+});
+
+test('a recovery130 portal binds the actual recovery candidate recipe and rejects owner-CLI drift',async t=>{
+  const root=await mkdtemp(path.join(tmpdir(),'portal-recovery-inputs-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const git=(...args)=>execFileSync('git',['-C',root,'-c','core.autocrlf=false','-c','user.name=tests','-c','user.email=tests@example.invalid',...args],{encoding:'utf8'}).trim();
+  const write=async(name,text)=>{await mkdir(path.dirname(path.join(root,name)),{recursive:true});await writeFile(path.join(root,name),text);};
+  const commit=()=>{git('add','--all');git('commit','--quiet','-m','synthetic recovery fixture');return git('rev-parse','HEAD');};
+  git('init','--quiet');
+  for(const recipe of ['backend/Dockerfile','backend/Dockerfile.recovery-candidate']) {
+    const contents=(await readFile(new URL('../'+recipe,import.meta.url),'utf8')).replaceAll('\r\n','\n');
+    await write(recipe,contents);
+    for(const line of contents.split('\n').filter(l=>l.startsWith('COPY ')&&!l.startsWith('COPY --from=')))
+      for(let source of line.split(/\s+/).slice(1,-1)) {
+        source=source.replaceAll('*','contract');if(!path.extname(source))source+='/nested/fixture.ts';
+        await write(source,'runtime input\n');
+      }
+  }
+  await write('backend/migrations/130_connect_recovery_collector_version.sql','fixture catalogue marker\n');
+  const api=commit();await write('web/src/recovery.ts','matching portal');const portal=commit();
+  assert.ok(verifyRuntimeInputs(root,api,portal,image).runtimeInputCount>40);
+  for(const changed of ['infra/backend-release/recovery-hosted-migration.mjs','backend/Dockerfile.recovery-candidate']) {
+    git('checkout','--quiet','--detach',portal);await write(changed,'different runtime input');
+    assert.throws(()=>verifyRuntimeInputs(root,api,commit(),image),/runtime Dockerfile|changes inputs/);
   }
 });

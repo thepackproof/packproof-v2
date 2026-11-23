@@ -1,0 +1,170 @@
+name: Connect recovery exact-source release
+on:
+  push:
+    branches: [main]
+    paths: ['infra/connect-rollout/recovery-promotion.json']
+  workflow_dispatch:
+    inputs:
+      request:
+        description: Reviewed JSON request for one inspect/facility-inspect/build/bridge/rehearse/apply/promote phase
+        required: true
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: packproof-backend-release
+  cancel-in-progress: false
+jobs:
+  rnd-release-policy:
+    uses: ./.github/workflows/rnd-release-policy.yml
+    permissions:
+      contents: read
+  phase:
+    needs: rnd-release-policy
+    if: needs.rnd-release-policy.outputs.allowed == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bind one reviewed request to exact main source and its successful CI
+        id: request
+        uses: actions/github-script@v7
+        env:
+          MANUAL_REQUEST: ${{ inputs.request }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const cp = require('node:child_process');
+            const path = require('node:path');
+            if (context.repo.owner !== 'thepackproof' || context.repo.repo !== 'packproof-v2' || context.ref !== 'refs/heads/main') throw Error('MAIN_SOURCE_REQUIRED');
+            const raw = context.eventName === 'workflow_dispatch' ? process.env.MANUAL_REQUEST : fs.readFileSync('infra/connect-rollout/recovery-promotion.json', 'utf8');
+            const request = JSON.parse(raw);
+            const phases = ['inspect','facility-inspect','build','bridge','rehearse','apply','promote'];
+            if (!phases.includes(request.phase) || !/^[a-f0-9]{40}$/.test(request.source ?? '')) throw Error('EXACT_PHASE_AND_SOURCE_REQUIRED');
+            if (request.phase === 'facility-inspect') {
+              if (Object.keys(request.facility ?? {}).sort().join(',') !== 'inventorySha256,recipientPublicKeySpki,subjectSha256') throw Error('ENCRYPTED_FACILITY_REQUEST_REQUIRED');
+              if (!/^[a-f0-9]{64}$/.test(request.facility.subjectSha256 ?? '') || !/^[A-Za-z0-9+/]{59}=$/.test(request.facility.recipientPublicKeySpki ?? '')) throw Error('VERIFIED_SUBJECT_DIGEST_AND_RECIPIENT_REQUIRED');
+            }
+            cp.execFileSync('git', ['merge-base','--is-ancestor',request.source,context.sha], {stdio:'pipe'});
+            const {data} = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id:'ci.yml', head_sha:request.source, status:'success', per_page:100 });
+            const ci = data.workflow_runs.find(run => run.head_sha === request.source && run.head_branch === 'main' && run.path === '.github/workflows/ci.yml' && ['push','workflow_dispatch'].includes(run.event) && run.status === 'completed' && run.conclusion === 'success');
+            if (request.phase !== 'inspect' && !ci) throw Error('EXACT_SOURCE_MAIN_CI_REQUIRED');
+            // Request metadata cannot invent CI evidence. GitHub supplies it here.
+            request.ci = ci ?? null;
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'recovery-request.json'),JSON.stringify(request),{mode:0o600});
+            core.setOutput('phase',request.phase);
+            core.setOutput('source',request.source);
+      - name: Check release constructors before acquiring cloud credentials
+        run: node --test infra/backend-release/recovery-*.test.mjs infra/backend-release/connect-hosted-task-receipt.test.mjs
+      - name: Restrict the existing identity to read-only inspection
+        id: inspect-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-inspect "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-inspect-${{ github.run_id }}
+          inline-session-policy: ${{ steps.inspect-policy.outputs.policy }}
+      - name: Observe current services, topology, identity and optional owner metadata
+        run: node infra/backend-release/recovery-hosted-release.mjs inspect "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Restrict the fixed facility inspector to the observed API identity and one task family
+        if: steps.request.outputs.phase == 'facility-inspect'
+        id: facility-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-facility "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.request.outputs.phase == 'facility-inspect'
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-facility-${{ github.run_id }}
+          inline-session-policy: ${{ steps.facility-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Inspect the verified human's facility choices in a read-only API-role transaction
+        if: steps.request.outputs.phase == 'facility-inspect'
+        run: node infra/backend-release/recovery-hosted-release.mjs facility-inspect "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Restrict source build to its content-addressed archive and existing CodeBuild project
+        if: steps.request.outputs.phase == 'build'
+        id: build-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-build "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.request.outputs.phase == 'build'
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-build-${{ github.run_id }}
+          inline-session-policy: ${{ steps.build-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Build and verify exact candidate and retained129 compatibility image
+        if: steps.request.outputs.phase == 'build'
+        run: node infra/backend-release/recovery-hosted-release.mjs build "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Restrict reconstruction of prior actual build and task receipts to reads
+        if: contains(fromJSON('["bridge","rehearse","apply","promote"]'), steps.request.outputs.phase)
+        id: hydrate-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-hydrate "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: contains(fromJSON('["bridge","rehearse","apply","promote"]'), steps.request.outputs.phase)
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-receipts-${{ github.run_id }}
+          inline-session-policy: ${{ steps.hydrate-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Re-read source-bound CodeBuild logs, registry digests and exact owner task receipts
+        if: contains(fromJSON('["bridge","rehearse","apply","promote"]'), steps.request.outputs.phase)
+        run: node infra/backend-release/recovery-hosted-release.mjs hydrate "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Restrict image qualification and promotion to the existing service roles and families
+        if: contains(fromJSON('["bridge","promote"]'), steps.request.outputs.phase)
+        id: runtime-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-runtime "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: contains(fromJSON('["bridge","promote"]'), steps.request.outputs.phase)
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-runtime-${{ github.run_id }}
+          inline-session-policy: ${{ steps.runtime-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Qualify four actual-role probes and promote only the129 compatibility bridge
+        if: steps.request.outputs.phase == 'bridge'
+        run: node infra/backend-release/recovery-hosted-release.mjs fallback "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Qualify four actual-role probes and promote only the130 candidate
+        if: steps.request.outputs.phase == 'promote'
+        run: node infra/backend-release/recovery-hosted-release.mjs candidate "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Restrict the owner task to the existing observed execution role
+        if: contains(fromJSON('["rehearse","apply"]'), steps.request.outputs.phase)
+        id: owner-policy
+        run: node infra/backend-release/recovery-hosted-release.mjs policy-owner "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: contains(fromJSON('["rehearse","apply"]'), steps.request.outputs.phase)
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          allowed-account-ids: '784514617543'
+          aws-region: us-east-1
+          role-session-name: recovery-owner-${{ github.run_id }}
+          inline-session-policy: ${{ steps.owner-policy.outputs.policy }}
+          unset-current-credentials: true
+      - name: Rehearse the exact130 SQL and narrow grants in a transaction that rolls back
+        if: steps.request.outputs.phase == 'rehearse'
+        run: node infra/backend-release/recovery-hosted-release.mjs rehearse "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - name: Apply only after the independently observed successful rollback rehearsal
+        if: steps.request.outputs.phase == 'apply'
+        run: node infra/backend-release/recovery-hosted-release.mjs apply "$RUNNER_TEMP/recovery-request.json" "$RUNNER_TEMP/recovery-private"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connect-recovery-${{ steps.request.outputs.phase }}-${{ steps.request.outputs.source }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/recovery-private/receipts/*.json
+          if-no-files-found: warn
+          retention-days: 30

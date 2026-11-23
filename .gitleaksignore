@@ -78,3 +78,16 @@ be2827828a8e73e7941ffe3d0ed48561b80c066c:docs/partner-foundation/foundation-brid
 # PR 171, source scan job 134715786633. The historical codebuildId field
 # identifies an AWS CodeBuild execution, verified against BatchGetBuilds.
 af4905c028da19a0214f5ee1e97ae1d63949425e:docs/windows-connect/releases/0.5.0-web-build-receipt.json:generic-api-key:5
+
+# Reviewed CI run 45079787398 / Source secrets job 137385118669.
+# The following two immutable historical lines contain the publicly visible
+# Figma DESIGN FILE IDENTIFIER (in a design link and contract). It is not a
+# bearer token, API key or secret. The live product reads no authentication
+# material from this identifier. Do not weaken the generic scanner rule.
+40212639a3f05f5844ee2449f38b3cceb72c0609:connect-windows/design/windows-ux-contract.json:generic-api-key:30
+ddb7f473f58899ad208a6a7cef73572563609928:connect-windows/scripts/verify-windows-ux-contract.cjs:generic-api-key:30
+
+# Reviewed the same scan's existing source finding: apiCommit is the public
+# Git commit SHA of the deployed API, not a credential. This exception covers
+# only the exact published release metadata line in this historical commit.
+ba258ded46df09c19786e2bbc4f1ef025611b939:infra/connect-rollout/portal-promotion.json:generic-api-key:3
