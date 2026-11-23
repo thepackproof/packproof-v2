@@ -1,7 +1,7 @@
 <Project>
   <ItemGroup>
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)../intelligence/export-catalogue.json" LogicalName="PackProof.Connect.ExportCatalogue.json" />
-    <PackageReference Include="NPOI" Version="2.7.6" />
+    <PackageReference Include="NPOI" Version="2.8.1" />
     <PackageReference Include="PdfPig" Version="0.1.13" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.14" />
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
