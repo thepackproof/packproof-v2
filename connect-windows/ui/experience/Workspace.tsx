@@ -4,6 +4,7 @@ import type { ConnectStatus } from "../types";
 import { Icon } from "./Icon";
 import { Connections } from "./WorkspaceConnections";
 import { OperationalSignal } from "./OperationalSignal";
+import { MatchingWorkspace, IntegrityWorkspace, ExportsWorkspace, WorkstationSettings } from "./WorkspaceDestinations";
 import { OrderRows, OrdersView } from "./WorkspaceOrdersView";
 import {
   reportError,
@@ -103,7 +104,7 @@ function WorkspaceView(props: WorkspaceProps) {
   };
   const sources = ws.sources.filter((s) => s.roles.length),
     recent = readable ? ws.orders || [] : [];
-  const wantsReview = readable && (section === "attention" || section === "home");
+  const wantsReview = readable && (section === "attention" || section === "home" || section === "matching");
   const revisionKey = recent.map((o) => o.proofId + "/" + o.revision).join(",");
   const lastReview = useRef({ key: "", requested: 0 });
   // Keep an active receiving dock from triggering a broad comparison on every import.
@@ -259,6 +260,53 @@ function WorkspaceView(props: WorkspaceProps) {
           run={run}
           sourceId={sourceId}
           onSource={setSourceId}
+        />
+      )}
+      {section === "matching" && (
+        <MatchingWorkspace
+          status={status}
+          bridge={bridge}
+          busy={busy}
+          run={run}
+          onSection={onSection}
+          onProof={onProof}
+          onOutputSetup={() => edit("output")}
+          report={report}
+          error={reviewError}
+          onRefresh={() => setAttempt((v) => v + 1)}
+        />
+      )}
+      {section === "integrity" && (
+        <IntegrityWorkspace
+          status={status}
+          bridge={bridge}
+          busy={busy}
+          run={run}
+          onSection={onSection}
+          onProof={onProof}
+          onOutputSetup={() => edit("output")}
+        />
+      )}
+      {section === "exports" && (
+        <ExportsWorkspace
+          status={status}
+          bridge={bridge}
+          busy={busy}
+          run={run}
+          onSection={onSection}
+          onProof={onProof}
+          onOutputSetup={() => edit("output")}
+        />
+      )}
+      {section === "settings" && (
+        <WorkstationSettings
+          status={status}
+          bridge={bridge}
+          busy={busy}
+          run={run}
+          onSection={onSection}
+          onProof={onProof}
+          onOutputSetup={() => edit("output")}
         />
       )}
       {section === "attention" && (
