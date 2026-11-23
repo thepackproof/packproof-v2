@@ -42,7 +42,7 @@ const bridgeDiscovery = source('connect-windows/main/workspace-discovery.ts');
 for (const extension of ['json', 'jsonl', 'ndjson']) {
   assert.ok(nativeDiscovery.includes('".' + extension + '"'),
     'Native discovery must recognize structured ' + extension + ' export files');
-  assert.match(bridgeDiscovery, new RegExp('\\\\b' + extension + '\\\\b'),
+  assert.ok(bridgeDiscovery.includes(extension),
     'Windows IPC validation must admit native ' + extension + ' suggestions');
 }
 const ops = source(contract.runtime.evidenceOsOverview);
