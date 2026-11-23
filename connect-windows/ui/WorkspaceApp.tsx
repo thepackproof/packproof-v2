@@ -4,6 +4,7 @@ import { getBridge, type ConnectBridge, type ConnectStatus } from "./types";
 import type { DraftPreview, OrderDetail, WorkspaceStep } from "./workspace-types";
 import { Header, Shell, type Section } from "./experience/Shell";
 import { Workspace } from "./experience/Workspace";
+import { canReadWorkspace } from "./experience/WorkspaceModel";
 import { Setup } from "./experience/Setup";
 import { Proof } from "./experience/Proof";
 import { draftProof, northSample, riversideSample, sampleOriginal } from "./experience/preview";
@@ -110,12 +111,18 @@ function Experience({
     status.binding?.organizationId,
     status.state === "revoked",
   ]);
-  const scope = JSON.stringify([identity, ws.viewKey, ws.canReadOrders]);
+  const accessConfirmed = canReadWorkspace(status) && !serviceUnavailable;
+  const scope = JSON.stringify([identity, ws.viewKey, status.binding?.locationId, accessConfirmed]);
+  // A lost or incompatible facility authorization invalidates an opened Proof.
+  // Recovery never automatically reopens a previously selected private order.
+  useEffect(() => {
+    if (!accessConfirmed) setSelection(null);
+  }, [accessConfirmed]);
   const liveDraft =
     draft?.identity === identity && status.state !== "revoked" && !serviceUnavailable ? draft.data : null;
   const showSetup = setup || ws.phase !== "active" || ws.step !== "overview";
   const selected =
-    selection?.scope === scope && ws.canReadOrders !== false && !serviceUnavailable ? selection : null;
+    selection?.scope === scope && accessConfirmed ? selection : null;
   const latest = selected && ws.orders?.find((o) => o.proofId === selected.id);
   const revision = selected ? Math.max(selected.revision, latest?.revision ?? 0) : 0;
   const sourceNames = Object.fromEntries(
@@ -129,6 +136,11 @@ function Experience({
   const open = (id: string, rev: number) => {
     if (facilitySetup) {
       void bridge.openWorkspaceOrder(id,rev).catch(e => setError(e instanceof Error ? e.message : "Could not open the signed-in order."));
+      return;
+    }
+    if (!accessConfirmed) {
+      setSelection(null);
+      setError("Restore your approved facility connection before opening order records.");
       return;
     }
     setSelection({ id, revision: rev, scope });

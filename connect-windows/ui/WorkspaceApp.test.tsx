@@ -187,3 +187,33 @@ it("discards a proof read that completes after switching the approved workspace"
   expect(screen.queryByRole("heading", { name: "Proof old-proof" })).toBeNull();
   expect(await within(await screen.findByRole("region", { name: "Recent order evidence" })).findByRole("button", { name: /East-806/ })).toBeVisible();
 });
+
+it("closes a loaded private Proof when live transport is incompatible and requires explicit reselection after renewal", async () => {
+  const order = { proofId: "private-proof", revision: 3, orderReference: "PRIVATE-ORDER" };
+  let current: ConnectStatus = active({orders:[order]});
+  const detail: OrderDetail = {...order,lines:[],events:[],evidence:[]};
+  const bridge = bridgeFor(current, {
+    getStatus: async () => current,
+    getWorkspaceStatus: async () => current,
+    workspaceOrderDetail: vi.fn(async () => detail),
+  });
+  render(<WorkspaceApp bridge={bridge}/>);
+  fireEvent.click(within(await screen.findByRole("region", {name:"Recent order evidence"}))
+    .getByRole("button",{name:/PRIVATE-ORDER/}));
+  expect(await screen.findByRole("heading",{name:"Proof private-proof"})).toBeVisible();
+
+  current = {...current,transport:{...current.transport!,state:"unsupported"}};
+  fireEvent.focus(window);
+  await waitFor(() => expect(screen.queryByRole("heading",{name:"Proof private-proof"})).toBeNull());
+  expect(screen.queryByText("PRIVATE-ORDER")).toBeNull();
+
+  current = active({orders:[order]});
+  fireEvent.focus(window);
+  await waitFor(() => expect(within(screen.getByRole("region",{name:"Recent order evidence"}))
+    .getByRole("button",{name:/PRIVATE-ORDER/})).toBeVisible());
+  expect(screen.queryByRole("heading",{name:"Proof private-proof"})).toBeNull();
+  fireEvent.click(within(screen.getByRole("region",{name:"Recent order evidence"}))
+    .getByRole("button",{name:/PRIVATE-ORDER/}));
+  expect(await screen.findByRole("heading",{name:"Proof private-proof"})).toBeVisible();
+  expect(bridge.workspaceOrderDetail).toHaveBeenCalledTimes(2);
+});

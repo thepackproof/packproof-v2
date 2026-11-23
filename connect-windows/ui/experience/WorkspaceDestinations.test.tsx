@@ -147,3 +147,20 @@ it("does not show restricted match observations or claim online export access on
   expect(screen.queryByText("AUTHENTICATED ACCESS")).toBeNull();
   expect(screen.getByText("— PENDING")).toBeVisible();
 });
+
+it("invalidates the selected integrity manifest on authorization loss and does not resurrect it after recovery", async () => {
+  const order = {proofId:"revocable",revision:2,orderReference:"ORDER-PRIVATE"};
+  const granted=fixture({orders:[order]});
+  const detail:OrderDetail={...order,lines:[],events:[{eventKey:"e1",kind:"packing",
+    sourceId:"s1",fileName:"secret-packing.csv",originalSha256:"a".repeat(64)}],evidence:[]};
+  const c=callbacks(granted,{workspaceOrderDetail:vi.fn(async()=>detail)});
+  const app=render(<IntegrityWorkspace {...c}/>);
+  fireEvent.click(screen.getByRole("button",{name:/ORDER-PRIVATE/}));
+  expect(await screen.findByText("secret-packing.csv")).toBeVisible();
+  const blocked={...granted,transport:{...granted.transport!,state:"unsupported" as const}};
+  app.rerender(<IntegrityWorkspace {...c} status={blocked}/>);
+  expect(screen.queryByText("secret-packing.csv")).toBeNull();
+  app.rerender(<IntegrityWorkspace {...c} status={granted}/>);
+  expect(screen.getByText("Inspect an order's evidence")).toBeVisible();
+  expect(screen.queryByText("secret-packing.csv")).toBeNull();
+});

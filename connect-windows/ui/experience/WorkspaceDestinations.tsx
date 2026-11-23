@@ -138,7 +138,8 @@ export function IntegrityWorkspace({ status, bridge, onSection, onProof }: Base)
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(false);
-  const scope = JSON.stringify([status.installationId, ws.viewKey, ws.canReadOrders, status.binding?.organizationId]);
+  const scope = JSON.stringify([status.installationId, ws.viewKey, ws.canReadOrders,
+    status.binding?.organizationId, status.binding?.locationId, available(status)]);
   const chosen = selected?.scope === scope && orders.find((o) => o.proofId === selected.order.proofId);
   // Do not let a previously authorized revision survive a facility switch or a
   // newer observed revision. Every inspection rechecks its exact identity.
