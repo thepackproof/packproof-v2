@@ -7,8 +7,18 @@ const check=(ok,code)=>{if(!ok)throw Error('RECOVERY_BUILD_'+code);};
 const statuses=new Set(['IN_PROGRESS','SUCCEEDED','FAILED','FAULT','STOPPED','TIMED_OUT']);
 const failures=new Set(['FAILED','FAULT','STOPPED','TIMED_OUT']);
 const validId=id=>typeof id==='string'&&id.startsWith(TARGET.serviceName+':')&&
-  /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/.test(id.slice(TARGET.serviceName.length+1));
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id.slice(TARGET.serviceName.length+1));
 const variables=build=>Array.isArray(build?.environment?.environmentVariables)?build.environment.environmentVariables:[];
+const sourceTypes=new Set(['BITBUCKET','CODECOMMIT','CODEPIPELINE','GITHUB','GITHUB_ENTERPRISE','GITLAB','GITLAB_SELF_MANAGED','NO_SOURCE','S3']);
+function classifiable(build) {
+  const source=build?.source,values=build?.environment?.environmentVariables;
+  return sourceTypes.has(source?.type)&&
+    (['NO_SOURCE','CODEPIPELINE'].includes(source.type)?
+      source.location===undefined||typeof source.location==='string':
+      typeof source.location==='string'&&source.location.length>0)&&
+    Array.isArray(values)&&values.every(v=>typeof v?.name==='string'&&v.name.length>0&&
+      typeof v.value==='string'&&['PLAINTEXT','PARAMETER_STORE','SECRETS_MANAGER'].includes(v.type));
+}
 
 function validatePrepared(prepared) {
   const r=prepared?.request,p=prepared?.receipt;
@@ -51,6 +61,7 @@ export function selectRecoveryBuild(prepared,builds) {
   const ids=builds.map(build=>build?.id);
   check(ids.every(validId)&&new Set(ids).size===ids.length&&
     builds.every(build=>build.projectName===prepared.request.projectName),'DISCOVERY_BINDING');
+  check(builds.every(classifiable),'DISCOVERY_UNCLASSIFIABLE');
   const matches=builds.filter(build=>claimsSource(build,prepared));
   // A failed or differently pinned execution for this source is evidence to
   // review, never permission to silently pick a newer execution or retry.
@@ -85,6 +96,7 @@ export async function startOrResumeRecoveryBuild(prepared,{listBuilds,readBuilds
         check(returned.every(id=>listed.ids.includes(id))&&new Set(returned).size===returned.length&&
           observed.builds.every(build=>build.projectName===request.projectName),'DISCOVERY_BINDING');
         builds.push(...observed.builds);
+        check(observed.builds.every(classifiable),'DISCOVERY_UNCLASSIFIABLE');
       }
       nextToken=listed.nextToken;
       if(nextToken===undefined||nextToken===null||nextToken===''){complete=true;break;}

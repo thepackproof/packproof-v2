@@ -59,7 +59,7 @@ test('same-source changed project, archive, version, buildspec or override pins 
   ];
   for(const mutate of mutations) {
     const current=build();mutate(current);
-    assert.throws(()=>selectRecoveryBuild(prepared,[current]),/DISCOVERY_BINDING|SAME_SOURCE_CONFLICT/);
+    assert.throws(()=>selectRecoveryBuild(prepared,[current]),/DISCOVERY_BINDING|DISCOVERY_UNCLASSIFIABLE|SAME_SOURCE_CONFLICT/);
   }
   assert.throws(()=>verifyRecoveryBuildObservation({...build(),id:'unrelated:secret'},prepared),/SAME_SOURCE_CONFLICT/);
 });
@@ -169,4 +169,42 @@ test('verified console pins contain only bounded public image identities and no 
   for(const changed of [{buildId:'other-project:build'},{sourceVersion:'null'},{sourceVersion:'v'.repeat(1025)},
     {candidate:repository+':latest'},{fallback:verified.candidate},{source:'not-reviewed'}])
     assert.throws(()=>publicRecoveryBuildPins({...verified,...changed}),/PUBLIC_RECEIPT/);
+});
+
+test('missing or malformed source and environment metadata cannot classify a build as unrelated or authorize StartBuild',async()=>{
+  for(const mutate of [
+    b=>{delete b.source;delete b.environment;},
+    b=>delete b.source,
+    b=>delete b.environment,
+    b=>delete b.source.location,
+    b=>delete b.source.type,
+    b=>b.source.type='UNRECOGNIZED',
+    b=>delete b.environment.environmentVariables,
+    b=>b.environment.environmentVariables={},
+    b=>b.environment.environmentVariables=[{name:'UNKNOWN',value:'private-value'}]
+  ]) {
+    const incomplete=unrelated();mutate(incomplete);
+    assert.throws(()=>selectRecoveryBuild(prepared,[incomplete]),/DISCOVERY_UNCLASSIFIABLE/);
+    const fake=io([{ids:[incomplete.id]}],[incomplete]);
+    await assert.rejects(startOrResumeRecoveryBuild(prepared,fake),/DISCOVERY_UNCLASSIFIABLE/);
+    assert.equal(fake.discoveries.length,1);
+    assert.equal(fake.discoveries[0].complete,false);
+    assert.equal(fake.discoveries[0].observedBuilds,1);
+    assert.doesNotMatch(JSON.stringify(fake.discoveries),/private-value/);
+    assert.ok(!fake.calls.some(([action])=>action==='start'));
+  }
+});
+
+test('only the exact project and canonical hexadecimal build UUID may enter public discovery receipts',async()=>{
+  for(const invalid of [
+    'packproof-v2-staging-api:private-metadata',
+    'packproof-v2-staging-api:00000001-0000-0000-0000-000000000000-extra',
+    'other-project:00000001-0000-0000-0000-000000000000'
+  ]) {
+    const fake=io([{ids:[invalid]}],[]);
+    await assert.rejects(startOrResumeRecoveryBuild(prepared,fake),/DISCOVERY_IDS/);
+    assert.deepEqual(fake.discoveries[0].matchingBuilds,[]);
+    assert.ok(!JSON.stringify(fake.discoveries).includes(invalid));
+    assert.ok(!fake.calls.some(([action])=>action==='start'));
+  }
 });
