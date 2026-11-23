@@ -137,15 +137,15 @@ export function MatchingWorkspace({ status, bridge, report, error, busy, run, on
 export function IntegrityWorkspace({ status, bridge, onSection, onProof }: Base) {
   const ws = status.workspace!;
   const orders = ws.orders ?? [];
-  const [selected, setSelected] = useState<OrderSummary | null>(null);
+  const [selected, setSelected] = useState<{order: OrderSummary; scope: string} | null>(null);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(false);
   const scope = JSON.stringify([status.installationId, ws.viewKey, ws.canReadOrders, status.binding?.organizationId]);
-  const chosen = selected && orders.find((o) => o.proofId === selected.proofId);
+  const chosen = selected?.scope === scope && orders.find((o) => o.proofId === selected.order.proofId);
   // Do not let a previously authorized revision survive a facility switch or a
   // newer observed revision. Every inspection rechecks its exact identity.
-  const effective = chosen?.revision === selected?.revision ? selected : null;
+  const effective = chosen && selected?.scope === scope && chosen.revision === selected.order.revision ? selected.order : null;
   useEffect(() => {
     setSelected(null); setDetail(null); setFailure("");
   }, [scope]);
@@ -175,7 +175,7 @@ export function IntegrityWorkspace({ status, bridge, onSection, onProof }: Base)
           <div className="eo-route-panel-title"><h2>Choose a Proof</h2><span className="eo-route-tag">{orders.length} VISIBLE ORDERS</span></div>
           {orders.length ? orders.slice(0, 20).map((order) => (
             <button key={order.proofId} className="eo-route-line" aria-pressed={effective?.proofId === order.proofId}
-              onClick={() => setSelected(order)}>
+              onClick={() => setSelected({order, scope})}>
               <span className="eo-route-statusdot is-linked"/><span><strong>{order.orderReference}</strong>
               <small>{order.customerName || "Customer not reported"} · Revision {order.revision}</small></span>
               <span className="eo-route-outcome">{order.issue ? "Needs review" : "Inspect"}</span>
