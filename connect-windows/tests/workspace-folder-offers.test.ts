@@ -64,8 +64,8 @@ it('accepts supported structured JSON, JSONL and NDJSON discovery without bypass
   const results = await discoverWorkspaceFolders('order', {exclude: ['C:\\Proofs']}, bridge);
   expect(results.map(result => result.sampleFile)).toEqual(['orders.json','events.jsonl','labels.ndjson']);
   expect(bridge.request).toHaveBeenCalledWith('discoverWorkspaceFolders', {role:'order', exclude:['C:\\Proofs']});
-  bridge.request.mockResolvedValue([{...sales, sampleFile:'payload.exe'}]);
+  bridge.request.mockResolvedValue([{...recognized, sampleFile:'payload.exe'}]);
   await expect(discoverWorkspaceFolders('order', {exclude:[]}, bridge)).rejects.toThrow();
-  bridge.request.mockResolvedValue([{...sales, sampleFile:'..\\orders.json'}]);
+  bridge.request.mockResolvedValue([{...recognized, sampleFile:'..\\orders.json'}]);
   await expect(discoverWorkspaceFolders('order', {exclude:[]}, bridge)).rejects.toThrow();
 });
