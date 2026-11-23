@@ -29,7 +29,7 @@ test('a portal release rejects changes to any deployed runtime input, image reci
     await write(recipe, contents);
     for (const line of contents.split('\n').filter(l => l.startsWith('COPY ') && !l.startsWith('COPY --from='))) {
       for (let source of line.split(/\s+/).slice(1, -1)) {
-        source = source.replace('*', 'contract');
+        source = source.replaceAll('*', 'contract');
         if (!path.extname(source)) source += '/nested/fixture.ts';
         await write(source, 'runtime input\n');
       }
@@ -80,7 +80,7 @@ test('a recovery130 portal binds the actual recovery candidate recipe and reject
     await write(recipe,contents);
     for(const line of contents.split('\n').filter(l=>l.startsWith('COPY ')&&!l.startsWith('COPY --from=')))
       for(let source of line.split(/\s+/).slice(1,-1)) {
-        source=source.replace('*','contract');if(!path.extname(source))source+='/nested/fixture.ts';
+        source=source.replaceAll('*','contract');if(!path.extname(source))source+='/nested/fixture.ts';
         await write(source,'runtime input\n');
       }
   }
