@@ -35,6 +35,16 @@ for (const [name, id] of Object.entries(visual.nodeReferences))
   assert.match(id, /^\d+:\d+$/, `Invalid Evidence OS Figma node: ${name}`);
 for (const [name, owner] of Object.entries(visual.implementedInRuntime))
   assert.ok(exists(owner), `Evidence OS owner missing: ${name} -> ${owner}`);
+// Native source discovery and Electron validation must agree on accepted
+// structured formats. A mismatch can make valid native findings disappear.
+const nativeDiscovery = source('connect-windows/bridge/WorkspaceDiscovery.cs');
+const bridgeDiscovery = source('connect-windows/main/workspace-discovery.ts');
+for (const extension of ['json', 'jsonl', 'ndjson']) {
+  assert.ok(nativeDiscovery.includes('".' + extension + '"'),
+    'Native discovery must recognize structured ' + extension + ' export files');
+  assert.match(bridgeDiscovery, new RegExp('\\\\b' + extension + '\\\\b'),
+    'Windows IPC validation must admit native ' + extension + ' suggestions');
+}
 const ops = source(contract.runtime.evidenceOsOverview);
 const projection = source(contract.runtime.evidenceOsProjection);
 const appearance = source(contract.runtime.evidenceOsTheme);
