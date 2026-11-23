@@ -53,10 +53,13 @@ it('accepts a local media sample only for evidence and rejects relative paths in
 });
 
 it('accepts supported structured JSON, JSONL and NDJSON discovery without bypassing source review', async () => {
+  // Native suggestions must include recognition evidence; the Electron bridge
+  // rejects a structurally incomplete discovery result, even for valid formats.
+  const recognized = {...sales, evidence: 'Recognized bounded source signature'};
   const bridge = { request: vi.fn(async () => [
-    {...sales, sampleFile: 'orders.json'},
-    {...sales, folder: 'C:\\Exports\\Warehouse', sampleFile: 'events.jsonl'},
-    {...sales, folder: 'C:\\Exports\\Shipping', sampleFile: 'labels.ndjson'},
+    {...recognized, sampleFile: 'orders.json'},
+    {...recognized, folder: 'C:\\Exports\\Warehouse', sampleFile: 'events.jsonl'},
+    {...recognized, folder: 'C:\\Exports\\Shipping', sampleFile: 'labels.ndjson'},
   ]) };
   const results = await discoverWorkspaceFolders('order', {exclude: ['C:\\Proofs']}, bridge);
   expect(results.map(result => result.sampleFile)).toEqual(['orders.json','events.jsonl','labels.ndjson']);
