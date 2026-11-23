@@ -10,7 +10,7 @@ afterEach(cleanup);
 it("shows honest animated discovery without fake percentages or consent claims",async()=>{
  let resolve!: (suggestions:WorkspaceFolderSuggestion[])=>void;
  const pending=new Promise<WorkspaceFolderSuggestion[]>(r=>{resolve=r;});
- const bridge=bridgeFor(selected,{discoverWorkspaceFolders:vi.fn(()=>pending)});
+ const bridge=bridgeFor(selected,{discoverWorkspaceFolders:vi.fn(()=>pending),useWorkspaceFolderSuggestion:vi.fn(async()=>selected)});
  const onChoose=vi.fn();
  render(<FolderSuggestions role="order" busy={false} bridge={bridge} onChoose={onChoose}/>);
  expect(screen.getByRole("status")).toHaveTextContent("Looking in common export folders");
