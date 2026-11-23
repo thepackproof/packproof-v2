@@ -275,12 +275,29 @@ export function ownerRunRequest(input, now=new Date(), profile=collectorOwner) {
     clientToken:hash({review:r,mode,td,retryOf:retry?.taskArn??null}),startedBy:'connect-owner-'+r.source.slice(0,12)+'-'+mode};
 }
 
+// Only known AWS exception names may reach public diagnostics. In particular,
+// never forward stderr, the CLI error message, resources or credential values.
+const awsReadFailureCodes=new Set([
+  'AccessDenied','AccessDeniedException','UnauthorizedOperation','InvalidInput','InvalidInputException',
+  'InvalidClientTokenId','UnrecognizedClientException','ExpiredToken','ExpiredTokenException','RequestExpired',
+  'ValidationError','ValidationException','NoSuchEntity','NoSuchEntityException','ResourceNotFoundException',
+  'Throttling','ThrottlingException','RequestLimitExceeded','TooManyRequestsException','PolicyEvaluation',
+  'ServiceFailure','ServiceUnavailable','ServiceUnavailableException','InternalFailure','InternalError',
+]);
+export function ownerReadFailureCode(error) {
+  if(error?.code==='ETIMEDOUT')return 'TIMEOUT';
+  const raw=error?.stderr;
+  const stderr=typeof raw==='string'?raw.slice(0,8192):Buffer.isBuffer(raw)?raw.subarray(0,8192).toString('utf8'):'';
+  const code=stderr.match(/(?:^|\n)An error occurred \(([A-Za-z][A-Za-z0-9]{0,63})\) when calling the [A-Za-z][A-Za-z0-9]{0,79} operation:/)?.[1];
+  return awsReadFailureCodes.has(code)?code.toUpperCase():'FAILED';
+}
+
 // The observe phase reads identities and metadata only. No secret value is requested.
 function aws(service, operation, args=[]) {
   try {
     return JSON.parse(execFileSync('aws',[service,operation,...args,'--region',region,'--no-cli-pager','--output','json'],
       {encoding:'utf8',timeout:25000,maxBuffer:8*1024*1024,stdio:['ignore','pipe','pipe']}));
-  }catch{throw Error('OWNER_TASK_READ_'+operation.replaceAll('-','_').toUpperCase());}
+  }catch(error){throw Error('OWNER_TASK_READ_'+operation.replaceAll('-','_').toUpperCase()+'_'+ownerReadFailureCode(error));}
 }
 function one(list,code) {check(list?.length===1,code);return list[0];}
 export async function observeServices({apiOnly=false}={}) {
