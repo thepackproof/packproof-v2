@@ -91,3 +91,9 @@ ddb7f473f58899ad208a6a7cef73572563609928:connect-windows/scripts/verify-windows-
 # Git commit SHA of the deployed API, not a credential. This exception covers
 # only the exact published release metadata line in this historical commit.
 ba258ded46df09c19786e2bbc4f1ef025611b939:infra/connect-rollout/portal-promotion.json:generic-api-key:3
+
+# Reviewed PR 200 Source secrets job 138245450198. This exact historical
+# buildId is the AWS CodeBuild execution locator verified by the successful
+# recovery build-resume run 45333049313. It cannot authenticate or authorize
+# access. Keep all scanner rules and every other historical location enabled.
+a92b1fd7321db55739e7f764857897010a890038:infra/connect-rollout/recovery-promotion.json:generic-api-key:22
