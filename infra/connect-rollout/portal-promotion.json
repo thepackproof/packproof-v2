@@ -1,6 +1,6 @@
 {
-  "portalCommit": "931112cfcc510f6248fc5eaead32b6d1490c2619",
-  "apiCommit": "617a58b883328ad04513a48564d33c573b9b7c78",
-  "apiImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:1efe5d4761918809195351d8ce56bdf023532975a7cb641ab72133ce20ec4961",
-  "previousManifestSha256": "04a87405f5250f4d691562f8949bac41743f9ca140c8681ba02d8ebc363efd5e"
+  "portalCommit": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
+  "apiCommit": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
+  "apiImage": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:0394622d2c50a9cb4ddb37eaac6152af322bd84ceb8cc35c4eea288e18530b4e",
+  "previousManifestSha256": "8fee3d9b667c739c33497ee84736f6079e93061265acee8c7396a367227154ea"
 }
