@@ -418,7 +418,11 @@ public sealed partial class AgentRuntime
         {
             // Keep attention and the previous verified-read timestamp until the
             // specific unreadable files have been reopened or removed.
-            s.Issue = s.PendingReadFailures.OrderBy(pair=>pair.Key,StringComparer.Ordinal).First().Value;
+            // Other independent incidents (for example a pending interpretation or
+            // upload) must survive the read recovery. WorkspaceView projects the
+            // retained file failure first, even if another operation sets Issue.
+            if (s.Issue is null or "SOURCE_UNREADABLE" or "SOURCE_ACCESS_DENIED" or "SOURCE_READ_FAILED" or "SOURCE_BUSY" or "SOURCE_SIZE_UNSUPPORTED")
+                s.Issue = s.PendingReadIssue();
         }
         else
         {

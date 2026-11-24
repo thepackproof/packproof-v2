@@ -244,12 +244,22 @@ public sealed class WorkspaceServiceTests
                     Assert.Equal("D.json",failed.Cursor);
                     var verified = failed.LastVerifiedReadAt;
                     // A new runtime has no watcher notifications from the first batch.
-                    using (var resumed = Open(store.Read<LocalState>("state.bin")!))
+                    var restart = store.Read<LocalState>("state.bin")!;
+                    // A separate interpretation/receipt incident can overwrite Issue
+                    // between scan turns. It must not hide the persisted sharing violation,
+                    // and recovery of the file must not erase the independent incident.
+                    restart.Workspace!.Sources.Single().Issue = "PROFILE_NEEDS_REVIEW";
+                    using (var resumed = Open(restart))
                     {
+                        var before = Json.Element(await resumed.Command("status",null,default)).GetProperty("workspace").GetProperty("sources")[0];
+                        Assert.Equal("needs_attention",before.GetProperty("state").GetString());
+                        Assert.Equal("SOURCE_BUSY",before.GetProperty("issue").GetString());
                         await resumed.Tick(default); // reads E, not the still-locked A
                         await resumed.Command("checkpoint",null,default);
                         var pending = store.Read<LocalState>("state.bin")!.Workspace!.Sources.Single();
-                        Assert.Equal("SOURCE_BUSY",pending.Issue);
+                        Assert.Equal("PROFILE_NEEDS_REVIEW",pending.Issue);
+                        var visible = Json.Element(await resumed.Command("status",null,default)).GetProperty("workspace").GetProperty("sources")[0];
+                        Assert.Equal("SOURCE_BUSY",visible.GetProperty("issue").GetString());
                         Assert.True(pending.LastReadFailed);
                         Assert.Equal(verified,pending.LastVerifiedReadAt);
                         Assert.Equal("E.json",pending.Cursor);
@@ -266,7 +276,10 @@ public sealed class WorkspaceServiceTests
                 var recovered=store.Read<LocalState>("state.bin")!.Workspace!.Sources.Single();
                 Assert.Empty(recovered.PendingReadFailures);
                 Assert.False(recovered.LastReadFailed);
-                Assert.NotEqual("SOURCE_BUSY",recovered.Issue);
+                Assert.Equal("PROFILE_NEEDS_REVIEW",recovered.Issue);
+                var visible = Json.Element(await resumed.Command("status",null,default)).GetProperty("workspace").GetProperty("sources")[0];
+                Assert.Equal("needs_attention",visible.GetProperty("state").GetString());
+                Assert.Equal("PROFILE_NEEDS_REVIEW",visible.GetProperty("issue").GetString());
                 Assert.Contains("A.JSON",recovered.Inventory.Keys);
             }
         }

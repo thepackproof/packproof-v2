@@ -93,10 +93,10 @@ public sealed partial class AgentRuntime
             sources = (w?.Sources ?? []).Where(s => s.Roles.Count > 0).Select(s => new
             {
                 s.Id, s.Folder, s.DisplayName, s.Transport, s.SourceNamespace, s.Roles, s.Generation, recognition = s.Recognition ?? Json.Element(new { state = "incomplete", message = "Check this folder to preview its records.", fields = Array.Empty<string>() }),
-                state = s.Paused ? "paused" : s.Issue is not null ? "needs_attention"
+                state = s.Paused ? "paused" : s.Issue is not null || s.PendingReadFailures.Count > 0 ? "needs_attention"
                     : s.PreviousCollectorId is { } priorId && !s.ReplacesPreviousCollector ? state.SourceSubscriptions.FirstOrDefault(p => p.Id == priorId)?.ServerState ?? "needs_approval"
                     : WorkspaceGrantCurrent && w!.ActiveGrant!.Generations.GetValueOrDefault(s.Id) == s.Generation ? "active" : "pending",
-                issue = s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, s.LastVerifiedReadAt, pendingMedia = s.MediaJobs.Count, historyState = s.ApiHistoryState,
+                issue = s.PendingReadIssue() ?? s.Issue, coverageGap = s.CoverageGap, s.LastScanAt, s.LastVerifiedReadAt, pendingMedia = s.MediaJobs.Count, historyState = s.ApiHistoryState,
                 queued = queue.Counts(DurableQueue.WorkspaceLane(s.Id)).Where(p => p.Key != "complete").Sum(p => p.Value)
             }).ToArray()
         };

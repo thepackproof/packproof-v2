@@ -156,6 +156,7 @@ public sealed class WorkspaceSource
     // A successful read of a different file must not resolve a retained sharing violation.
     // Keys are normalized basenames in the protected, bounded source inventory.
     public Dictionary<string,string> PendingReadFailures { get; set; } = [];
+    public string? PendingReadIssue() => PendingReadFailures.OrderBy(pair=>pair.Key,StringComparer.Ordinal).FirstOrDefault().Value;
     public DateTimeOffset? RetryAt { get; set; }
     public string? Issue { get; set; }
     public List<string> MediaJobs { get; set; } = [];
