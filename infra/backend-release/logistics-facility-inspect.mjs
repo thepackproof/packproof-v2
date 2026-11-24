@@ -1,9 +1,6 @@
-// Fixed, read-only facility metadata probe. This does not authenticate a person,
-// grant access, enable a facility, or read customer originals/credential values.
 import {createHash,createPublicKey,createPrivateKey,generateKeyPairSync,diffieHellman,hkdfSync,
   randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
 import {createRequire} from 'node:module';
-
 const target = Object.freeze({
   repository:'784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api',
   taskPrefix:'arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/',
@@ -15,9 +12,24 @@ const inventories = new Map([
   ['8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc',128],
   ['13f05713808a4c077b9388d5609d99ad1bfa16b9ded82b2e447bc1c076d5896e',129],
 ]);
-const check = (ok,code) => {if(!ok) throw Error('FACILITY_INSPECT_'+code);};
+const safeCode=Symbol();
+const failure=code=>Object.defineProperty(Error(code),safeCode,{value:code});
+const check=(ok,code)=>{if(!ok)throw failure('FACILITY_INSPECT_'+code);};
 const hex = (v,n) => typeof v==='string' && new RegExp(`^[a-f0-9]{${n}}$`).test(v);
 const sha=value=>createHash('sha256').update(value).digest('hex');
+const stages=new Set(('INPUT METADATA LOAD_MODULES CONFIGURATION CONNECT TRANSACTION IDENTITY LEDGER HUMAN '+
+  'INSTALLATIONS ELIGIBLE_LOCATIONS ROLLBACK CLOSE ENCRYPT').split(' '));
+export function formatFacilityInspectionFailure(error,stage='INPUT') {
+  const sqlState=[error?.sqlState,error?.code].find(value=>typeof value==='string'&&/^[0-9A-Z]{5}$/.test(value));
+  return {
+  stage:stages.has(error?.stage)?error.stage:stages.has(stage)?stage:'INPUT',
+  code:error?.[safeCode]??(sqlState?'POSTGRES_ERROR':'FACILITY_INSPECT_FAILED'),
+  ...(sqlState?{sqlState}:{})};
+}
+function stagedFailure(error,stage) {
+  const detail=formatFacilityInspectionFailure(error,stage),safe=failure(detail.code);
+  safe.stage=detail.stage;if(detail.sqlState)safe.sqlState=detail.sqlState;return safe;
+}
 const decode=(value,limit)=>{check(typeof value==='string'&&value.length<=limit&&/^[A-Za-z0-9+/]*={0,2}$/.test(value),'ENVELOPE_ENCODING');
   const bytes=Buffer.from(value,'base64');check(bytes.toString('base64')===value,'ENVELOPE_ENCODING');return bytes;};
 function recipientKey(encoded) {
@@ -26,7 +38,6 @@ function recipientKey(encoded) {
   return key;
 }
 export {recipientKey as validateFacilityRecipientKey};
-
 export function facilityEnvelopeHeader(envelope) {
   check(envelope?.schema==='packproof.logistics-facility-encrypted/v1'&&
     Object.keys(envelope).sort().join(',')==='ciphertext,protected,schema,tag','ENVELOPE_SHAPE');
@@ -37,7 +48,6 @@ export function facilityEnvelopeHeader(envelope) {
   check(decode(header.salt,44).length===32&&decode(header.iv,16).length===12&&decode(envelope.tag,24).length===16,'ENVELOPE_PARAMETERS');
   decode(envelope.ciphertext,256000);return header;
 }
-
 export function encryptFacilityReceipt(report,subjectSha256,recipientPublicKeySpki) {
   check(hex(subjectSha256,64),'SUBJECT_DIGEST');
   const recipient=recipientKey(recipientPublicKeySpki),ephemeral=generateKeyPairSync('x25519');
@@ -55,8 +65,6 @@ export function encryptFacilityReceipt(report,subjectSha256,recipientPublicKeySp
       ciphertext:ciphertext.toString('base64'),tag:cipher.getAuthTag().toString('base64')};
   } finally {shared.fill(0);key.fill(0);plain.fill(0);}
 }
-
-// Local operator use only. The workflow never receives the recipient private key.
 export function decryptFacilityReceipt(envelope,privateKey,expected) {
   const header=facilityEnvelopeHeader(envelope),recipient=createPrivateKey(privateKey);
   check(recipient.asymmetricKeyType==='x25519'&&sha(createPublicKey(recipient).export({type:'spki',format:'der'}))===header.recipientSha256,'RECIPIENT_KEY');
@@ -72,7 +80,6 @@ export function decryptFacilityReceipt(envelope,privateKey,expected) {
     return report;
   } finally {shared.fill(0);key.fill(0);}
 }
-
 export function inspectionInput(args,env) {
   const [source,inventory,subject,recipientPublicKeySpki]=args;
   const encrypted=args.length===4;
@@ -92,7 +99,6 @@ export function inspectionInput(args,env) {
   check(/^http:\/\/169\.254\.170\.2\/v4\/[A-Za-z0-9_-]+$/.test(env.ECS_CONTAINER_METADATA_URI_V4??''),'METADATA_URI');
   return {source,inventory,...(encrypted?{subjectSha256:subject,recipientPublicKeySpki}:{subject}),image};
 }
-
 const identitySql = `SELECT ai.user_id,u.status,
  EXISTS(SELECT 1 FROM public.platform_principals p WHERE p.actor_user_id=ai.user_id) AS service_principal
  FROM public.auth_identities ai JOIN public.users u ON u.id=ai.user_id
@@ -128,43 +134,43 @@ const eligibleLocationsSql = `SELECT l.id AS eligible_location_id,left(l.name,12
  AND (NOT operator.location_scoped OR EXISTS(SELECT 1 FROM public.record_membership_locations g
   WHERE g.organization_id=o.id AND g.location_id=l.id AND g.membership_id=operator.id))
  ORDER BY l.name,l.id LIMIT 21`;
-
 function facilityFlags(env,organization,environment,location) {
   const scope=[organization,environment,location].join(':');
   const enabled=name=>typeof env[name]==='string' && env[name].split(',').some(value=>value.trim()===scope);
   const guided=!!location && env.PACKPROOF_ORDER_WORKSPACE_ENABLED==='true' && enabled('PACKPROOF_GUIDED_FACILITIES');
   return {guidedSetupAvailable:guided,assistantSetupAvailable:guided && enabled('PACKPROOF_SETUP_AI_FACILITIES')};
 }
-
 export async function inspectFacilities(client,sub,inventory,env={},hashedSubject=false) {
-  check((hashedSubject?hex(sub,64):typeof sub==='string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(sub)) && inventories.has(inventory),'SUBJECT_OR_LEDGER');
-  let begun=false;
+  let begun=false,stage='INPUT';
   try {
+    check((hashedSubject?hex(sub,64):typeof sub==='string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(sub)) && inventories.has(inventory),'SUBJECT_OR_LEDGER');
+    stage='TRANSACTION';
     await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');begun=true;
     await client.query("SET LOCAL statement_timeout='5s'");
     await client.query("SET LOCAL lock_timeout='2s'");
     await client.query("SET LOCAL idle_in_transaction_session_timeout='10s'");
+    stage='IDENTITY';
     const who=(await client.query(`SELECT current_user AS role,session_user AS login,current_database() AS database,
       current_setting('transaction_read_only') AS read_only,
       NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb) AS unprivileged,
       (SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()) AS ssl FROM pg_roles r WHERE r.rolname=current_user`)).rows;
     check(who.length===1 && who[0].role===target.role && who[0].login===target.role && who[0].database===target.database &&
       who[0].read_only==='on' && who[0].ssl===true && who[0].unprivileged===true,'DATABASE_IDENTITY');
-    // The extra row makes an unreviewed131 receipt visible even on the130 ledger.
-    const ledger=(await client.query('SELECT id,checksum FROM public.schema_migrations ORDER BY id LIMIT 130')).rows;
+    stage='LEDGER';const ledger=(await client.query('SELECT id,checksum FROM public.schema_migrations ORDER BY id LIMIT 130')).rows;
     check(ledger.length===inventories.get(inventory) &&
       createHash('sha256').update(JSON.stringify(ledger.map(({id,checksum})=>({id,checksum})))).digest('hex')===inventory,'LEDGER');
-    const identity=hashedSubject?identitySql.replace('ai.provider_subject=$1',"encode(sha256(convert_to(ai.provider_subject,'UTF8')),'hex')=$1"):identitySql;
+    stage='HUMAN';const identity=hashedSubject?identitySql.replace('ai.provider_subject=$1',"encode(sha256(convert_to(ai.provider_subject,'UTF8')),'hex')=$1"):identitySql;
     const users=(await client.query(identity,[sub])).rows;
     check(users.length===1 && /^user_[A-Za-z0-9]{1,80}$/.test(users[0].user_id) &&
       users[0].status==='ACTIVE' && users[0].service_principal===false,'UNIQUE_ACTIVE_HUMAN');
-    const userId=users[0].user_id,rows=(await client.query(facilitiesSql,[userId])).rows;
+    stage='INSTALLATIONS';const userId=users[0].user_id,rows=(await client.query(facilitiesSql,[userId])).rows;
     const total=rows.length?Number(rows[0].total_matching_installations):0;
     check(rows.length<=21 && Number.isSafeInteger(total) && total>=rows.length &&
       rows.every(r=>Number(r.total_matching_installations)===total) &&
       new Set(rows.map(r=>r.installation_id)).size===rows.length,'INVENTORY_SHAPE');
     const installations=[];
     for(const row of rows) {
+      stage='ELIGIBLE_LOCATIONS';
       const locations=(await client.query(eligibleLocationsSql,[userId,row.installation_id,row.organization_id,row.environment])).rows;
       const count=locations.length?Number(locations[0].total_eligible_locations):0;
       check(locations.length<=21 && Number.isSafeInteger(count) && count>=locations.length &&
@@ -178,25 +184,31 @@ export async function inspectFacilities(client,sub,inventory,env={},hashedSubjec
           ...facilityFlags(env,row.organization_id,row.environment,value.eligible_location_id)}))});
     }
     return {userId,totalMatchingInstallations:total,truncated:total>rows.length,installations};
-  } finally {
-    // A failed rollback propagates; never produce a successful receipt without it.
-    if(begun) await client.query('ROLLBACK');
+  } catch(error) {throw stagedFailure(error,stage);} finally {
+    if(begun)try{await client.query('ROLLBACK');}catch(error){throw stagedFailure(error,'ROLLBACK');}
   }
 }
-
 async function openRuntimeDatabase(env) {
-  const {postgresPoolConfig}=await import('/app/backend/dist/db/postgres.js');
+  let stage='LOAD_MODULES';
+  try {
+  const {postgresPoolConfig}=await import('file:///app/backend/dist/db/postgres.js');
   const {Client}=createRequire('/app/backend/package.json')('pg');
+  stage='CONFIGURATION';
   const uri=new URL('postgresql://'+target.host+':5432/'+target.database);
   uri.username=target.role;uri.searchParams.set('sslmode','verify-full');
   uri.searchParams.set('options','-c default_transaction_read_only=on');
-  // No Secrets Manager client/provider: use only the execution role's injected value.
   const client=new Client(postgresPoolConfig(uri.href,async()=>env.PACKPROOF_DB_PASSWORD,env));
-  try {await client.connect();return client;} catch(error) {await client.end();throw error;}
+  stage='CONNECT';
+  try {await client.connect();return client;} catch(error) {
+    try{await client.end();}catch(close){throw stagedFailure(close,'CLOSE');}throw error;
+  }
+  } catch(error) {throw stagedFailure(error,stage);}
 }
-
 export async function runFacilityInspection({args=process.argv.slice(2),env=process.env,request=fetch,open=openRuntimeDatabase}={}) {
+  let stage='INPUT';
+  try {
   const input=inspectionInput(args,env),uri=env.ECS_CONTAINER_METADATA_URI_V4;
+  stage='METADATA';
   const metadata=async path=>{
     const response=await request(uri+path,{redirect:'error',signal:AbortSignal.timeout(5000)});
     check(response.ok,'METADATA_RESPONSE');return response.json();
@@ -205,16 +217,16 @@ export async function runFacilityInspection({args=process.argv.slice(2),env=proc
   check(container?.Image===input.image && container?.ImageID===input.image.split('@')[1] &&
     typeof task?.TaskARN==='string' && task.TaskARN.startsWith(target.taskPrefix) &&
     hex(task.TaskARN.slice(target.taskPrefix.length),32),'TASK_IMAGE_CLUSTER');
-  const client=await open(env);let inventory;
-  try {inventory=await inspectFacilities(client,input.subjectSha256??input.subject,input.inventory,env,!!input.subjectSha256);} finally {await client.end();}
+  stage='CONNECT';const client=await open(env);let inventory;
+  try {inventory=await inspectFacilities(client,input.subjectSha256??input.subject,input.inventory,env,!!input.subjectSha256);}
+  finally {try{await client.end();}catch(error){throw stagedFailure(error,'CLOSE');}}
   const report={schema:'packproof.logistics-facility-inspection/v1',readOnly:true,rolledBack:true,
     source:input.source,inventorySha256:input.inventory,image:input.image,actualTask:task.TaskARN,
     ...inventory,completedAt:new Date().toISOString()};
-  return input.subjectSha256?encryptFacilityReceipt(report,input.subjectSha256,input.recipientPublicKeySpki):report;
+  stage='ENCRYPT';return input.subjectSha256?encryptFacilityReceipt(report,input.subjectSha256,input.recipientPublicKeySpki):report;
+  } catch(error) {throw stagedFailure(error,stage);}
 }
-
-export async function facilityInspectionMain() {
-  try {console.log(JSON.stringify(await runFacilityInspection()));}
-  catch(error) {console.error(/^FACILITY_INSPECT_[A-Z_]+$/.test(error?.message)?error.message:'FACILITY_INSPECT_FAILED');process.exitCode=1;}
+export async function facilityInspectionMain(options) {
+  try {console.log(JSON.stringify(await runFacilityInspection(options)));}
+  catch(error) {console.error(JSON.stringify(formatFacilityInspectionFailure(error)));process.exitCode=1;}
 }
-// The reviewed one-shot command explicitly invokes facilityInspectionMain().

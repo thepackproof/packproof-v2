@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {brotliCompressSync,brotliDecompressSync} from 'node:zlib';
 import {createHash,generateKeyPairSync} from 'node:crypto';
-import {inspectionInput,inspectFacilities,runFacilityInspection,facilityEnvelopeHeader,decryptFacilityReceipt} from './logistics-facility-inspect.mjs';
+import {inspectionInput,inspectFacilities,runFacilityInspection,facilityInspectionMain,formatFacilityInspectionFailure,
+  facilityEnvelopeHeader,decryptFacilityReceipt} from './logistics-facility-inspect.mjs';
 import {verifierTaskDefinition} from './backend-release-requests.mjs';
 
 const source='a'.repeat(40),inventory='8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc';
@@ -35,9 +39,9 @@ const installation=(id='installation_example')=>({installation_id:id,organizatio
   total_matching_installations:'1'});
 function connection(options={}) {
   const calls=[];let ended=false;
-  return {calls,get ended(){return ended;},async end(){ended=true;},async query(sql,params){
+  return {calls,get ended(){return ended;},async end(){ended=true;if(options.endError)throw options.endError;},async query(sql,params){
     calls.push({sql,params});
-    if(options.failAt && sql.includes(options.failAt)) throw Error('DO_NOT_EMIT_DATABASE_ERROR');
+    if(options.failAt && sql.includes(options.failAt)) throw options.error??Error('DO_NOT_EMIT_DATABASE_ERROR');
     if(sql.includes('FROM pg_roles')) return {rows:[options.who??databaseIdentity()]};
     if(sql.includes('public.schema_migrations')) return {rows:options.ledger??ledger};
     if(sql.includes('public.auth_identities')) return {rows:options.users??[{user_id:user,status:'ACTIVE',service_principal:false}]};
@@ -201,9 +205,101 @@ test('eligible choices are bounded, explicit about truncation and reject inconsi
 test('query and rollback failures close the connection and cannot emit success',async()=>{
   for(const failAt of ['public.record_agent_installations','ROLLBACK']) {
     const client=connection({failAt});
-    await assert.rejects(runFacilityInspection({args:[source,inventory,subject],env:environment(),request:requests(),open:async()=>client}),/DO_NOT_EMIT_DATABASE_ERROR/);
+    await assert.rejects(runFacilityInspection({args:[source,inventory,subject],env:environment(),request:requests(),open:async()=>client}),/FACILITY_INSPECT_FAILED/);
     assert.equal(client.calls.at(-1).sql,'ROLLBACK');assert.equal(client.ended,true);
   }
+});
+
+test('failure diagnostics expose only closed stages, exact inspector codes and validated SQLSTATE',()=>{
+  const secret='postgres://private-user:private-password@private-host SELECT private_column; subject=private-identity';
+  for(const message of [secret,'FACILITY_INSPECT_PRIVATE_IDENTITY','FACILITY_INSPECT_LEDGER\n'+secret]) {
+    const diagnostic=formatFacilityInspectionFailure(Object.assign(new Error(message),{
+      code:'42501',stage:secret,query:secret,parameters:[secret],stack:secret,cause:new Error(secret)
+    }),'HUMAN');
+    assert.deepEqual(diagnostic,{
+      stage:'HUMAN',code:'POSTGRES_ERROR',sqlState:'42501'});
+    assert.doesNotMatch(JSON.stringify(diagnostic),/private-|SELECT|parameters|stack|cause/);
+  }
+  for(const forged of [new Error('FACILITY_INSPECT_LEDGER'),
+    {message:'FACILITY_INSPECT_LEDGER',safeCode:'FACILITY_INSPECT_LEDGER',[Symbol()]:secret}])
+    assert.equal(formatFacilityInspectionFailure(forged,'LEDGER').code,'FACILITY_INSPECT_FAILED');
+  let guard;
+  try{inspectionInput([],environment());}catch(error){guard=error;}
+  assert.equal(formatFacilityInspectionFailure(guard).code,'FACILITY_INSPECT_ARGUMENTS');
+  guard.message=secret;
+  assert.equal(formatFacilityInspectionFailure(guard).code,'FACILITY_INSPECT_ARGUMENTS');
+  assert.throws(()=>{guard[Object.getOwnPropertySymbols(guard)[0]]=secret;},TypeError);
+  for(const code of ['4250','425010','42501\n',secret,42501,null]) {
+    const detail=formatFacilityInspectionFailure(Object.assign(new Error(secret),{code,stage:secret}),secret);
+    assert.deepEqual(detail,{
+      stage:'INPUT',code:'FACILITY_INSPECT_FAILED'});
+  }
+});
+
+test('each database failure keeps its actual closed stage, rolls back when begun, closes and emits no receipt',async(t)=>{
+  const stdout=[],stderr=[],prior=process.exitCode;
+  const out=t.mock.method(console,'log',value=>stdout.push(value));
+  const err=t.mock.method(console,'error',value=>stderr.push(value));
+  try {
+    for(const [failAt,stage] of [['BEGIN TRANSACTION','TRANSACTION'],["SET LOCAL statement_timeout",'TRANSACTION'],
+      ['FROM pg_roles','IDENTITY'],['public.schema_migrations','LEDGER'],['public.auth_identities','HUMAN'],
+      ['public.record_agent_installations','INSTALLATIONS'],['eligible_location_id','ELIGIBLE_LOCATIONS'],['ROLLBACK','ROLLBACK']]) {
+      stdout.length=0;stderr.length=0;process.exitCode=0;
+      const error=Object.assign(new Error('private password / query / subject / parameter'),{code:'42501'});
+      const client=connection({failAt,error});
+      await facilityInspectionMain({args:[source,inventory,subjectSha256,recipientPublicKeySpki],env:environment(),request:requests(),open:async()=>client});
+      assert.equal(process.exitCode,1);assert.equal(client.ended,true);assert.deepEqual(stdout,[]);assert.equal(stderr.length,1);
+      assert.deepEqual(JSON.parse(stderr[0]),{
+        stage,code:'POSTGRES_ERROR',sqlState:'42501'});
+      assert.doesNotMatch(stderr[0],/private|password|query|subject|parameter|ciphertext|rolledBack/);
+      assert.equal(client.calls.at(-1).sql,failAt==='BEGIN TRANSACTION'?client.calls[0].sql:'ROLLBACK');
+    }
+  } finally {process.exitCode=prior;out.mock.restore();err.mock.restore();}
+});
+
+test('metadata, connect and close failures remain failures and expose no driver text',async()=>{
+  const error=()=>Object.assign(new Error('private connection credentials, identity and query'),{code:'08006'});
+  const args=[source,inventory,subjectSha256,recipientPublicKeySpki];
+  for(const [stage,options] of [
+    ['METADATA',{request:async()=>{throw error();},open:()=>assert.fail('No connection after metadata failure')}],
+    ['CONNECT',{request:requests(),open:async()=>{throw error();}}],
+    ['CLOSE',{request:requests(),open:async()=>connection({endError:error()})}]
+  ]) await assert.rejects(runFacilityInspection({args,env:environment(),...options}),failure=>{
+    const detail=formatFacilityInspectionFailure(failure);
+    assert.equal(detail.stage,stage);assert.equal(detail.sqlState,'08006');assert.equal(detail.code,'POSTGRES_ERROR');
+    assert.doesNotMatch(JSON.stringify(detail),/private|credentials|identity|query/);return true;
+  });
+});
+
+test('the compressed data-module uses its default runtime loader and a file URL before connecting',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'packproof-inspector-loader-'));
+  try {
+    const db=join(root,'dist','db','postgres.js'),pkg=join(root,'package.json'),pg=join(root,'node_modules','pg');
+    await mkdir(join(root,'dist','db'),{recursive:true});await mkdir(pg,{recursive:true});
+    await writeFile(pkg,JSON.stringify({type:'module'}));
+    await writeFile(db,"export let calls=0;export function postgresPoolConfig(){calls++;return {};}");
+    await writeFile(join(pg,'index.js'),"exports.Client=class{async connect(){throw Object.assign(Error('private connect details'),{code:'08006'});}async end(){}};");
+    const text=await readFile(new URL('./logistics-facility-inspect.mjs',import.meta.url),'utf8');
+    assert.ok(text.includes("import('file:///app/backend/dist/db/postgres.js')"));
+    // Only fixture paths change. The actual compressed module executes its own
+    // openRuntimeDatabase, ESM import, createRequire, config and connect handling.
+    const relocated=text.replace('file:///app/backend/dist/db/postgres.js',pathToFileURL(db).href)
+      .replace('/app/backend/package.json',pkg);
+    const compressed=brotliCompressSync(Buffer.from(relocated));
+    const module=await import('data:text/javascript;base64,'+brotliDecompressSync(compressed).toString('base64'));
+    await assert.rejects(module.runFacilityInspection({args:[source,inventory,subjectSha256,recipientPublicKeySpki],
+      env:environment(),request:requests()}),failure=>{
+      assert.deepEqual(module.formatFacilityInspectionFailure(failure),{stage:'CONNECT',code:'POSTGRES_ERROR',sqlState:'08006'});return true;
+    });
+    assert.equal((await import(pathToFileURL(db).href)).calls,1);
+    const broken=relocated.replace(pathToFileURL(db).href,db);
+    const old=await import('data:text/javascript;base64,'+brotliDecompressSync(brotliCompressSync(Buffer.from(broken))).toString('base64'));
+    await assert.rejects(old.runFacilityInspection({args:[source,inventory,subjectSha256,recipientPublicKeySpki],
+      env:environment(),request:requests()}),failure=>{
+      assert.equal(old.formatFacilityInspectionFailure(failure).stage,'LOAD_MODULES');return true;
+    });
+    assert.equal((await import(pathToFileURL(db).href)).calls,1);
+  } finally {await rm(root,{recursive:true,force:true});}
 });
 
 test('workflow mode looks up only the exact verified subject digest and emits encrypted account metadata',async()=>{

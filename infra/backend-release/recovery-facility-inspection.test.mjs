@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {brotliCompressSync,brotliDecompressSync} from 'node:zlib';
+import {spawnSync} from 'node:child_process';
 import {TARGET} from './backend-deployment-plan.mjs';
 import {prepareRecoveryFacilityInspection,runRecoveryFacilityInspection,collectRecoveryFacilityInspection} from './recovery-facility-inspection.mjs';
 import {recoveryFacilityCleanupRequest} from './recovery-hosted-release.mjs';
@@ -57,6 +60,26 @@ test('the fixed one-shot inspector retains the actual API source, image, role, c
   assert.deepEqual(run.networkConfiguration,f.snapshot.api.service.networkConfiguration);
   assert.equal(run.count,1);assert.equal(run.enableExecuteCommand,false);assert.equal(run.overrides,undefined);
   assert.deepEqual(collectRecoveryFacilityInspection(f.receipt,now),{envelope:f.envelope,header:facilityEnvelopeHeader(f.envelope)});
+});
+
+test('the actual bounded wrapper executes the full hashed module and refuses changed source before execution',()=>{
+  const {prepared}=fixture(),command=prepared.request.containerDefinitions[0].command;
+  const packed=/Buffer\.from\('([A-Za-z0-9+/=]+)','base64'\)/.exec(command[3]);
+  assert.ok(packed);
+  const fullSource=readFileSync(new URL('./logistics-facility-inspect.mjs',import.meta.url));
+  assert.deepEqual(brotliDecompressSync(Buffer.from(packed[1],'base64')),fullSource);
+  assert.equal(createHash('sha256').update(fullSource).digest('hex'),prepared.inspectorSha256);
+  assert.ok(Buffer.byteLength(JSON.stringify(command))<7800);
+  const run=script=>spawnSync(process.execPath,[...command.slice(1,3),script],{env:{},encoding:'utf8',timeout:5000});
+  // The actual wrapper loads the module, whose runtime guard rejects an empty
+  // environment before metadata or database access. No injected open() is used.
+  const actual=run(command[3]);
+  assert.equal(actual.error,undefined);assert.equal(actual.status,1);assert.equal(actual.stdout,'');
+  assert.deepEqual(JSON.parse(actual.stderr.trim()),{stage:'INPUT',code:'FACILITY_INSPECT_IMAGE_SOURCE'});
+  const changed=brotliCompressSync(Buffer.concat([fullSource,Buffer.from("\nconsole.log('UNREVIEWED_MODULE_MUST_NOT_RUN');")])).toString('base64');
+  const rejected=run(command[3].replace(packed[1],changed));
+  assert.equal(rejected.error,undefined);assert.equal(rejected.status,1);assert.equal(rejected.stdout,'');
+  assert.match(rejected.stderr,/FACILITY_CODE_BINDING/);
 });
 
 test('wrong subject, ledger, live identity or stale observation cannot construct or launch the inspector',()=>{
