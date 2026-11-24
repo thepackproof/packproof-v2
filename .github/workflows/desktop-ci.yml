@@ -29,10 +29,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: windows-2022
-            platform: win32
-            target: win
-            arch: x64
           - runner: macos-15-intel
             platform: darwin
             target: mac
@@ -78,25 +74,19 @@ jobs:
       - name: Verify inventory and mark unsigned candidate
         run: node scripts/verify-artifacts.cjs
       - name: Launch packaged application twice and verify protected installation restart
-        if: matrix.platform != 'win32'
         run: node scripts/native-launch-smoke.cjs
-      - name: Exercise installed Windows launch/restart, reinstall and uninstall
-        if: matrix.platform == 'win32'
-        run: pwsh -NoProfile -NonInteractive -File scripts/smoke-install-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: packproof-desktop-DEVELOPMENT-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/DEVELOPMENT-BUILD.txt
-            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/installer-smoke.json
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/native-launch-smoke.json
       - name: Preserve native startup evidence on failure
         if: failure()

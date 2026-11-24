@@ -27,7 +27,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
       let authenticated=true;
       const session={userId:'test-user',email:'test@example.invalid',profile:{userId:'test-user',username:'testoperator',displayName:'Test Operator',status:'ACTIVE',createdAt:now,updatedAt:now}};
       const settings={cameraId:'',microphoneId:'',audio:false,resolution:'1080p',frameRate:30,retentionHours:24,notifications:true,scannerSuffix:'Enter',theme:'light'};
-      const state={version:'1.0.0-test',platform:'win32',environment:'staging',online:true,configured:true,secureStorage:true,pendingOtherAccounts:false,settings,update:{state:'idle'}};
+      const state={version:'1.0.0-test',platform:'darwin',environment:'staging',online:true,configured:true,secureStorage:true,pendingOtherAccounts:false,settings,update:{state:'idle'}};
       const smoke={calls:[],jobs:[],chunks:[],finish:null,interrupt:null,sharePreviews:0,shareRequests:[],mediaRequests:[],rejectShare:false};window.__smoke=smoke;
       const emit=event=>listeners.forEach(fn=>fn(event));
       window.packproof={

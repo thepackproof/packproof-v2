@@ -55,7 +55,7 @@ export const privacyPolicy: LegalDocument = {
       id: "who-we-are",
       title: "1. Who we are",
       paragraphs: [
-        `This Privacy Policy describes how ${LEGAL_ENTITY_PLACEHOLDER} (“PackProof,” “we,” “us”) handles information in connection with the PackProof service, including the PackProof API, the first-party web application, the mobile client, and the Windows and macOS desktop applications.`,
+        `This Privacy Policy describes how ${LEGAL_ENTITY_PLACEHOLDER} (“PackProof,” “we,” “us”) handles information in connection with the PackProof service, including the PackProof API, the first-party web application, the mobile client, and the desktop applications.`,
         "PackProof is evidence infrastructure. It records, timestamps, hashes, stores, and retrieves transaction-bound records (“Proofs”). PackProof does not adjudicate disputes, determine liability, or independently verify that marketplace-supplied transaction claims, packing statements, or carrier events are true in the real world.",
         `Questions about this policy: ${PRIVACY_CONTACT_EMAIL}. Mailing address: ${MAILING_ADDRESS_PLACEHOLDER}.`,
       ],
@@ -219,7 +219,7 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       id: "desktop",
-      title: "18. Desktop applications on Windows and macOS",
+      title: "18. Desktop applications",
       paragraphs: [
         "Camera, microphone, and labels. Opening the Packing Station requests access to the camera you select and displays a live preview. Audio is off by default. If you enable audio, the selected microphone is also active while that preview is open, and its audio is included when you record. Preview alone does not save a recording. Recording begins when you start a capture, and camera and microphone access ends when you leave the Packing Station or quit. Hiding the window in the tray or menu bar does not itself close an active preview. Recordings may contain people, voices, addresses, shipping labels, and other details in view. Barcode recognition runs on your computer; detected values, formats, recording offsets, and your label confirmations are submitted with the completed capture.",
         "Local storage and background work. The desktop application encrypts staged original recordings and their queue metadata in its application-data directory. Authentication tokens, the local encryption key, settings, and cached account, Proof, order, and integration information use operating-system-protected encrypted storage. The application separates queued evidence and cached records by PackProof account. It can retain an offline recording and resume its upload after connectivity returns while the originating account is signed in. Choosing to continue in the background keeps uploads and account-status checks running in the tray or menu bar. Quitting stops that work until the application opens again.",

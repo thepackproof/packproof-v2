@@ -173,7 +173,7 @@ export function OrderProofs({ api, organization, locationId, id, revision, route
   const params = new URLSearchParams({ organizationId: organization.id, environment: organization.environment });
   if (locationId) params.set('locationId', locationId);
   const route = new URLSearchParams(params);
-  for (const key of ['revision','subject','namespace','subjectType','desktopUser']) {
+  for (const key of ['revision','subject','namespace','subjectType']) {
     const value=routeParams?.get(key); if (value !== undefined && value !== null) route.set(key,value);
   }
   const list = new URLSearchParams(params);

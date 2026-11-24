@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { verifyHostedApproval } from '../scripts/verify-hosted-approval.mjs';
+import { verifyHostedApproval } from './verify-hosted-approval.mjs';
 const web='https://web.example', api='https://api.example';
 const html='<!doctype html><div id="root"></div>';
 const release={commit:'a'.repeat(40),indexSha256:createHash('sha256').update(html).digest('hex'),apiUrl:api,approvalPath:'/app/records/connect/approve',capabilities:{connectApproval:1}};
@@ -12,7 +12,7 @@ const responder=(manifest=release,page=html) => async (url, options) => {
 test('accepts only the source-pinned approval application for the configured API',async()=>{
  assert.deepEqual(await verifyHostedApproval(web,api,responder()),{webOrigin:web,apiOrigin:api,webCommit:release.commit,approvalPath:release.approvalPath,supportsOrderWorkspace:false});
 });
-test('signed channels require exact hosted support for the multi-source approval locator',async()=>{
+test('workspace releases require exact hosted support for the multi-source approval locator',async()=>{
  await assert.rejects(verifyHostedApproval(web,api,responder(),{requireOrderWorkspace:true}),/multi-source approval/);
  const paths=[];
  const serve=responder({...release,capabilities:{connectApproval:1,orderWorkspaceApproval:1}});
@@ -37,7 +37,7 @@ test('refuses insecure origins and embedded credentials',async()=>{
  for(const url of ['http://web.example','https://u:p@web.example','https://web.example/path'])await assert.rejects(verifyHostedApproval(url,api,responder()),/HTTPS origin/);
 });
 
-test('matches the reviewed hosted portal commit before signing or publishing', async () => {
+test('matches the reviewed hosted portal commit before publishing', async () => {
   await verifyHostedApproval(web, api, responder(), {expectedCommit:release.commit});
   await assert.rejects(verifyHostedApproval(web, api, responder(), {expectedCommit:'b'.repeat(40)}), /reviewed portal commit/);
 });

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
 
 const APPROVAL_PATH = '/app/records/connect/approve';
 function origin(value, name) {
@@ -21,7 +20,7 @@ export async function verifyHostedApproval(webBaseUrl, apiBaseUrl, fetcher = fet
   }
   const manifest = await (await read('/release.json', 'application/json')).json();
   if (!/^[a-f0-9]{40}$/.test(manifest.commit || '') || !/^[a-f0-9]{64}$/.test(manifest.indexSha256 || '') || manifest.apiUrl !== api || manifest.approvalPath !== APPROVAL_PATH || manifest.capabilities?.connectApproval !== 1) {
-    throw new Error('The selected website has no compatible, source-pinned Connect approval release. Publish the matching web application before building an installer.');
+    throw new Error('The selected website has no compatible, source-pinned Connect approval release.');
   }
   if (expectedCommit !== undefined && (!/^[a-f0-9]{40}$/.test(expectedCommit) || manifest.commit !== expectedCommit)) {
     throw new Error('Hosted approval does not match the reviewed portal commit.');
@@ -35,7 +34,7 @@ export async function verifyHostedApproval(webBaseUrl, apiBaseUrl, fetcher = fet
   }
   const supportsOrderWorkspace = manifest.capabilities.orderWorkspaceApproval === 1;
   if (requireOrderWorkspace && !supportsOrderWorkspace) {
-    throw new Error('Publish the web portal with multi-source approval before releasing this installer.');
+    throw new Error('The web portal must support multi-source approval.');
   }
   const locators = ['enrollmentId=release-route-check'];
   if (supportsOrderWorkspace) locators.push(`installationId=release-route-check&organizationId=release-check&environment=${expectedEnvironment === 'production' ? 'live' : 'sandbox'}&workspaceSession=release-check`);
@@ -47,9 +46,4 @@ export async function verifyHostedApproval(webBaseUrl, apiBaseUrl, fetcher = fet
     }
   }
   return { webOrigin: web, apiOrigin: api, webCommit: manifest.commit, approvalPath: APPROVAL_PATH, supportsOrderWorkspace };
-}
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  verifyHostedApproval(process.env.PACKPROOF_WEB_BASE_URL || '', process.env.PACKPROOF_API_BASE_URL || '', fetch, {requireOrderWorkspace: process.env.APP_ENV !== 'development', expectedCommit:process.env.PACKPROOF_REVIEWED_PORTAL_SHA, expectedEnvironment:process.env.PACKPROOF_REVIEWED_PORTAL_SHA ? process.env.APP_ENV : undefined})
-    .then(result => console.log(JSON.stringify({ hostedApprovalVerified: true, ...result })))
-    .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -1,6 +1,6 @@
 # Existing-data API candidate
 
-This contract preserves approved source originals and reconstructs operational cases from their reported facts. It is an opt-in development candidate. Customer source qualification, independent security/usability acceptance, real PostgreSQL concurrency, load/restore exercises and the Windows service qualification remain release gates. Implementation and synthetic tests do not establish production availability. See [implementation status](EXISTING_DATA_IMPLEMENTATION_2026-11-14.md) and the [machine-readable partner contract](../backend/partner-openapi.json).
+This contract preserves approved source originals and reconstructs operational cases from their reported facts. It is an opt-in development candidate. Customer source qualification, independent security/usability acceptance, real PostgreSQL concurrency, and load/restore exercises remain release gates. Implementation and synthetic tests do not establish production availability. See [implementation status](EXISTING_DATA_IMPLEMENTATION_2026-11-14.md) and the [machine-readable partner contract](../backend/partner-openapi.json).
 
 ## Admission and authority
 
@@ -243,7 +243,7 @@ An older approved installation still in `setup` can use the capability-gated `ap
 
 A CSV source owner can propose the optional `headerPolicy` value `same_names_any_order/v1` for a complete list of exact column names. Existing configurations require exact order. The option applies to a scheduled CSV v2 contract or a typed CSV source subscription. Named bindings, row meaning, units, time scope and whole-original consent remain part of the reviewed configuration. A new, missing or renamed column requires review, including an unmapped column. A reordered accepted batch retains its original ordered headers, original bytes, digest and configuration revision.
 
-The portal stages typed policy changes through the existing `revise` action with the current configuration revision. Review the proposed field and disclosure changes and separately approve that revision. The Windows setup option requests the policy for the selected report. The browser approves the exact proposal.
+The portal stages typed policy changes through the existing `revise` action with the current configuration revision. Review the proposed field and disclosure changes and separately approve that revision. The browser approves the exact proposal.
 
 New reorder admission is off by default. Qualify the worker at the exact release digest with the API before setting `PACKPROOF_CSV_HEADER_WORKER_POLICY=same_names_any_order/v1` and `PACKPROOF_CSV_HEADER_VARIANTS_ENABLED=true` on the matching API. The worker marker is a release-owner declaration. Local collectors must advertise the supported 0.4.1 build. To suspend new reordered intake, disable the API switch; protected queued originals and accepted receipts retain their previous revision. Verify retained-work recovery before resuming a source.
 

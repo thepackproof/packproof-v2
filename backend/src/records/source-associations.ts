@@ -42,8 +42,7 @@ async function connection(db:Database,clock:Clock,a:PartnerActor,id:string,locat
  if(!row)fail('CONNECTION_NOT_FOUND','Source connection not found',404);
  if(row.paused)fail('CONNECTION_PAUSED','Resume this source before submitting or replaying observations');
  if(locationId&&!(await db.query('SELECT 1 FROM record_locations WHERE id=$1 AND organization_id=$2',[locationId,a.merchantId])).rows[0])fail('LOCATION_NOT_FOUND','Location not found',404);
- // This endpoint must not broaden an enrolled Windows installation's CSV-only
- // authority when invoked directly rather than through the HTTP route guard.
+ // Enforce the installation's CSV-only scope even when called outside the HTTP route.
  if((await db.query('SELECT 1 FROM record_agent_installations WHERE principal_id=$1',[a.principalId])).rows[0])fail('AGENT_OPERATION_DENIED','This installation is restricted to its approved CSV source',403);
  return row.control_revision??0;
 }

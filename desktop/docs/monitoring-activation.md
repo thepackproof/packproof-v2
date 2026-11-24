@@ -34,7 +34,7 @@ APP_ENV=staging node scripts/reporting-canary.mjs \
 
 The receipt includes the exact checked-out source, application version, destination metadata without the DSN key, random event ID, numeric HTTP status, and SDK flush result. `INGEST_ACKNOWLEDGED_READBACK_REQUIRED` means one filtered event received a 2xx response and the queue drained. A transport acknowledgment or flush alone does **not** prove project ingestion, routing, retention, or alert delivery. Every canary receipt has `deliveryVerified: false`.
 
-The receipt also records `waitBudgetMs` and `waitBudgetExceeded`. `INGEST_WAIT_BUDGET_EXCEEDED` means the operator's 10-second deadline elapsed before SDK completion; it does not diagnose network-policy denial or prove the event never arrived. The deadline does not retract an in-flight request. Check the exact event ID in the project before authorizing another attempt. Other unsuccessful outcomes remain `INGEST_NOT_CONFIRMED`, with raw transport errors excluded. This source-level canary does not establish signed Windows/macOS package configuration or production release acceptance.
+The receipt also records `waitBudgetMs` and `waitBudgetExceeded`. `INGEST_WAIT_BUDGET_EXCEEDED` means the operator's 10-second deadline elapsed before SDK completion; it does not diagnose network-policy denial or prove the event never arrived. The deadline does not retract an in-flight request. Check the exact event ID in the project before authorizing another attempt. Other unsuccessful outcomes remain `INGEST_NOT_CONFIRMED`, with raw transport errors excluded. This source-level canary does not establish signed macOS package configuration or production release acceptance.
 
 ## Independent project readback
 
