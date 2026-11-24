@@ -3,8 +3,6 @@ const path = require('node:path');
 
 const channels = new Set(['development', 'staging', 'production']);
 const updateOrigin = 'https://downloads.thepackproof.com';
-const azureSigningHosts = new Set('brs cus eus jpe krc ncus neu plc scus swn wcus weu wus wus2 wus3'.split(' ').map(region => `${region}.codesigning.azure.net`));
-
 // Keep aligned with the renderer-free runtime reporter's public, hosted DSN policy.
 function validPublicSentryDsn(value) {
   try {
@@ -13,22 +11,6 @@ function validPublicSentryDsn(value) {
       && /^[a-f0-9]{32}$/i.test(url.username) && /^\/\d+$/.test(url.pathname)
       && (url.hostname === 'sentry.io' || /^[a-z0-9-]+\.ingest(?:\.[a-z]{2})?\.sentry\.io$/.test(url.hostname));
   } catch { return false; }
-}
-
-function windowsSigningOptions(env = process.env) {
-  if ((env.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx') === 'azure') return {
-    azureSignOptions: {
-      publisherName: env.WINDOWS_PUBLISHER_NAME,
-      endpoint: env.AZURE_TRUSTED_SIGNING_ENDPOINT,
-      certificateProfileName: env.AZURE_TRUSTED_SIGNING_PROFILE,
-      codeSigningAccountName: env.AZURE_TRUSTED_SIGNING_ACCOUNT,
-      fileDigest: 'SHA256', timestampDigest: 'SHA256', timestampRfc3161: 'http://timestamp.acs.microsoft.com',
-    },
-  };
-  return { signtoolOptions: {
-    publisherName: env.WINDOWS_PUBLISHER_NAME,
-    signingHashAlgorithms: ['sha256'], rfc3161TimeStampServer: 'http://timestamp.digicert.com',
-  } };
 }
 
 function releaseContext(env = process.env, platform = env.PACKPROOF_BUILD_PLATFORM || process.platform, arch = env.PACKPROOF_BUILD_ARCH || process.arch) {
@@ -51,10 +33,11 @@ function releaseContext(env = process.env, platform = env.PACKPROOF_BUILD_PLATFO
 
 function checkReleaseEnvironment({ env = process.env, platform = process.platform, checkRuntime = false, cwd = process.cwd() } = {}) {
   const release = releaseContext(env, env.PACKPROOF_BUILD_PLATFORM || platform);
+  if (release.platform !== 'darwin') throw new Error('Desktop packages target macOS only.');
   const errors = [];
   const required = name => { if (!env[name]?.trim()) errors.push(`${name} is required`); };
   if (release.channel !== 'development') {
-    if (!['win32', 'darwin'].includes(platform)) errors.push('Signed releases must be built on native Windows or macOS runners');
+    if (platform !== 'darwin') errors.push('Signed releases must be built on native macOS runners');
     if (release.platform !== platform) errors.push('Signed release target must match the native build runner');
     for (const key of ['PACKPROOF_API_BASE_URL', 'PACKPROOF_COGNITO_CLIENT_ID', 'PACKPROOF_COGNITO_REGION', 'PACKPROOF_UPDATES_URL']) required(key);
     if (release.channel === 'production') required('PACKPROOF_SENTRY_DSN');
@@ -65,26 +48,6 @@ function checkReleaseEnvironment({ env = process.env, platform = process.platfor
       if (['localhost', '127.0.0.1', '[::1]'].includes(api.hostname)) errors.push('Release API must not be a loopback endpoint');
     } catch { errors.push('Release API URL is invalid'); }
     if (env.PACKPROOF_UPDATES_URL !== release.updateUrl) errors.push(`PACKPROOF_UPDATES_URL must be ${release.updateUrl}`);
-    if (platform === 'win32') {
-      required('WINDOWS_PUBLISHER_NAME');
-      const provider = env.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx';
-      if (provider === 'pfx') { required('WIN_CSC_LINK'); required('WIN_CSC_KEY_PASSWORD'); }
-      else if (provider === 'azure') {
-        for (const key of ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_SUBSCRIPTION_ID', 'AZURE_TRUSTED_SIGNING_ENDPOINT', 'AZURE_TRUSTED_SIGNING_ACCOUNT', 'AZURE_TRUSTED_SIGNING_PROFILE']) required(key);
-        for (const key of ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_SUBSCRIPTION_ID']) if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(env[key] || '')) errors.push(`${key} must be an Azure identifier`);
-        for (const key of ['AZURE_TRUSTED_SIGNING_ACCOUNT', 'AZURE_TRUSTED_SIGNING_PROFILE']) if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,99}$/.test(env[key] || '')) errors.push(`${key} must be an existing signing resource name`);
-        try {
-          const endpoint = new URL(env.AZURE_TRUSTED_SIGNING_ENDPOINT);
-          if (endpoint.protocol !== 'https:' || !azureSigningHosts.has(endpoint.hostname) || endpoint.username || endpoint.password || endpoint.port || endpoint.search || endpoint.hash || endpoint.pathname !== '/') throw new Error();
-        } catch { errors.push('AZURE_TRUSTED_SIGNING_ENDPOINT must be an official public Azure regional signing HTTPS endpoint'); }
-        // The supplied route uses azure/login OIDC and AzureCliCredential in an isolated hosted runner.
-        // Do not allow environment credentials to take precedence in the provider's default chain.
-        if (env.GITHUB_ACTIONS !== 'true' || env.RUNNER_ENVIRONMENT !== 'github-hosted') errors.push('Azure signing requires the protected GitHub-hosted OIDC release workflow');
-        required('ACTIONS_ID_TOKEN_REQUEST_URL'); required('ACTIONS_ID_TOKEN_REQUEST_TOKEN');
-        for (const key of ['AZURE_CLIENT_SECRET', 'AZURE_CLIENT_CERTIFICATE_PATH', 'AZURE_USERNAME', 'AZURE_PASSWORD', 'AZURE_FEDERATED_TOKEN_FILE']) if (env[key]) errors.push(`${key} is forbidden for the Azure CLI OIDC signing route`);
-        if (env.WIN_CSC_LINK || env.WIN_CSC_KEY_PASSWORD) errors.push('Azure signing must not also receive PFX credentials');
-      } else errors.push('PACKPROOF_WINDOWS_SIGNING_PROVIDER must be pfx or azure');
-    }
     if (platform === 'darwin') {
       required('CSC_LINK'); required('CSC_KEY_PASSWORD'); required('APPLE_TEAM_ID');
       const notarization = ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER'].every(name => env[name]?.trim());
@@ -106,7 +69,7 @@ function checkReleaseEnvironment({ env = process.env, platform = process.platfor
   return release;
 }
 
-module.exports = { releaseContext, checkReleaseEnvironment, validPublicSentryDsn, windowsSigningOptions };
+module.exports = { releaseContext, checkReleaseEnvironment, validPublicSentryDsn };
 
 if (require.main === module) {
   try {

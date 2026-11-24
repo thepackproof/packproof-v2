@@ -6,7 +6,7 @@ import { analyzeColumns, shipmentInterpretation, CSV_RULES } from '../src/record
 import { parseShipmentCsv } from '../src/records/csv.js';
 import { validateScheduledCsvRows, validateScheduledCsvSourceContract } from '../src/records/agent-restrictions.js';
 const corpus=JSON.parse(readFileSync(new URL('./fixtures/connect-csv-corpus.json',import.meta.url),'utf8')) as Array<{name:string;csv:string;ready:boolean;mapping?:Record<string,string>;confirmedFields?:string[];locationId?:string;parseError?:boolean;encodingError?:boolean;base64?:string;byteSha256?:string;repeat?:{unit:string;count:number;suffix:string};interpretation?:{outcome:string;grain:string;reasonCodes:string[]};fieldCounts?:Record<string,{valid:number;invalid:number}>}>;
-describe('shared raw CSV semantic corpus (also run by the C# service)',()=>{
+describe('shared raw CSV semantic corpus',()=>{
  for(const fixture of corpus)it(fixture.name,()=>{
   const repeated=fixture.repeat;
   const csv=fixture.csv+(repeated ? (repeated.unit.includes('{i}') ? Array.from({length:repeated.count},(_,i)=>repeated.unit.replace('{i}',String(i))).join('') : repeated.unit.repeat(repeated.count))+repeated.suffix : '');

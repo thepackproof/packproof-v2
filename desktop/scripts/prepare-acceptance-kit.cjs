@@ -7,7 +7,7 @@ function parseArguments(args) {
   const values = {};
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index];
-    if (!['--source', '--artifacts', '--out', '--platforms'].includes(key) || values[key] || !args[index + 1]) throw new Error('Use --source <40-character commit> --artifacts <downloaded artifact directory> --out <new kit directory> [--platforms all|mac|windows].');
+    if (!['--source', '--artifacts', '--out', '--platforms'].includes(key) || values[key] || !args[index + 1]) throw new Error('Use --source <40-character commit> --artifacts <downloaded artifact directory> --out <new kit directory> [--platforms mac].');
     values[key] = args[index + 1];
   }
   if (!/^[a-f0-9]{40}$/.test(values['--source'] || '') || !values['--artifacts'] || !values['--out']) throw new Error('An exact source commit, artifact directory and new output directory are required.');
@@ -16,7 +16,7 @@ function parseArguments(args) {
 function findInventories(root) {
   const found = []; let visited = 0;
   function walk(directory, depth) {
-    if (++visited > 200) throw new Error('Artifact directory is too broad. Select only the three downloaded candidate artifacts.');
+    if (++visited > 200) throw new Error('Artifact directory is too broad. Select only the two downloaded candidate artifacts.');
     if (fs.lstatSync(directory).isSymbolicLink()) throw new Error('Artifact directories must not be symbolic links.');
     const entries = fs.readdirSync(directory, { withFileTypes: true });
     if (entries.length > 500) throw new Error('Artifact directory contains too many entries.');
@@ -28,7 +28,7 @@ function findInventories(root) {
     }
   }
   walk(root, 0);
-  if (!found.length || found.length > 3) throw new Error('Provide one to three candidate release-evidence.json inventories.');
+  if (!found.length || found.length > 2) throw new Error('Provide one or two candidate release-evidence.json inventories.');
   return found;
 }
 async function hashFile(file) {
@@ -36,7 +36,7 @@ async function hashFile(file) {
   for await (const bytes of fs.createReadStream(file)) hash.update(bytes);
   return hash.digest('hex');
 }
-async function inspectCandidates(root, sourceCommit, value = 'all') {
+async function inspectCandidates(root, sourceCommit, value = 'mac') {
   const scope = validatePlatformScope(value), platforms = platformsForScope(scope).map(item => item.replace('/', '-'));
   const inventories = []; const seen = new Set(); let identity;
   for (const file of findInventories(root)) {
@@ -52,7 +52,7 @@ async function inspectCandidates(root, sourceCommit, value = 'all') {
     if (!Array.isArray(report.artifacts) || !report.artifacts.length || report.artifacts.length > 20) throw new Error('Artifact inventory has no bounded installer list.');
     const artifacts = [], names = new Set();
     for (const item of report.artifacts) {
-      if (typeof item.file !== 'string' || !/^[a-zA-Z0-9 ._-]+\.(exe|dmg|zip|pkg)$/.test(item.file) || path.basename(item.file) !== item.file || names.has(item.file) || !/^[a-f0-9]{64}$/.test(item.sha256 || '') || !Number.isSafeInteger(item.bytes) || item.bytes <= 0) throw new Error('Artifact inventory contains an invalid filename, hash or size.');
+      if (typeof item.file !== 'string' || !/^[a-zA-Z0-9 ._-]+\.(dmg|zip|pkg)$/.test(item.file) || path.basename(item.file) !== item.file || names.has(item.file) || !/^[a-f0-9]{64}$/.test(item.sha256 || '') || !Number.isSafeInteger(item.bytes) || item.bytes <= 0) throw new Error('Artifact inventory contains an invalid filename, hash or size.');
       names.add(item.file);
       const actual = path.join(path.dirname(file), item.file), stat = fs.lstatSync(actual);
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== item.bytes || await hashFile(actual) !== item.sha256) throw new Error('Artifact bytes do not match the candidate inventory.');
@@ -62,7 +62,7 @@ async function inspectCandidates(root, sourceCommit, value = 'all') {
   }
   return { sourceCommit, platforms: scope, inventories, missingPlatforms: platforms.filter(platform => !seen.has(platform)) };
 }
-async function prepareKit({ sourceCommit, artifacts, out, platforms: value = 'all' }) {
+async function prepareKit({ sourceCommit, artifacts, out, platforms: value = 'mac' }) {
   const scope = validatePlatformScope(value), gates = requiredForScope(scope);
   if (!/^[a-f0-9]{40}$/.test(sourceCommit)) throw new Error('An exact source commit is required.');
   if (fs.existsSync(out)) throw new Error('Output already exists; preserve its operator results and choose a new directory.');
@@ -70,7 +70,7 @@ async function prepareKit({ sourceCommit, artifacts, out, platforms: value = 'al
   const template = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/release-acceptance.template.json'), 'utf8'));
   if (template.tests?.length !== required.length || required.some(id => !template.tests.some(test => test.id === id))) throw new Error('Acceptance template and required release gates disagree.');
   const report = { schemaVersion: template.schemaVersion, sourceCommit, platforms: scope, approvedBy: '', testedAt: '', tests: gates.map(id => ({ id, status: 'pending', evidence: '' })) };
-  const columns = platformsForScope(scope).map(item => ({ 'win32/x64': 'Windows', 'darwin/x64': 'Intel Mac', 'darwin/arm64': 'Apple Silicon' })[item]);
+  const columns = platformsForScope(scope).map(item => ({ 'darwin/x64': 'Intel Mac', 'darwin/arm64': 'Apple Silicon' })[item]);
   const worksheet = ['# Candidate acceptance worksheet', '', `Exact source: \`${sourceCommit}\``, '',
     `Candidate identity: ${candidate.inventories[0].channel} ${candidate.inventories[0].version}.`, `Release platform scope: ${scope}.`,
     `Missing platform inventories: ${candidate.missingPlatforms.join(', ') || 'none'}.`, '',

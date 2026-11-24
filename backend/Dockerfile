@@ -6,7 +6,8 @@ COPY backend/vendor/picomatch/picomatch-4.0.7-packproof.1.tgz ./vendor/picomatch
 RUN npm ci
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
-COPY backend/scripts/m2-runtime-privileges.mjs backend/scripts/m2-runtime-privileges.d.mts ./scripts/
+COPY backend/scripts/*.d.mts ./scripts/
+COPY backend/scripts/m2-runtime-privileges.mjs ./scripts/
 COPY packages/evidence-contracts /app/packages/evidence-contracts
 RUN npm run build
 
@@ -16,6 +17,7 @@ ENV NODE_ENV=production
 # zlib 1.4 includes the CVE-2026-85091 and CVE-2026-4738 fixes.
 RUN apk add --no-cache --upgrade 'zlib>=1.4-r0' ffmpeg util-linux font-dejavu ca-certificates && command -v prlimit && command -v ffprobe
 COPY backend/package.json backend/package-lock.json ./
+COPY backend/vendor/picomatch/picomatch-4.0.7-packproof.1.tgz ./vendor/picomatch/
 RUN npm ci --omit=dev
 COPY --from=build /app/backend/dist ./dist
 COPY --from=build /app/packages/evidence-contracts /app/packages/evidence-contracts

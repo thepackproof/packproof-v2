@@ -1,4 +1,4 @@
-const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('./scripts/release-policy.cjs');
+const { releaseContext, checkReleaseEnvironment } = require('./scripts/release-policy.cjs');
 
 const release = releaseContext();
 const research = require('../config/rnd/research-build.json').researchOnly === true;
@@ -37,28 +37,6 @@ module.exports = {
   publish: signed ? [{ provider: 'generic', url: release.updateUrl, channel: 'latest' }] : null,
   detectUpdateChannel: false,
   generateUpdatesFilesForAllChannels: false,
-  win: {
-    target: [{ target: 'nsis', arch: ['x64'] }],
-    icon: 'build/icon.png',
-    executableName: release.productName,
-    requestedExecutionLevel: 'asInvoker',
-    signExecutable: signed,
-    verifyUpdateCodeSignature: true,
-    ...(signed ? windowsSigningOptions() : {}),
-  },
-  nsis: {
-    artifactName: `${release.artifactPrefix}-Setup-\${version}.exe`,
-    oneClick: false,
-    perMachine: false,
-    allowElevation: false,
-    allowToChangeInstallationDirectory: true,
-    createDesktopShortcut: false,
-    createStartMenuShortcut: true,
-    shortcutName: release.productName,
-    runAfterFinish: false,
-    deleteAppDataOnUninstall: false,
-    warningsAsErrors: true,
-  },
   mac: {
     target: ['dmg', 'zip', ...(release.includePkg ? ['pkg'] : [])],
     icon: 'build/icon.png',

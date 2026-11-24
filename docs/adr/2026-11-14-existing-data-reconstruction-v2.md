@@ -28,4 +28,4 @@ Source disposition uses a separate worker-only exact-version deletion capability
 
 Migrations 110–113 and old release policies remain frozen. Migrations 114–116 and the explicit reconstruction-v2/116 release profile are additive. New flags default off. Rollback pauses new admission/readers and preserves queues, keys, originals, ledgers and generated packages; compatible roll-forward repair replaces destructive reset.
 
-Automated fixtures establish implementation behavior. Actual Windows 11 installed-flow/usability acceptance, authorized real feed contracts, production IAM/storage/signing/restore review and the pilot investigation study remain external qualification requirements.
+Automated fixtures establish implementation behavior. Usability acceptance, authorized real feed contracts, production IAM/storage/signing/restore review and the pilot investigation study remain external qualification requirements.

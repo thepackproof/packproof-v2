@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { releaseContext, checkReleaseEnvironment, windowsSigningOptions } = require('../scripts/release-policy.cjs');
+const { releaseContext, checkReleaseEnvironment } = require('../scripts/release-policy.cjs');
 const { validateAcceptance, required, validatePlatformScope, platformsForScope, requiredForScope } = require('../scripts/check-acceptance.cjs');
 const { inspectRelease } = require('../scripts/publish-release.cjs');
 const fs = require('node:fs');
@@ -9,117 +9,78 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const YAML = require('yaml');
 
-const windows = {
+const mac = {
   APP_ENV: 'production', PACKPROOF_BUILD_ARCH: 'x64',
   PACKPROOF_API_BASE_URL: 'https://api.example.test', PACKPROOF_COGNITO_CLIENT_ID: 'examplepublicclient',
-  PACKPROOF_COGNITO_REGION: 'us-east-1', PACKPROOF_UPDATES_URL: 'https://downloads.thepackproof.com/desktop/production/win32/x64/',
+  PACKPROOF_COGNITO_REGION: 'us-east-1', PACKPROOF_UPDATES_URL: 'https://downloads.thepackproof.com/desktop/production/darwin/x64/',
   PACKPROOF_SENTRY_DSN: 'https://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/123',
-  WIN_CSC_LINK: 'test-fixture-not-a-real-certificate', WIN_CSC_KEY_PASSWORD: 'test-fixture', WINDOWS_PUBLISHER_NAME: 'Test Publisher',
-};
-
-const azure = {
-  ...windows, PACKPROOF_WINDOWS_SIGNING_PROVIDER: 'azure', WIN_CSC_LINK: '', WIN_CSC_KEY_PASSWORD: '',
-  AZURE_TENANT_ID: '11111111-1111-1111-1111-111111111111', AZURE_CLIENT_ID: '22222222-2222-2222-2222-222222222222',
-  AZURE_SUBSCRIPTION_ID: '33333333-3333-3333-3333-333333333333', AZURE_TRUSTED_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net/',
-  AZURE_TRUSTED_SIGNING_ACCOUNT: 'test-account', AZURE_TRUSTED_SIGNING_PROFILE: 'test-profile',
-  GITHUB_ACTIONS: 'true', RUNNER_ENVIRONMENT: 'github-hosted',
-  ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.test/oidc', ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'test-fixture-never-log',
+  CSC_LINK: 'test', CSC_KEY_PASSWORD: 'test', APPLE_TEAM_ID: 'TESTTEAM',
+  APPLE_ID: 'test', APPLE_APP_SPECIFIC_PASSWORD: 'test',
 };
 
 test('production requires a public reporting destination and rejects credential-bearing or arbitrary endpoints', () => {
   for (const dsn of ['', 'http://0123456789abcdef0123456789abcdef@o1.ingest.sentry.io/123', 'https://0123456789abcdef0123456789abcdef:secret@o1.ingest.sentry.io/123', 'https://0123456789abcdef0123456789abcdef@collector.example.test/123']) {
-    assert.throws(() => checkReleaseEnvironment({ env: { ...windows, PACKPROOF_SENTRY_DSN: dsn }, platform: 'win32' }), /PACKPROOF_SENTRY_DSN/);
+    assert.throws(() => checkReleaseEnvironment({ env: { ...mac, PACKPROOF_SENTRY_DSN: dsn }, platform: 'darwin' }), /PACKPROOF_SENTRY_DSN/);
   }
-  checkReleaseEnvironment({ env: { ...windows, APP_ENV: 'staging', PACKPROOF_SENTRY_DSN: '', PACKPROOF_UPDATES_URL: windows.PACKPROOF_UPDATES_URL.replace('/production/', '/staging/') }, platform: 'win32' });
+  checkReleaseEnvironment({ env: { ...mac, APP_ENV: 'staging', PACKPROOF_SENTRY_DSN: '', PACKPROOF_UPDATES_URL: mac.PACKPROOF_UPDATES_URL.replace('/production/', '/staging/') }, platform: 'darwin' });
 });
 test('production rejects a build with a different reporting project', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-runtime-release-test-'));
   try {
     fs.mkdirSync(path.join(directory, 'dist/main'), { recursive: true });
-    const runtime = { channel: 'production', updateUrl: windows.PACKPROOF_UPDATES_URL, apiBaseUrl: windows.PACKPROOF_API_BASE_URL, cognito: { clientId: windows.PACKPROOF_COGNITO_CLIENT_ID }, sentryDsn: '' };
+    const runtime = { channel: 'production', updateUrl: mac.PACKPROOF_UPDATES_URL, apiBaseUrl: mac.PACKPROOF_API_BASE_URL, cognito: { clientId: mac.PACKPROOF_COGNITO_CLIENT_ID }, sentryDsn: '' };
     fs.writeFileSync(path.join(directory, 'dist/main/runtime-config.json'), JSON.stringify(runtime));
-    assert.throws(() => checkReleaseEnvironment({ env: windows, platform: 'win32', checkRuntime: true, cwd: directory }), /reporting destination/);
-    runtime.sentryDsn = windows.PACKPROOF_SENTRY_DSN;
+    assert.throws(() => checkReleaseEnvironment({ env: mac, platform: 'darwin', checkRuntime: true, cwd: directory }), /reporting destination/);
+    runtime.sentryDsn = mac.PACKPROOF_SENTRY_DSN;
     fs.writeFileSync(path.join(directory, 'dist/main/runtime-config.json'), JSON.stringify(runtime));
-    checkReleaseEnvironment({ env: windows, platform: 'win32', checkRuntime: true, cwd: directory });
+    checkReleaseEnvironment({ env: mac, platform: 'darwin', checkRuntime: true, cwd: directory });
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
-test('Azure OIDC signing accepts no exportable key and keeps one signing provider', () => {
-  checkReleaseEnvironment({ env: azure, platform: 'win32' });
-  const options = windowsSigningOptions(azure);
-  assert.equal(options.signtoolOptions, undefined);
-  assert.equal(options.azureSignOptions.publisherName, windows.WINDOWS_PUBLISHER_NAME);
-  assert.equal(options.azureSignOptions.fileDigest, 'SHA256');
-  assert.equal(windowsSigningOptions(windows).azureSignOptions, undefined);
-});
-test('Azure signing rejects alternate credential chains, missing OIDC, untrusted endpoints and mixed providers', () => {
-  for (const overrides of [
-    { ACTIONS_ID_TOKEN_REQUEST_TOKEN: '' }, { GITHUB_ACTIONS: '' }, { RUNNER_ENVIRONMENT: 'self-hosted' },
-    { AZURE_CLIENT_SECRET: 'do-not-echo-test-value' }, { AZURE_FEDERATED_TOKEN_FILE: '/tmp/token' },
-    { AZURE_TRUSTED_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net.attacker.test/' },
-    { AZURE_TRUSTED_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net/sign' },
-    { AZURE_TRUSTED_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net/?redirect=1' },
-    { AZURE_CLIENT_ID: 'missing' }, { WIN_CSC_LINK: 'unexpected-certificate' },
-    { PACKPROOF_WINDOWS_SIGNING_PROVIDER: 'unsigned' },
-  ]) assert.throws(() => checkReleaseEnvironment({ env: { ...azure, ...overrides }, platform: 'win32' }), error => !error.message.includes('do-not-echo-test-value'));
-});
-
-test('missing Windows signing material fails closed without echoing secrets', () => {
-  const env = { ...windows, WIN_CSC_LINK: '', WIN_CSC_KEY_PASSWORD: 'do-not-echo-test-value' };
-  assert.throws(() => checkReleaseEnvironment({ env, platform: 'win32' }), error => /WIN_CSC_LINK/.test(error.message) && !error.message.includes('do-not-echo-test-value'));
-});
-test('public build flags cannot make production silently unsigned', () => {
-  assert.throws(() => checkReleaseEnvironment({ env: { ...windows, WIN_CSC_LINK: '' }, platform: 'win32' }));
-  assert.throws(() => checkReleaseEnvironment({ env: windows, platform: 'linux' }), /native Windows or macOS/);
+test('signed releases require a macOS runner and signing material', () => {
+  assert.throws(() => checkReleaseEnvironment({ env: { ...mac, CSC_LINK: '' }, platform: 'darwin' }), /CSC_LINK/);
+  assert.throws(() => checkReleaseEnvironment({ env: { ...mac, PACKPROOF_BUILD_PLATFORM: 'darwin' }, platform: 'linux' }), /native macOS/);
+  assert.throws(() => checkReleaseEnvironment({ env: { APP_ENV: 'development' }, platform: 'win32' }), /macOS only/);
 });
 test('update URL is bound to owned origin, environment and architecture', () => {
-  checkReleaseEnvironment({ env: windows, platform: 'win32' });
-  for (const url of ['https://downloads.thepackproof.com/desktop/staging/win32/x64/', 'https://attacker.example/latest/', windows.PACKPROOF_UPDATES_URL + '?redirect=1', windows.PACKPROOF_UPDATES_URL.replace('/x64/', '/arm64/')]) {
-    assert.throws(() => checkReleaseEnvironment({ env: { ...windows, PACKPROOF_UPDATES_URL: url }, platform: 'win32' }), /PACKPROOF_UPDATES_URL/);
+  checkReleaseEnvironment({ env: mac, platform: 'darwin' });
+  for (const url of ['https://downloads.thepackproof.com/desktop/staging/darwin/x64/', 'https://attacker.example/latest/', mac.PACKPROOF_UPDATES_URL + '?redirect=1', mac.PACKPROOF_UPDATES_URL.replace('/x64/', '/arm64/')]) {
+    assert.throws(() => checkReleaseEnvironment({ env: { ...mac, PACKPROOF_UPDATES_URL: url }, platform: 'darwin' }), /PACKPROOF_UPDATES_URL/);
   }
 });
 test('channels have unique install identities and protocol registrations', () => {
-  const contexts = ['development', 'staging', 'production'].map(APP_ENV => releaseContext({ APP_ENV }, 'win32', 'x64'));
+  const contexts = ['development', 'staging', 'production'].map(APP_ENV => releaseContext({ APP_ENV }, 'darwin', 'x64'));
   for (const field of ['appId', 'productName', 'packageName', 'protocol', 'updateUrl', 'outputDirectory']) assert.equal(new Set(contexts.map(item => item[field])).size, 3);
   assert.equal(contexts[2].protocol, 'packproof');
 });
 test('signed PKG builds require the Installer certificate and notarization', () => {
-  const env = { ...windows, PACKPROOF_BUILD_PKG: '1', PACKPROOF_UPDATES_URL: 'https://downloads.thepackproof.com/desktop/production/darwin/x64/', CSC_LINK: 'test', CSC_KEY_PASSWORD: 'test', APPLE_TEAM_ID: 'TESTTEAM' };
+  const env = { ...mac, PACKPROOF_BUILD_PKG: '1', APPLE_ID: '' };
   assert.throws(() => checkReleaseEnvironment({ env, platform: 'darwin' }), /Apple notarization/);
   assert.throws(() => checkReleaseEnvironment({ env, platform: 'darwin' }), /CSC_INSTALLER_LINK/);
 });
 test('hardware acceptance cannot be replaced by a successful compile', () => {
   const sourceCommit = 'a'.repeat(40);
-  const report = { sourceCommit, approvedBy: 'Reviewer', testedAt: '2026-09-27T12:00:00Z', tests: required.map(id => ({ id, status: 'passed', evidence: 'Evidence record reference' })) };
+  const report = { sourceCommit, platforms: 'mac', approvedBy: 'Reviewer', testedAt: '2026-09-27T12:00:00Z', tests: required.map(id => ({ id, status: 'passed', evidence: 'Evidence record reference' })) };
   assert.equal(validateAcceptance(report, sourceCommit), true);
   assert.throws(() => validateAcceptance(report, 'b'.repeat(40)), /exact source commit/);
   report.tests[0].status = 'pending';
   assert.throws(() => validateAcceptance(report, sourceCommit), /incomplete/);
 });
 
-test('explicit platform scopes retain every shared gate and default only an omitted value to all', () => {
-  assert.equal(validatePlatformScope(), 'all');
-  for (const value of ['', 'Mac', 'darwin', 'mac,windows', null, [], {}]) assert.throws(() => validatePlatformScope(value));
-  assert.deepEqual(platformsForScope('mac'), ['darwin/x64', 'darwin/arm64']);
-  assert.deepEqual(platformsForScope('windows'), ['win32/x64']);
-  assert.equal(requiredForScope('all').length, 18);assert.equal(requiredForScope('mac').length, 17);assert.equal(requiredForScope('windows').length, 16);
-  const shared = required.slice(3);
-  for (const scope of ['mac', 'windows']) assert.ok(shared.every(id => requiredForScope(scope).includes(id)));
+test('only the Mac scope can authorize releases of both supported architectures', () => {
+  assert.equal(validatePlatformScope(), 'mac');
+  for (const value of ['', 'all', 'windows', null, [], {}]) assert.throws(() => validatePlatformScope(value));
+  assert.deepEqual(platformsForScope(), ['darwin/x64', 'darwin/arm64']);
+  assert.equal(requiredForScope().length, 17);
 });
 
-test('acceptance scope must match and legacy approval cannot authorize a partial-platform release', () => {
+test('acceptance must explicitly identify the supported platform scope', () => {
   const sourceCommit = 'a'.repeat(40);
-  const report = platforms => ({ sourceCommit, platforms, approvedBy: 'Reviewer', testedAt: '2026-10-12T01:00:00Z', tests: requiredForScope(platforms).map(id => ({ id, status: 'passed', evidence: 'Synthetic policy-test reference; not real acceptance' })) });
-  for (const scope of ['all', 'mac', 'windows']) {
-    assert.equal(validateAcceptance(report(scope), sourceCommit, scope), true);
-    for (const other of ['all', 'mac', 'windows'].filter(value => value !== scope)) assert.throws(() => validateAcceptance(report(scope), sourceCommit, other), /scope/);
-  }
-  const legacy = report('all');delete legacy.platforms;
-  assert.equal(validateAcceptance(legacy, sourceCommit), true);
-  for (const scope of ['mac', 'windows']) assert.throws(() => validateAcceptance(legacy, sourceCommit, scope), /scope/);
+  const report = platforms => ({ sourceCommit, platforms, approvedBy: 'Reviewer', testedAt: '2026-10-12T01:00:00Z', tests: required.map(id => ({ id, status: 'passed', evidence: 'Synthetic policy-test reference' })) });
+  assert.equal(validateAcceptance(report('mac'), sourceCommit), true);
+  for (const scope of [undefined, 'all', 'windows']) assert.throws(() => validateAcceptance(report(scope), sourceCommit), /scope/);
   const duplicate = report('mac');duplicate.tests.push({ ...duplicate.tests[0], status: 'pending' });
   assert.throws(() => validateAcceptance(duplicate, sourceCommit, 'mac'), /duplicate/);
-  const extra = report('mac');extra.tests.push({ id: 'windows-install-upgrade-uninstall', status: 'passed', evidence: 'Unrelated scope' });
+  const extra = report('mac');extra.tests.push({ id: 'unexpected-install-gate', status: 'passed', evidence: 'Unrelated scope' });
   assert.throws(() => validateAcceptance(extra, sourceCommit, 'mac'), /scope/);
   for (const value of ['pending', 'partial', 'not-applicable']) {
     const incomplete = report('mac');incomplete.tests.find(test => test.id === 'continuous-recording-valid-media').status = value;
@@ -132,7 +93,7 @@ test('acceptance scope must match and legacy approval cannot authorize a partial
 });
 test('production promotion requires actual centralized reporting delivery evidence', () => {
   const sourceCommit = 'd'.repeat(40);
-  const report = { sourceCommit, approvedBy: 'Reviewer', testedAt: '2026-09-27T12:00:00Z', tests: required.filter(id => id !== 'centralized-error-reporting-delivery').map(id => ({ id, status: 'passed', evidence: 'Evidence record reference' })) };
+  const report = { sourceCommit, platforms: 'mac', approvedBy: 'Reviewer', testedAt: '2026-09-27T12:00:00Z', tests: required.filter(id => id !== 'centralized-error-reporting-delivery').map(id => ({ id, status: 'passed', evidence: 'Evidence record reference' })) };
   assert.throws(() => validateAcceptance(report, sourceCommit), /centralized-error-reporting-delivery/);
 });
 
@@ -162,19 +123,19 @@ test('publication rejects tampering after native signature verification', async 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-release-test-'));
   try {
     const bytes = Buffer.from('synthetic signed artifact fixture; no executable');
-    const file = 'PackProof-Setup-1.0.0.exe';
+    const file = 'PackProof-1.0.0-x64.zip';
     const sourceCommit = 'c'.repeat(40);
     fs.writeFileSync(path.join(directory, file), bytes);
     fs.writeFileSync(path.join(directory, 'release-evidence.json'), JSON.stringify({
-      channel: 'production', sourceCommit, signed: true, platform: 'win32', arch: 'x64', version: '1.0.0',
-      updateUrl: 'https://downloads.thepackproof.com/desktop/production/win32/x64/',
-      checks: ['authenticode-valid', 'publisher-matches', 'timestamp-valid'],
+      channel: 'production', sourceCommit, signed: true, platform: 'darwin', arch: 'x64', version: '1.0.0',
+      updateUrl: 'https://downloads.thepackproof.com/desktop/production/darwin/x64/',
+      checks: ['codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted'],
       artifacts: [{ file, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }],
     }));
     const sha512 = crypto.createHash('sha512').update(bytes).digest('base64');
-    fs.writeFileSync(path.join(directory, 'latest.yml'), YAML.stringify({ version: '1.0.0', files: [{ url: file, sha512 }], path: file, sha512 }));
+    fs.writeFileSync(path.join(directory, 'latest-mac.yml'), YAML.stringify({ version: '1.0.0', files: [{ url: file, sha512 }], path: file, sha512 }));
     await inspectRelease(directory, { channel: 'production', sourceCommit });
-    fs.writeFileSync(path.join(directory, 'latest.yml'), YAML.stringify({ version: '1.0.0', files: [{ url: 'https://attacker.example/payload.exe', sha512 }] }));
+    fs.writeFileSync(path.join(directory, 'latest-mac.yml'), YAML.stringify({ version: '1.0.0', files: [{ url: 'https://attacker.example/payload.zip', sha512 }] }));
     await assert.rejects(inspectRelease(directory, { channel: 'production', sourceCommit }), /unverified or external/);
     fs.writeFileSync(path.join(directory, file), 'changed after signature verification');
     await assert.rejects(inspectRelease(directory, { channel: 'production', sourceCommit }), /do not match/);

@@ -64,12 +64,12 @@ node scripts/run-staging-acceptance.mjs --execute-protocol-fixture
 
 Preflight performs public GETs only, without credentials or remote writes.
 `--execute-protocol-fixture` may run on Linux. Its report explicitly records the
-real host OS and a **simulated Windows platform claim** in the synthetic request
+real host OS and a **simulated macOS platform claim** in the synthetic request
 fixture. It never changes `process.platform`, claims to have run Electron, or
 reports native hardware acceptance. Capture dates, camera name and declaration
 are disclosed synthetic request inputs; no physical shipment occurred.
 
-On an actual Windows or macOS host, use `--execute-native-host` instead. This
+On an actual macOS host, use `--execute-native-host` instead. This
 uses the real host platform but still tests source fixtures, not webcam capture.
 Native installation, camera, scanner, OS vault and hardware acceptance remain
 separate release checks.

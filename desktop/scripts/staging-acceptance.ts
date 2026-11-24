@@ -75,10 +75,10 @@ try {
     report.status = 'PREFLIGHT_PASS';
     report.limitations.push('Preflight made no authenticated request or remote mutation.');
   } else {
-    const platformClaim = mode === '--execute-protocol-fixture' ? 'win32' : process.platform;
-    ensure(platformClaim === 'win32' || platformClaim === 'darwin', 'NATIVE_HOST_REQUIRED');
+    const platformClaim = mode === '--execute-protocol-fixture' ? 'darwin' : process.platform;
+    ensure(platformClaim === 'darwin', 'NATIVE_HOST_REQUIRED');
     report.desktopPlatformClaim = platformClaim;
-    if (mode === '--execute-protocol-fixture') report.limitations.push('The win32 request metadata is an explicitly simulated protocol fixture. Actual host platform is recorded separately; this is not Windows or macOS native acceptance.');
+    if (mode === '--execute-protocol-fixture') report.limitations.push('The darwin request metadata is an explicitly simulated protocol fixture. Actual host platform is recorded separately; this is not macOS native acceptance.');
     const email = process.env.PACKPROOF_SMOKE_EMAIL;
     const password = process.env.PACKPROOF_SMOKE_PASSWORD;
     ensure(email && /^desktop-staging-[a-z0-9-]{8,80}@example\.invalid$/i.test(email), 'DEDICATED_TEST_ACCOUNT_REQUIRED');

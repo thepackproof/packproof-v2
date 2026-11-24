@@ -7,9 +7,9 @@ const crypto = require('node:crypto');
 const { inspectCandidates, prepareKit, parseArguments } = require('../scripts/prepare-acceptance-kit.cjs');
 const { required, validateAcceptance } = require('../scripts/check-acceptance.cjs');
 const sourceCommit = 'a'.repeat(40);
-function fixture(platform = 'win32', arch = 'x64') {
+function fixture(platform = 'darwin', arch = 'x64') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'packproof-kit-')), artifacts = path.join(root, 'artifacts'), out = path.join(root, 'kit');
-  fs.mkdirSync(artifacts);const bytes = Buffer.from('synthetic installer fixture, not executable'), file = 'PackProof-Dev-Setup.exe';fs.writeFileSync(path.join(artifacts, file), bytes);
+  fs.mkdirSync(artifacts);const bytes = Buffer.from('synthetic installer fixture, not executable'), file = 'PackProof-Dev.dmg';fs.writeFileSync(path.join(artifacts, file), bytes);
   const report = { sourceCommit, version: '1.0.0', channel: 'development', signed: false, platform, arch, artifacts: [{ file, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }] };
   const save = () => fs.writeFileSync(path.join(artifacts, 'release-evidence.json'), JSON.stringify(report));save();
   return { root, artifacts, out, report, save };
@@ -17,7 +17,7 @@ function fixture(platform = 'win32', arch = 'x64') {
 test('candidate kit verifies bytes but leaves every current release gate pending and unapproved', async () => {
   const f = fixture();try {
     const result = await prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out });
-    assert.equal(result.pendingGates, required.length);assert.deepEqual(result.missingPlatforms, ['darwin-x64', 'darwin-arm64']);
+    assert.equal(result.pendingGates, required.length);assert.deepEqual(result.missingPlatforms, ['darwin-arm64']);
     const report = JSON.parse(fs.readFileSync(path.join(f.out, 'release-acceptance.json')));
     assert.equal(report.sourceCommit, sourceCommit);assert.equal(report.approvedBy, '');assert.deepEqual(report.tests.map(t => t.id), required);assert.ok(report.tests.every(t => t.status === 'pending' && t.evidence === ''));
     assert.throws(() => validateAcceptance(report, sourceCommit));
@@ -30,7 +30,7 @@ test('wrong source, changed installer bytes and escaped inventory paths are reje
     await assert.rejects(inspectCandidates(f.artifacts, 'b'.repeat(40)), /exact source/);
     fs.writeFileSync(path.join(f.artifacts, f.report.artifacts[0].file), 'tampered');
     await assert.rejects(prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out }), /bytes do not match/);assert.equal(fs.existsSync(f.out), false);
-    f.report.artifacts[0].file = '../outside.exe';f.save();await assert.rejects(inspectCandidates(f.artifacts, sourceCommit), /invalid filename/);
+    f.report.artifacts[0].file = '../outside.dmg';f.save();await assert.rejects(inspectCandidates(f.artifacts, sourceCommit), /invalid filename/);
   } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
 });
 test('mixed versions and duplicate platform inventories cannot form one candidate', async () => {
@@ -58,28 +58,24 @@ test('Mac-only preparation requires both Mac installation gates, retains shared 
     assert.equal(result.platformScope, 'mac');assert.equal(result.pendingGates, 17);assert.deepEqual(result.missingPlatforms, ['darwin-arm64']);
     const report = JSON.parse(fs.readFileSync(path.join(f.out, 'release-acceptance.json')));
     assert.equal(report.platforms, 'mac');assert.ok(report.tests.every(test => test.status === 'pending' && test.evidence === ''));
-    assert.ok(!report.tests.some(test => test.id === 'windows-install-upgrade-uninstall'));
     assert.ok(report.tests.some(test => test.id === 'macos-intel-install-upgrade'));
     assert.ok(report.tests.some(test => test.id === 'macos-arm-install-upgrade'));
-    assert.ok(required.slice(3).every(id => report.tests.some(test => test.id === id)));
+    assert.ok(required.every(id => report.tests.some(test => test.id === id)));
     assert.throws(() => validateAcceptance(report, sourceCommit, 'mac'));
     const worksheet = fs.readFileSync(path.join(f.out, 'WORKSHEET.md'), 'utf8');
-    assert.ok(!worksheet.includes('Windows evidence'));assert.ok(worksheet.includes('Intel Mac evidence'));assert.ok(worksheet.includes('Apple Silicon evidence'));
+    assert.ok(worksheet.includes('Intel Mac evidence'));assert.ok(worksheet.includes('Apple Silicon evidence'));
     assert.equal(JSON.parse(fs.readFileSync(path.join(f.out, 'candidate-manifest.json'))).platforms, 'mac');
   } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test('Windows scope excludes Mac gates and wrong-scope inventories fail before kit creation', async () => {
-  const f = fixture();try {
-    await assert.rejects(prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out, platforms: 'mac' }), /platform inventory/);
+test('unsupported release scopes and architectures fail before kit creation', async () => {
+  const f = fixture('win32');try {
+    await assert.rejects(prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out }), /platform inventory/);
+    for (const value of ['', 'all', 'windows', null]) await assert.rejects(prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out, platforms: value }), /platforms/);
     assert.equal(fs.existsSync(f.out), false);
-    for (const value of ['', 'darwin', null]) await assert.rejects(prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out, platforms: value }), /platforms/);
-    const result = await prepareKit({ sourceCommit, artifacts: f.artifacts, out: f.out, platforms: 'windows' });
-    assert.equal(result.pendingGates, 16);assert.deepEqual(result.missingPlatforms, []);
-    const report = JSON.parse(fs.readFileSync(path.join(f.out, 'release-acceptance.json')));
-    assert.equal(report.platforms, 'windows');assert.ok(!report.tests.some(test => test.id.startsWith('macos-')));
     const args = ['--source', sourceCommit, '--artifacts', f.artifacts, '--out', f.out];
-    assert.equal(parseArguments(args).platforms, 'all');assert.equal(parseArguments([...args, '--platforms', 'mac']).platforms, 'mac');
-    for (const scope of ['', 'darwin', 'Mac']) assert.throws(() => parseArguments([...args, '--platforms', scope]));
+    assert.equal(parseArguments(args).platforms, 'mac');
+    assert.equal(parseArguments([...args, '--platforms', 'mac']).platforms, 'mac');
+    assert.throws(() => parseArguments([...args, '--platforms', 'all']));
   } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
 });

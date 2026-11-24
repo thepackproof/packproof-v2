@@ -38,6 +38,28 @@ describe('Connect approval deep-link sign-in return', () => {
     expect(consumeConnectApprovalReturn(sessionStorage)).toBe(destination);
   });
 
+  it.each([
+    'installationId=install-a&organizationId=org-a&environment=sandbox&intent=facility',
+    'enrollmentId=enroll-a&intent=facility',
+    'enrollmentId=enroll-a&organizationId=org-a&environment=live&intent=facility',
+  ])('restores an exact facility connection across sign-in: %s', query => {
+    const path = '/app/records/connect/approve?' + query;
+    rememberConnectApprovalReturn(path + '&redeemSecret=PRIVATE', sessionStorage);
+    expect(consumeConnectApprovalReturn(sessionStorage)).toBe(path);
+  });
+
+  it.each([
+    'installationId=install-a&intent=facility',
+    'installationId=install-a&organizationId=org-a&intent=facility',
+    'installationId=install-a&organizationId=org-a&environment=live&importId=job-a&intent=facility',
+    'installationId=install-a&organizationId=org-a&environment=live&subscriptionId=s-a&intent=facility',
+    'installationId=install-a&organizationId=org-a&environment=live&workspaceSession=w-a&intent=facility',
+    'installationId=install-a&organizationId=org-a&environment=live&action=resume&intent=facility',
+    'enrollmentId=enroll-a&intent=file', 'enrollmentId=enroll-a&intent=facility&intent=facility',
+  ])('rejects a mixed or incomplete facility intent: %s', query => {
+    expect(connectApprovalReturnPath('/app/records/connect/approve?' + query)).toBeNull();
+  });
+
   it('retains an exact historical manifest locator across sign-in without secret parameters', () => {
     const destination = `/app/records/connect/approve?installationId=install-a&subscriptionId=source-a&configurationRevision=3&backfillJobId=history-a&manifestSha256=${'a'.repeat(64)}`;
     rememberConnectApprovalReturn(destination + '&token=PRIVATE', sessionStorage);

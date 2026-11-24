@@ -51,8 +51,8 @@ async function inspect(directory, source) {
     const request = await loadJson(path.join(directory, profile + '.json'));
     if (json(request) !== json(buildRequest(profile, source, exact.archiveSha256))) throw Error('The CodeBuild request differs for ' + profile);
   }
-  const windows = await loadJson(path.join(root, 'connect-windows/package.json'));
-  return { schema: 'packproof.connect-rollout/v1', version: windows.version, source, apiOrigin: target.api, webOrigin: target.web,
+  // The reviewed legacy release packet qualifies collector protocol 0.6.0.
+  return { schema: 'packproof.connect-rollout/v1', version: '0.6.0', source, apiOrigin: target.api, webOrigin: target.web,
     migrationInventorySha256: exact.migrationInventorySha256, approvedPredecessorImage: predecessor,
     files: await inventory(directory) };
 }
@@ -79,7 +79,7 @@ async function main() {
       for (const profile of profiles) {
         await writeFile(path.join(temporary, profile + '.json'), json(buildRequest(profile, source, archive.archiveSha256)));
       }
-      for (const name of ['docs/windows-connect/LIVE_ROLLOUT.md', 'docs/windows-connect/releases/SIGNED_WINDOWS_ROLLOUT.md',
+      for (const name of ['docs/releases/hosted-portal-rollout.md',
         'infra/backend-release/connect-hosted-rollout.md']) {
         await cp(path.join(root, name), path.join(temporary, name), { recursive: true });
       }

@@ -4,7 +4,7 @@ The customer API is the ECS Express service `packproof-v2-staging-api`. The work
 
 ## Release evidence
 
-1. Prepare and verify the exact-source release packet and retain the currently served portal using the [rollout guide](../../docs/windows-connect/LIVE_ROLLOUT.md). Complete its image retention and publication steps. The bridge and candidate must each have a published ECR digest. Save the CodeBuild IDs and logs for the builds that produced those published bytes, including images first staged privately.
+1. Prepare and verify the exact-source release packet and retain the currently served portal using the [rollout guide](../../docs/releases/hosted-portal-rollout.md). Complete its image retention and publication steps. The bridge and candidate must each have a published ECR digest. Save the CodeBuild IDs and logs for the builds that produced those published bytes, including images first staged privately.
 2. Create a private working directory outside the checkout. Requests contain private container settings and secret references. Each builder creates a new output file. Keep the registered task definitions, task ARNs, reviews, plans, receipts and RDS recovery-point identifier with the release record.
 
 ```sh
@@ -140,9 +140,9 @@ If the inspect review was captured before bridge promotion and its result is sta
 
 ## Open and verify the workspace
 
-Promote and verify the exact matching browser bundle using the [portal steps](../../docs/windows-connect/LIVE_ROLLOUT.md). Read the public manifest at `https://dvpmnwc27i8tw.cloudfront.net/release.json`. Capture a new full runtime observation and assemble `{enabled:true,plan,apiObservation,workerObservation,portalManifest}` using the **candidate** plan and published manifest. Run `workspace-switch` with the phase runner, execute its UpdateExpressGatewayService request and check the native rollout and all running digests again. This changes only the API's workspace flag. A newly approved 0.6.0 folder collector can create its integration account under this flag without enabling general typed imports or multi-source grants.
+Promote and verify the exact matching browser bundle using the [portal steps](../../docs/releases/hosted-portal-rollout.md). Read the public manifest at `https://dvpmnwc27i8tw.cloudfront.net/release.json`. Capture a new full runtime observation and assemble `{enabled:true,plan,apiObservation,workerObservation,portalManifest}` using the **candidate** plan and published manifest. Run `workspace-switch` with the phase runner, execute its UpdateExpressGatewayService request and check the native rollout and all running digests again. This changes only the API's workspace flag. A newly approved 0.6.0 folder collector can create its integration account under this flag without enabling general typed imports or multi-source grants.
 
-Complete the authenticated Windows-to-Proof journey, including export byte verification, using the [release acceptance procedure](../../docs/windows-connect/LIVE_ROLLOUT.md).
+Check the selected Proof and exported file hashes using the [release acceptance procedure](../../docs/releases/hosted-portal-rollout.md).
 
 ## Recover service
 

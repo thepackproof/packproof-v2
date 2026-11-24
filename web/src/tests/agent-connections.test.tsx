@@ -6,6 +6,68 @@ import { AgentApproval, AgentConnections } from '../records/AgentConnections';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const enrollment = { id: 'enroll-a', comparisonCode: 'ABC-123', deviceName: 'Warehouse PC', version: '0.1.0', state: 'pending', expiresAt: '2026-11-06T14:00:00Z', choices: { integrationAccounts: [{ id: 'source-a', name: 'Dispatch export' }], operators: [{ id: 'member-a', name: 'Collin', role: 'OWNER' }], locations: [{ id: 'site-a', name: 'Main warehouse' }] } };
 const installation = { id: 'agent-a', state: 'ready', deviceName: 'Warehouse PC', version: '0.1.0', configRevision: 4, configSha256: 'digest-a', config: { sourceName: 'Dispatch', mapping: { shipmentReference: 'Reference', itemTitle: 'Description', quantity: 'Quantity' }, timeZone: 'UTC' }, testImportId: 'import-a', verifiedImportId: null, health: { serviceOnline: true } };
+const proposal = { ...installation, pendingProposal: installation.config, pendingProposalSha256: 'a'.repeat(64) };
+
+it('shows one configuration submission, retains its receipt across refreshes, and clears it on a different installation', async () => {
+  vi.useFakeTimers();
+  let acknowledge!: () => void;
+  let current: typeof installation = proposal;
+  const request = vi.fn(async (_path: string, method?: string) => {
+    if (method === 'POST') await new Promise<void>(resolve => { acknowledge = resolve; });
+    return current;
+  });
+  const api = { recordsRequest: request } as unknown as PackProofApi;
+  const review = (id: string) => <AgentApproval api={api} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: id })} canManage/>;
+  const { rerender } = render(review(installation.id));
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('checkbox', { name: /Approve this exact configuration/ }));
+  const approve = screen.getByRole('button', { name: 'Approve configuration' });
+  fireEvent.click(approve);
+  fireEvent.click(approve);
+  expect(approve).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent('Saving your decision');
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+  await act(async () => { acknowledge(); });
+  const message = 'Configuration approved.';
+  expect(screen.getByText(message)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Configuration approved' })).toBeDisabled();
+  current = installation;
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(screen.queryByRole('button', { name: 'Configuration approved' })).not.toBeInTheDocument();
+  expect(screen.getByText(message)).toBeVisible();
+  current = { ...installation, id: 'other-computer' };
+  rerender(review(current.id));
+  await act(async () => {});
+  expect(screen.queryByText(message)).not.toBeInTheDocument();
+});
+
+it('keeps a configuration rejection beside the action through a successful authorization poll and retries with the original idempotency key', async () => {
+  vi.useFakeTimers();
+  let fail = true;
+  const request = vi.fn(async (_path: string, method?: string, _body?: unknown, _headers?: Record<string, string>) => {
+    if (method === 'POST' && fail) throw new Error('Server could not confirm this approval. Try again.');
+    return proposal;
+  });
+  render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ installationId: installation.id })} canManage/>);
+  await act(async () => {});
+  const approve = screen.getByRole('button', { name: 'Approve configuration' });
+  fireEvent.click(screen.getByRole('checkbox', { name: /Approve this exact configuration/ }));
+  await act(async () => { fireEvent.click(approve); });
+  expect(screen.getByRole('alert').parentElement).toContainElement(approve);
+  const readsBeforePoll = request.mock.calls.filter(([, method]) => !method).length;
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(request.mock.calls.filter(([, method]) => !method)).toHaveLength(readsBeforePoll + 1);
+  expect(screen.getByRole('alert')).toHaveTextContent('Server could not confirm this approval. Try again.');
+  fail = false;
+  await act(async () => { fireEvent.click(approve); });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByText('Configuration approved.')).toBeVisible();
+  const writes = request.mock.calls.filter(([, method]) => method === 'POST');
+  expect(writes).toHaveLength(2);
+  expect(writes[0][3]?.['Idempotency-Key']).toEqual(expect.any(String));
+  expect(writes[1]).toEqual(writes[0]);
+});
+
 it('keeps setup enrollment limited and requires the matching local comparison code and named choices', async () => {
   const request = vi.fn(async (_path: string, method?: string) => method === 'POST' ? { state: 'approved' } : enrollment);
   render(<AgentApproval api={{ recordsRequest: request } as unknown as PackProofApi} organizationId="org-a" environment="sandbox" params={new URLSearchParams({ enrollmentId: 'enroll-a' })} canManage/>);
@@ -118,7 +180,7 @@ it('enables separately approved source setup without a legacy CSV configuration 
   fireEvent.click(screen.getByRole('checkbox', { name: /I approve source setup on Source setup PC/ }));
   fireEvent.click(enable);
   await waitFor(() => expect(request).toHaveBeenCalledWith('/agent-installations/source-agent/actions?organizationId=org-a&environment=sandbox', 'POST', { organizationId: 'org-a', environment: 'sandbox', action: 'approve_source_setup', configRevision: 1, configSha256: 'setup-digest' }, expect.objectContaining({ 'Idempotency-Key': expect.any(String) })));
-  expect(await screen.findByText(/Source setup is enabled. Return to PackProof Connect/)).toBeVisible();
+  expect(await screen.findByText(/Source setup is enabled. This computer can now propose/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Enable source setup' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Approve automatic collection' })).not.toBeInTheDocument();
 });

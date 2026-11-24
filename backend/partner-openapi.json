@@ -36591,8 +36591,8 @@
     "/connect/enrollments": {
       "post": {
         "operationId": "post__connect_enrollments",
-        "summary": "Begin a short-lived Windows setup request",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Unauthenticated, IP-rate-limited start. Returns a private 32-byte polling secret to the service only; compare the separate code in the browser. Ten-minute expiry, minimum five-second polling, three pending intents per device label. No organization authority is issued by this call.",
+        "summary": "Begin a short-lived collector enrollment request",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Unauthenticated, IP-rate-limited start. Returns a private 32-byte polling secret to the service only; compare the separate code in the browser. Ten-minute expiry, minimum five-second polling, three pending intents per device label. No organization authority is issued by this call.",
         "x-packproof-generated-records": true,
         "security": [
           {}
@@ -37173,7 +37173,7 @@
       "get": {
         "operationId": "get__me_records_agent_enrollments__enrollmentId_",
         "summary": "Inspect the comparison code and eligible setup choices",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Current human administrator workspace required; returns eligible integration accounts, teammates and permitted locations, never polling secrets or service tokens.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Current human administrator workspace required; returns eligible integration accounts, teammates and permitted locations, never polling secrets or service tokens.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -37483,7 +37483,7 @@
       "post": {
         "operationId": "post__me_records_agent_enrollments__enrollmentId__decision",
         "summary": "Approve or deny setup-only installation authority",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication, exact comparison code and explicit source/operator/location binding required. Existing source installation must be explicitly revoked before replacement. Stable Idempotency-Key replays the original human decision; no secret is returned to the browser. Qualified 0.3.0 with typed intake, source subscriptions and multi-source capabilities may select createLocalSource:true with integrationAccountId:null; the existing integration-account command creates one scoped local file connection atomically. The resulting ready installation has no legacy CSV config or import grant; each typed source still needs separate human approval.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication, exact comparison code and explicit source/operator/location binding required. Existing source installation must be explicitly revoked before replacement. Stable Idempotency-Key replays the original human decision; no secret is returned to the browser. Qualified 0.3.0 with typed intake, source subscriptions and multi-source capabilities may select createLocalSource:true with integrationAccountId:null; the existing integration-account command creates one scoped local file connection atomically. The resulting ready installation has no legacy CSV config or import grant; each typed source still needs separate human approval.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -37822,7 +37822,7 @@
       "get": {
         "operationId": "get__me_records_agent_installations",
         "summary": "List this workspace’s restricted collection installations",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Up to 100 installations. Service online, folder scan, last observed export and server-confirmed imports are distinct; freshness remains unknown without a qualified upstream watermark.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Up to 100 installations. Service online, folder scan, last observed export and server-confirmed imports are distinct; freshness remains unknown without a qualified upstream watermark.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -38078,7 +38078,7 @@
       "get": {
         "operationId": "get__me_records_agent_installations__installationId_",
         "summary": "Review the exact installation proposal and optional test batch",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Optional importId displays current source/config-bound preview counts and original digest for deliberate whole-batch authorization. Whole original uploads preserve unmapped columns.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Optional importId displays current source/config-bound preview counts and original digest for deliberate whole-batch authorization. Whole original uploads preserve unmapped columns.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -38342,7 +38342,7 @@
       "post": {
         "operationId": "post__me_records_agent_installations__installationId__actions",
         "summary": "Approve exact configuration, test batch, activation or lifecycle action",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication plus stable Idempotency-Key. Configure requires current proposalSha256. authorize_test, activate and resume require exact configRevision/configSha256. abandon_preview explicitly stops an uncommitted preview without deleting its original or rows, allowing later authorized re-preview after rotation. Test authorization binds a completely valid whole preview; activation requires terminal success and an existing canonical record. Reconfiguration invalidates verification. Pause permits already accepted server work to finish; revoke prevents worker writes. Replacement requires revoke and fresh enrollment. approve_source_setup is an explicit owner/admin action for an acknowledged older 0.3.0 setup installation with all three typed setup capabilities enabled; exact current configRevision and configSha256 (including null) are required. It enables source proposal setup without a legacy CSV config, shipment, quantity or Proof and grants no source upload authority.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Recent authentication plus stable Idempotency-Key. Configure requires current proposalSha256. authorize_test, activate and resume require exact configRevision/configSha256. abandon_preview explicitly stops an uncommitted preview without deleting its original or rows, allowing later authorized re-preview after rotation. Test authorization binds a completely valid whole preview; activation requires terminal success and an existing canonical record. Reconfiguration invalidates verification. Pause permits already accepted server work to finish; revoke prevents worker writes. Replacement requires revoke and fresh enrollment. approve_source_setup is an explicit owner/admin action for an acknowledged older 0.3.0 setup installation with all three typed setup capabilities enabled; exact current configRevision and configSha256 (including null) are required. It enables source proposal setup without a legacy CSV config, shipment, quantity or Proof and grants no source upload authority.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -38653,7 +38653,7 @@
       "get": {
         "operationId": "get__v1_partner_agent_config",
         "summary": "Read current approved collection policy",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -38895,7 +38895,7 @@
       "post": {
         "operationId": "post__v1_partner_agent_config_proposals",
         "summary": "Stage a configuration for human review",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -39164,7 +39164,7 @@
       "post": {
         "operationId": "post__v1_partner_agent_heartbeat",
         "summary": "Acknowledge protected credentials and report bounded local observations",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -39483,7 +39483,7 @@
       "post": {
         "operationId": "post__v1_partner_agent_credential_renewals",
         "summary": "Renew the same restricted authority after draining originating receipts",
-        "description": "One Windows 11 x64 local NTFS immutable CSV folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
+        "description": "The legacy collector profile accepts immutable CSV files from one approved local NTFS folder. Current OWNER/ADMIN approval binds exact source/config revision. Setup enrollment never authorizes commit or continuous collection. No public qualification or live connector acceptance is implied. Restricted installation credential only. New proposals cannot activate or widen scope. Credential-bound receipts stay with the originating token. Renewal begins seven days before expiry and refuses pending receipts; one encrypted successor replay has a ten-minute protected persistence/acknowledgement window. If protected local persistence fails, the predecessor can cancelCredentialId for its exact unacknowledged successor using a separate stable cancellation key; repeat cancellation is idempotent and never revokes the predecessor. Heartbeat acknowledgement is idempotent after lost responses. No client status can manufacture completed imports.",
         "x-packproof-generated-records": true,
         "security": [
           {
@@ -63001,7 +63001,7 @@
       "PACKPROOF_SOURCE_DISPOSITION_ENABLED",
       "PACKPROOF_SOURCE_BACKFILL_JOBS_ENABLED"
     ],
-    "externalGate": "G0 source-owner/security/usability/load/restore/Windows qualification remains required. Candidate contracts are not a production activation claim."
+    "externalGate": "G0 qualification covers the source owner, security, usability, load, restore and the collecting client on its target platform. Candidate contracts are not a production activation claim."
   },
   "x-packproof-order-workspace": {
     "version": "packproof.order-workspace/v1",

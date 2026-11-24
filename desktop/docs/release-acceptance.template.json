@@ -1,14 +1,10 @@
 {
   "schemaVersion": 1,
+  "platforms": "mac",
   "sourceCommit": "",
   "approvedBy": "",
   "testedAt": "",
   "tests": [
-    {
-      "id": "windows-install-upgrade-uninstall",
-      "status": "pending",
-      "evidence": ""
-    },
     {
       "id": "macos-intel-install-upgrade",
       "status": "pending",

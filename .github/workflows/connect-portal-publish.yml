@@ -1,0 +1,114 @@
+name: Publish verified Connect portal
+on:
+  push:
+    branches: [main]
+    paths: ['infra/connect-rollout/portal-promotion.json']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-connect-portal-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read the reviewed release request
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          import assert from 'node:assert/strict';
+          const request = JSON.parse(readFileSync('infra/connect-rollout/portal-promotion.json', 'utf8'));
+          for (const sha of [request.portalCommit, request.apiCommit]) {
+            assert.match(sha, /^[a-f0-9]{40}$/);
+            execFileSync('git', ['merge-base', '--is-ancestor', sha, process.env.GITHUB_SHA]);
+          }
+          assert.match(request.previousManifestSha256, /^[a-f0-9]{64}$/);
+          assert.match(request.apiImage, /^784514617543\.dkr\.ecr\.us-east-1\.amazonaws\.com\/[a-z0-9/._-]+@sha256:[a-f0-9]{64}$/);
+          appendFileSync(process.env.GITHUB_ENV, [
+            'PORTAL_COMMIT=' + request.portalCommit,
+            'API_COMMIT=' + request.apiCommit,
+            'API_IMAGE=' + request.apiImage,
+            'PREVIOUS_MANIFEST=' + request.previousManifestSha256, ''
+          ].join('\n'));
+          JS
+          git checkout --detach "$(node -p 'require("./infra/connect-rollout/portal-promotion.json").portalCommit')"
+      - name: Build the production portal from its exact source
+        run: |
+          npm ci --prefix mobile --ignore-scripts --no-audit --no-fund
+          npm ci --prefix web --no-audit --no-fund
+          node --test infra/connect-portal-release.test.mjs infra/connect-portal-runtime.test.mjs
+          node infra/connect-portal-release.mjs build
+          test "$(node -p 'require("./web/dist/release.json").commit')" = "$PORTAL_COMMIT"
+      - name: Preserve and verify the currently served portal
+        id: snapshot
+        run: |
+          node infra/connect-portal-release.mjs snapshot "$RUNNER_TEMP/portal-previous"
+          if cmp -s "$RUNNER_TEMP/portal-previous/release.json" web/dist/release.json; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s  %s\n' "$PREVIOUS_MANIFEST" "$RUNNER_TEMP/portal-previous/release.json" | sha256sum --check
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+          tar -czf "$RUNNER_TEMP/previous-portal.tgz" -C "$RUNNER_TEMP/portal-previous" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previous-connect-portal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/previous-portal.tgz
+          retention-days: 30
+          if-no-files-found: error
+      - name: Assume the existing deploy role for the portal origin
+        if: steps.snapshot.outputs.current != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::784514617543:role/PackProofGitHubDeploy
+          aws-region: us-east-1
+          allowed-account-ids: '784514617543'
+          role-session-name: connect-portal-${{ github.run_id }}
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[
+            {"Effect":"Allow","Action":["s3:ListBucket"],"Resource":"arn:aws:s3:::packproof-v2-staging-web-784514617543"},
+            {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject"],"Resource":"arn:aws:s3:::packproof-v2-staging-web-784514617543/*"},
+            {"Effect":"Allow","Action":["cloudfront:GetDistribution","cloudfront:CreateInvalidation"],"Resource":"arn:aws:cloudfront::784514617543:distribution/E1TWYI3YRLSHTD"}]}
+      - name: Publish compatible assets and request CDN refresh
+        if: steps.snapshot.outputs.current != 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          node infra/connect-portal-release.mjs promote-portal "$RUNNER_TEMP/portal-previous" web/dist "$API_COMMIT" "$API_IMAGE" | tee "$RUNNER_TEMP/promotion.txt"
+      - name: Verify the API and the files served by the public portal
+        shell: bash
+        run: |
+          for attempt in {1..24}; do
+            if node infra/connect-portal-release.mjs verify-portal web/dist "$API_COMMIT" "$API_IMAGE"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 24 ]; then sleep 10; fi
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.snapshot.outputs.current == 'false'
+        with:
+          name: connect-portal-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/promotion.txt
+          if-no-files-found: ignore
+          retention-days: 30

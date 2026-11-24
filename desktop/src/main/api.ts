@@ -34,19 +34,6 @@ export class DesktopApi {
   private rndOperation<K extends RndOperationId>(operation:K,input:RndInput<K>):Promise<RndOutput<K>>{this.requireResearch();const request=buildRndRequest(operation,input);return this.request(request.path,{method:request.method as RequestOptions['method'],body:request.body,idempotencyKey:request.headers['Idempotency-Key']});}
   private readonly fetcher: typeof fetch;
   constructor(private readonly options: { config: DesktopConfig; getToken: (forceRefresh?: boolean) => Promise<string | null>; getAccountId: () => string | null; fetch?: typeof fetch }) { this.fetcher = options.fetch ?? fetch; }
-  facilityAccess(scope: { installationId: string; organizationId: string; environment: string }) {
-    const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });
-    return this.request<{canConfigure:boolean; organizationId:string; environment:string; locationId:string|null; userId:string}>(
-      '/me/records/agent-installations/'+id(scope.installationId)+'/workspace-access?'+query);
-  }
-  facilitySuggestions(scope: { installationId: string; organizationId: string; environment: string }, input: unknown) {
-    const query = new URLSearchParams({ organizationId: scope.organizationId, environment: scope.environment });
-    return this.request('/me/records/agent-installations/'+id(scope.installationId)+'/facility-setup/suggestions/v1?'+query,{ method:'POST',body:input });
-  }
-  async reviewFacilitySuggestion(scope: { installationId: string; organizationId: string; environment: string }, input:unknown) {
-    const query = new URLSearchParams({organizationId:scope.organizationId,environment:scope.environment});
-    await this.response('/me/records/agent-installations/'+id(scope.installationId)+'/facility-setup/reviews/v1?'+query,{method:'POST',body:input});
-  }
   assertAccount(accountId: string): void {
     if (!accountId || this.options.getAccountId() !== accountId) throw new DesktopApiError('SESSION_CHANGED', 'Sign in to the account that recorded this evidence.', 401);
   }

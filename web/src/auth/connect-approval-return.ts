@@ -53,6 +53,12 @@ export function connectApprovalReturnPath(href: string): string | null {
     }
     if (action !== null && (action !== 'resume' || !installation)) return null;
     if (action === 'resume') kept.set('action', 'resume');
+    const intent = url.searchParams.get('intent');
+    if (intent !== null) {
+      if (intent !== 'facility' || session || action || subscription || importId) return null;
+      if (installation && (!organization || !environment)) return null;
+      kept.set('intent', 'facility');
+    }
     return '/app/records/connect/approve?' + kept.toString();
   } catch { return null; }
 }

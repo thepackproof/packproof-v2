@@ -21,16 +21,11 @@ async function main() {
   const release = checkReleaseEnvironment({ checkRuntime: true });
   const signed = release.channel !== 'development';
   const output = path.resolve(release.outputDirectory);
-  const files = fs.readdirSync(output).filter(file => /\.(exe|dmg|zip|pkg)$/.test(file) && file.startsWith(release.artifactPrefix));
-  const expected = release.platform === 'win32' ? ['exe'] : ['dmg', 'zip', ...(release.includePkg ? ['pkg'] : [])];
+  const files = fs.readdirSync(output).filter(file => /\.(dmg|zip|pkg)$/.test(file) && file.startsWith(release.artifactPrefix));
+  const expected = ['dmg', 'zip', ...(release.includePkg ? ['pkg'] : [])];
   for (const ext of expected) if (!files.some(file => file.endsWith(`.${ext}`))) throw new Error(`Missing ${ext} release artifact`);
   const checks = [];
-  if (signed && release.platform === 'win32') {
-    const binaries = [path.join(output, 'win-unpacked', `${release.productName}.exe`), ...files.filter(file => file.endsWith('.exe')).map(file => path.join(output, file))];
-    for (const file of binaries) command('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(__dirname, 'verify-windows-signature.ps1'), '-Artifact', file, '-Publisher', process.env.WINDOWS_PUBLISHER_NAME]);
-    checks.push('authenticode-valid', 'publisher-matches', 'timestamp-valid');
-  }
-  if (signed && release.platform === 'darwin') {
+  if (signed) {
     const appFolder = fs.readdirSync(output).find(name => name === (release.arch === 'arm64' ? 'mac-arm64' : 'mac'));
     if (!appFolder) throw new Error('Packaged macOS application is missing');
     const app = path.join(output, appFolder, `${release.productName}.app`);
@@ -52,10 +47,10 @@ async function main() {
     checks.push('codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted');
   }
   // Aliases are convenient download names. Updater metadata continues using immutable versioned names.
-  for (const ext of ['exe', 'dmg', 'pkg']) {
+  for (const ext of ['dmg', 'pkg']) {
     const file = files.find(name => name.endsWith(`.${ext}`));
     if (!file) continue;
-    const alias = `${release.artifactPrefix}${ext === 'exe' ? '-Setup' : ''}.${ext}`;
+    const alias = `${release.artifactPrefix}.${ext}`;
     if (file !== alias) { fs.copyFileSync(path.join(output, file), path.join(output, alias)); files.push(alias); }
   }
   const artifacts = [];
@@ -68,7 +63,7 @@ async function main() {
   };
   fs.writeFileSync(path.join(output, 'release-evidence.json'), `${JSON.stringify(report, null, 2)}\n`);
   fs.writeFileSync(path.join(output, 'SHA256SUMS'), artifacts.map(item => `${item.sha256}  ${item.file}\n`).join(''));
-  if (!signed) fs.writeFileSync(path.join(output, 'DEVELOPMENT-BUILD.txt'), 'Development build without a verified publisher. Windows is unsigned; macOS uses an ad-hoc signature and is not notarized. Separate application data and protocol. Not approved for production evidence capture or customer distribution.\n');
+  if (!signed) fs.writeFileSync(path.join(output, 'DEVELOPMENT-BUILD.txt'), 'Development build without a verified publisher. macOS uses an ad-hoc signature and is not notarized. Separate application data and protocol. Not approved for production evidence capture or customer distribution.\n');
   console.log(`Verified ${artifacts.length} desktop artifacts for ${release.channel}/${release.platform}/${release.arch}.`);
 }
 

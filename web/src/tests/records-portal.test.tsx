@@ -19,24 +19,24 @@ const list = { records: [record], nextCursor: null, counts: { total: 1, open: 1,
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/app/records'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 function portal(api: PackProofApi, href = '/app/records?organizationId=org-a&environment=live') { return <RecordsPortal api={api} session={session} href={href} onGo={vi.fn()} onSignOut={vi.fn()}/>; }
-it('loads only Logistics navigation and scoped attention panels in the signed-in desktop window', async () => {
-  vi.spyOn(navigator,'userAgent','get').mockReturnValue('PackProofLogistics/1');
-  const href='/app/needs-attention?organizationId=org-a&environment=live&locationId=site-a&desktopUser=operator';
-  window.history.replaceState({},'',href);
-  const paths:string[]=[];
-  const request=async (path:string)=>{
-    paths.push(path);
-    if(path.startsWith('/context?')) return {...context,capabilities:{...context.capabilities,orderProofs:true}};
-    if(path.startsWith('/order-source-health?')) return {incidents:[],overdue:[],limited:false};
-    if(path.startsWith('/order-attention?')) return {items:[],hasMore:false};
-    throw Error('Unexpected hosted request');
-  };
-  render(portal({recordsRequest:request} as unknown as PackProofApi,href));
-  expect(await screen.findByText('No reports are waiting for a reference.')).toBeVisible();
-  expect(screen.getByRole('navigation',{name:'Logistics workspace'})).toBeVisible();
-  expect(screen.getByRole('link',{name:'Orders'})).toHaveAttribute('href',expect.stringContaining('locationId=site-a'));
-  expect(screen.queryByRole('link',{name:'Connections'})).toBeNull();
-  expect(paths.map(p=>p.split('?')[0]).sort()).toEqual(['/context','/order-attention','/order-source-health']);
+it.each(['', '&intent=facility'])('keeps an installed sandbox computer connected when its authorized workspace has no facilities (%s)', async intent => {
+  const organization = { ...organizations[1], role: 'OWNER', locations: [] };
+  const installation = { id: 'agent-a', version: '0.7.0', deviceName: 'Warehouse PC', state: 'setup', locationId: null,
+    configRevision: 0, pendingProposalSha256: 'a'.repeat(64), pendingProposal: { sourceContract: {
+      schema: 'packproof.scheduled-csv/v2', expectedHeaders: ['Reference'], historyPolicy: { observedAt: '2020-01-01T00:00:00Z', initialFileName: 'orders.csv' },
+    } } };
+  const request = vi.fn(async (path: string, method?: string) => {
+    if (method && method !== 'GET') throw new Error('Opening this review must be read-only');
+    if (path.startsWith('/context?')) return { ...context, organizations: [organization], selectedOrganizationId: organization.id };
+    if (path === '/agent-installations/agent-a?organizationId=org-b&environment=sandbox') return installation;
+    throw new Error('Unexpected review path');
+  });
+  const href = '/app/records/connect/approve?installationId=agent-a&organizationId=org-b&environment=sandbox' + intent;
+  render(portal({ recordsRequest: request } as unknown as PackProofApi, href));
+  expect(await screen.findByRole('heading', { name: 'Renew your export file review' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Make your facility available' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Disconnect and continue' })).not.toBeInTheDocument();
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(0);
 });
 it('opens the Connect approval locator and retains it while choosing the workspace', async () => {
   const enrollment = { id: 'enroll-a', comparisonCode: 'ABC-123', deviceName: 'Collection PC', version: '0.1.0', state: 'pending', expiresAt: '2026-11-06T14:00:00Z', choices: { integrationAccounts: [], operators: [], locations: [] } };
