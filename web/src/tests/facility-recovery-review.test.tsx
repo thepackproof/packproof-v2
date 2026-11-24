@@ -39,7 +39,7 @@ it.each([[], null] as const)('keeps current service access when available destin
   open(legacy, request, true, locations ? [...locations] : null);
   expect(await screen.findByRole('heading', { name: 'Make your facility available' })).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Renew your export file review' })).toBeVisible();
-  expect(screen.getByText('Request a fresh file review')).toBeVisible();
+  expect(screen.getByText(/request a fresh file review from the source computer/i)).toBeVisible();
   expect(screen.getByText(/your current connection is still in place/i)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Disconnect and continue' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /view the separate file/i }));
@@ -48,7 +48,7 @@ it.each([[], null] as const)('keeps current service access when available destin
   expect(request).toHaveBeenCalledTimes(1);
 });
 
-it('uses the existing scoped revoke only after consent and returns the user to Windows after acknowledgement', async () => {
+it('uses the existing scoped revoke only after consent and confirms service access has stopped after acknowledgement', async () => {
   let revoked = false;
   const request = vi.fn(async (_path: string, method?: string) => {
     if (method === 'POST') revoked = true;
@@ -58,8 +58,8 @@ it('uses the existing scoped revoke only after consent and returns the user to W
   const button = await screen.findByRole('button', { name: 'Disconnect and continue' });
   fireEvent.click(screen.getByRole('checkbox', { name: /disconnect the current service access for warehouse pc/i }));
   fireEvent.click(button);
-  await screen.findByRole('heading', { name: 'Continue in PackProof on Windows' });
-  expect(screen.getByText('Preserve work and reconnect')).toBeVisible();
+  await screen.findByRole('heading', { name: 'Service access revoked' });
+  expect(screen.getByText(/preserve pending work on the source computer/i)).toBeVisible();
   expect(request).toHaveBeenCalledWith('/agent-installations/agent-a/actions?organizationId=org-a&environment=sandbox', 'POST',
     { organizationId: 'org-a', environment: 'sandbox', action: 'revoke' }, { 'Idempotency-Key': expect.any(String) });
 });

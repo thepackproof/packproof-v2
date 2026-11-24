@@ -79,7 +79,7 @@ createRoot(document.getElementById('root')!).render(<ThemeProvider>
     </nav></aside>
     <div className="records-workspace"><header className="records-topbar"><strong>Synthetic component QA — no live data</strong></header>
       <main className="records-main"><header className="records-page-heading"><div><span className="records-eyebrow">SYNTHETIC SOURCE REVIEW</span>
-        <h1>Order snapshot export</h1><p>Actual review components and production styles. This test does not establish hosted or installed Windows acceptance.</p>
+        <h1>Order snapshot export</h1><p>Actual review components and production styles. The fixture uses local sample data.</p>
       </div></header><section className="records-panel source-subscription-approval">
         {scenario === 'backfill' ? <SourceBackfills api={api} source={source} organizationId="org-a" environment="sandbox" requestedJobId={job.id} requestedManifest={job.manifestSha256}/>
           : <SourceCompletenessPolicy api={api} source={source} organizationId="org-a" environment="sandbox" onSaved={() => {}}/>}

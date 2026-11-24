@@ -15,8 +15,8 @@
 ## 1. Executive decisions
 
 1. **Extend, do not rebuild.** Retain the existing canonical Proof ID and records API; PostgreSQL, S3, worker/outbox infrastructure, organization permissions, existing source-artifact and source-event flows, and the records portal.
-2. **Continue Windows Connect, not a second installer.** `connect-windows/` and `docs/windows-connect/` already contain an implemented unattended local-service and setup foundation. It is an **internal candidate**, with Windows 11, signed distribution, production deployment, and approved-source acceptance still gated. The new program must close those gates and reuse its service, queue, encryption, native packaging, and UI.
-3. **Qualify one real source first.** The first supported release is **Scheduled CSV Export Folder v1** on Windows 11 x64, backed by the existing service-import API. Obtain an explicit named exporter/version and customer-approved sample before claiming compatibility. Optional second-source events and existing files are admitted only after their exact authority and matching contracts are qualified.
+2. **Use the service-import API for recurring intake.** Bind the approved source and credential to the organization, environment and location.
+3. **Qualify one real source first.** The first supported release is **Scheduled CSV Export Folder v1**, backed by the existing service-import API. Obtain an explicit named exporter/version and customer-approved sample before claiming compatibility. Optional second-source events and existing files are admitted only after their exact authority and matching contracts are qualified.
 4. **No magical access to all warehouse data.** PackProof can ingest the information a customer is authorized to expose through supported exports, APIs, webhooks, or media feeds. It must show unavailable sources and missing coverage, never imply a complete view when sources are absent.
 5. **Correctness beats forced automation.** Deterministic identities and approved crosswalks can link data automatically. Ambiguous identifiers must be quarantined for exception review; never silently link to the most plausible shipment.
 6. **A Proof is one canonical record, not a new data silo.** Operational record projections may update as information arrives; original files and finalized manifests remain immutable. Later updates do not alter the scope of an earlier signature.
@@ -33,11 +33,10 @@
 | Continuous source events | Durable source observations; identity ledger; leases, retries, conflicts; requires an existing `proofId` | Add a safe **source reference -> Proof ID resolver** and cross-system correlation workflow, without bypassing bindings |
 | Operational records | Shipment, stop, package, pallet, item, return entities; timelines; source artifacts; requirements/issues; operational revisions | Add deterministic, idempotent assembly from normalized events and authoritative source relationships |
 | Browser dashboard | Authenticated records portal, search, detail, evidence, issue and source-management views | Show automation health, freshness, unmapped events, source lineage, and actionable explanations; validate with real data |
-| Windows Connect | Unattended .NET service, encrypted spool, local folder source, setup UI, pause/revoke/diagnostics, installer candidate | Deploy backend/portal changes, qualify signed Windows 11 install/upgrade/reboot and actual customer exporter |
 | Cryptographic evidence | Server-side digests, source-original retention, immutable/finalized capture boundaries, KMS signing | Distinguish ongoing unsigned operational views from already finalized/signed selections; complete any protected-profile gate before marketing the stronger claim |
-| Production release | Working existing customer API and live website; source tests and internal Windows artifacts | The new Windows Connect API/portal changes are not yet deployed; controlled migration and acceptance remain outstanding |
+| Production release | Existing customer API and website | Verify the deployed API and portal against the migration inventory and approved source |
 
-**Source evidence:** `docs/windows-connect/IMPLEMENTATION_STATUS.md`, `docs/windows-connect/BLOCKERS.md`, `docs/windows-connect/DEVELOPMENT_PLAN.md`, `docs/api-portal-v1/QUICKSTART.md`, `docs/api-portal-v1/RECORDS_CONTRACT.md`, `backend/src/records/ingestions.ts`, `backend/src/records/connections.ts` (all in the repository linked in §13). A green source test is not a customer-ready connection.
+**Source evidence:** `docs/api-portal-v1/QUICKSTART.md`, `docs/api-portal-v1/RECORDS_CONTRACT.md`, `backend/src/records/ingestions.ts`, `backend/src/records/connections.ts` (all in the repository linked in §13). A green source test is not a customer-ready connection.
 
 ---
 
@@ -68,13 +67,13 @@ When data cannot be safely matched, the source stops updating, credentials expir
 | Pipeline stage | Responsibility |
 |---|---|
 | Warehouse sources | Approved WMS/ERP/TMS exports, authorized event feeds, original documents or media |
-| Durable intake | Existing Windows Connect or service connector; original files, hashes, source identity, receipts and retries |
+| Durable intake | Authorized service connector; original files, hashes, source identity, receipts and retries |
 | Source normalization | Map approved source fields, timestamps, locations, quantities and provenance using a versioned rule |
 | Reference resolution | Match against explicit source bindings and approved crosswalks; quarantine ambiguous items |
 | Canonical PackProof Proof | Existing Proof ID and operational records; append entities, timeline, original artifacts and issues |
 | Customer experience | Existing records portal, health/recovery views, authorized exports and shares |
 
-**Do not introduce:** another canonical Proof table, an independent evidence store, a second customer dashboard, a new identity provider, an event-bus replacement, a general-purpose rules engine, or a standalone Windows-hosted PackProof API.
+**Do not introduce:** another canonical Proof table, an independent evidence store, a second customer dashboard, a new identity provider, an event-bus replacement, a general-purpose rules engine, or a standalone on-premises PackProof API.
 
 ### Internal normalized source envelope (planned contract; not an already published API)
 
@@ -145,10 +144,9 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 **Goal:** prevent rework and identify the actual deployable state.
 
 **Implementation actions**
-- Read `AGENTS.md`, `docs/windows-connect/AGENT_START_HERE.md`, `IMPLEMENTATION_STATUS.md`, `BLOCKERS.md`, `EVIDENCE.json`, and the records contracts at the exact current main SHA.
-- Inventory only the touched surfaces: Windows service/installer, service CSV import, event ingestion, source bindings, source artifacts, records projection, portal, scheduler, infrastructure migrations and grants.
+- Read `AGENTS.md`, the implementation status and evidence in this directory, and the records contracts at the exact current main SHA.
+- Inventory only the touched surfaces: service CSV import, event ingestion, source bindings, source artifacts, records projection, portal, scheduler, infrastructure migrations and grants.
 - Record current commit, CI results, API image, database migration/role eligibility, source/version owner, enabled organization cohort, existing setup artifact and whether a signed build is available.
-- Reconcile the Windows Connect G1-G4 blockers without duplicating implemented W01-W10 work.
 - Define the first pilot's source export schema, mapping owner, time zone, location identities, event cadence, evidence types, retention and source coverage. Explicitly mark unprovided external prerequisites.
 
 **Exit:** one baseline and dependency ledger; no guessed deployment state; scope limited to one qualified source and defined additional data feeds.
@@ -157,7 +155,7 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 
 **Goal:** approved source files become durable, exactly-attributed import outcomes without manual PackProof actions.
 
-**Reuse:** `connect-windows/service/`, `connect-windows/ui/`, `backend/src/records/partner-imports.ts`, `agent-enrollments.ts`, `agent-restrictions.ts`, existing partner import endpoints, S3 original preservation.
+**Reuse:** `backend/src/records/partner-imports.ts`, `agent-enrollments.ts`, `agent-restrictions.ts`, existing partner import endpoints, S3 original preservation.
 
 **Implementation actions**
 - Qualify the actual exporter/edition: UTF-8, header names, file naming, write-completion signal, cadence, source IDs, date/time zone, max size/rows, and duplicate/rewrite behavior.
@@ -166,7 +164,7 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 - Maintain source checkpoints that survive restart, logoff, reboot, failed network, lost response, renewal, and service replacement. Resume using stable command IDs, not a new import per retry.
 - Record `last folder checked`, `last export detected`, `last accepted import`, and `last receipt reconciled` separately.
 
-**Exit:** one actual approved exporter -> running Windows service -> hosted sandbox -> correct canonical records, including restart and lost-response tests. Mock HTTP tests are necessary but not sufficient.
+**Exit:** one actual approved exporter -> authorized connector -> hosted sandbox -> correct canonical records, including restart and lost-response tests. Mock HTTP tests are necessary but not sufficient.
 
 ### WP02 — Versioned normalization and source identity
 
@@ -187,7 +185,7 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 
 **Goal:** data from multiple authorized systems consistently attaches to the right Proof.
 
-**Likely touchpoints:** new small resolver module under `backend/src/records/` plus existing binding, record access, ingestion/outbox code. Avoid placing complex matching in the Windows worker or browser.
+**Likely touchpoints:** new small resolver module under `backend/src/records/` plus existing binding, record access, ingestion/outbox code. Avoid placing complex matching in the source connector or browser.
 
 **Implementation actions**
 - Build a pure matching function with auditable rule precedence and a bounded database transaction applying the result.
@@ -232,7 +230,7 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 
 **Goal:** the system continues without human babysitting, and tells the truth when it cannot.
 
-**Reuse:** existing Windows encrypted spool, import receipts, `backend/src/records/connections.ts`, `ingestions.ts`, `operations/runtime-jobs.ts`, event/outbox, leased workers and existing support tools.
+**Reuse:** existing import receipts, `backend/src/records/connections.ts`, `ingestions.ts`, `operations/runtime-jobs.ts`, event/outbox, leased workers and existing support tools.
 
 **Implementation actions**
 - Define a per-source cadence and honest freshness watermark. A file-source heartbeat cannot be “up to date” merely because the folder was scanned if no fresh expected export was received.
@@ -248,10 +246,10 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 
 **Goal:** setup is doable by a nondeveloper and Proofs are immediately useful to managers.
 
-**Reuse:** existing Connect setup and `web/src/records/RecordsPortal.tsx`, `AgentConnections.tsx`, `ConnectionActions.tsx`, `ImportWizard.tsx`, `SourceArtifacts.tsx`, portal models and styles.
+**Reuse:** `web/src/records/RecordsPortal.tsx`, `AgentConnections.tsx`, `ConnectionActions.tsx`, `ImportWizard.tsx`, `SourceArtifacts.tsx`, portal models and styles.
 
 **Implementation actions**
-- Reuse the current Connect wizard. Add only missing steps: name/version verification, mapping preview, backfill cutoff, first record confirmation, continuous sync enablement and status troubleshooting.
+- Verify the source name and version, mapping preview, backfill cutoff, first record, recurring collection approval and source status.
 - Replace simulated setup success with server-side receipts and an actual dashboard link; state which scopes, sites and data types are enabled.
 - Show a source health summary: service running, folder accessible, last export seen, last accepted result, last reconciled watermark and pending errors as **different fields**.
 - Make Proof detail chronological, source-attributed and fast to scan: shipment summary, entities, expected-vs-observed, time-line, evidence, exceptions, source coverage and confidence/assurance notes.
@@ -267,9 +265,8 @@ An automatically assembled **operational Proof view** may continue updating. Exi
 **Implementation actions**
 - Enforce required CI on protected main/release branches; require review and exact commit test results, including role/migration and independent security checks.
 - Verify the existing migration-108 compatibility and distinct API/worker role authorization with a restored nonproduction database. No historical migration edits, production role shortcuts or synthetic reset of customer data.
-- Confirm Windows signed candidate with publisher/timestamp verification and Windows 11 x64 install/upgrade/repair/uninstall/reboot/UAC, local service identity, counterfeit-peer and low-privilege checks.
 - Validate storage, KMS, exact-original versioning, customer source secrets, revocation, least privilege, logs without secrets, retention and actual restore paths.
-- Capture API image digest, database/role receipt, website version, Windows build hash, tested source/version and deployment cohort in a single release manifest.
+- Capture API image digest, database/role receipt, website version, tested source/version and deployment cohort in a single release manifest.
 - Keep the separate mobile secure-token-storage correction as a required security remediation before broadly promoting workflows dependent on those mobile credentials; do not let unrelated UI refactors expand this project.
 
 **Exit:** all relevant automated, hosted, native and security release gates pass on the exact candidate; deployment history is independently reproducible; no new capture/assurance claim is implied.
@@ -336,8 +333,8 @@ Targets below are **go/no-go criteria for the first named supported connector**,
 
 1. Duplicate CSV export or the same file submitted twice.
 2. Lost acknowledgment after server commit; service retries with same idempotency key.
-3. Windows service killed during file read, spool write, upload, and server polling.
-4. Windows logoff/reboot; credentials rotated or revoked; expired delegated authority.
+3. Source connector interrupted during file read, spool write, upload, and server polling.
+4. Source host reboot; credentials rotated or revoked; expired delegated authority.
 5. Source ID reused at another location; source record with no location; cross-tenant ID collision.
 6. Split shipment, merged order, wrong tracking number and changed shipping label.
 7. Package/video arriving before the shipment record exists; later replay resolves it safely.
@@ -350,7 +347,7 @@ Targets below are **go/no-go criteria for the first named supported connector**,
 14. Malicious or accidental source secrets, external object keys or private URLs in metadata.
 15. Attempted auto-review, auto-waiver, personal attestation or forged source-origin assertion from a service principal.
 
-For each test, store input fixture, exact revision, expected state transitions, actual receipts, relevant SQL/query evidence and whether the test ran in a local fixture, hosted test, actual Windows device, or customer pilot. A simulated test cannot fulfill a physical-machine or provider-qualification gate.
+For each test, store input fixture, exact revision, expected state transitions, actual receipts, relevant SQL/query evidence and whether the test ran in a local fixture, hosted test, source host, or customer pilot. A simulated test cannot fulfill a physical-machine or provider-qualification gate.
 
 ---
 
@@ -362,13 +359,12 @@ For each test, store input fixture, exact revision, expected state transitions, 
 
 **D2 — Deterministic assembly.** Multi-event, split-shipment, correction, artifact and out-of-order fixtures produce exactly the correct operational record. Ambiguities are actionable and never silently linked.
 
-**D3 — Unattended resilience.** Actual Windows 11 x64 release candidate, interruption tests, health/reconciliation, access revocation, accessibility and signed installer pass.
+**D3 — Unattended resilience.** Verify recovery after interruptions, health and reconciliation, access revocation and accessibility against the supported source.
 
 **D4 — Named source acceptance.** Customer-approved exporter/version and original data reconcile against source, including evidence permissions and honest coverage. Five first-time users complete the onboarding study.
 
-**D5 — Staged production canary.** Reviewed migration/roles, published immutable API image and signed Windows build, exact deployment cohort, current-source reconciling records, monitoring and rollback; no generalized launch before D0-D4.
+**D5 — Staged production canary.** Reviewed migration/roles, published immutable API image, exact deployment cohort, current-source reconciling records, monitoring and rollback; no generalized launch before D0-D4.
 
-**Do not relabel existing Windows Connect G0–G4 gates as passed.** Map their receipts into D1/D3/D4/D5, and leave existing blockers open until their required evidence actually exists.
 
 ---
 
@@ -381,7 +377,6 @@ These prerequisites **do not prevent independent source implementation**, but th
 - Representative originals: CSV exports, a cross-system identity sample, and any opted-in documents/photos/videos. Synthetic fixtures can support development but not customer acceptance.
 - Source fields/cadence: stable shipment/package IDs, location mapping, event timestamps with time zone, update/correction behavior, and how completed exports are signaled.
 - Approved nonproduction organization, administrator/role access and reviewed migration/privilege target.
-- An accessible Windows 11 x64 test device and authorized signing/release identity.
 - Customer privacy, recording permissions, retention expectations, network/security approval and pilot success criteria.
 
 If one of these remains unavailable, mark the exact gate blocked, continue independent work, and do not fabricate credentials, access, source compatibility or acceptance receipts.
@@ -390,22 +385,22 @@ If one of these remains unavailable, mark the exact gate blocked, continue indep
 
 ## 10. Coding-agent execution rules (prevent wasted work)
 
-1. **Read this plan and the existing Connect status first.** Do not rerun a repository-wide 2,000+ file audit or rewrite another Windows setup plan.
+1. **Read this plan and the existing implementation status first.** Verify the specific paths and dependencies affected by the change.
 2. **Use one integration vertical slice.** No universal WMS adapter, connector marketplace, arbitrary SQL access, SMB/UNC crawler, NVR reverse engineering, robotics work, AI event inference, or open-ended vendor research in the first release.
-3. **No platform replacement.** Preserve Node/Express backend, React portal, PostgreSQL, S3, KMS, canonical Proof, existing Windows service and established API boundaries. Add the smallest cohesive module that passes the acceptance test.
-4. **No duplicate authority.** The Windows worker collects and submits; the hosted backend enforces identity, business rules, finalization and signing. Do not let installers or services sign as humans.
+3. **No platform replacement.** Preserve Node/Express backend, React portal, PostgreSQL, S3, KMS, canonical Proof and established API boundaries. Add the smallest cohesive module that passes the acceptance test.
+4. **No duplicate authority.** Collectors submit observations. The hosted backend enforces identity, business rules, finalization and signing. Do not let installers or services sign as humans.
 5. **No automatic merging on approximate identity.** If safe resolution is not possible, preserve the raw item, record the ambiguity and surface it. Do not engineer a confidence model to hide the blocker.
 6. **Tests before breadth.** Add fixture and negative tests for each new invariant, run targeted checks during work and full affected checks at the gate. Do not disable tests or loosen permissions to pass CI.
 7. **Minimal schema changes.** Use current tables and event/receipt mechanisms; if necessary add additive migrations and grants, preserving prior migration checksums and rollback compatibility.
 8. **One primary status ledger.** Record implemented/tested/deployed/customer-accepted separately with source hashes, commands, test results, artifact hashes and working links. Avoid multiple contradictory progress docs.
 9. **Bound external failures.** After two unchanged retries of the same externally blocked action, record diagnosis, exact missing permission or artifact, impact and owner. Continue independent work; do not repeatedly attempt production changes.
 10. **Do not silently deploy.** Require reviewed current-target preflight, applicable authorization and exact release/canary gates. A merged PR is not deployment. A deployed API is not customer source acceptance.
-11. **Keep the interface consistent.** Extend the current records portal and Connect wizard; do not build a replacement website or redesign unrelated mobile screens.
+11. **Keep the interface consistent.** Extend the current records portal; do not build a replacement website or redesign unrelated mobile screens.
 12. **Stop at scope completion.** Once the named source's complete accepted journey works and all launch gates have evidence, defer other adapters or experimental features into a separate backlog.
 
 ### Required completion handoff
 
-The coding agent's final report must name: current SHA; changed paths; new migration/permissions; applicable backend, frontend, Windows, native and end-to-end tests with pass/fail/skip counts; signed artifact identity/hash; API image/deployment receipt; supported exporter and its exact version; source reconciliation numbers; first-run usability result; preserved/signed assurance scope; passed/blocked D0–D5 and Windows G0–G4; unresolved owner dependencies; and what was intentionally excluded.
+The coding agent's final report must name: current SHA; changed paths; new migration/permissions; applicable backend, frontend and end-to-end tests with pass/fail/skip counts; signed artifact identity/hash; API image/deployment receipt; supported exporter and its exact version; source reconciliation numbers; first-run usability result; preserved/signed assurance scope; passed/blocked D0–D5; unresolved owner dependencies; and what was intentionally excluded.
 
 ---
 
@@ -425,7 +420,7 @@ These can be valuable later, but none is necessary to prove the first unattended
 
 The acceptance demonstration should be understandable without reading source code:
 
-1. A nontechnical tester installs the **signed** current Connect client and approves an authorized source.
+1. A nontechnical tester authorizes a source in the correct workspace.
 2. Setup previews the real source format, maps identifiers and imports a representative shipment.
 3. The customer returns to their normal WMS workflow; **no PackProof operator clicks occur**.
 4. A new export is produced. PackProof ingests it, creates or updates the correct canonical Proof once, and shows the source receipt.
@@ -434,7 +429,7 @@ The acceptance demonstration should be understandable without reading source cod
 7. The source is deliberately interrupted, then restored. Backlog is reconciled without duplicate Proofs, silent data loss or false “current” labels.
 8. An ambiguous or unauthorized event stays unlinked and visible for human resolution. It does **not** corrupt another shipment.
 9. An authorized reviewer retrieves originals and an appropriate available export, with exact statements of what was and was not signed.
-10. The test team retains links to source receipts, test runs, Windows artifact hash and the deployment manifest, so the outcome can be reproduced.
+10. The test team retains links to source receipts, test runs, source version and deployment manifest, so the outcome can be reproduced.
 
 **Definition of done:** For one named supported warehouse source and agreed source coverage, PackProof produces and maintains operational shipment records with **zero routine PackProof entry after setup**, safe and observable exceptions, reproducible deployment, and customer-accepted reconciliation. A broad claim that it can ingest “every warehouse system” is not part of this definition.
 
@@ -443,9 +438,6 @@ The acceptance demonstration should be understandable without reading source cod
 ## 13. Traceable source references
 
 - [Repository main](https://github.com/thepackproof/packproof-v2/tree/main)
-- [Windows Connect status](https://github.com/thepackproof/packproof-v2/blob/main/docs/windows-connect/IMPLEMENTATION_STATUS.md)
-- [Windows Connect blockers](https://github.com/thepackproof/packproof-v2/blob/main/docs/windows-connect/BLOCKERS.md)
-- [Existing Windows Connect plan](https://github.com/thepackproof/packproof-v2/blob/main/docs/windows-connect/DEVELOPMENT_PLAN.md)
 - [Records contract](https://github.com/thepackproof/packproof-v2/blob/main/docs/api-portal-v1/RECORDS_CONTRACT.md)
 - [Records quickstart](https://github.com/thepackproof/packproof-v2/blob/main/docs/api-portal-v1/QUICKSTART.md)
 - [Source ingestion contract](https://github.com/thepackproof/packproof-v2/blob/main/docs/api-portal-v1/SOURCE_INGESTIONS.md)

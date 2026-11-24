@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { verifyHostedApproval } from '../connect-windows/scripts/verify-hosted-approval.mjs';
+import { verifyHostedApproval } from './verify-hosted-approval.mjs';
 import { digest } from '../web/scripts/write-connect-release.mjs';
 import { verifyRuntimeInputs } from './connect-portal-runtime.mjs';
 

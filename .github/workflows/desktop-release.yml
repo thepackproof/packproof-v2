@@ -9,10 +9,10 @@ on:
         options: [staging, production]
         default: staging
       platforms:
-        description: Platforms to build and publish independently
+        description: Desktop release platform
         type: choice
-        options: [all, mac, windows]
-        default: all
+        options: [mac]
+        default: mac
       include_pkg:
         description: Build signed and notarized macOS PKG in addition to DMG and ZIP
         type: boolean
@@ -35,45 +35,23 @@ jobs:
     permissions:
       contents: read
 
-  plan:
-    name: Select release platforms
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.scope.outputs.matrix }}
-      artifact-pattern: ${{ steps.scope.outputs.artifact-pattern }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: scope
-        env:
-          PACKPROOF_RELEASE_PLATFORMS: ${{ inputs.platforms }}
-          RELEASE_CHANNEL: ${{ inputs.channel }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const {validatePlatformScope, platformsForScope} = require('./desktop/scripts/check-acceptance.cjs');
-          const scope = validatePlatformScope(process.env.PACKPROOF_RELEASE_PLATFORMS);
-          const all = [
-            {runner:'windows-2022',platform:'win32',target:'win',arch:'x64'},
-            {runner:'macos-15-intel',platform:'darwin',target:'mac',arch:'x64'},
-            {runner:'macos-15',platform:'darwin',target:'mac',arch:'arm64'},
-          ];
-          const selected = platformsForScope(scope);
-          const matrix = {include:all.filter(row => selected.includes(`${row.platform}/${row.arch}`))};
-          const platform = scope === 'mac' ? 'darwin' : scope === 'windows' ? 'win32' : '*';
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(matrix)}\nartifact-pattern=packproof-desktop-${process.env.RELEASE_CHANNEL}-${platform}-*-${process.env.GITHUB_SHA}\n`);
-          NODE
-
   signed:
     if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') }}
-    needs: [plan, rnd-release-policy]
+    needs: rnd-release-policy
     name: Signed ${{ inputs.channel }} / ${{ matrix.platform }} / ${{ matrix.arch }}
     environment: desktop-${{ inputs.channel }}
     permissions:
       contents: read
-      id-token: write
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix:
+        include:
+          - runner: macos-15-intel
+            platform: darwin
+            arch: x64
+          - runner: macos-15
+            platform: darwin
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     defaults:
@@ -91,22 +69,12 @@ jobs:
       PACKPROOF_COGNITO_REGION: ${{ vars.PACKPROOF_COGNITO_REGION }}
       PACKPROOF_COGNITO_USER_POOL_ID: ${{ vars.PACKPROOF_COGNITO_USER_POOL_ID }}
       PACKPROOF_UPDATES_URL: https://downloads.thepackproof.com/desktop/${{ inputs.channel }}/${{ matrix.platform }}/${{ matrix.arch }}/
-      WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
-      PACKPROOF_WINDOWS_SIGNING_PROVIDER: ${{ vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER || 'pfx' }}
-      WIN_CSC_LINK: ${{ matrix.platform == 'win32' && vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_P12 || '' }}
-      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win32' && vars.PACKPROOF_WINDOWS_SIGNING_PROVIDER != 'azure' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
-      AZURE_TENANT_ID: ${{ matrix.platform == 'win32' && vars.AZURE_TENANT_ID || '' }}
-      AZURE_CLIENT_ID: ${{ matrix.platform == 'win32' && vars.AZURE_CLIENT_ID || '' }}
-      AZURE_SUBSCRIPTION_ID: ${{ matrix.platform == 'win32' && vars.AZURE_SUBSCRIPTION_ID || '' }}
-      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT }}
-      AZURE_TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT }}
-      AZURE_TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_TRUSTED_SIGNING_PROFILE }}
-      CSC_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_P12 || '' }}
-      CSC_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_APPLICATION_PASSWORD || '' }}
-      CSC_INSTALLER_LINK: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_INSTALLER_P12 || '' }}
-      CSC_INSTALLER_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_DEVELOPER_ID_INSTALLER_PASSWORD || '' }}
-      APPLE_ID: ${{ matrix.platform == 'darwin' && secrets.APPLE_NOTARIZATION_ID || '' }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.APPLE_NOTARIZATION_PASSWORD || '' }}
+      CSC_LINK: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_P12 }}
+      CSC_KEY_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_PASSWORD }}
+      CSC_INSTALLER_LINK: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_P12 }}
+      CSC_INSTALLER_KEY_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_NOTARIZATION_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
@@ -117,14 +85,6 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Refuse missing signing and environment configuration
         run: node scripts/release-policy.cjs
-      - name: Authenticate the protected Windows cloud signer with GitHub OIDC
-        if: matrix.platform == 'win32' && env.PACKPROOF_WINDOWS_SIGNING_PROVIDER == 'azure'
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: false
       - run: npm ci
       - name: Audit all desktop dependencies
         run: npm audit --audit-level=low
@@ -133,7 +93,7 @@ jobs:
       - run: node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs tests/notarize-dmg.test.cjs
       - run: npm run build
       - name: Package, sign and notarize
-        run: npx --no-install electron-builder --config electron-builder.config.cjs --${{ matrix.target }} --${{ matrix.arch }} --publish never
+        run: npx --no-install electron-builder --config electron-builder.config.cjs --mac --${{ matrix.arch }} --publish never
       - name: Verify OS signatures, notarization, publisher and file hashes
         run: node scripts/verify-artifacts.cjs
       - uses: actions/upload-artifact@v4
@@ -142,19 +102,18 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           path: |
-            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.pkg
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/*.blockmap
-            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/latest*.yml
+            desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/latest-mac.yml
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS
             desktop/release/${{ inputs.channel }}/${{ matrix.platform }}-${{ matrix.arch }}/release-evidence.json
 
   publish:
     if: ${{ needs.rnd-release-policy.outputs.allowed == 'true' && !startsWith(github.ref_name, 'rnd/') && !startsWith(github.head_ref, 'rnd/') && (inputs.publish) }}
     name: Publish signed artifacts and promote updater metadata
-    needs: [plan, signed, rnd-release-policy]
+    needs: [signed, rnd-release-policy]
     environment: desktop-${{ inputs.channel }}-publish
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -187,7 +146,7 @@ jobs:
         working-directory: desktop
       - uses: actions/download-artifact@v4
         with:
-          pattern: ${{ needs.plan.outputs.artifact-pattern }}
+          pattern: packproof-desktop-${{ inputs.channel }}-darwin-*-${{ github.sha }}
           path: desktop/release-downloads
       - uses: aws-actions/configure-aws-credentials@v4
         with:

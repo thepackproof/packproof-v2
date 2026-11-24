@@ -19,21 +19,6 @@ function assertCleanShutdown(child, shutdown, rows) {
   if (fatal) throw new Error(`Native application reported ${fatal.code} during this launch or shutdown.`);
   if (shutdown !== 'normal-window-close' || gracefulExitOutcome(child) !== 'normal-window-close') throw new Error('The native application did not complete a normal zero-exit window-close shutdown.');
 }
-function requestWindowsClose(child, executable, run = spawnSync) {
-  if (!Number.isSafeInteger(child.pid) || child.pid < 1 || !path.isAbsolute(executable)) throw new Error('An owned native process and absolute executable are required.');
-  const method = 'owned-visible-window-wm-close';
-  const result = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', path.join(__dirname, 'request-native-close-windows.ps1'), '-OwnedProcessId', String(child.pid), '-ExpectedExecutable', executable], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 16384 });
-  let reported;
-  try { reported = JSON.parse(result.stdout || ''); } catch { /* An error is not a delivery acknowledgement. */ }
-  const targetMatches = reported?.method === method && reported.processId === child.pid;
-  const count = targetMatches && Number.isSafeInteger(reported.matchedWindows) && reported.matchedWindows >= 0 && reported.matchedWindows <= 1000 ? reported.matchedWindows : null;
-  const delivered = result.status === 0 && !result.error && targetMatches && count === 1 && reported.delivered === true;
-  const failureCode = targetMatches && ['NO_UNIQUE_OWNED_WINDOW', 'WINDOW_CLOSE_POST_FAILED'].includes(reported.failureCode) ? reported.failureCode : 'OWNED_WINDOW_CLOSE_NOT_CONFIRMED';
-  const helperStatus = Number.isSafeInteger(result.status) ? result.status : null;
-  const helperError = ['ETIMEDOUT', 'ENOENT', 'EACCES', 'EPERM', 'ENOBUFS'].includes(result.error?.code) ? result.error.code : result.error ? 'OTHER_HELPER_ERROR' : null;
-  const acknowledgment = delivered ? 'confirmed' : !reported ? 'invalid-json' : !targetMatches ? 'target-mismatch' : count === null ? 'invalid-window-count' : result.status !== 0 || result.error ? 'helper-failed' : count !== 1 ? 'non-unique-window' : 'delivery-not-confirmed';
-  return { method, delivered, matchedWindows: count, failureCode: delivered ? null : failureCode, helperStatus, helperError, acknowledgment };
-}
 function diagnosticRows(file) {
   if (!fs.existsSync(file)) return [];
   return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => {
@@ -45,35 +30,11 @@ async function fingerprint(file) {
   for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
   return hash.digest('hex');
 }
-function launchArguments(args) {
-  if (!args.length) return {};
-  if (args.length !== 2 || args[0] !== '--installed-executable' || !path.isAbsolute(args[1])) throw new Error('Use --installed-executable with the absolute registered Windows executable path.');
-  return { installedExecutable: args[1] };
-}
-async function launchTarget(release, output, installedExecutable) {
-  const appBundle = release.platform === 'darwin' ? path.join(output, release.arch === 'arm64' ? 'mac-arm64' : 'mac', `${release.productName}.app`) : null;
-  const packaged = appBundle ? path.join(appBundle, 'Contents', 'MacOS', release.productName) : path.join(output, 'win-unpacked', `${release.productName}.exe`);
-  if (!fs.existsSync(packaged)) throw new Error('Packaged native application executable is missing.');
-  if (!installedExecutable) return { executable: packaged, appBundle, executionLocation: 'packaged-output' };
-  if (release.platform !== 'win32') throw new Error('Registered installed-executable smoke is Windows only.');
-  const executable = path.resolve(installedExecutable);
-  if (path.basename(executable) !== `${release.productName}.exe` || executable === path.resolve(packaged)) throw new Error('Expected the registered installed application executable.');
-  // Bind both Electron's executable and its actual application code to this verified package.
-  for (const suffix of [release.productName + '.exe', path.join('resources', 'app.asar')]) {
-    const original = path.join(path.dirname(packaged), suffix), installed = path.join(path.dirname(executable), suffix);
-    if (!fs.existsSync(installed) || fs.lstatSync(installed).isSymbolicLink() || (await fingerprint(original)) !== (await fingerprint(installed))) throw new Error('Installed executable/application bytes differ from the packaged candidate.');
-  }
-  return { executable, appBundle: null, executionLocation: 'registered-current-user-install' };
-}
 async function stopOwnedChild(child, target, result) {
   if (child.exitCode !== null || child.signalCode !== null) return 'already-exited';
-  if (process.platform === 'win32') {
-    result.closeRequest = requestWindowsClose(child, target.executable);
-  } else {
-    const quotedPath = target.appBundle.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-    const request = spawnSync('osascript', ['-e', `tell application "${quotedPath}" to quit`], { timeout: 10000, stdio: 'ignore' });
-    result.closeRequest = { method: 'application-quit', delivered: request.status === 0 && !request.error };
-  }
+  const quotedPath = target.appBundle.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  const request = spawnSync('osascript', ['-e', `tell application "${quotedPath}" to quit`], { timeout: 10000, stdio: 'ignore' });
+  result.closeRequest = { method: 'application-quit', delivered: request.status === 0 && !request.error };
   const gracefulDeadline = Date.now() + 10000;
   while (child.exitCode === null && child.signalCode === null && Date.now() < gracefulDeadline) await delay(200);
   if (child.exitCode !== null || child.signalCode !== null) return result.closeRequest.delivered ? gracefulExitOutcome(child) : 'normal-close-request-not-confirmed';
@@ -82,8 +43,7 @@ async function stopOwnedChild(child, target, result) {
   const deadline = Date.now() + 5000;
   while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(200);
   if (child.exitCode === null && child.signalCode === null) {
-    if (process.platform === 'win32') spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 10000, stdio: 'ignore' });
-    else child.kill('SIGKILL');
+    child.kill('SIGKILL');
     return 'owned-fresh-profile-process-force-stopped';
   }
   return 'owned-fresh-profile-process-terminated';
@@ -126,28 +86,24 @@ async function launchCycle(target, logFile, result, { env = process.env } = {}) 
 }
 async function main() {
   if (process.env.CI !== 'true' || process.env.APP_ENV !== 'development') throw new Error('Native launch smoke is restricted to isolated development CI.');
-  if (!['win32', 'darwin'].includes(process.platform)) throw new Error('Native launch smoke requires Windows or macOS.');
-  const desktop = releaseContext();
-  const unifiedWindows = process.env.PACKPROOF_UNIFIED_WINDOWS === '1';
-  let release = desktop;
-  if (unifiedWindows) {
-    if (process.platform !== 'win32') throw new Error('Unified workstation smoke requires Windows.');
-    const connect = require('../../connect-windows/scripts/release-policy.cjs').context();
-    release = { ...desktop, productName: connect.productName, outputDirectory: connect.output };
-  }
+  if (process.platform !== 'darwin') throw new Error('Native launch smoke requires macOS.');
+  if (process.argv.length !== 2) throw new Error('Native launch smoke accepts no arguments.');
+  const release = releaseContext();
   if (release.platform !== process.platform || release.arch !== process.arch) throw new Error('Launch smoke must run the native architecture.');
   const runtime = JSON.parse(fs.readFileSync(path.resolve('dist/main/runtime-config.json'), 'utf8'));
   if (runtime.channel !== 'development') throw new Error('Refusing to launch a production/staging profile in this smoke test.');
-  const profileBase = process.platform === 'win32' ? process.env.LOCALAPPDATA : path.join(os.homedir(), 'Library', 'Application Support');
-  if (!profileBase) throw new Error('Native application-data location is unavailable.');
-  const profile = path.join(profileBase, desktop.productName);
+  const profileBase = path.join(os.homedir(), 'Library', 'Application Support');
+  const profile = path.join(profileBase, release.productName);
   if (fs.existsSync(profile)) throw new Error('A development profile already exists. Preserve it; this CI smoke requires a clean runner.');
   const output = path.resolve(release.outputDirectory);
-  const target = await launchTarget(release, output, launchArguments(process.argv.slice(2)).installedExecutable);
+  const appBundle = path.join(output, release.arch === 'arm64' ? 'mac-arm64' : 'mac', release.productName + '.app');
+  const executable = path.join(appBundle, 'Contents', 'MacOS', release.productName);
+  if (!fs.existsSync(executable)) throw new Error('Packaged native application executable is missing.');
+  const target = { executable, appBundle };
   const logFile = path.join(profile, 'Logs', 'desktop.log');
   const report = {
     schemaVersion: 2, sourceCommit: process.env.GITHUB_SHA || null,
-    platform: process.platform, arch: process.arch, channel: 'development', unifiedWindows, executionLocation: target.executionLocation,
+    platform: process.platform, arch: process.arch, channel: 'development', executionLocation: 'packaged-output',
     started: false, rendererReady: false, secureStorage: 'not-reported', protectedInstallation: 'not-tested',
     authentication: 'not-tested', signedPublisherVerification: 'not-tested', captureHardware: 'not-tested',
     evidenceQueueRecovery: 'not-tested', shutdown: 'not-started', checks: [], launches: [],
@@ -165,7 +121,6 @@ async function main() {
     if ((await fingerprint(installation)) !== before) throw new Error('Native restart replaced the persisted installation material.');
     report.protectedInstallation = 'preserved-and-reopened-across-normal-restart';
     report.checks = ['native-process-running', 'packaged-main-started', 'local-renderer-assets-executed', 'sandboxed-preload-ipc-used', 'no-observed-startup-exception', 'normal-quit-and-native-relaunch', 'persisted-protected-installation-reopened'];
-    if (target.executionLocation === 'registered-current-user-install') report.checks.push('installed-executable-and-asar-match-packaged-candidate');
   } catch (error) { failure = error; report.error = error.message; }
   finally {
     report.started = report.launches.length === 2 && report.launches.every(cycle => cycle.started);
@@ -178,5 +133,5 @@ async function main() {
   if (failure) throw failure;
   console.log('Native application launch, normal quit/relaunch and persisted protected installation passed. Authentication, real evidence recovery, hardware and production signing were not tested.');
 }
-module.exports = { launchArguments, launchTarget, diagnosticRows, gracefulExitOutcome, assertCleanShutdown, requestWindowsClose, shutdownDiagnostics, launchCycle };
+module.exports = { diagnosticRows, gracefulExitOutcome, assertCleanShutdown, shutdownDiagnostics, launchCycle };
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });

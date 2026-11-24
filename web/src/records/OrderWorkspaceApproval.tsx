@@ -17,7 +17,7 @@ export function ApprovalFrame({children,account,organization,onSwitch}:{children
   useEffect(()=>{if(navigated.current){if(accounts)title.current?.focus();else link.current?.focus();}},[accounts]);
   function select(next:boolean){navigated.current=true;setAccounts(next);}
   return <div className="pp-approval-page"><header className="pp-approval-bar"><div><Icon name="browser" size={33}/><b>Browser</b></div>
-    <div><span className="pp-approval-logo"><img src="/brand/connect/packproof.png" alt=""/></span><span>PackProof Connect &nbsp;/&nbsp; Connection approval</span></div></header>
+    <div><span className="pp-approval-logo"><img src="/brand/connect/packproof.png" alt=""/></span><span>PackProof &nbsp;/&nbsp; Connection approval</span></div></header>
     <main className="pp-approval-panel"><div className="pp-approval-crumb"><Icon name={accounts?"computer":"approval"} size={48}/><span>Browser &nbsp;/&nbsp; {accounts?"Work account":"Connection request"}</span></div>
     {accounts?<><h1 ref={title} tabIndex={-1}>Choose your work account.</h1><p>Use an account with permission to approve sources in this workspace.</p>
       <Info name="computer" title={account}><p>{organization||"Signed-in account"}</p></Info>
@@ -67,16 +67,16 @@ export function OrderWorkspaceApproval({ api, organizationId, environment, param
     if (!path || !session || expired || Date.parse(session.expiresAt) <= Date.now() || result.error || session.state !== 'pending' || notice) return;
     const accepted = await command.run(path + '/decision' + query, { organizationId, environment, scopeDigest: session.scopeDigest, decision });
     if (accepted) {
-      setNotice(decision === 'approve' ? 'Access approved. PackProof Connect will continue automatically.' : 'Access declined. You can change the selection in PackProof Connect.');
+      setNotice(decision === 'approve' ? 'Access approved for the selected sources.' : 'Access declined for the selected sources.');
       setRefresh(value => value + 1);
     }
   }
   if (!canManage || !valid) return <><h1>Check workspace access</h1><p role="alert">{canManage ? 'Reopen this request from the computer where you selected the sources.' : 'Sign in as an administrator of this workspace to review collection.'}</p></>;
-  return <section aria-label="PackProof Connect approval">
+  return <section aria-label="Connection approval">
     <h1>{session?.state === 'active' ? 'Collection approved' : 'Allow PackProof to read orders?'}</h1>
     {result.error ? <div role="alert"><p>{result.error}</p><button className="pp-approval-secondary" onClick={() => setRefresh(n => n + 1)}>Try again</button></div>
-      : !session ? <p role="status">{result.loading ? 'Opening the request…' : 'The request changed. Reopen it from PackProof Connect.'}</p> : <>
-        <p>Review the request you started from PackProof Connect on <strong>{session.deviceName}</strong>.</p>
+      : !session ? <p role="status">{result.loading ? 'Opening the request…' : 'The request changed. Reopen the approval link from the computer requesting access.'}</p> : <>
+        <p>Review the request from <strong>{session.deviceName}</strong>.</p>
         <div className="pp-approval-sources">{session.scope.sources.map(source =>
           <Info key={source.id} name={source.transport==='api'?'computer':'folder'} title={source.displayName || 'Selected source'}>
             {source.transport==='api' ? <p>Connected system{source.sourceNamespace?' · '+source.sourceNamespace:''}. Earlier orders may contain only a saved summary.</p>:
@@ -87,8 +87,8 @@ export function OrderWorkspaceApproval({ api, organizationId, environment, param
           {session.scope.testedProfile && <div><dt>Tested facility workflow</dt><dd>Revision {session.scope.testedProfile.revision}, checked on {session.scope.testedProfile.examples} known orders.<details><summary>Configuration fingerprint</summary><code>{session.scope.testedProfile.digest}</code></details></dd></div>}
           <div><dt>Offline collection</dt><dd>Up to one hour after the last successful access check</dd></div>
           <div><dt>Saved proofs</dt><dd>{session.scope.outputName||'The folder selected on this computer'}</dd></div></dl>
-        {notice ? <p role="status" className="pp-approval-notice">{notice}</p>:session.state==='active'?<p role="status" className="pp-approval-notice">Access approved. PackProof Connect will continue automatically.</p>:
-          session.state!=='pending'||expired?<p role="status">This request is closed. Return to PackProof Connect to review its status or start again.</p>:
+        {notice ? <p role="status" className="pp-approval-notice">{notice}</p>:session.state==='active'?<p role="status" className="pp-approval-notice">Access approved for the selected sources.</p>:
+          session.state!=='pending'||expired?<p role="status">This request is closed. Start a new request from the computer that needs access.</p>:
           <div className="pp-approval-actions"><button className="pp-approval-primary" disabled={command.busy || !session.scopeDigest} onClick={()=>void decide('approve')}>{command.busy?'Saving decision…':'Approve collection'}</button>
             <button className="pp-approval-secondary" disabled={command.busy} onClick={()=>void decide('deny')}>Decline</button></div>}
       </>}{command.error && <p role="alert">{command.error}</p>}

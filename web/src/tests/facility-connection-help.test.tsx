@@ -31,11 +31,11 @@ it('opens the existing service-access review and leaves revocation for a separat
   expect(request.mock.calls.some(([, method]) => method === 'POST')).toBe(false);
 });
 
-it('directs a revoked facility-less installation back to preservation and enrollment on Windows', async () => {
+it('directs a revoked facility-less installation to preserve pending work and enroll again', async () => {
   openInstallation('revoked', null);
   const steps = await screen.findByRole('region', { name: 'Reconnect this computer to a facility' });
-  expect(steps).toHaveTextContent('Preserve work and reconnect');
-  expect(steps).toHaveTextContent('Approved location');
+  expect(steps).toHaveTextContent(/preserve pending work/i);
+  expect(steps).toHaveTextContent('approved facility');
   expect(screen.queryByRole('button', { name: 'Review service access' })).not.toBeInTheDocument();
 });
 

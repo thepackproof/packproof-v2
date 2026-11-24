@@ -1,7 +1,7 @@
-// Read one operator-selected Proof and compare it to the Windows export.
+// Read one operator-selected Proof and compare it to a local Proof export.
 import { pathToFileURL } from 'node:url';
 import { verifyOutput } from '../../examples/multisource-journey/verify-output.mjs';
-import { verifyHostedApproval } from '../../connect-windows/scripts/verify-hosted-approval.mjs';
+import { verifyHostedApproval } from '../verify-hosted-approval.mjs';
 import { target } from '../connect-portal-release.mjs';
 
 export async function checkOrder({ source, organizationId, environment, proofId, output, token }, {

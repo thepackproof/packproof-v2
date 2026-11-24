@@ -1,4 +1,4 @@
-/** CI-only synthetic rendering. No accounts, hosted API, or Windows qualification. */
+/** CI-only synthetic rendering. No accounts or hosted API. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -61,7 +61,7 @@ async function chromeEndpoint(child, diagnostics) {
 }
 let server, chrome;
 const report = { schema: 'packproof.synthetic-source-review-visual/v1', synthetic: true, candidateSha: process.env.GITHUB_SHA || null,
-  acceptance: 'Local component render only; no hosted login, actual source qualification, or installed Windows acceptance.', results: [], error: null };
+  acceptance: 'Local component render only; no hosted login or actual source qualification.', results: [], error: null };
 try {
   if (args.includes('--check-bundle')) { await build({ ...config, build: { outDir: path.join(temporary, 'bundle') } }); console.log('Synthetic source review fixture bundled; browser rendering was not run.'); }
   else {

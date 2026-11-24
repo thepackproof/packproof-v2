@@ -48,7 +48,7 @@ Deterministic verification is in `backend/tests/record-ingestions.test.ts`; asse
 
 ## Exact source references before a Proof ID is known (candidate)
 
-`POST /v1/partner/source-observations` accepts one bounded logical source envelope before a canonical Proof is known. Use a direct merchant credential with current `proofs:write` and a stable `Idempotency-Key`. Enrolled Windows agents retain their CSV-only route restrictions. Supply the exact connection and explicit location (including `null` for an unlocated source); never infer the location from a tracking number.
+`POST /v1/partner/source-observations` accepts one bounded logical source envelope before a canonical Proof is known. Use a direct merchant credential with current `proofs:write` and a stable `Idempotency-Key`. Enrolled agents retain their CSV-only route restrictions. Supply the exact connection and explicit location (including `null` for an unlocated source); never infer the location from a tracking number.
 
 ```json
 {
@@ -75,4 +75,4 @@ For authorized source files already handled by an integration, call `POST /v1/pa
 
 Human exception review is at `GET /me/records/source-associations`. Operators cannot see unassigned inbound observations; reviewers and administrators receive only authorized locations. A current administrator can approve an exact source relationship through `POST /me/records/source-crosswalks`, with target Proof, rule version and reason. The target must have exactly the source location. Existing mappings cannot silently move to another Proof. `POST /me/records/source-associations/{id}/replay` records the repair reason and rechecks current source credential/location/control policy. It never changes original receipt ownership or bytes. Conflicting or already submitted source identities cannot be reassigned by replay. Expired or revoked originating credentials require explicit integration recovery; a new credential does not inherit old receipts.
 
-All these routes require migration109 and the reviewed API/worker privilege profile. They are engineering candidates until the named-source, Windows and hosted release gates in `docs/zero-touch-warehouse/IMPLEMENTATION_STATUS.md` pass. API source completion does not establish deployed provider support.
+All these routes require migration109 and the reviewed API/worker privilege profile. They are engineering candidates until the named-source and hosted release gates in `docs/zero-touch-warehouse/IMPLEMENTATION_STATUS.md` pass. API source completion does not establish deployed provider support.
