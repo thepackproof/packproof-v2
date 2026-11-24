@@ -108,3 +108,22 @@ test('CodeBuild build reads use its exact project authorization resource, never 
     assert.doesNotMatch(JSON.stringify(policy),/:build\/|\bcodebuild:\*/);
   }
 });
+
+test('only facility cleanup receives the resource-unscoped ECS deregistration action',()=>{
+  const observed={...snapshot,api:{...snapshot.api,meta:{commit:'b'.repeat(40)}}};
+  const family='arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-security-verifier-bbbbbbbbbbbb-123:*';
+  for(const stage of ['inspect','hydrate','build','runtime','owner','facility']) {
+    const policy=JSON.parse(recoverySessionPolicy(stage,{source,snapshot:observed,owner,runId:'123'}));
+    const statementsFor=action=>policy.Statement.filter(s=>[s.Action].flat().includes(action));
+    assert.deepEqual(statementsFor('ecs:DeregisterTaskDefinition'),stage==='facility'?
+      [{Effect:'Allow',Action:'ecs:DeregisterTaskDefinition',Resource:'*',Condition:{StringEquals:{'aws:RequestedRegion':'us-east-1'}}}]:[],stage);
+    const wildcardMutations=policy.Statement.filter(s=>s.Resource==='*')
+      .flatMap(s=>[s.Action].flat()).filter(a=>!/:((Get|Describe|List|BatchGet|Simulate)[A-Za-z*]*)$/.test(a));
+    assert.deepEqual(wildcardMutations,stage==='facility'?['ecs:DeregisterTaskDefinition']:[],stage);
+    if(stage==='facility') {
+      for(const action of ['ecs:RegisterTaskDefinition','ecs:RunTask'])
+        assert.deepEqual(statementsFor(action).map(s=>s.Resource),[family]);
+      assert.ok(statementsFor('iam:PassRole').every(s=>![s.Resource].flat().some(r=>r.includes('*'))));
+    }
+  }
+});

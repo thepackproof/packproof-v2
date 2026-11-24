@@ -11,7 +11,7 @@ import {TARGET,hash} from './backend-deployment-plan.mjs';
 import {observeRuntime} from './connect-hosted-runtime-observe.mjs';
 import {prepareRecoveryImages} from './recovery-image-builds.mjs';
 import {normalizeRecoverySnapshot,verifyRecoveryRelease} from './recovery-runtime-release.mjs';
-import {verifyReleasePins} from './recovery-hosted-release.mjs';
+import {verifyReleasePins,recoveryFacilityCleanupRequest} from './recovery-hosted-release.mjs';
 import {prepareRecoveryFacilityInspection,runRecoveryFacilityInspection,collectRecoveryFacilityInspection} from './recovery-facility-inspection.mjs';
 import {decryptFacilityReceipt} from './logistics-facility-inspect.mjs';
 import {verifyRuntimeInputs} from '../connect-portal-runtime.mjs';
@@ -91,7 +91,8 @@ async function inspectFacility(phase,recipientPublicKeySpki) {
   else verifyGuidedResult(state.plan,snapshot,request,state.publication);
   const prepared=prepareRecoveryFacilityInspection({snapshot,subjectSha256:request.facility.subjectSha256,recipientPublicKeySpki,
     inventorySha256:guidedInventory,runId:guidedPhaseRunId(process.env.GITHUB_RUN_ID,phase)});
-  const registered=await aws('ecs','register-task-definition',prepared.request),definition=registered.taskDefinition?.taskDefinitionArn;
+  const registered=await aws('ecs','register-task-definition',prepared.request);
+  const cleanup=recoveryFacilityCleanupRequest({prepared,registered}),definition=cleanup.taskDefinition;
   let taskArn,finished=false;
   try {
     const fresh=await current();verifyGuidedRuntime(fresh,request,state.publication);
@@ -110,7 +111,7 @@ async function inspectFacility(phase,recipientPublicKeySpki) {
     return {...observation,prepared,taskArn,taskDefinition:definition};
   } finally {
     if(taskArn&&!finished)await aws('ecs','stop-task',{cluster:TARGET.cluster,task:taskArn,reason:'Bounded guided facility inspection cleanup'});
-    if(definition)await aws('ecs','deregister-task-definition',{taskDefinition:definition});
+    await aws('ecs','deregister-task-definition',cleanup);
   }
 }
 async function precheck() {
