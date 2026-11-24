@@ -7,13 +7,14 @@ import { target } from '../connect-portal-release.mjs';
 export async function checkOrder({ source, organizationId, environment, proofId, output, token }, {
   fetcher = fetch, checkPortal = verifyHostedApproval, checkLocal = verifyOutput,
 } = {}) {
-  if (!/^[a-f0-9]{40}$/.test(source) || !organizationId || !['sandbox', 'production'].includes(environment) ||
+  const workspaceEnvironment = environment === 'production' ? 'live' : environment;
+  if (!/^[a-f0-9]{40}$/.test(source) || !organizationId || !['sandbox', 'live'].includes(workspaceEnvironment) ||
       !proofId || !output || !token) throw Error('Source, organization, environment, Proof, output folder and signed-in operator token are required.');
   async function get(endpoint, authenticated) {
     const url = new URL(endpoint, target.api);
     if (authenticated) {
       url.searchParams.set('organizationId', organizationId);
-      url.searchParams.set('environment', environment);
+      url.searchParams.set('environment', workspaceEnvironment);
     }
     const response = await fetcher(url, { headers: authenticated ? { Authorization: 'Bearer ' + token } : {},
       redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000) });
@@ -26,7 +27,7 @@ export async function checkOrder({ source, organizationId, environment, proofId,
   if (meta.commit !== source || meta.environment !== 'production') throw Error('Unexpected running API release.');
   await checkPortal(target.web, target.api, fetcher, { requireOrderWorkspace: true, expectedCommit: source });
   const context = await get('/me/records/context', true);
-  if (context.selectedOrganizationId !== organizationId || context.environment !== environment ||
+  if (context.selectedOrganizationId !== organizationId || context.environment !== workspaceEnvironment ||
       context.capabilities?.orderProofs !== true) throw Error('The selected organization has no active Proof workspace.');
   const receipt = await get('/me/records/order-proofs/' + encodeURIComponent(proofId), true);
   if (receipt.proofId !== proofId || !Number.isSafeInteger(receipt.revision) || receipt.revision < 1) {
