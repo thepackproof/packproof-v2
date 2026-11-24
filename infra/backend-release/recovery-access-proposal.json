@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListReviewedRecoveryProjectBuilds",
+      "Effect": "Allow",
+      "Action": "codebuild:ListBuildsForProject",
+      "Resource": "arn:aws:codebuild:us-east-1:784514617543:project/packproof-v2-staging-api"
+    },
+    {
+      "Sid": "SimulateExistingOwnerExecutionRole",
+      "Effect": "Allow",
+      "Action": "iam:SimulatePrincipalPolicy",
+      "Resource": "arn:aws:iam::784514617543:role/packproof-v2-staging-execution"
+    }
+  ]
+}
