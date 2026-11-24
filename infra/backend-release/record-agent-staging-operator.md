@@ -1,4 +1,4 @@
-# Isolated Windows Connect108 preparation
+# Isolated record-agent migration 108 preparation
 
 This additive operator accepts only the checksum-pinned106-receipt schema through107, then applies108. It does not bootstrap an empty database, upgrade a pre107 database, provision roles, change passwords, activate organizations, or deploy a service. Historical095→107 operators and manifests remain frozen. The production-serving RDS hostname containing `packproof-v2-staging-db` is explicitly denied.
 
@@ -35,7 +35,7 @@ Execute in this order:
 3. Against the approved target, run `node scripts/record-agent-migrate-cli.mjs --inspect`. Pass the returned inspection as `PACKPROOF_AGENT_INSPECTION_JSON` and its `sha256` as `PACKPROOF_AGENT_INSPECTION_SHA256`. Within15 minutes, run `node scripts/record-agent-migrate-cli.mjs --apply`. Rehearsal evidence expires after24 hours. The migration locks historical tables, rechecks the inspection and108 source bytes, appliesDDL and receipt atomically, removes broad inherited default grants only on the new tables, and verifies historical data/catalog/ACL/runtime authority preservation.
 4. Run `node scripts/record-agent-migrate-cli.mjs --plan-roles`. Review the returned statements. Set `PACKPROOF_AGENT_ROLE_PLAN_SHA256` to `statementsSha256`. Run `--rehearse-roles`; it executes and rolls back only the108 delta. Pass its returned report as `PACKPROOF_AGENT_ROLE_REHEARSAL_JSON`; run `--apply-roles` within15 minutes. No roles are created and no historical grants are rewritten.
 5. Launch `node /release/record-agent-database-preflight.mjs api` and separately `... worker` under the actual distinct runtime logins, current candidate image, same review JSON/hash and exact approved target. Set `PACKPROOF_PROCESS_ROLE` appropriately, keep migration-on-start false and provide normal runtime secret references. These read-only probes require all existing M2/records grants, current exact108 catalog, non-owner separation, TLS and matching durability fence. A role-delta receipt alone does not qualify the runtime.
-6. Deployment and sandbox merchant enrollment are separate reviewed actions. G1 requires an actual Windows service enrollment, portal approval, test upload, durable worker import and visible record; schema preparation alone does not satisfy G1.
+6. Deployment and sandbox merchant enrollment are separate reviewed actions. G1 requires an actual collector enrollment, portal approval, test upload, durable worker import and visible record; schema preparation alone does not satisfy G1.
 
 All output failures redact raw database errors. No source preparation receipt proves that any hosted migration, role change, old-image probe, deployment or G1 acceptance has occurred.
 

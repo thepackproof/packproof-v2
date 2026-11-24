@@ -1,6 +1,6 @@
 # Zero-touch warehouse implementation status
 
-This is the primary ledger for the November 7 development plan. Source implementation, local verification, hosted deployment and customer qualification are separate states. Baseline: `575b42f1d297736a89ee6d5167d7e25b6b0e4ad2` on `thepackproof/packproof-v2/main`. Windows G0–G4 receipts remain in `docs/windows-connect/EVIDENCE.json` and are not relabeled here.
+This is the primary ledger for the November 7 development plan. Source implementation, local verification, hosted deployment and customer qualification are separate states. Baseline: `575b42f1d297736a89ee6d5167d7e25b6b0e4ad2` on `thepackproof/packproof-v2/main`. This dated ledger records the components and test environments present at that time.
 
 ## Implemented candidate
 

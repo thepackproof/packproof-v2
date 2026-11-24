@@ -10,7 +10,7 @@ const YAML = require('yaml');
 
 test('a missing immutable release key is checked using only its channel prefix', () => {
   const calls = [];
-  const key = 'desktop/staging/win32/x64/PackProof-Staging-1.0.0.exe';
+  const key = 'desktop/staging/darwin/x64/PackProof-Staging-1.0.0.zip';
   const result = existingReleaseObject('release-bucket', key, args => { calls.push(args); return JSON.stringify({ Contents: [{ Key: `${key}.blockmap` }] }); });
   assert.equal(result, null);
   assert.equal(calls.length, 1);
@@ -27,7 +27,7 @@ test('an existing release is inspected before deciding whether its hash permits 
 });
 
 test('an access denial never becomes permission to replace an existing release', () => {
-  const key = 'desktop/production/win32/x64/PackProof-1.0.0.exe';
+  const key = 'desktop/production/darwin/x64/PackProof-1.0.0.zip';
   assert.throws(() => existingReleaseObject('release-bucket', key, args => {
     if (args[1] === 'list-objects-v2') return JSON.stringify({ Contents: [{ Key: key }] });
     throw new Error('AccessDenied');
@@ -40,15 +40,15 @@ function releaseFixture(scope, members) {
   const receipts = [];
   for (const [index, identity] of members.entries()) {
     const [platform, arch] = identity.split('/'), directory = path.join(root, `candidate-${index}`);fs.mkdirSync(directory);
-    const file = platform === 'win32' ? 'PackProof-Setup-1.0.1.exe' : `PackProof-1.0.1-${arch}.zip`;
+    const file = `PackProof-1.0.1-${arch}.zip`;
     const bytes = Buffer.from(`Synthetic nonexecutable signing-policy fixture ${identity}`);
-    const checks = platform === 'win32' ? ['authenticode-valid', 'publisher-matches', 'timestamp-valid'] : ['codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted'];
+    const checks = ['codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted'];
     const report = { channel: 'production', sourceCommit, signed: true, platform, arch, version: '1.0.1', checks,
       updateUrl: `https://downloads.thepackproof.com/desktop/production/${platform}/${arch}/`,
       artifacts: [{ file, bytes: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex') }] };
     fs.writeFileSync(path.join(directory, file), bytes);fs.writeFileSync(path.join(directory, 'release-evidence.json'), JSON.stringify(report));
     fs.writeFileSync(path.join(directory, 'SHA256SUMS'), `${report.artifacts[0].sha256}  ${file}\n`);
-    const metadataName = platform === 'win32' ? 'latest.yml' : 'latest-mac.yml';
+    const metadataName = 'latest-mac.yml';
     fs.writeFileSync(path.join(directory, metadataName), YAML.stringify({ version: report.version, files: [{ url: file, sha512: crypto.createHash('sha512').update(bytes).digest('base64') }] }));
     receipts.push({ directory, report, metadataName, save: () => fs.writeFileSync(path.join(directory, 'release-evidence.json'), JSON.stringify(report)) });
   }
@@ -65,19 +65,18 @@ function releaseFixture(scope, members) {
   return { root, receipts, acceptance, env, events, executeAws, fetchImpl };
 }
 
-test('selected Mac, Windows and legacy all releases upload all selected binaries before any update pointers', async () => {
-  for (const [scope, members] of [['mac', ['darwin/x64', 'darwin/arm64']], ['windows', ['win32/x64']], ['all', ['win32/x64', 'darwin/x64', 'darwin/arm64']]]) {
-    const f = releaseFixture(scope, members);try {
-      if (scope === 'all') { delete f.env.PACKPROOF_RELEASE_PLATFORMS;delete f.acceptance.platforms;f.env.PACKPROOF_RELEASE_ACCEPTANCE_JSON = JSON.stringify(f.acceptance); }
-      assert.equal((await publishRelease(f)).platforms, scope);
-      const writes = f.events.filter(event => event.kind === 'aws' && event.args[0] === 's3');
-      const firstPointer = writes.findIndex(event => /latest(?:-mac)?\.yml$/.test(event.args[3]));
-      assert.equal(firstPointer, members.length * 3);
-      assert.equal(writes.length, members.length * 4);
-      assert.ok(writes.slice(firstPointer).every(event => /latest(?:-mac)?\.yml$/.test(event.args[3])));
-      assert.ok(writes.every(event => members.some(identity => event.args[3].includes(`/production/${identity}/`))));
-    } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
-  }
+test('both Mac architectures upload their binaries before any update pointers', async () => {
+  const members = ['darwin/x64', 'darwin/arm64'];
+  const f = releaseFixture('mac', members);
+  try {
+      assert.equal((await publishRelease(f)).platforms, 'mac');
+    const writes = f.events.filter(event => event.kind === 'aws' && event.args[0] === 's3');
+    const firstPointer = writes.findIndex(event => /latest-mac\.yml$/.test(event.args[3]));
+    assert.equal(firstPointer, members.length * 3);
+    assert.equal(writes.length, members.length * 4);
+    assert.ok(writes.slice(firstPointer).every(event => /latest-mac\.yml$/.test(event.args[3])));
+    assert.ok(writes.every(event => members.some(identity => event.args[3].includes(`/production/${identity}/`))));
+  } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
 });
 
 test('missing, extra, duplicate or mixed release identities fail before network access or cloud writes', async () => {
@@ -141,7 +140,7 @@ test('auxiliary blockmap bytes receive their precomputed hash and are uploaded b
     await publishRelease(f);
     const writes = f.events.filter(event => event.kind === 'aws' && event.args[0] === 's3');
     const index = writes.findIndex(event => event.args[3].endsWith(name));
-    assert.ok(index >= 0 && index < writes.findIndex(event => /latest(?:-mac)?\.yml$/.test(event.args[3])));
+    assert.ok(index >= 0 && index < writes.findIndex(event => /latest-mac\.yml$/.test(event.args[3])));
     assert.equal(writes[index].args[writes[index].args.indexOf('--metadata') + 1], `sha256=${crypto.createHash('sha256').update(bytes).digest('hex')}`);
   } finally { fs.rmSync(f.root, { recursive: true, force: true }); }
 });

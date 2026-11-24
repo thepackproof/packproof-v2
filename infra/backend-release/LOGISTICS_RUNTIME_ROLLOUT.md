@@ -1,6 +1,6 @@
 # Logistics129 hosted runtime rollout
 
-This route completes the image-only runtime gap around the existing Logistics owner migration. It targets the live API `packproof-v2-staging-api` and worker `packproof-records-worker` in account784514617543, us-east-1. It does not publish a Windows installer, grant a facility, apply database changes, or enable AI setup.
+This route completes the image-only runtime gap around the existing Logistics owner migration. It targets the live API `packproof-v2-staging-api` and worker `packproof-records-worker` in account784514617543, us-east-1. Facility grants, database migrations and AI setup are separate operations.
 
 The reviewed backend image source and reviewed deployment-tooling source are separate pins. Keep the backend source, source archive hash/version, successful CodeBuild result, publication log, registry digests and CI result unchanged when publishing these tooling files. Each runtime review binds the exact probe program hash; registration and receipt verification reconstruct its exact command. Editing the probe after constructing a review invalidates that review.
 
@@ -18,7 +18,7 @@ The release object contains:
 
 - `images`: actual `prepareLogisticsImages` receipt.
 - `archiveSha256` and `sourceVersion`: exact reviewed source archive pins.
-- `ci`: full successful main-branch `CI` workflow-run response for `images.source`, not the Windows candidate workflow.
+- `ci`: full successful main-branch `CI` workflow-run response for `images.source`.
 - `build`: successful actual CodeBuild build from `BatchGetBuilds`.
 - `buildLog`: `{group,stream,events}` from that build's own CloudWatch log stream, including its final two-image `DescribeImages` JSON and image receipt.
 - `candidate` and `fallback`: live ECR `DescribeImages` responses for the two source-bound tags.
@@ -53,7 +53,7 @@ Use `logistics-hosted-owner-requests.mjs` for the existing sequence: fresh owner
 
 After successful committed129 verification, repeat the complete qualification and promotion sequence with `profile:"candidate"` in a new private directory. Both initial services must be on the reviewed fallback. Target is the candidate; peer is that fallback. Candidate API and worker probes verify the full129 privilege catalogue under their actual logins. Fallback readers independently invoke their own compiled startup guard against the real129 ledger and verify TLS/login, restricted authority, immutable history, the exact129 backfill trigger, membership locks, M2 separation and legacy reads. Their old124 privilege catalogue is not misrepresented as a129 verifier: the planner requires simultaneous full129 candidate verification for both database logins.
 
-Promote worker first, then API. Verify the final immutable digests, native deployment status, public identity and readiness independently. Then verify the actual signed-in installation's `workspace-access` path, approved facility scope, order reconstruction and Proof. Runtime qualification alone is not customer acceptance and does not establish Windows/Figma parity.
+Promote worker first, then API. Verify the final immutable digests, native deployment status, public identity and readiness independently. Then verify the actual signed-in installation's `workspace-access` path, approved facility scope, order reconstruction and Proof. Runtime qualification alone is not customer acceptance.
 
 ## Recovery after129
 

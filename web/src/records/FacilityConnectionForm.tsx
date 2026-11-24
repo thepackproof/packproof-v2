@@ -34,7 +34,7 @@ export function FacilityConnectionForm({ installation, workspace, busy, error, o
       </select>
     </label></div> : <p role="status">No facility is available to this account. A workspace administrator must create a facility or grant access to an existing one. Your current connection and saved files stay in place.</p>}
     {(creating || access.locations.length > 0) && <>
-      <p>Connecting a facility does not upload files or start collection. You will review your sources in PackProof on Windows next. Any earlier file review will need to be recreated for this facility; the original file stays on your computer.</p>
+      <p>Connecting a facility does not upload files or start collection. Any earlier file review will need to be recreated for this facility; the original file stays on your computer.</p>
       {(creating || selected && !selected.guidedSetupAvailable) && <p className="records-notice neutral">This facility also needs guided setup enabled by PackProof before source discovery is available. Saving its connection does not enable collection.</p>}
       <label className="agent-check"><input type="checkbox" checked={consent} disabled={busy || !(creating ? name.trim() : selected)}
         onChange={event => setConsent(event.target.checked)}/>

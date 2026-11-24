@@ -13,7 +13,7 @@ export function validateResumeReport(value: unknown, expected: {
   if (expected.mode !== '--execute-protocol-fixture' || report.mode !== expected.mode || report.schemaVersion !== 1 || report.status !== 'FAIL' || report.resumedFrom ||
       !/^[a-f0-9-]{36}$/.test(report.runId) || report.sourceCommit !== expected.expectedCommit || report.migration?.receiptSha256 !== expected.migrationReceiptSha256 ||
       !Number.isFinite(Date.parse(report.completedAt)) || expected.now - Date.parse(report.completedAt) < 0 || expected.now - Date.parse(report.completedAt) > 86_400_000 ||
-      report.failure?.stage !== 'share_video/mp4' || report.failure?.code !== 'DOWNLOAD_FAILED' || report.simulatedPlatformClaim !== true || report.desktopPlatformClaim !== 'win32' ||
+      report.failure?.stage !== 'share_video/mp4' || report.failure?.code !== 'DOWNLOAD_FAILED' || report.simulatedPlatformClaim !== true || report.desktopPlatformClaim !== 'darwin' ||
       report.cleanup?.shareLinksRevoked !== true || report.cleanup?.localSessionCleared !== true || report.cleanup?.pendingAccessLinkIds?.length ||
       !Array.isArray(report.fixtures) || report.fixtures.length !== 1) return fail();
   const row = report.fixtures[0];

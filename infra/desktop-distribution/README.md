@@ -154,9 +154,9 @@ curl --head --fail --silent --show-error --proto '=https' \
   https://downloads.thepackproof.com/desktop/health.json
 ```
 
-The body must contain `"service":"packproof-desktop-updates"`; headers must include `Cache-Control: no-cache,no-store,must-revalidate` and `X-PackProof-Distribution: desktop-updates-v1`. Confirm the TLS certificate matches the download domain, no redirect occurs, and anonymous access to the S3 object URL is denied. Do not fabricate `latest.yml` or point clients at a development/unsigned artifact just to test readiness.
+The body must contain `"service":"packproof-desktop-updates"`; headers must include `Cache-Control: no-cache,no-store,must-revalidate` and `X-PackProof-Distribution: desktop-updates-v1`. Confirm the TLS certificate matches the download domain, no redirect occurs, and anonymous access to the S3 object URL is denied. Do not fabricate `latest-mac.yml` or point clients at a development/unsigned artifact just to test readiness.
 
-The bucket is private; downloads through CloudFront are intentionally public. OAC authenticates CloudFront's origin request. It does not sign application binaries or replace Authenticode, Developer ID, notarization, updater hash verification, or protected release gates.
+The bucket is private; downloads through CloudFront are intentionally public. OAC authenticates CloudFront's origin request. It does not sign application binaries or replace Developer ID, notarization, updater hash verification, or protected release gates.
 
 ## Connect the signed release workflow
 
@@ -171,21 +171,19 @@ For `desktop-staging-publish` and `desktop-production-publish`, configure:
 
 Require `main` as the deployment branch in both environments. Production should require review and prevent self-approval. Keep signing certificates and notarization credentials in the separate existing `desktop-staging` / `desktop-production` build environments. Do not place signing material in the publish environment or S3 bucket.
 
-The workflow already grants OIDC only to its publish job. Test staging first. The publisher validates signed evidence and all three architecture artifacts before cloud writes, uploads binaries first, and promotes updater metadata last. It checks an exact S3 key through a prefix-restricted list before HEAD, so a missing object is not confused with a denied request. Release roles need no broad bucket listing or CloudFront invalidation permission.
+The workflow already grants OIDC only to its publish job. Test staging first. The publisher validates signed evidence and both macOS architecture artifacts before cloud writes, uploads binaries first, and promotes updater metadata last. It checks an exact S3 key through a prefix-restricted list before HEAD, so a missing object is not confused with a denied request. Release roles need no broad bucket listing or CloudFront invalidation permission.
 
 Paths are fixed:
 
 ```text
-desktop/staging/win32/x64/
 desktop/staging/darwin/x64/
 desktop/staging/darwin/arm64/
-desktop/production/win32/x64/
 desktop/production/darwin/x64/
 desktop/production/darwin/arm64/
 desktop/health.json
 ```
 
-Versioned artifacts get immutable cache headers. `latest.yml` / `latest-mac.yml` always bypass the CDN cache. Range requests remain supported for resumable/differential downloads. Existing artifact versions remain available during rollout; the bucket lifecycle only aborts incomplete multipart uploads after seven days, with no expiry of current releases or old object versions.
+Versioned artifacts get immutable cache headers. `latest-mac.yml` always bypass the CDN cache. Range requests remain supported for resumable/differential downloads. Existing artifact versions remain available during rollout; the bucket lifecycle only aborts incomplete multipart uploads after seven days, with no expiry of current releases or old object versions.
 
 ## Validation performed
 

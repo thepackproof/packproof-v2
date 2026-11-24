@@ -265,10 +265,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: windows-2022
-            platform: win32
-            target: win
-            arch: x64
           - runner: macos-15-intel
             platform: darwin
             target: mac
@@ -304,7 +300,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       - name: Check canonical tokens, source chronology and durable capture
-        if: matrix.platform == 'win32'
+        if: matrix.arch == 'arm64'
         run: |
           npm audit --audit-level=high
           node ../packages/evidence-in-motion/generate-tokens.mjs --check
@@ -320,7 +316,6 @@ jobs:
           name: evidence-in-motion-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.sha }}
           retention-days: 30
           path: |
-            desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.exe
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.dmg
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/*.zip
             desktop/release/development/${{ matrix.platform }}-${{ matrix.arch }}/SHA256SUMS

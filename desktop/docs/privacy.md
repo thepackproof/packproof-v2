@@ -29,9 +29,7 @@ and preserves unrelated provisions and the unresolved legal-entity/address field
 | Native notices | Fixed generic notices for queue, attention, synchronization, connectivity and updates contain no shipment/account content. The desktop-notification setting controls OS notices. | `src/main/workspace-notifications.ts`, `src/main/index.ts` |
 | Updates | Configured packaged staging/production releases check a dedicated feed on startup; download/install is requested by the user. Update requests do not include PackProof credentials or evidence; the distribution provider sees ordinary connection and update-request metadata. | `src/main/updates.ts`, `src/main/index.ts` |
 
-OS-protected encryption has platform limits. Electron uses macOS Keychain and
-Windows DPAPI; Windows protection does not isolate data from other applications
-running as the same OS user. This is not a promise of protection from a
+OS-protected encryption has platform limits. Electron uses macOS Keychain. This is not a promise of protection from a
 compromised account or administrator, and files users export have separate access
 controls. See Electron's [safeStorage documentation](https://www.electronjs.org/docs/latest/api/safe-storage).
 
