@@ -1,4 +1,23 @@
 {
-  "phase": "inspect",
-  "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6"
+  "phase": "facility-inspect",
+  "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
+  "expected": {
+    "api": {
+      "source": "617a58b883328ad04513a48564d33c573b9b7c78",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:1efe5d4761918809195351d8ce56bdf023532975a7cb641ab72133ce20ec4961",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:64"
+    },
+    "worker": {
+      "source": "617a58b883328ad04513a48564d33c573b9b7c78",
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:1efe5d4761918809195351d8ce56bdf023532975a7cb641ab72133ce20ec4961",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:13"
+    },
+    "topologySha256": "eea80fa8e043898d78b13830d21449481476a9428d761570fc4b5358348197f8",
+    "preservationSha256": "1392e1613632c993d07bd250b987caf645166e5cf6d68aead355e981712c1eba"
+  },
+  "facility": {
+    "inventorySha256": "8ab67cf9cc721d6da4c28cef72fdcdaf2b08faaa86196d76acff0a4f95f97fcc",
+    "subjectSha256": "ae396ba52d42be0a0cc5112f47976d36d3dac5b96e0b138e0f9272990c0aa887",
+    "recipientPublicKeySpki": "MCowBQYDK2VuAyEAoB6bLAbu7YSloicfV9OkC6rZfIa87v4BEtXyH6wRhVA="
+  }
 }
