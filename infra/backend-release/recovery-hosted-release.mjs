@@ -302,6 +302,12 @@ async function waitWorker(taskDefinition,deadline) {
   }
   throw Error('RECOVERY_RELEASE_WORKER_CUTOVER_TIMEOUT');
 }
+export function recoveryApiReadyForObservation({express,deployment,image}) {
+  const configs=express?.activeConfigurations,revision=deployment?.targetServiceRevision?.arn;
+  return typeof image==='string'&&image.length>0&&deployment?.status==='SUCCESSFUL'&&
+    typeof revision==='string'&&revision.length>0&&Array.isArray(configs)&&configs.length===1&&
+    configs[0]?.primaryContainer?.image===image&&configs[0]?.serviceRevisionArn===revision;
+}
 async function waitApi(image,deadline) {
   while(Date.now()<deadline) {
     const list=await aws('ecs','list-service-deployments',{cluster:TARGET.cluster,service:TARGET.serviceName});
@@ -310,8 +316,13 @@ async function waitApi(image,deadline) {
     const deployment=(await aws('ecs','describe-service-deployments',{serviceDeploymentArns:[latest.serviceDeploymentArn]})).serviceDeployments?.[0];
     if(deployment?.status==='ROLLBACK_SUCCESSFUL'||deployment?.status==='ROLLBACK_FAILED'||deployment?.status==='STOPPED')throw Error('RECOVERY_RELEASE_API_ROLLED_BACK');
     if(deployment?.status==='SUCCESSFUL') {
-      const snapshot=await current();
-      if(snapshot.api.meta.image===image){preserved(snapshot);return snapshot;}
+      // Express can expose both revisions before the deployment list exposes
+      // the new rollout. An old SUCCESSFUL deployment is not convergence.
+      const express=(await aws('ecs','describe-express-gateway-service',{serviceArn:TARGET.serviceArn})).service;
+      if(recoveryApiReadyForObservation({express,deployment,image})) {
+        const snapshot=await current();
+        if(snapshot.api.meta.image===image){preserved(snapshot);return snapshot;}
+      }
     }
     await wait(10_000);
   }

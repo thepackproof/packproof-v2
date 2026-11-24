@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {hash} from './backend-deployment-plan.mjs';
 import {reconstructionDigest,hostedCollectorTarget} from './reconstruction-v11-release-review.mjs';
-import {recoverySessionPolicy,authorizeCoordinatorPhase,ownerReviewFromReceipt} from './recovery-hosted-release.mjs';
+import {recoverySessionPolicy,authorizeCoordinatorPhase,ownerReviewFromReceipt,recoveryApiReadyForObservation} from './recovery-hosted-release.mjs';
 import {validateRecoveryOwnerReview,recoveryInventory,recoveryReviewSchema} from './recovery-hosted-migration.mjs';
 
 const source='a'.repeat(40),role=name=>'arn:aws:iam::784514617543:role/'+name;
@@ -15,6 +15,45 @@ const definition=kind=>({family:kind==='api'?'packproof-v2-staging-cluster-packp
 const snapshot={api:{taskDefinition:definition('api'),express:{infrastructureRoleArn:role('packproof-v2-staging-infrastructure')}},
   worker:{taskDefinition:definition('worker'),service:{serviceArn:'arn:aws:ecs:us-east-1:784514617543:service/packproof-v2-staging-cluster/packproof-records-worker'}}};
 const owner={ownerLaunch:{executionRoleArn:role('packproof-v2-staging-execution')}};
+
+const targetImage=hostedCollectorTarget.repository+'@sha256:'+'c'.repeat(64);
+const previousImage=hostedCollectorTarget.repository+'@sha256:'+'b'.repeat(64);
+const revision=id=>'arn:aws:ecs:us-east-1:784514617543:service-revision/packproof-v2-staging-cluster/packproof-v2-staging-api/'+id;
+const targetConfig={serviceRevisionArn:revision('target'),primaryContainer:{image:targetImage}};
+const previousConfig={serviceRevisionArn:revision('previous'),primaryContainer:{image:previousImage}};
+const successfulDeployment={status:'SUCCESSFUL',targetServiceRevision:{arn:targetConfig.serviceRevisionArn}};
+
+test('API cutover waits when the latest observed successful deployment is old and Express has two active configurations',()=>{
+  const deployment={status:'SUCCESSFUL',targetServiceRevision:{arn:previousConfig.serviceRevisionArn}};
+  for(const activeConfigurations of [[previousConfig,targetConfig],[targetConfig,previousConfig],[previousConfig]])
+    assert.equal(recoveryApiReadyForObservation({express:{activeConfigurations},deployment,image:targetImage}),false);
+});
+
+test('API cutover waits for the new deployment to succeed even when only the target configuration is active',()=>{
+  assert.equal(recoveryApiReadyForObservation({express:{activeConfigurations:[targetConfig]},
+    deployment:{...successfulDeployment,status:'IN_PROGRESS'},image:targetImage}),false);
+});
+
+test('API cutover waits when the target image configuration and successful deployment name different revisions',()=>{
+  assert.equal(recoveryApiReadyForObservation({express:{activeConfigurations:[targetConfig]},
+    deployment:{...successfulDeployment,targetServiceRevision:{arn:revision('different')}},image:targetImage}),false);
+  assert.equal(recoveryApiReadyForObservation({express:{activeConfigurations:[previousConfig,targetConfig]},
+    deployment:successfulDeployment,image:targetImage}),false);
+});
+
+test('API cutover permits strict observation only for a singleton target image on the matching successful revision',()=>{
+  assert.equal(recoveryApiReadyForObservation({express:{activeConfigurations:[targetConfig]},
+    deployment:successfulDeployment,image:targetImage}),true);
+});
+
+test('missing or malformed API convergence metadata cannot permit strict observation',()=>{
+  const valid={express:{activeConfigurations:[targetConfig]},deployment:successfulDeployment,image:targetImage};
+  for(const change of [
+    {express:undefined},{express:{activeConfigurations:[]}},{express:{activeConfigurations:[null]}},
+    {express:{activeConfigurations:{0:targetConfig,length:1}}},{deployment:undefined},
+    {deployment:{status:'SUCCESSFUL'}},{image:undefined},{image:''}
+  ])assert.equal(recoveryApiReadyForObservation({...valid,...change}),false);
+});
 
 test('phase-scoped sessions fit the actual retained runtime identities without granting secret reads or role writes',()=>{
   const observed={...snapshot,api:{...snapshot.api,meta:{commit:'b'.repeat(40)}}};
