@@ -25,13 +25,12 @@ export function prepareRecoveryFacilityInspection({snapshot,subjectSha256,recipi
   const code=readFileSync(new URL('./logistics-facility-inspect.mjs',import.meta.url));
   const inspectorSha256=createHash('sha256').update(code).digest('hex');
   const compressed=brotliCompressSync(code).toString('base64');
-  const script=`process.argv.push(${JSON.stringify(subjectSha256)},${JSON.stringify(recipientPublicKeySpki)});
-import {brotliDecompressSync} from 'node:zlib';import {createHash} from 'node:crypto';
-const code=brotliDecompressSync(Buffer.from('${compressed}','base64'));
-if(createHash('sha256').update(code).digest('hex')!=='${inspectorSha256}')throw Error('FACILITY_CODE_BINDING');
-const timer=setTimeout(()=>process.exit(2),180000);timer.unref();
-try{const inspector=await import('data:text/javascript;base64,'+code.toString('base64'));await inspector.facilityInspectionMain();}
-finally{clearTimeout(timer);}`;
+  const script=`process.argv.push(${JSON.stringify(subjectSha256)},${JSON.stringify(recipientPublicKeySpki)});`+
+    `import{brotliDecompressSync as b}from'node:zlib';import{createHash as h}from'node:crypto';`+
+    `const c=b(Buffer.from('${compressed}','base64'));`+
+    `if(h('sha256').update(c).digest('hex')!=='${inspectorSha256}')throw Error('FACILITY_CODE_BINDING');`+
+    `const t=setTimeout(()=>process.exit(2),180000);t.unref();`+
+    `try{await(await import('data:text/javascript;base64,'+c.toString('base64'))).facilityInspectionMain();}finally{clearTimeout(t);}`;
   const prepared=verifierTaskDefinition(api.taskDefinition,{sourceSha:source,image,version:api.meta.version,script,inventorySha256,runId});
   return {...prepared,source,image,inventorySha256,runId,inspectorSha256,subjectSha256,recipientSha256};
 }
