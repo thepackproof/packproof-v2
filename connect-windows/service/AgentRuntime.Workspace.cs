@@ -149,7 +149,7 @@ public sealed partial class AgentRuntime
                     source.ConfirmedWorkflow=null; source.ProposedWorkflow=null; source.Workflows.Clear();
                     source.ConfirmedDependencies.Clear(); source.RelatedSources.Clear();
                     source.Inventory.Clear(); source.Cursor=null; source.LastScanAt=null; source.LastVerifiedReadAt=null;
-                    source.LastCheckAttemptAt=null; source.LastReadFailed=false; source.RetryAt=null;
+                    source.LastCheckAttemptAt=null; source.LastReadFailed=false; source.PendingReadFailures.Clear(); source.RetryAt=null;
                     source.CoverageGap=false; source.Issue=null;
                     w.Invalidate(); w.Step=source.InspectRole ?? source.Roles[0];
                 }

@@ -385,28 +385,51 @@ public sealed partial class AgentRuntime
         var batch = names.Where(n => string.Compare(n, s.Cursor, StringComparison.OrdinalIgnoreCase) > 0).Take(4).ToArray();
         if (batch.Length == 0) batch = names.Take(4).ToArray();
         var prioritized = changed.Where(n=>present.Contains(n)).Concat(batch).Distinct(StringComparer.OrdinalIgnoreCase);
-        bool readSucceeded = true;
+        bool failureChanged = false;
+        // A producer can remove a failed report before we obtain its bytes. Keep the
+        // coverage gap visible rather than manufacturing a successful observation.
+        foreach (var key in s.PendingReadFailures.Keys.Where(key=>!present.Contains(key)).ToArray())
+        {
+            s.PendingReadFailures.Remove(key);
+            s.CoverageGap = true;
+            failureChanged = true;
+        }
         foreach (var name in prioritized)
         {
             // A single bad report cannot starve the folder: advance the traversal
             // cursor, not the durable file version, when a particular file is busy.
-            try { CaptureWorkspaceFile(w,s,folder,name); }
+            var key = name.ToUpperInvariant();
+            try
+            {
+                CaptureWorkspaceFile(w,s,folder,name);
+                failureChanged |= s.PendingReadFailures.Remove(key);
+            }
             catch (ConnectException e) when (e.Code is "SOURCE_BUSY" or "SOURCE_READ_FAILED" or "SOURCE_SIZE_UNSUPPORTED" or "SOURCE_ACCESS_DENIED")
-            { s.Issue = e.Code; readSucceeded = false; }
+            {
+                failureChanged |= s.PendingReadFailures.GetValueOrDefault(key) != e.Code;
+                s.PendingReadFailures[key] = e.Code;
+            }
         }
         if (batch.Length > 0) s.Cursor = batch[^1];
         s.LastScanAt = batch.Length == 0 || names[^1] == batch[^1] ? now : null;
         s.LastCheckAttemptAt = receiptClock.GetUtcNow();
-        s.LastReadFailed = !readSucceeded;
-        if (readSucceeded)
+        s.LastReadFailed = s.PendingReadFailures.Count > 0;
+        if (s.LastReadFailed)
+        {
+            // Keep attention and the previous verified-read timestamp until the
+            // specific unreadable files have been reopened or removed.
+            s.Issue = s.PendingReadFailures.OrderBy(pair=>pair.Key,StringComparer.Ordinal).First().Value;
+        }
+        else
         {
             s.LastVerifiedReadAt = s.LastCheckAttemptAt;
             s.RetryAt = null;
             // Only clear a read incident after reopening the source and completing a read.
             // File interpretations and pending receipts have independent recovery conditions.
-            if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_ACCESS_DENIED" or "SOURCE_READ_FAILED" or "SOURCE_BUSY")
+            if (s.Issue is "SOURCE_UNREADABLE" or "SOURCE_ACCESS_DENIED" or "SOURCE_READ_FAILED" or "SOURCE_BUSY" or "SOURCE_SIZE_UNSUPPORTED")
                 s.Issue = null;
         }
+        if (failureChanged) Save();
     }
 
     private void CaptureWorkspaceFile(OrderWorkspaceState w, WorkspaceSource s, string folder, string name)

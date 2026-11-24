@@ -210,6 +210,69 @@ public sealed class WorkspaceServiceTests
         }
     }
 
+    [Fact]
+    public async Task Locked_report_stays_unreadable_across_other_batches_and_restart()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root = Directory.CreateTempSubdirectory("pp-workspace-lock-health-").FullName;
+        var folder = Directory.CreateDirectory(Path.Combine(root,"input")).FullName;
+        var output = Directory.CreateDirectory(Path.Combine(root,"output")).FullName;
+        var store = new ProtectedStore(Path.Combine(root,"store"),new TestProtector());
+        store.Initialize();
+        var api = new WorkspaceServer { Active = true };
+        var host = new HostConfiguration("development","https://api.example","https://portal.example","S-1-5-32-545");
+        var state = new LocalState { InstallationId="lock-fixture",Token="fixture",CredentialExpiresAt=DateTimeOffset.UtcNow.AddDays(40) };
+        AgentRuntime Open(LocalState s) => new(host,store,new PackProofClient(host,api),s);
+        try
+        {
+            using (var app = Open(state))
+            {
+                await app.Command("addWorkspaceSource",Json.Element(new {folder,role="order"}),default);
+                await app.Command("setWorkspaceOutput",Json.Element(new {folder=output}),default);
+                await app.Command("activateWorkspace",Json.Element(new{}),default);
+                foreach (var id in new[] {"A","B","C","D","E"})
+                    await File.WriteAllBytesAsync(Path.Combine(folder,id+".json"),Json.Bytes(new {eventId=id,version="1",kind="order",entityNamespace="erp",entityType="order",entityId=id}));
+            }
+            using (var locked = new FileStream(Path.Combine(folder,"A.json"),FileMode.Open,FileAccess.ReadWrite,FileShare.None))
+            {
+                using (var app = Open(store.Read<LocalState>("state.bin")!)) await app.Tick(default);
+                {
+                    var failed = store.Read<LocalState>("state.bin")!.Workspace!.Sources.Single();
+                    Assert.Equal("SOURCE_BUSY",failed.Issue);
+                    Assert.True(failed.LastReadFailed);
+                    Assert.Equal("SOURCE_BUSY",failed.PendingReadFailures["A.JSON"]);
+                    Assert.Equal("D.json",failed.Cursor);
+                    var verified = failed.LastVerifiedReadAt;
+                    // A new runtime has no watcher notifications from the first batch.
+                    using (var resumed = Open(store.Read<LocalState>("state.bin")!))
+                    {
+                        await resumed.Tick(default); // reads E, not the still-locked A
+                        await resumed.Command("checkpoint",null,default);
+                        var pending = store.Read<LocalState>("state.bin")!.Workspace!.Sources.Single();
+                        Assert.Equal("SOURCE_BUSY",pending.Issue);
+                        Assert.True(pending.LastReadFailed);
+                        Assert.Equal(verified,pending.LastVerifiedReadAt);
+                        Assert.Equal("E.json",pending.Cursor);
+                        Assert.Contains("E.JSON",pending.Inventory.Keys);
+                    }
+                }
+            }
+            var reload=store.Read<LocalState>("state.bin")!;
+            reload.Workspace!.Sources.Single().LastScanAt=null;
+            using (var resumed=Open(reload))
+            {
+                await resumed.Tick(default); // wrap and actually reopen A
+                await resumed.Command("checkpoint",null,default);
+                var recovered=store.Read<LocalState>("state.bin")!.Workspace!.Sources.Single();
+                Assert.Empty(recovered.PendingReadFailures);
+                Assert.False(recovered.LastReadFailed);
+                Assert.NotEqual("SOURCE_BUSY",recovered.Issue);
+                Assert.Contains("A.JSON",recovered.Inventory.Keys);
+            }
+        }
+        finally { SqliteConnection.ClearAllPools(); Directory.Delete(root,recursive:true); }
+    }
+
     private static void CopyTree(string source,string destination)
     {
         Directory.CreateDirectory(destination);

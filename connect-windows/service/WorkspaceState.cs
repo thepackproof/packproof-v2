@@ -153,6 +153,9 @@ public sealed class WorkspaceSource
     public DateTimeOffset? LastVerifiedReadAt { get; set; }
     public DateTimeOffset? LastCheckAttemptAt { get; set; }
     public bool LastReadFailed { get; set; }
+    // A successful read of a different file must not resolve a retained sharing violation.
+    // Keys are normalized basenames in the protected, bounded source inventory.
+    public Dictionary<string,string> PendingReadFailures { get; set; } = [];
     public DateTimeOffset? RetryAt { get; set; }
     public string? Issue { get; set; }
     public List<string> MediaJobs { get; set; } = [];
