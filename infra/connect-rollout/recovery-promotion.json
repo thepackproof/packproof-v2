@@ -1,47 +1,23 @@
 {
-  "phase": "promote",
+  "phase": "facility-inspect",
   "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
   "expected": {
     "api": {
       "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
-      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:9325eeae69af9620301fad958956a91b9abd7c4620c71ca8514d32eb144d5f09",
-      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:65"
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:0394622d2c50a9cb4ddb37eaac6152af322bd84ceb8cc35c4eea288e18530b4e",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-cluster-packproof-v2-staging-api:66"
     },
     "worker": {
       "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
-      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:9325eeae69af9620301fad958956a91b9abd7c4620c71ca8514d32eb144d5f09",
-      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:14"
+      "image": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:0394622d2c50a9cb4ddb37eaac6152af322bd84ceb8cc35c4eea288e18530b4e",
+      "taskDefinition": "arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-records-production-worker:15"
     },
     "topologySha256": "eea80fa8e043898d78b13830d21449481476a9428d761570fc4b5358348197f8",
     "preservationSha256": "1392e1613632c993d07bd250b987caf645166e5cf6d68aead355e981712c1eba"
   },
-  "build": {
-    "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
-    "archiveSha256": "8ecbeca6a06310baf166a3a6f84d2b010cfa2757c520799783e2fccf7381f62d",
-    "sourceVersion": "ful5530XmGPcTz3BmFNB_oRST6kYQxbQ",
-    "buildId": "packproof-v2-staging-api:27f11552-38e5-4a72-be03-1841253a7b47",
-    "predecessor": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:1efe5d4761918809195351d8ce56bdf023532975a7cb641ab72133ce20ec4961",
-    "candidate": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:0394622d2c50a9cb4ddb37eaac6152af322bd84ceb8cc35c4eea288e18530b4e",
-    "fallback": "784514617543.dkr.ecr.us-east-1.amazonaws.com/packproof-v2-staging-api@sha256:9325eeae69af9620301fad958956a91b9abd7c4620c71ca8514d32eb144d5f09"
-  },
-  "owner": {
-    "executionRoleArn": "arn:aws:iam::784514617543:role/packproof-v2-staging-execution",
-    "network": {
-      "subnets": [
-        "subnet-0d7611419ad695536",
-        "subnet-002790f4a22ef84ee"
-      ],
-      "securityGroups": [
-        "sg-0fbfe8871eef85488"
-      ],
-      "assignPublicIp": "ENABLED"
-    }
-  },
-  "ownerReceipts": {
-    "reviewSha256": "a645b3a56c7268c1b4bc4fa45b5f91930539bb80858dbd4c9d4dcad51d0ec2d4",
-    "inspection": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/ccfeee586a694a329ba3fb9fbaf31b59",
-    "rehearsal": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/cf05e9f6498f4e4c94a800c37d35df87",
-    "confirmation": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/fcb7841e39f0497a930c9b166ac5b725",
-    "postInspection": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/521fdf79ea5b44fa80e39b0ce8abe246"
+  "facility": {
+    "inventorySha256": "13f05713808a4c077b9388d5609d99ad1bfa16b9ded82b2e447bc1c076d5896e",
+    "subjectSha256": "ae396ba52d42be0a0cc5112f47976d36d3dac5b96e0b138e0f9272990c0aa887",
+    "recipientPublicKeySpki": "MCowBQYDK2VuAyEAoB6bLAbu7YSloicfV9OkC6rZfIa87v4BEtXyH6wRhVA="
   }
 }
