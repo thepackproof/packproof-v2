@@ -54,7 +54,6 @@ import { captureEvidenceType } from "@packproof/copy/custody";
 import { PackProofApi } from "./api/client";
 import { createSessionTokenProvider } from "./auth/token-provider";
 import { cognitoRefresh, defaultCognitoConfig } from "./auth/cognito";
-import { desktopLogisticsContext } from "./auth/desktop-logistics";
 import { ApiError } from "./api/types";
 import type {
   CanonicalProof,
@@ -880,12 +879,6 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     );
   }
 
-  const desktopContext = desktopLogisticsContext();
-  if (session && desktopContext && session.userId !== desktopContext.userId) {
-    return <main className="page narrow-page"><h1>Use your Windows workspace account</h1>
-      <p>Sign in with the account that opened Logistics on this computer.</p>
-      <button className="btn" onClick={() => signOut()}>Switch account</button></main>;
-  }
   if (!session) {
     return (
       <AuthFrame>
@@ -919,7 +912,7 @@ function PackProofApp({ authInitialView }: { authInitialView?: "sign-in" | "crea
     );
   }
 
-  if (!desktopContext && !firstExperience && !isProfileComplete(session)) {
+  if (!firstExperience && !isProfileComplete(session)) {
     return (
       <AuthFrame>
         <ProfileSetupScreen

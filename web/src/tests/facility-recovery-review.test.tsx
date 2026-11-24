@@ -39,7 +39,7 @@ it.each([[], null] as const)('keeps current service access when available destin
   open(legacy, request, true, locations ? [...locations] : null);
   expect(await screen.findByRole('heading', { name: 'Make your facility available' })).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Renew your export file review' })).toBeVisible();
-  expect(screen.getByText('Request a fresh file review')).toBeVisible();
+  expect(screen.getByText(/request a fresh file review from the source computer/i)).toBeVisible();
   expect(screen.getByText(/your current connection is still in place/i)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Disconnect and continue' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /view the separate file/i }));
@@ -48,7 +48,7 @@ it.each([[], null] as const)('keeps current service access when available destin
   expect(request).toHaveBeenCalledTimes(1);
 });
 
-it('uses the existing scoped revoke only after consent and returns the user to Windows after acknowledgement', async () => {
+it('uses the existing scoped revoke only after consent and confirms service access has stopped after acknowledgement', async () => {
   let revoked = false;
   const request = vi.fn(async (_path: string, method?: string) => {
     if (method === 'POST') revoked = true;
@@ -58,8 +58,8 @@ it('uses the existing scoped revoke only after consent and returns the user to W
   const button = await screen.findByRole('button', { name: 'Disconnect and continue' });
   fireEvent.click(screen.getByRole('checkbox', { name: /disconnect the current service access for warehouse pc/i }));
   fireEvent.click(button);
-  await screen.findByRole('heading', { name: 'Continue in PackProof on Windows' });
-  expect(screen.getByText('Preserve work and reconnect')).toBeVisible();
+  await screen.findByRole('heading', { name: 'Service access revoked' });
+  expect(screen.getByText(/preserve pending work on the source computer/i)).toBeVisible();
   expect(request).toHaveBeenCalledWith('/agent-installations/agent-a/actions?organizationId=org-a&environment=sandbox', 'POST',
     { organizationId: 'org-a', environment: 'sandbox', action: 'revoke' }, { 'Idempotency-Key': expect.any(String) });
 });
@@ -99,7 +99,7 @@ it('offers the guarded first connection without revocation and submits only the 
     organizationId:'org-a',environment:'sandbox',action:'connect_facility',configRevision:0,configSha256:null,proposalSha256:'a'.repeat(64),locationId:'site-a',
   },{'Idempotency-Key':expect.any(String)}));
   expect(await screen.findByRole('heading',{name:'This computer is connected'})).toBeVisible();
-  expect(screen.getByRole('status')).toHaveTextContent('Return to PackProof on Windows');
+  expect(screen.getByRole('status')).toHaveTextContent('This computer is connected to its facility.');
   expect(screen.queryByRole('button',{name:'Disconnect and continue'})).not.toBeInTheDocument();
 });
 
@@ -179,14 +179,14 @@ it.each([false, undefined])('keeps a newly named facility waiting for exact setu
   expect(await screen.findByRole('heading', {name:'Setup activation is pending'})).toBeVisible();
   expect(screen.getByRole('status')).toHaveTextContent(initialCapability === false
     ? 'guided setup is not enabled' : 'guided setup availability has not been confirmed');
-  expect(screen.queryByText(/Return to PackProof on Windows/)).not.toBeInTheDocument();
+  expect(screen.queryByText('This computer is connected to its facility.')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name:'Disconnect and continue'})).not.toBeInTheDocument();
   expect(screen.getByRole('link', {name:'Contact PackProof support'})).toHaveAttribute('href',
     'mailto:admin@thepackproof.com?subject=PackProof%20facility%20setup%20activation');
   guidedFacilitySetup = true;
   fireEvent.click(screen.getByRole('button', {name:'Check setup status'}));
   expect(await screen.findByRole('heading', {name:'This computer is connected'})).toBeVisible();
-  expect(screen.getByRole('status')).toHaveTextContent('Return to PackProof on Windows');
+  expect(screen.getByRole('status')).toHaveTextContent('This computer is connected to its facility.');
   expect(request.mock.calls.filter(([,method]) => method === 'POST')).toHaveLength(1);
 });
 
@@ -196,7 +196,7 @@ it('keeps an assigned facility in activation recovery when the review is reopene
   open(legacy + '&intent=facility', request);
   expect(await screen.findByRole('heading', {name:'Setup activation is pending'})).toBeVisible();
   expect(screen.getByRole('button', {name:'Check setup status'})).toBeEnabled();
-  expect(screen.queryByText(/Return to PackProof on Windows/)).not.toBeInTheDocument();
+  expect(screen.queryByText('This computer is connected to its facility.')).not.toBeInTheDocument();
   expect(request).toHaveBeenCalledTimes(1);
 });
 

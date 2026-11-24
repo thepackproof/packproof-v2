@@ -1,10 +1,10 @@
-# PackProof Connect 0.6.0 live rollout
+# Hosted order workspace rollout
 
-This release upgrades the customer-facing order workspace used by PackProof Connect. The hosted API and portal have AWS names containing `staging`. They serve production. The Windows development installer remains available for local folder previews and sample Proofs.
+The customer-facing portal and API use AWS resources whose names contain `staging`. They serve production. Prepare the release from the exact reviewed source and retain the currently served portal for rollback.
 
-## Prepare the reviewed source
+The **Prepare Connect live release** workflow selects the packet profile from the migration inventory. For a recovery packet, follow the [coordinated recovery procedure](../../infra/backend-release/CONNECT_RECOVERY_ROLLOUT.md). The image and upgrade sequence below applies to the legacy bridge from migration 122 to 124.
 
-Use the **Prepare Connect live release** workflow. Its artifact includes the verified backend source archive, the two CodeBuild requests, the Cognito-enabled portal, a file checksum manifest and an exact copy of the current portal for rollback. It uses the existing AWS account in us-east-1. A pull-request build can be rehearsed before merge. After merge, prepare again at the exact source commit selected for production. The signed installer and both hosted services must identify that source.
+## Prepare the release packet
 
 To reproduce the packet from a clean checkout with Node 24 and Python 3:
 
@@ -45,30 +45,27 @@ At ECR promotion, use `publish` in place of `check`. It publishes the verified i
 3. Run the candidate owner's transactional rehearsal against the observed ledger. Review its receipt and apply using the same review and successful rehearsal. The owner adds only the outstanding migrations. It preserves earlier Proofs, immutable originals, grants and revisions. Obtain independent API and worker readback at 124.
 4. Qualify the candidate with the workspace switch closed. Promote the worker, verify its tasks, then promote the API and verify its public identity.
 5. Publish the portal using the verified predecessor and candidate directories. The publisher compares the running API commit, installs assets before replacing the entry point, invalidates CloudFront and verifies the served files.
-6. Enable `PACKPROOF_ORDER_WORKSPACE_ENABLED` with the coordinated workspace-switch operation. It checks the two running services and the portal identity. Approve a pilot installation through the actual portal with an entitled account, collect an authorized test order, and compare its hosted Proof to the Windows export.
-7. Release the signed Windows build through the production feed after completing the acceptance checks. A new installation and an in-place upgrade must retrieve the accepted, signed bytes.
+6. Enable `PACKPROOF_ORDER_WORKSPACE_ENABLED` with the coordinated workspace-switch operation. It checks the two running services and the portal identity.
 
-The backend commands, private review documents and AWS request constructors are in [Hosted backend rollout](../../infra/backend-release/connect-hosted-rollout.md). The platform signing settings, distribution change set and exact build/publish workflow are in [Signed Windows rollout](releases/SIGNED_WINDOWS_ROLLOUT.md).
-
-For the existing downloads stack, the unexecuted change set prepared on November 18 is `connect-release-paths-20261118-004e50bc` in `packproof-desktop-updates` (us-east-1). Its review showed two new Connect publishing roles and two in-place distribution and bucket-policy updates. Describe the change set again before executing. If the stack has changed, prepare a new change set against its current template.
+See the [hosted backend rollout](../../infra/backend-release/connect-hosted-rollout.md) for commands, private review documents and AWS request constructors.
 
 ```sh
 node infra/connect-portal-release.mjs promote ../connect-release/previous-portal ../connect-release/candidate/portal
 node infra/connect-portal-release.mjs verify ../connect-release/candidate/portal
 ```
 
-For the end-to-end check, run the following from the operator's Windows computer with a short-lived signed-in session in `PACKPROOF_OPERATOR_TOKEN`. Supply the actual pilot organization, environment, Proof ID and output folder. The check uses read-only requests, compares the current revision and validates each exported file hash. Its receipt contains the source commit, revision, file count and time.
+To compare a local Proof export with its hosted revision, supply the selected organization, environment and Proof ID. Set `PACKPROOF_OPERATOR_TOKEN` to a short-lived operator token authorized for that organization. The checker verifies each exported file hash and reports the source commit and revision.
 
-```powershell
-node infra/connect-rollout/check-order.mjs $source $organizationId $environment $proofId $outputFolder
+```sh
+node infra/connect-rollout/check-order.mjs "$SOURCE" "$ORGANIZATION_ID" "$ENVIRONMENT" "$PROOF_ID" "$OUTPUT_FOLDER"
 ```
 
 ## Recovery
 
-Close the workspace switch before restricting new activity. Preserve local queues, grants, proof output and committed database history. If the portal needs reversal, restore the captured release using the same origin:
+Close the workspace switch before restricting new activity. Preserve existing grants, stored originals and committed database history. If the portal needs reversal, restore the captured release using the same origin:
 
 ```sh
 node infra/connect-portal-release.mjs rollback ../connect-release/candidate/portal ../connect-release/previous-portal
 ```
 
-For backend recovery after database migration, use the qualified compatibility image and reconcile work accepted since cutover. A pre-upgrade task definition alone is insufficient. Restore a database recovery point into a separate instance for investigation. For Windows, keep the existing protected data directory and use the signed forward-recovery installer process.
+For backend recovery after database migration, use the qualified compatibility image and reconcile work accepted since cutover. A pre-upgrade task definition alone is insufficient. Restore a database recovery point into a separate instance for investigation.

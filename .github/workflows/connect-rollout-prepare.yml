@@ -9,7 +9,8 @@ on:
       - 'infra/connect-portal-runtime*.mjs'
       - '.github/workflows/connect-portal-publish.yml'
       - 'infra/backend-release/connect-hosted*'
-      - 'docs/windows-connect/LIVE_ROLLOUT.md'
+      - 'infra/verify-hosted-approval*.mjs'
+      - 'docs/releases/hosted-portal-rollout.md'
 
 permissions:
   contents: read
@@ -37,7 +38,7 @@ jobs:
           npm ci --prefix web --no-audit --no-fund
       - name: Check rollout, rollback and publication commands
         run: |
-          node --test infra/connect-rollout/*.test.mjs infra/connect-portal-release.test.mjs infra/connect-portal-runtime.test.mjs infra/backend-release/connect-hosted-*.test.mjs infra/desktop-distribution/configure-connect-environments.test.mjs
+          node --test infra/connect-rollout/*.test.mjs infra/connect-portal-release.test.mjs infra/connect-portal-runtime.test.mjs infra/backend-release/connect-hosted-*.test.mjs infra/verify-hosted-approval.test.mjs
           python3 -m py_compile infra/connect-rollout/stage-private.py
       - name: Select the release packet from the files under review
         id: packet

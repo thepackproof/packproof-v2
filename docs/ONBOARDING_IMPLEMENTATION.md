@@ -25,7 +25,7 @@ All clients use `packages/onboarding/model.ts`. Replay is session-only and does 
 
 1. Deploy this API before migration 075. Startup/readiness tolerate only the absence of this optional feature migration; all prior receipts and every present checksum remain mandatory. The onboarding endpoint returns 503 until its receipt exists. This lets the old task drain before the database inventory changes.
 2. Run `scripts/onboarding-migrate.mjs --inspect`, then `--apply`, in the hash-pinned candidate image with owner components injected by the existing execution role. It checks the exact database, verified TLS, existing inventory, and supplied migration SHA-256; uses a separate expiring login for migration; grants only SELECT/INSERT on onboarding events to the existing runtime role; and cleans up the temporary login. Do not reuse the hash-pinned desktop-074 operator. Verify the new endpoint with a runtime login afterward.
-3. Publish the web client; build Android/iOS and Windows/macOS release candidates from this source.
+3. Publish the web client; build Android/iOS and macOS release candidates from this source.
 4. Check the six spotlight positions, font scaling, reduced motion, skip/reopen, cross-device completion, replay, and one first-Proof flow on representative clients.
 5. Promote verified signed packages through the existing app-store/desktop release process.
 

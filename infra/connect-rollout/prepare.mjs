@@ -86,8 +86,8 @@ async function inspect(directory, source) {
     const request = await loadJson(path.join(directory, profile + '.json'));
     if (json(request) !== json(buildRequest(profile, source, exact.archiveSha256))) throw Error('The CodeBuild request differs for ' + profile);
   }
-  const windows = await loadJson(path.join(root, 'connect-windows/package.json'));
-  return { schema: 'packproof.connect-rollout/v1', version: windows.version, source, apiOrigin: target.api, webOrigin: target.web,
+  // Migration 124 qualifies the 0.6.0 collector protocol for this legacy packet.
+  return { schema: 'packproof.connect-rollout/v1', version: '0.6.0', source, apiOrigin: target.api, webOrigin: target.web,
     migrationInventorySha256: exact.migrationInventorySha256, approvedPredecessorImage: predecessor,
     files: await inventory(directory) };
 }
@@ -117,7 +117,7 @@ async function main() {
         await writeFile(path.join(temporary, legacy + '.json'), json(buildRequest(legacy, source, archive.archiveSha256)));
       }
       const documents = profile === 'recovery-v1' ? ['infra/backend-release/CONNECT_RECOVERY_ROLLOUT.md'] :
-        ['docs/windows-connect/LIVE_ROLLOUT.md', 'docs/windows-connect/releases/SIGNED_WINDOWS_ROLLOUT.md', 'infra/backend-release/connect-hosted-rollout.md'];
+        ['docs/releases/hosted-portal-rollout.md', 'infra/backend-release/connect-hosted-rollout.md'];
       for (const name of documents) {
         await cp(path.join(root, name), path.join(temporary, name), { recursive: true });
       }

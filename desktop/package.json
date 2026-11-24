@@ -12,9 +12,8 @@
     "test": "vitest run",
     "dev": "npm run build && electron .",
     "start": "electron .",
-    "package": "npm run build && electron-builder --config electron-builder.config.cjs --publish never",
-    "package:win": "npm run package -- --win nsis --x64",
-    "package:mac": "npm run package -- --mac",
+    "package": "npm run build && electron-builder --config electron-builder.config.cjs --mac --publish never",
+    "package:mac": "npm run package",
     "check": "npm run typecheck && npm test",
     "test:release": "node --test tests/release-policy.test.cjs tests/release-distribution.test.cjs",
     "verify:artifacts": "node scripts/verify-artifacts.cjs"

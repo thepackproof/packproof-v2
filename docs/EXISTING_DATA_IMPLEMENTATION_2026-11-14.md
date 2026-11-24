@@ -48,7 +48,7 @@ The synthetic contract corpus is shared by TypeScript and C# through `typed-sour
 - Each displayed quantity retains its batch, assertion, source revision and derived locator.
 - An unrelated order in the same original remains absent from the case field extract and investigation package.
 
-`backend/tests/reconstruction.test.ts` covers reversed arrival, corrected snapshots, split allocation, issue history, source outages, separate flags and complete pagination beyond 1,000 assertions. `connect-windows/service-tests/SourceSubscriptionTests.cs` exercises the headless three-source service and isolates one drifting or unreadable source while others continue. These are internal synthetic acceptance results, not G1/G2 site acceptance.
+`backend/tests/reconstruction.test.ts` covers reversed arrival, corrected snapshots, split allocation, issue history, source outages, separate flags and complete pagination beyond 1,000 assertions. These are internal synthetic acceptance results, not G1/G2 site acceptance.
 
 ## Versions and rollback
 

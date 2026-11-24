@@ -236,10 +236,9 @@ current manifest, retains the previous release, verifies the exact live API
 source/image and publishes to the existing Connect CloudFront distribution.
 The Sites project for the main website is a separate surface.
 
-Finally record the matching Windows0.7.1 installer source/artifact and installed
-100%/125% screenshots, then run the original combined state: retained installation
-and queued evidence, no assigned facility, expired saved review. Facility recovery
-must lead; the saved report exposes retained facts only until a facility is bound.
+Check the hosted authorization contract using an existing installation with queued
+evidence, no assigned facility, and an expired saved review. The saved report
+exposes retained facts only until a facility is bound.
 Verify that neither expired nor current report metadata can start file renewal or
 browser report approval before binding. Then verify facility assignment and the
 normal facility-scoped source review against the newly deployed backend with

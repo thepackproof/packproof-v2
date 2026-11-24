@@ -45,7 +45,7 @@ it('shows one configuration submission, retains its receipt across refreshes, an
   expect(screen.getByRole('status')).toHaveTextContent('Saving your decision');
   expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
   await act(async () => { acknowledge(); });
-  const message = 'Configuration approved. Return to PackProof Connect to continue.';
+  const message = 'Configuration approved.';
   expect(screen.getByText(message)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Configuration approved' })).toBeDisabled();
   current = installation;
@@ -78,7 +78,7 @@ it('keeps a configuration rejection beside the action through a successful autho
   fail = false;
   await act(async () => { fireEvent.click(approve); });
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByText(/Configuration approved\. Return/)).toBeVisible();
+  expect(screen.getByText('Configuration approved.')).toBeVisible();
   const writes = request.mock.calls.filter(([, method]) => method === 'POST');
   expect(writes).toHaveLength(2);
   expect(writes[0][3]?.['Idempotency-Key']).toEqual(expect.any(String));
@@ -197,7 +197,7 @@ it('enables separately approved source setup without a legacy CSV configuration 
   fireEvent.click(screen.getByRole('checkbox', { name: /I approve source setup on Source setup PC/ }));
   fireEvent.click(enable);
   await waitFor(() => expect(request).toHaveBeenCalledWith('/agent-installations/source-agent/actions?organizationId=org-a&environment=sandbox', 'POST', { organizationId: 'org-a', environment: 'sandbox', action: 'approve_source_setup', configRevision: 1, configSha256: 'setup-digest' }, expect.objectContaining({ 'Idempotency-Key': expect.any(String) })));
-  expect(await screen.findByText(/Source setup is enabled. Return to PackProof Connect/)).toBeVisible();
+  expect(await screen.findByText(/Source setup is enabled. This computer can now propose/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Enable source setup' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Approve automatic collection' })).not.toBeInTheDocument();
 });

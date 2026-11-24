@@ -37,7 +37,7 @@ Authenticate the originating PackProof account and provide a stable
     "schemaVersion": 1,
     "installationId": "opaque installation identifier",
     "appVersion": "1.0.0",
-    "platform": "win32",
+    "platform": "darwin",
     "captureStartedAt": "2026-09-27T10:00:00.000Z",
     "captureEndedAt": "2026-09-27T10:02:00.000Z",
     "cameraLabel": "USB Camera",

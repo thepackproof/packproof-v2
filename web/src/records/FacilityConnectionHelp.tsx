@@ -28,10 +28,10 @@ export function FacilityConnectionHelp({ installation, reviewRef, hasAvailableFa
           <p>To use this computer with PackProof Logistics, replace its current approval and choose a facility. Revoking the approval stops service access for this installation.</p>
           <button type="button" className="records-button secondary" onClick={reviewServiceAccess}>Review service access</button>
         </>}
-        <p>{revoked ? 'Service access has been revoked. Continue in PackProof on the same Windows computer.' : 'After you revoke service access, return to PackProof on the same Windows computer.'}</p>
+        <p>{revoked ? 'Service access has been revoked.' : 'After revoking access, keep any pending work on the source computer.'}</p>
         <ol>
-          <li>Select <b>Check connection again</b>. When prompted, check the box to preserve pending work, then select <b>Preserve work and reconnect</b>.</li>
-          <li>Select <b>Connect this computer to a facility</b>. In the browser, match the code from the app, select your facility under <b>Approved location</b>, and complete <b>Approve setup only</b>.</li>
+          <li>Preserve pending work before requesting a new enrollment from the same computer.</li>
+          <li>Match the new enrollment code in the browser, choose the approved facility, and confirm setup.</li>
         </ol>
         </>}
       </div>

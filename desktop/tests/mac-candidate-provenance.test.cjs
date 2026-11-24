@@ -9,7 +9,7 @@ function fixture(arch='x64') {
   const candidate = structuredClone(descriptor), expected = candidate.artifacts.find(item=>item.arch===arch);
   return [candidate,arch,{id:candidate.runId,repository:{full_name:candidate.repository},head_repository:{full_name:candidate.repository},head_sha:candidate.sourceCommit,head_branch:'main',event:'workflow_dispatch',path:'.github/workflows/desktop-release.yml',status:'completed',conclusion:'failure'},candidate.artifacts.map(item=>({name:`Signed production / darwin / ${item.arch}`,status:'completed',conclusion:'success'})),{...expected,name:`packproof-desktop-production-darwin-${arch}-${candidate.sourceCommit}`,expired:false,workflow_run:{id:candidate.runId,head_sha:candidate.sourceCommit}}];
 }
-test('both native candidates remain valid when only the unrelated Windows job failed',()=>{
+test('both native candidates remain valid when an unrelated job failed',()=>{
   for(const arch of ['x64','arm64']) assert.equal(validateProvenance(...fixture(arch)).arch,arch);
 });
 test('rejects wrong source, branch, workflow, repository and unsuccessful selected signing jobs',()=>{
@@ -32,26 +32,16 @@ test('candidate descriptor requires exact two architectures and distinct positiv
 });
 test('release workflow propagates exact platform scope before cloud credential access',()=>{
   const workflow=YAML.parse(fs.readFileSync(path.join(__dirname,'../../.github/workflows/desktop-release.yml'),'utf8'));
-  assert.deepEqual(workflow.on.workflow_dispatch.inputs.platforms.options,['all','mac','windows']);
-  assert.deepEqual(workflow.jobs.signed.needs,['plan','rnd-release-policy']);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.platforms.options,['mac']);
+  assert.equal(workflow.jobs.signed.needs,'rnd-release-policy');
   assert.match(workflow.jobs.signed.if,/needs\.rnd-release-policy\.outputs\.allowed == 'true'/);
-  assert.match(workflow.jobs.signed.strategy.matrix,/needs\.plan\.outputs\.matrix/);
-  assert.deepEqual(workflow.jobs.publish.needs,['plan','signed','rnd-release-policy']);
+  assert.deepEqual(workflow.jobs.signed.strategy.matrix.include.map(row => [row.platform, row.arch]), [['darwin','x64'],['darwin','arm64']]);
+  assert.deepEqual(workflow.jobs.publish.needs,['signed','rnd-release-policy']);
   assert.match(workflow.jobs.publish.if,/needs\.rnd-release-policy\.outputs\.allowed == 'true'/);
   assert.equal(workflow.jobs.publish.env.PACKPROOF_RELEASE_PLATFORMS,'${{ inputs.platforms }}');
   const steps=workflow.jobs.publish.steps;
   const gate=steps.findIndex(step=>step.name?.startsWith('Validate acceptance'));
-  assert.ok(gate<steps.findIndex(step=>step.uses?.startsWith('aws-actions/configure-aws-credentials')));
+  assert.ok(gate >= 0 && gate<steps.findIndex(step=>step.uses?.startsWith('aws-actions/configure-aws-credentials')));
   assert.match(steps[gate].run,/validateAcceptance\([\s\S]*process\.env\.PACKPROOF_RELEASE_PLATFORMS/);
-  assert.equal(steps.find(step=>step.uses?.startsWith('actions/download-artifact')).with.pattern,'${{ needs.plan.outputs.artifact-pattern }}');
-  // Execute the matrix planner for every scope to check actual runner/artifact routing.
-  const script=workflow.jobs.plan.steps.find(step=>step.id==='scope').run.replace(/^node <<'NODE'\n/,'').replace(/\nNODE\s*$/,'');
-  const vm=require('node:vm');
-  for(const [scope,wanted] of [['mac',['darwin/x64','darwin/arm64']],['windows',['win32/x64']],['all',['win32/x64','darwin/x64','darwin/arm64']]]) {
-    let result='';
-    vm.runInNewContext(script,{require:name=>name==='node:fs'?{appendFileSync:(_,value)=>result+=value}:require('../scripts/check-acceptance.cjs'),process:{env:{PACKPROOF_RELEASE_PLATFORMS:scope,RELEASE_CHANNEL:'production',GITHUB_SHA:descriptor.sourceCommit,GITHUB_OUTPUT:'unused'}}});
-    const matrix=JSON.parse(result.split('\n')[0].slice('matrix='.length));
-    assert.deepEqual(matrix.include.map(row=>`${row.platform}/${row.arch}`),wanted);
-    assert.ok(result.includes(`artifact-pattern=packproof-desktop-production-${scope==='mac'?'darwin':scope==='windows'?'win32':'*'}-*-${descriptor.sourceCommit}`));
-  }
+  assert.equal(steps.find(step=>step.uses?.startsWith('actions/download-artifact')).with.pattern,'packproof-desktop-${{ inputs.channel }}-darwin-*-${{ github.sha }}');
 });

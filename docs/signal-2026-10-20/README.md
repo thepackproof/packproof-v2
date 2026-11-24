@@ -52,14 +52,14 @@ Desktop journals formerly marked `COMPLETE` without a durable-confirmation marke
 
 `EXPO_PUBLIC_PACKPROOF_SIGNAL` (native) and `VITE_PACKPROOF_SIGNAL` (web/desktop) default on in this branch and can be set to `false` at build time. Flags are read at startup; they are not switched during a recording. EAS `signal-review` and `signal-ios-simulator` inherit existing internal profiles and retain their release validation.
 
-The review workflow runs **web → Android → iOS and desktop**. Native and desktop packages use existing review controls; no production signing credentials were changed. Desktop development identities are isolated and have no verified publisher signing: Windows is unsigned; macOS uses an ad-hoc signature and is not notarized. iOS output is a simulator app with the Share Extension, not a signed device IPA or TestFlight build.
+The review workflow runs **web → Android → iOS and desktop**. Native and desktop packages use existing review controls; no production signing credentials were changed. Desktop development identities are isolated and have no verified publisher signing: macOS uses an ad-hoc signature and is not notarized. iOS output is a simulator app with the Share Extension, not a signed device IPA or TestFlight build.
 
 | Platform | Review configuration |
 | --- | --- |
 | Web | Production Vite bundle; existing server/auth configuration |
 | Android | Existing internal local-review builder; app 1.0.1, versionCode 66, `com.packproof.mobile`; generated review signing key, not Play signing |
 | iOS | App 1.0.1, build 1, `com.packproof.mobile`; minimum iOS 15.1; simulator Release build, signing disabled |
-| Desktop | Windows x64, macOS x64 and arm64; existing development identities; minimum macOS 13 |
+| Desktop | macOS x64 and arm64; existing development identities; minimum macOS 13 |
 
 Android compiles/targets API 36; the installed React Native dependency minimum is API 24. Review versionCode 66 is lower than production profile 70 and has different signing: **do not uninstall an existing production app with pending evidence to install this APK**. Use a dedicated review device/profile. These configuration values do not substitute for artifact provenance or installed-device verification.
 

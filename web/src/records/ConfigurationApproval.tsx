@@ -7,19 +7,18 @@ interface ConfigurationApprovalProps {
   approved?: boolean;
   error?: string | null;
   notice?: string | null;
-  recoveryHint?: string;
   onApprove: () => void;
 }
 
 const reviewWindowMs = 30 * 60 * 1000;
-const freshReview = 'In PackProof Connect, reopen the selected local report and request a fresh review.';
+const freshReview = 'Reopen the selected local report on the source computer and request a fresh review.';
 
 export function configurationReviewDeadline(contract: ConfigurationApprovalProps['sourceContract']) {
   if (contract?.schema !== 'packproof.scheduled-csv/v2') return null;
   return Date.parse(contract.historyPolicy?.observedAt ?? '') + reviewWindowMs;
 }
 
-export function ConfigurationApproval({ proposalSha256, sourceContract, busy, approved = false, error, notice, recoveryHint, onApprove }: ConfigurationApprovalProps) {
+export function ConfigurationApproval({ proposalSha256, sourceContract, busy, approved = false, error, notice, onApprove }: ConfigurationApprovalProps) {
   const [consentedDigest, setConsentedDigest] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now);
   const deadline = configurationReviewDeadline(sourceContract);
@@ -55,7 +54,7 @@ export function ConfigurationApproval({ proposalSha256, sourceContract, busy, ap
 
   return <div className="source-approval-action">
     {unavailable && !approved && <p role="status" className="records-notice warning">
-      {expired ? 'This configuration review expired after 30 minutes.' : 'This configuration review is incomplete.'} {recoveryHint || freshReview}
+      {expired ? 'This configuration review expired after 30 minutes.' : 'This configuration review is incomplete.'} {freshReview}
     </p>}
     <label className="agent-check">
       <input type="checkbox" checked={consent && !unavailable} disabled={busy || unavailable || approved}

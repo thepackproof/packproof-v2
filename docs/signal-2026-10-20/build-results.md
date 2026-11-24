@@ -7,7 +7,6 @@ All six final build targets passed in [run 39425835098](https://github.com/thepa
 | Web | Passed | Production bundle | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12264984628) |
 | Android | Passed | Release APK with review signing | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12266362321) |
 | iOS | Passed | Release simulator app and Share Extension | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12267941935) |
-| Windows x64 | Passed | Development EXE installer | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12266646731) |
 | macOS Intel | Passed | Development DMG and ZIP | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12267220108) |
 | macOS Apple Silicon | Passed | Development DMG and ZIP | [Download](https://github.com/thepackproof/packproof-v2/actions/runs/39425835098/artifacts/12265768931) |
 
@@ -29,7 +28,7 @@ Use a dedicated review device or emulator. This APK does not upgrade a different
 
 The focused receipt/recording-review checks (5), web retained-take checks (3), and desktop evidence-engine checks (25) passed. TypeScript and bundle compilation passed. The iOS generated Share Extension project check and full Xcode simulator Release build passed. Broad end-to-end suites were not added or run for this work.
 
-The iOS package is simulator-only, with signing disabled; no device IPA or TestFlight release was produced. Desktop development packages have isolated identities: Windows is unsigned, and macOS is ad-hoc signed without notarization. These are internal review packages, not production releases.
+The iOS package is simulator-only, with signing disabled; no device IPA or TestFlight release was produced. Desktop development packages have isolated identities: macOS is ad-hoc signed without notarization. These are internal review packages, not production releases.
 
 Installed-app visual comparison, physical camera/biometric/lifecycle behavior, account-switch integration, real canonical saved/share outcomes, and upgrade/rollback exercises remain **not executed**. Their absence is documented in [README.md](README.md) and [coverage.json](coverage.json). A successful build does not establish those acceptance results.
 

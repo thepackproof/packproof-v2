@@ -15,7 +15,7 @@ export class DesktopEvidenceTransport implements EvidenceTransport {
     const policy = capabilities.desktopCapture;
     if (!policy || !Array.isArray(policy.registrationVersions) || !policy.registrationVersions.includes(1) || policy.client !== 'DESKTOP_CAMERA' || policy.surface !== 'DESKTOP' || policy.timingProvenance !== 'CLIENT_REPORTED_NOT_INDEPENDENTLY_VERIFIED' || !Number.isSafeInteger(policy.maxBytes) || policy.maxBytes < 1 || !Number.isSafeInteger(policy.maxDurationSeconds) || policy.maxDurationSeconds < 1) throw new DesktopApiError('DESKTOP_CAPTURE_UNSUPPORTED', 'This server has not enabled desktop recording yet. Your original is safely retained on this computer.', 409);
     if (input.byteSize > policy.maxBytes || input.recordedDurationMs > policy.maxDurationSeconds * 1000) throw new DesktopApiError('CAPTURE_RECORDING_LIMIT', 'This recording exceeds the server recording limit. Your original remains on this computer.', 422);
-    if (!['win32', 'darwin'].includes(input.metadata.platform)) throw new DesktopApiError('UNSUPPORTED_DESKTOP_PLATFORM', 'Desktop recording is supported on Windows and macOS.', 422);
+    if (!['win32', 'darwin'].includes(input.metadata.platform)) throw new DesktopApiError('UNSUPPORTED_DESKTOP_PLATFORM', 'This recording has an unsupported capture platform.', 422);
     if (!input.metadata.endedAt) throw new DesktopApiError('INCOMPLETE_CAPTURE', 'Finish recording before uploading. The local original is preserved.', 422);
     this.api.assertAccount(input.accountId);
     const session = input.captureSessionId ? await this.api.recoverCaptureSession(input.proofId, input.captureSessionId, signal) : await this.api.registerDesktopRecording(input.proofId, input.jobId, {

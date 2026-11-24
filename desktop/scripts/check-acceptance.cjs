@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 
 const required = [
-  'windows-install-upgrade-uninstall', 'macos-intel-install-upgrade', 'macos-arm-install-upgrade',
+  'macos-intel-install-upgrade', 'macos-arm-install-upgrade',
   'authentication-refresh-logout-isolation', 'camera-permissions-disconnect', 'continuous-recording-valid-media',
   'live-barcode-and-usb-scanner', 'hash-upload-commit-manifest', 'offline-reconnect-and-restart',
   'machine-restart-and-disk-full', 'expired-upload-authorization', 'marketplace-orders-and-tracking',
@@ -13,26 +13,25 @@ const required = [
 // passes. It never waives signing, hashes, privacy review or reporting delivery.
 const deviceChecks = new Set(required.filter(id => !['privacy-review', 'centralized-error-reporting-delivery'].includes(id)));
 
-function validatePlatformScope(value = 'all') {
-  if (!['all', 'mac', 'windows'].includes(value)) throw new Error('Release platforms must be all, mac or windows.');
+function validatePlatformScope(value = 'mac') {
+  if (value !== 'mac') throw new Error('Release platforms must use the mac scope.');
   return value;
 }
 
-function platformsForScope(value = 'all') {
-  const scope = validatePlatformScope(value);
-  return scope === 'mac' ? ['darwin/x64', 'darwin/arm64'] : scope === 'windows' ? ['win32/x64'] : ['win32/x64', 'darwin/x64', 'darwin/arm64'];
+function platformsForScope(value = 'mac') {
+  validatePlatformScope(value);
+  return ['darwin/x64', 'darwin/arm64'];
 }
 
-function requiredForScope(value = 'all') {
-  const scope = validatePlatformScope(value);
-  return required.filter(id => scope === 'all' || (scope === 'mac' ? id !== 'windows-install-upgrade-uninstall' : !['macos-intel-install-upgrade', 'macos-arm-install-upgrade'].includes(id)));
+function requiredForScope(value = 'mac') {
+  validatePlatformScope(value);
+  return [...required];
 }
 
-function validateAcceptance(report, expectedCommit, value = 'all') {
+function validateAcceptance(report, expectedCommit, value = 'mac') {
   const scope = validatePlatformScope(value);
   if (!report || typeof report !== 'object' || Array.isArray(report) || !expectedCommit || report.sourceCommit !== expectedCommit) throw new Error('Release acceptance must identify the exact source commit.');
-  // Legacy records describe the original all-platform release only.
-  if ((report.platforms === undefined ? 'all' : validatePlatformScope(report.platforms)) !== scope) throw new Error('Release acceptance platform scope does not match this promotion.');
+  if (report.platforms !== scope) throw new Error('Release acceptance platform scope does not match this promotion.');
   if (typeof report.approvedBy !== 'string' || !report.approvedBy.trim() || typeof report.testedAt !== 'string' || !Number.isFinite(Date.parse(report.testedAt))) throw new Error('Release acceptance requires an accountable reviewer and test date.');
   const waiver = report.deviceCheckWaiver;
   if (waiver !== undefined && (!waiver || typeof waiver !== 'object' || Array.isArray(waiver)

@@ -33,17 +33,17 @@ function existingReleaseObject(bucket, key, execute = aws) {
 async function inspectRelease(directory, { channel, sourceCommit }) {
   const report = JSON.parse(fs.readFileSync(path.join(directory, 'release-evidence.json'), 'utf8'));
   if (report.channel !== channel || report.sourceCommit !== sourceCommit || report.signed !== true) throw new Error('Artifact identity or signed release verification does not match this promotion.');
-  if (!['win32/x64', 'darwin/x64', 'darwin/arm64'].includes(`${report.platform}/${report.arch}`)) throw new Error('Unexpected release architecture.');
-  const checks = report.platform === 'win32' ? ['authenticode-valid', 'publisher-matches', 'timestamp-valid'] : ['codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted'];
+  if (!platformsForScope().includes(`${report.platform}/${report.arch}`)) throw new Error('Unexpected release architecture.');
+  const checks = ['codesign-valid', 'apple-team-matches', 'hardened-runtime', 'notarized', 'stapled', 'gatekeeper-accepted'];
   for (const check of checks) if (!report.checks.includes(check)) throw new Error(`Signed verification is missing: ${check}`);
   const prefix = `desktop/${channel}/${report.platform}/${report.arch}/`;
   if (report.updateUrl !== `https://downloads.thepackproof.com/${prefix}`) throw new Error('Unexpected updater origin.');
   for (const artifact of report.artifacts) {
-    if (path.basename(artifact.file) !== artifact.file || !/^PackProof(?:-Staging)?[-.][a-zA-Z0-9_.-]+$/.test(artifact.file)) throw new Error('Unsafe artifact name.');
+    if (path.basename(artifact.file) !== artifact.file || !/^PackProof(?:-[a-zA-Z0-9_.-]+)?\.(?:zip|dmg|pkg)$/.test(artifact.file)) throw new Error('Unsafe artifact name.');
     const file = path.join(directory, artifact.file);
     if (fs.statSync(file).size !== artifact.bytes || await digest(file) !== artifact.sha256) throw new Error('Release artifact bytes do not match the OS-verified build.');
   }
-  const metadataName = report.platform === 'win32' ? 'latest.yml' : 'latest-mac.yml';
+  const metadataName = 'latest-mac.yml';
   const metadata = YAML.parse(fs.readFileSync(path.join(directory, metadataName), 'utf8'));
   if (metadata.version !== report.version || !Array.isArray(metadata.files) || !metadata.files.length) throw new Error('Invalid updater metadata version or file list.');
   for (const file of metadata.files) {
@@ -54,7 +54,7 @@ async function inspectRelease(directory, { channel, sourceCommit }) {
   return { report, prefix, metadataName, directory };
 }
 
-function validateReleaseSet(releases, value = 'all') {
+function validateReleaseSet(releases, value = 'mac') {
   const expected = platformsForScope(value);
   const actual = releases.map(item => `${item.report.platform}/${item.report.arch}`);
   if (actual.length !== expected.length || new Set(actual).size !== actual.length || actual.some(item => !expected.includes(item))) throw new Error('Promotion requires exactly the selected platform set, without missing, extra or duplicate architectures.');
@@ -75,7 +75,7 @@ async function publishRelease({ env = process.env, root = path.resolve(process.a
   // Resolve every upload, including auxiliary files, before any network request. A
   // missing file in a later architecture must not leave an earlier one uploaded.
   for (const release of releases) {
-    const names = [...release.report.artifacts.map(item => item.file), ...fs.readdirSync(release.directory).filter(name => name.endsWith('.blockmap')), 'SHA256SUMS', 'release-evidence.json'];
+    const names = [...release.report.artifacts.map(item => item.file), ...fs.readdirSync(release.directory).filter(name => release.report.artifacts.some(artifact => name === artifact.file + '.blockmap')), 'SHA256SUMS', 'release-evidence.json'];
     release.uploads = [];
     for (const name of names) {
       if (path.basename(name) !== name) throw new Error('Unsafe release file name.');
