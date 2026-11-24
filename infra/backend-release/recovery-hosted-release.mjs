@@ -12,6 +12,7 @@ import {observeRuntime} from './connect-hosted-runtime-observe.mjs';
 import {observeOwner} from './connect-hosted-owner-task.mjs';
 import {collectTaskReceipt} from './connect-hosted-task-receipt.mjs';
 import {prepareRecoveryImages} from './recovery-image-builds.mjs';
+import {startOrResumeRecoveryBuild,verifyRecoveryBuildObservation,publicRecoveryBuildPins} from './recovery-build-resume.mjs';
 import {normalizeRecoverySnapshot,recoveryPreservationHash,verifyRecoveryRelease,createRecoveryRuntimeReview,
   recoveryProbeRegistrations,recoveryProbeRunRequest,collectRecoveryProbeReceipt,createRecoveryRuntimePlan,
   recoveryWorkerRegistration,recoveryWorkerUpdate,recoveryApiUpdate} from './recovery-runtime-release.mjs';
@@ -71,9 +72,10 @@ export function recoverySessionPolicy(stage,{source,snapshot,owner,runId}) {
   if(stage==='build' || stage==='hydrate') {
     if(stage==='build') {
       allow(['s3:GetObject','s3:GetObjectVersion','s3:PutObject'],'arn:aws:s3:::'+bucket+'/security-release/'+source+'/*');
-      allow('codebuild:StartBuild','arn:aws:codebuild:'+r+':'+a+':project/'+TARGET.serviceName);
+      allow(['codebuild:StartBuild','codebuild:ListBuildsForProject'],'arn:aws:codebuild:'+r+':'+a+':project/'+TARGET.serviceName);
     }
-    allow('codebuild:BatchGetBuilds','arn:aws:codebuild:'+r+':'+a+':build/'+TARGET.serviceName+':*');
+    // AWS authorizes both build metadata reads against the project resource.
+    allow('codebuild:BatchGetBuilds','arn:aws:codebuild:'+r+':'+a+':project/'+TARGET.serviceName);
     allow(['ecr:DescribeImages','ecr:BatchGetImage'],ecr);
     allow('logs:GetLogEvents',(stage==='hydrate'?['/aws/codebuild/'+TARGET.serviceName,'/ecs/packproof-v2-staging-api']:['/aws/codebuild/'+TARGET.serviceName]).map(x=>'arn:aws:logs:'+r+':'+a+':log-group:'+x+':log-stream:*'));
   } else if(stage==='facility') {
@@ -208,11 +210,18 @@ async function build() {
   const head=await aws('s3api','head-object',{Bucket:bucket,Key:key,ChecksumMode:'ENABLED'});
   check(head.ContentLength===bytes.length&&head.ChecksumSHA256===checksum&&typeof head.VersionId==='string'&&head.VersionId!=='null','VERSIONED_SOURCE_CHECKSUM');
   const prepared=prepareRecoveryImages({source:input.source,archiveSha256:built.archiveSha256,sourceVersion:head.VersionId,predecessorImage:state.expected.api.image});
-  const started=await aws('codebuild','start-build',prepared.request);check(started.build?.id,'BUILD_ID');
+  const selected=await startOrResumeRecoveryBuild(prepared,{
+    listBuilds:params=>aws('codebuild','list-builds-for-project',params,['--no-paginate']),
+    readBuilds:params=>aws('codebuild','batch-get-builds',params),
+    startBuild:params=>aws('codebuild','start-build',params),
+    recordDiscovery:async receipt=>{await json('build-discovery',receipt,true);console.log(JSON.stringify(receipt));},
+    recordStarted:async receipt=>{await json('build-started',receipt,true);console.log(JSON.stringify(receipt));}
+  });
   const deadline=Date.now()+40*60_000;let result;
   while(Date.now()<deadline) {
-    result=(await aws('codebuild','batch-get-builds',{ids:[started.build.id]})).builds?.[0];
-    check(result?.id===started.build.id,'BUILD_OBSERVATION');
+    result=(await aws('codebuild','batch-get-builds',{ids:[selected.build.id]})).builds?.[0];
+    check(result?.id===selected.build.id,'BUILD_OBSERVATION');
+    verifyRecoveryBuildObservation(result,prepared);
     if(result.buildStatus!=='IN_PROGRESS')break;
     console.log(JSON.stringify({phase:'build',status:result.currentPhase}));await wait(20_000);
   }
@@ -222,6 +231,7 @@ async function build() {
   const buildLog={group:result.logs.groupName,stream:result.logs.streamName,events:await logEvents(result.logs.groupName,result.logs.streamName)};
   state.release={images:prepared.receipt,ci:input.ci,candidate,fallback,build:result,buildLog,archiveSha256:built.archiveSha256,sourceVersion:head.VersionId};
   const verifiedRelease=verifyRecoveryRelease(state.release);await save();
+  console.log(JSON.stringify({event:'recovery_images_verified',...publicRecoveryBuildPins(verifiedRelease)}));
   await json('images',{...verifiedRelease,sourceInventorySha256:built.migrationInventorySha256,
     databaseRecovery:{latestRestorableTime:db.LatestRestorableTime,backupRetentionDays:db.BackupRetentionPeriod},completedAt:new Date().toISOString()},true);
 }

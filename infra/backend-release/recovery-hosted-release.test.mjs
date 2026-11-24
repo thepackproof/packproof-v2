@@ -94,3 +94,17 @@ test('reviewed request-file pushes use main OIDC and publish only redacted recei
   const ci=readFileSync(new URL('../../.github/workflows/ci.yml',import.meta.url),'utf8');
   assert.match(ci,/tests\/connect-recovery-privileges\.test\.ts/);
 });
+
+test('CodeBuild build reads use its exact project authorization resource, never a build ARN',()=>{
+  const project='arn:aws:codebuild:us-east-1:784514617543:project/packproof-v2-staging-api';
+  for(const stage of ['build','hydrate']) {
+    const policy=JSON.parse(recoverySessionPolicy(stage,{source,snapshot,owner}));
+    const statementsFor=action=>policy.Statement.filter(statement=>[statement.Action].flat().includes(action));
+    assert.deepEqual(statementsFor('codebuild:BatchGetBuilds').map(s=>s.Resource),[project]);
+    assert.deepEqual(statementsFor('codebuild:ListBuildsForProject').map(s=>s.Resource),stage==='build'?[project]:[]);
+    assert.deepEqual(statementsFor('codebuild:StartBuild').map(s=>s.Resource),stage==='build'?[project]:[]);
+    assert.ok(policy.Statement.filter(s=>[s.Action].flat().some(a=>/^codebuild:(BatchGetBuilds|ListBuildsForProject|StartBuild)$/.test(a)))
+      .every(s=>s.Resource===project));
+    assert.doesNotMatch(JSON.stringify(policy),/:build\/|\bcodebuild:\*/);
+  }
+});
