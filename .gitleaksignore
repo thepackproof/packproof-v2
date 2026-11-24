@@ -97,3 +97,9 @@ ba258ded46df09c19786e2bbc4f1ef025611b939:infra/connect-rollout/portal-promotion.
 # recovery build-resume run 45333049313. It cannot authenticate or authorize
 # access. Keep all scanner rules and every other historical location enabled.
 a92b1fd7321db55739e7f764857897010a890038:infra/connect-rollout/recovery-promotion.json:generic-api-key:22
+
+# Reviewed main Source secrets job 138248514264 at request commit dfe31a4.
+# This exact historical buildId is the same public CodeBuild execution locator;
+# all seven build receipt fields match successful recovery run 45333049313.
+# It is not a credential. This exception covers only the observed fingerprint.
+dfe31a485a62ca601ef2555e2f949f58aa9b8690:infra/connect-rollout/recovery-promotion.json:generic-api-key:22
