@@ -103,3 +103,9 @@ a92b1fd7321db55739e7f764857897010a890038:infra/connect-rollout/recovery-promotio
 # all seven build receipt fields match successful recovery run 45333049313.
 # It is not a credential. This exception covers only the observed fingerprint.
 dfe31a485a62ca601ef2555e2f949f58aa9b8690:infra/connect-rollout/recovery-promotion.json:generic-api-key:22
+
+# Reviewed main Source secrets job 138263552192 at portal request commit 63143e5.
+# This exact historical apiCommit is the public, qualified runtime Git commit
+# verified by recovery build-resume run 45333049313, not a credential.
+# Keep all scanner rules and every other historical location enabled.
+63143e557157788d77375ebdc7194b6816a59eed:infra/connect-rollout/portal-promotion.json:generic-api-key:3
