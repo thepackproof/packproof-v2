@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync} from 'node:crypto';
 import {TARGET} from './backend-deployment-plan.mjs';
 import {prepareRecoveryFacilityInspection,runRecoveryFacilityInspection,collectRecoveryFacilityInspection} from './recovery-facility-inspection.mjs';
+import {recoveryFacilityCleanupRequest} from './recovery-hosted-release.mjs';
 import {encryptFacilityReceipt,facilityEnvelopeHeader} from './logistics-facility-inspect.mjs';
 
 const source='a'.repeat(40),image=TARGET.repository+'@sha256:'+'b'.repeat(64),now=Date.parse('2026-11-23T22:00:00Z');
@@ -77,4 +78,39 @@ test('receipt verification rejects command drift, task overrides, wrong image, b
     f=>{const r=JSON.parse(f.events[0].message),h=facilityEnvelopeHeader(r);h.source='d'.repeat(40);r.protected=Buffer.from(JSON.stringify(h)).toString('base64');f.events[0].message=JSON.stringify(r);},
     f=>{const r=JSON.parse(f.events[0].message),h=facilityEnvelopeHeader(r);h.completedAt=new Date(now-901000).toISOString();r.protected=Buffer.from(JSON.stringify(h)).toString('base64');f.events[0].message=JSON.stringify(r);}
   ]) {const f=fixture().receipt;mutate(f);assert.throws(()=>collectRecoveryFacilityInspection(f,now));}
+});
+
+test('cleanup targets only the exact verified ephemeral definition returned by registration',()=>{
+  const {prepared,registered}=fixture();
+  for(const response of [registered,{taskDefinition:registered}]) {
+    const cleanup=recoveryFacilityCleanupRequest({prepared,registered:response});
+    assert.deepEqual(cleanup,{taskDefinition:registered.taskDefinitionArn});
+    assert.ok(Object.isFrozen(cleanup));
+    assert.throws(()=>{cleanup.taskDefinition='other';},TypeError);
+  }
+});
+
+test('cleanup refuses foreign, changed, malformed or non-inspector registration responses',()=>{
+  for(const mutate of [
+    f=>f.registered.taskDefinitionArn=f.registered.taskDefinitionArn.replace('784514617543','111111111111'),
+    f=>f.registered.taskDefinitionArn=f.registered.taskDefinitionArn.replace('us-east-1','us-west-2'),
+    f=>f.registered.taskDefinitionArn=f.registered.taskDefinitionArn.replace('-123:1','-124:1'),
+    f=>f.registered.taskDefinitionArn=f.registered.taskDefinitionArn.replace(/:1$/,':latest'),
+    f=>f.registered.family='packproof-other-definition',
+    f=>f.registered.status='INACTIVE',
+    f=>f.registered.containerDefinitions[0].command.push('unreviewed'),
+    f=>f.registered.containerDefinitions[0].image=TARGET.repository+'@sha256:'+'d'.repeat(64),
+    f=>f.registered.taskRoleArn=role+'different-task-role',
+    f=>f.registered.executionRoleArn=role+'different-execution-role',
+    f=>f.registered=undefined,
+    f=>f.prepared.source='d'.repeat(40),
+    f=>f.prepared.runId='124',
+    f=>f.prepared.runId='123:*',
+    f=>f.prepared=undefined,
+    f=>{f.prepared.request.family=f.registered.family='packproof-v2-staging-api';
+      f.registered.taskDefinitionArn='arn:aws:ecs:us-east-1:784514617543:task-definition/packproof-v2-staging-api:1';}
+  ]) {
+    const f=fixture();mutate(f);
+    assert.throws(()=>recoveryFacilityCleanupRequest(f),/FACILITY_CLEANUP_BINDING|REGISTERED_DEFINITION/);
+  }
 });

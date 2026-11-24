@@ -15,7 +15,7 @@ import {prepareRecoveryImages} from './recovery-image-builds.mjs';
 import {startOrResumeRecoveryBuild,verifyRecoveryBuildObservation,publicRecoveryBuildPins} from './recovery-build-resume.mjs';
 import {normalizeRecoverySnapshot,recoveryPreservationHash,verifyRecoveryRelease,createRecoveryRuntimeReview,
   recoveryProbeRegistrations,recoveryProbeRunRequest,collectRecoveryProbeReceipt,createRecoveryRuntimePlan,
-  recoveryWorkerRegistration,recoveryWorkerUpdate,recoveryApiUpdate} from './recovery-runtime-release.mjs';
+  recoveryWorkerRegistration,recoveryWorkerUpdate,recoveryApiUpdate,verifyRecoveryTaskRegistration} from './recovery-runtime-release.mjs';
 import {createRecoveryOwnerReview,registerRecoveryOwner,runRecoveryOwner,verifyRecoveryApplication} from './recovery-hosted-owner-requests.mjs';
 import {reconstructionDigest as ownerDigest} from './reconstruction-v11-release-review.mjs';
 import {prepareRecoveryFacilityInspection,runRecoveryFacilityInspection,collectRecoveryFacilityInspection} from './recovery-facility-inspection.mjs';
@@ -64,6 +64,12 @@ export function verifyReleasePins(snapshot,expected) {
   check(hash(releasePins(snapshot))===hash(expected),'INSPECTED_RUNTIME_CHANGED');
   check(expected.api.image===expected.worker.image && expected.api.source===expected.worker.source,'COMMON_PREDECESSOR_REQUIRED');
 }
+export function recoveryFacilityCleanupRequest({prepared,registered}) {
+  check(/^[a-f0-9]{40}$/.test(prepared?.source??'')&&/^[0-9]{1,20}$/.test(prepared?.runId??'')&&
+    prepared?.request?.family==='packproof-security-verifier-'+prepared.source.slice(0,12)+'-'+prepared.runId,'FACILITY_CLEANUP_BINDING');
+  const definition=verifyRecoveryTaskRegistration(registered,prepared.request);
+  return Object.freeze({taskDefinition:definition.taskDefinitionArn});
+}
 export function recoverySessionPolicy(stage,{source,snapshot,owner,runId}) {
   check(/^[a-f0-9]{40}$/.test(source??''),'SOURCE');
   const a=TARGET.account,r=TARGET.region,ecs='arn:aws:ecs:'+r+':'+a+':',ecr='arn:aws:ecr:'+r+':'+a+':repository/'+TARGET.serviceName;
@@ -82,7 +88,12 @@ export function recoverySessionPolicy(stage,{source,snapshot,owner,runId}) {
     const api=snapshot?.api,liveSource=api?.meta?.commit;
     check(/^[a-f0-9]{40}$/.test(liveSource??'')&&/^[0-9]{1,20}$/.test(runId??''),'FACILITY_RUNTIME_PINS');
     const family='packproof-security-verifier-'+liveSource.slice(0,12)+'-'+runId;
-    allow(['ecs:RegisterTaskDefinition','ecs:DeregisterTaskDefinition','ecs:RunTask'],ecs+'task-definition/'+family+':*');
+    allow(['ecs:RegisterTaskDefinition','ecs:RunTask'],ecs+'task-definition/'+family+':*');
+    // ECS does not support task-definition resources or service condition keys for deregistration:
+    // https://docs.aws.amazon.com/service-authorization/latest/reference/list_ecs.html
+    // Only this phase cleans up; recoveryFacilityCleanupRequest binds its exact definition.
+    // The global RequestedRegion key is always present and restricts the endpoint.
+    allow('ecs:DeregisterTaskDefinition','*',{StringEquals:{'aws:RequestedRegion':r}});
     allow('ecs:TagResource',ecs+'task/'+TARGET.cluster+'/*',{StringEquals:{'ecs:CreateAction':'RunTask','aws:RequestTag/packproof-release':liveSource}});
     allow('ecs:StopTask',ecs+'task/'+TARGET.cluster+'/*',{StringEquals:{'ecs:ResourceTag/packproof-release':liveSource}});
     const roles=[api.taskDefinition?.taskRoleArn,api.taskDefinition?.executionRoleArn];
@@ -96,7 +107,7 @@ export function recoverySessionPolicy(stage,{source,snapshot,owner,runId}) {
     const families=stage==='owner'?['packproof-recovery-owner-'+source.slice(0,12)+'-*']:
       ['packproof-recovery-probe-'+source.slice(0,12)+'-*',snapshot.worker.taskDefinition.family,snapshot.api.taskDefinition.family];
     check(families.every(x=>/^packproof-[A-Za-z0-9_*-]+$/.test(x)),'TASK_FAMILY');
-    allow(['ecs:RegisterTaskDefinition','ecs:DeregisterTaskDefinition'],families.map(x=>ecs+'task-definition/'+x+':*'));
+    allow('ecs:RegisterTaskDefinition',families.map(x=>ecs+'task-definition/'+x+':*'));
     allow('ecs:RunTask',ecs+'task-definition/'+families[0]+':*');
     const roles=stage==='owner'?[owner?.ownerLaunch?.executionRoleArn]:
       [...new Set(['api','worker'].flatMap(k=>[snapshot[k].taskDefinition.taskRoleArn,snapshot[k].taskDefinition.executionRoleArn]))];
@@ -169,7 +180,7 @@ async function inspectFacility() {
   let snapshot=await current();verifyReleasePins(snapshot,state.expected);
   const prepared=prepareRecoveryFacilityInspection({snapshot,...input.facility,runId:process.env.GITHUB_RUN_ID});
   const registered=await aws('ecs','register-task-definition',prepared.request);
-  const definition=registered.taskDefinition?.taskDefinitionArn;
+  const cleanup=recoveryFacilityCleanupRequest({prepared,registered}),definition=cleanup.taskDefinition;
   let taskArn,finished=false;
   try {
     snapshot=await current();verifyReleasePins(snapshot,state.expected);
@@ -192,7 +203,7 @@ async function inspectFacility() {
       taskExitVerified:true,innerReceiptAuthentication:'REQUIRES_LOCAL_PRIVATE_KEY',envelope:report.envelope},true);
   } finally {
     if(taskArn&&!finished)await aws('ecs','stop-task',{cluster:TARGET.cluster,task:taskArn,reason:'Bounded read-only facility inspection cleanup'});
-    if(definition)await aws('ecs','deregister-task-definition',{taskDefinition:definition});
+    await aws('ecs','deregister-task-definition',cleanup);
   }
 }
 async function build() {
