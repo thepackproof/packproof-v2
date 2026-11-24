@@ -296,9 +296,9 @@ function ownerReadOperation(operation) {
   return ownerReadOperations.has(operation)?operation:null;
 }
 function ownerAwsEnvelope(stderr,operation) {
-  // Accept CLI indentation, horizontal whitespace and its optional retry
-  // suffix. The exception and operation remain bounded and are never echoed.
-  const matches=[...stderr.matchAll(/^[ \t]{0,16}An[ \t]{1,16}error[ \t]{1,16}occurred[ \t]{1,16}\(([A-Za-z][A-Za-z0-9_.-]{0,63})\)[ \t]{1,16}when[ \t]{1,16}calling[ \t]{1,16}the[ \t]{1,16}([A-Za-z][A-Za-z0-9]{0,79})[ \t]{1,16}operation(?:[ \t]{1,16}\([ \t]{0,16}reached[ \t]{1,16}max[ \t]{1,16}retries:[ \t]{0,16}[0-9]{1,3}[ \t]{0,16}\))?[ \t]{0,16}:/gm)];
+  // Accept the documented enhanced CLI prefix, indentation, horizontal
+  // whitespace and optional retry suffix. No exception or operation is echoed.
+  const matches=[...stderr.matchAll(/^[ \t]{0,16}(?:aws: \[ERROR\]: )?An[ \t]{1,16}error[ \t]{1,16}occurred[ \t]{1,16}\(([A-Za-z][A-Za-z0-9_.-]{0,63})\)[ \t]{1,16}when[ \t]{1,16}calling[ \t]{1,16}the[ \t]{1,16}([A-Za-z][A-Za-z0-9]{0,79})[ \t]{1,16}operation(?:[ \t]{1,16}\([ \t]{0,16}reached[ \t]{1,16}max[ \t]{1,16}retries:[ \t]{0,16}[0-9]{1,3}[ \t]{0,16}\))?[ \t]{0,16}:/gm)];
   if(matches.length!==1)return null;
   const [,code,called]=matches[0];
   if(operation!==undefined&&(!ownerReadOperation(operation)||called.toLowerCase()!==operation.replaceAll('-','').toLowerCase()))return null;
@@ -316,9 +316,9 @@ function ownerStderrFormat(stderr,operation) {
   if(!stderr.trim())return 'EMPTY';
   const code=ownerAwsEnvelope(stderr,operation);
   if(code&&!awsReadFailureCodes.has(code))return 'AWS_UNKNOWN_CODE';
-  if(/^[ \t]*(?:usage:[ \t]+aws\b|aws:[ \t]+error:|Unknown options:|Invalid choice:|Parameter validation failed:)/im.test(stderr))return 'CLI_USAGE_OPTIONS';
-  if(/^[ \t]*(?:Could not connect to the endpoint URL:|Connection was closed before we received a valid response|Connect timeout on endpoint URL:|Read timeout on endpoint URL:|SSL validation failed for|Failed to connect to proxy URL:|Could not resolve host)/im.test(stderr))return 'NETWORK_TLS';
-  if(/^[ \t]*(?:Unable to locate credentials|Partial credentials found in|Error when retrieving credentials from|Error loading SSO Token|The SSO session associated with this profile has expired)/im.test(stderr))return 'CREDENTIALS';
+  if(/^[ \t]*(?:aws: \[ERROR\]: )?(?:usage:[ \t]+aws\b|aws:[ \t]+error:|Unknown options:|Invalid choice:|Parameter validation failed:)/im.test(stderr))return 'CLI_USAGE_OPTIONS';
+  if(/^[ \t]*(?:aws: \[ERROR\]: )?(?:Could not connect to the endpoint URL:|Connection was closed before we received a valid response|Connect timeout on endpoint URL:|Read timeout on endpoint URL:|SSL validation failed for|Failed to connect to proxy URL:|Could not resolve host)/im.test(stderr))return 'NETWORK_TLS';
+  if(/^[ \t]*(?:aws: \[ERROR\]: )?(?:Unable to locate credentials|Partial credentials found in|Error when retrieving credentials from|Error loading SSO Token|The SSO session associated with this profile has expired)/im.test(stderr))return 'CREDENTIALS';
   return 'OTHER';
 }
 export function ownerReadFailureMessage(error,operation) {
