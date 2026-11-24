@@ -86,3 +86,33 @@ it("removes recovery counters on scope, transport, or service loss and restores 
  expect(screen.getByText("5")).toBeVisible();
  expect(screen.getByText("2")).toBeVisible();
 });
+
+
+it("keeps every approved source reachable and prioritizes real file-lock recovery",()=>{
+ const healthy:WorkspaceSource[]=Array.from({length:6},(_,i)=>({
+   ...ship,id:"healthy-"+i,displayName:"Healthy system "+i,state:"active",issue:null,
+   recognition:{state:"recognized",message:""}
+ }));
+ const locked:WorkspaceSource={...ship,id:"locked",displayName:"Locked order report",state:"active",issue:"SOURCE_BUSY",
+   recognition:{state:"recognized",message:""}};
+ const sources=[...healthy,locked];
+ const st=status();
+ const onSource=vi.fn();
+ const panel=(value:ConnectStatus,rows:WorkspaceSource[])=> <RecoveryPanel status={value} sources={rows} busy={false}
+   run={vi.fn()} bridge={bridgeFor(value)} onSource={onSource}/>;
+ const view=render(panel(st,sources));
+ expect(screen.getByText("6 collecting")).toBeVisible();
+ expect(screen.getByText("One connection needs attention")).toBeVisible();
+ const sourceButtons=screen.getAllByRole("button").filter(button=>button.classList.contains("eo-recovery-source"));
+ expect(sourceButtons).toHaveLength(7);
+ expect(sourceButtons[0]).toHaveTextContent("Locked order report");
+ expect(sourceButtons[0]).toHaveTextContent("A warehouse file is in use.");
+ fireEvent.click(sourceButtons[0]);
+ expect(onSource).toHaveBeenCalledWith("locked");
+ view.rerender(panel(st,[...healthy,{...locked,issue:null}]));
+ expect(screen.getByText("7 collecting")).toBeVisible();
+ expect(screen.queryByText(/A warehouse file is in use/)).toBeNull();
+ view.rerender(panel(status(false),sources));
+ expect(screen.queryByText("Locked order report")).toBeNull();
+ expect(screen.queryByText("Healthy system 5")).toBeNull();
+});

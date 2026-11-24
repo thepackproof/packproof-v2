@@ -27,6 +27,7 @@
 .eo-recovery-dot{width:11px;height:11px;border-radius:50%;background:var(--eos-blue,#547fff)}
 .eo-recovery-dot.is-active{background:var(--eos-green,#36e8c5)}
 .eo-recovery-dot.has-issue{background:#ffc46b}
+.eo-recovery-source.has-issue em{color:var(--eos-text,#e9f4ff)}
 .eo-recovery-stat{display:grid;grid-template-columns:39px minmax(0,1fr) auto;gap:13px;align-items:center;min-height:70px;border-radius:11px;background:var(--eos-surface-raised,#1b3450);padding:10px 13px;margin:0 0 8px}
 .eo-recovery-status-icon{display:grid;place-items:center;width:35px;height:35px;border-radius:10px;background:var(--eos-surface,#12253d)}
 .eo-recovery-stat strong{display:block;font-size:12px;color:var(--eos-text,#e9f4ff)}

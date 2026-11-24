@@ -34,6 +34,7 @@ export function sourceIcon(source: WorkspaceSource) {
 }
 export function sourceIssue(source: WorkspaceSource) {
   if (source.state === "paused") return "";
+  if (source.issue === "SOURCE_BUSY") return "A warehouse file is in use. PackProof will check again when it is available.";
   if (source.issue === "IDENTITY_UNRESOLVED") return "A record needs an order reference.";
   if (source.issue === "COVERAGE_GAP" || source.coverageGap)
     return "Some records may have been missed. Review the source coverage.";

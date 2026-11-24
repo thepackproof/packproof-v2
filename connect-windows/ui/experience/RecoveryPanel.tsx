@@ -31,8 +31,12 @@ export function RecoveryPanel({status,sources,busy,run,bridge,onSource,onOutputS
   // or local archive status after scope, transport, or service authorization loss.
   const queue = canInspect ? status.health.queueCount : null;
   const output = canInspect ? status.proofOutput : undefined;
-  const active = canInspect ? sources.filter(s=>s.state === "active").length : 0;
-  const problem = canInspect ? sources.filter(s=>!!sourceIssue(s)).length : 0;
+  // Failed sources must remain reachable even in facilities with many systems.
+  // Keep source order within each group and never present a truncated healthy-only list.
+  const visibleSources = canInspect ? sources.map(source=>({source, issue:sourceIssue(source)}))
+    .sort((a,b)=>Number(!!b.issue)-Number(!!a.issue)) : [];
+  const active = visibleSources.filter(({source,issue})=>source.state === "active" && !issue).length;
+  const problem = visibleSources.filter(({issue})=>!!issue).length;
   const needsOutput = (output?.pending ?? 0)>0 || ["access_denied","unavailable"].includes(output?.state ?? "");
   const attention = !canInspect || problem>0 || (queue !== null && queue !== undefined && queue>0) || needsOutput;
   const headline = !status.health.serviceOnline ? "Background collector unavailable" :
@@ -64,11 +68,10 @@ export function RecoveryPanel({status,sources,busy,run,bridge,onSource,onOutputS
       <div className="eo-recovery-grids">
         <section className="eo-recovery-panel">
           <div className="eo-recovery-panel-head"><h3>Connected systems</h3><span>{canInspect ? active + " collecting" : "Access unavailable"}</span></div>
-          {canInspect && sources.length ? (
+          {canInspect && visibleSources.length ? (
             <div className="eo-recovery-sources">
-              {sources.slice(0,5).map(source=>{
-                const issue=sourceIssue(source);
-                return <button key={source.id} type="button" className="eo-recovery-source"
+              {visibleSources.map(({source,issue})=>{
+                return <button key={source.id} type="button" className={"eo-recovery-source" + (issue ? " has-issue" : "")}
                   disabled={busy} onClick={()=>onSource(source.id)}>
                   <span className={"eo-recovery-dot " + (issue ? "has-issue" : source.state==="active" ? "is-active" : "")}/>
                   <span><strong>{sourceTitle(source)}</strong>
