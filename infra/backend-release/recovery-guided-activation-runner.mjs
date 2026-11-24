@@ -35,6 +35,14 @@ export function guidedAwsFailureCode(error) {
   const code=stderr.match(/(?:^|\n)An error occurred \(([A-Za-z][A-Za-z0-9]{0,63})\) when calling the [A-Za-z][A-Za-z0-9]{0,79} operation:/)?.[1];
   return awsFailureCodes.has(code)?code.toUpperCase():'FAILED';
 }
+export function guidedApiReadyForObservation({express,deployment,primaryContainerSha256}) {
+  const configs=express?.activeConfigurations,revision=deployment?.targetServiceRevision?.arn;
+  const container=Array.isArray(configs)&&configs.length===1?configs[0]?.primaryContainer:undefined;
+  return typeof primaryContainerSha256==='string'&&/^[a-f0-9]{64}$/.test(primaryContainerSha256)&&
+    deployment?.status==='SUCCESSFUL'&&typeof revision==='string'&&revision.length>0&&
+    Array.isArray(configs)&&configs.length===1&&configs[0]?.serviceRevisionArn===revision&&
+    container!==null&&typeof container==='object'&&!Array.isArray(container)&&hash(container)===primaryContainerSha256;
+}
 function command(name,args){return execFileSync(name,args,{cwd:root,encoding:'utf8',timeout:90000,maxBuffer:32*1024*1024,stdio:['ignore','pipe','pipe']});}
 let request,state,directory,evidence,sequence=0;
 async function json(file,value){await writeFile(file,JSON.stringify(value,null,2)+'\n',{mode:0o600});}
@@ -139,9 +147,15 @@ async function waitApi() {
     const deployment=(await aws('ecs','describe-service-deployments',{serviceDeploymentArns:[latest.serviceDeploymentArn]})).serviceDeployments?.[0];
     check(!['ROLLBACK_SUCCESSFUL','ROLLBACK_FAILED','STOPPED'].includes(deployment?.status),'API_UPDATE_ROLLED_BACK');
     if(deployment?.status==='SUCCESSFUL') {
-      const snapshot=await current();
-      if(hash(snapshot.api.express.activeConfigurations[0].primaryContainer)===state.plan.afterPrimaryContainerSha256) {
-        verifyGuidedResult(state.plan,snapshot,request,state.publication);return snapshot;
+      // The previous SUCCESSFUL deployment can remain visible while Express
+      // has already started a same-image configuration update. Wait for the
+      // exact planned container and revision before invoking strict observation.
+      const express=(await aws('ecs','describe-express-gateway-service',{serviceArn:TARGET.serviceArn})).service;
+      if(guidedApiReadyForObservation({express,deployment,primaryContainerSha256:state.plan.afterPrimaryContainerSha256})) {
+        const snapshot=await current();
+        if(hash(snapshot.api.express.activeConfigurations[0].primaryContainer)===state.plan.afterPrimaryContainerSha256) {
+          verifyGuidedResult(state.plan,snapshot,request,state.publication);return snapshot;
+        }
       }
     }
     await wait(10000);

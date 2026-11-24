@@ -8,7 +8,7 @@ import {encryptFacilityReceipt,decryptFacilityReceipt} from './logistics-facilit
 import {guidedName,guidedInventory,guidedSelectionDigest,guidedScopeDigest,validateGuidedRequest,
   selectBoundGuidedFacility,createGuidedPlan,guidedUpdateRequest,verifyGuidedResult,guidedPreservationHash,
   guidedSessionPolicy,guidedPhaseRunId} from './recovery-guided-activation.mjs';
-import {safeGuidedFailure,guidedAwsFailureCode,guidedToolingPaths} from './recovery-guided-activation-runner.mjs';
+import {safeGuidedFailure,guidedAwsFailureCode,guidedToolingPaths,guidedApiReadyForObservation} from './recovery-guided-activation-runner.mjs';
 
 const now=Date.parse('2026-11-24T01:00:00Z'),at=new Date(now).toISOString(),source='a'.repeat(40),tooling='d'.repeat(40);
 const image=letter=>TARGET.repository+'@sha256:'+letter.repeat(64),candidate=image('b');
@@ -81,6 +81,48 @@ function completed(f,plan) {
   a.express.activeConfigurations[0].serviceRevisionArn='revision-2';a.express.activeConfigurations[0].taskDefinitionArn=a.taskDefinition.taskDefinitionArn;
   a.nativeDeployment.targetServiceRevision.arn='revision-2';return s;
 }
+
+test('guided observation waits through the old-successful deployment and two active same-image configurations',()=>{
+  const f=fixture(),plan=createGuidedPlan(f,now),after=completed(f,plan);
+  const express=structuredClone(after.api.express);
+  express.activeConfigurations.unshift(f.snapshot.api.express.activeConfigurations[0]);
+  assert.equal(express.activeConfigurations[0].primaryContainer.image,express.activeConfigurations[1].primaryContainer.image);
+  assert.equal(guidedApiReadyForObservation({express,deployment:f.snapshot.api.nativeDeployment,
+    primaryContainerSha256:plan.afterPrimaryContainerSha256}),false);
+});
+test('guided observation does not mistake the old stable configuration for the new same-image plan',()=>{
+  const f=fixture(),plan=createGuidedPlan(f,now);
+  assert.equal(f.snapshot.api.express.activeConfigurations[0].primaryContainer.image,plan.update.primaryContainer.image);
+  assert.equal(guidedApiReadyForObservation({express:f.snapshot.api.express,deployment:f.snapshot.api.nativeDeployment,
+    primaryContainerSha256:plan.afterPrimaryContainerSha256}),false);
+});
+test('guided observation waits for successful deployment and the exact target revision',()=>{
+  const f=fixture(),plan=createGuidedPlan(f,now),after=completed(f,plan);
+  for(const status of ['IN_PROGRESS','PENDING','ROLLBACK_SUCCESSFUL','ROLLBACK_FAILED','STOPPED']) {
+    assert.equal(guidedApiReadyForObservation({express:after.api.express,
+      deployment:{...after.api.nativeDeployment,status},primaryContainerSha256:plan.afterPrimaryContainerSha256}),false);
+  }
+  assert.equal(guidedApiReadyForObservation({express:after.api.express,deployment:f.snapshot.api.nativeDeployment,
+    primaryContainerSha256:plan.afterPrimaryContainerSha256}),false);
+});
+test('guided observation admits the exact planned singleton only after its matching deployment succeeds',()=>{
+  const f=fixture(),plan=createGuidedPlan(f,now),after=completed(f,plan);
+  assert.equal(guidedApiReadyForObservation({express:after.api.express,deployment:after.api.nativeDeployment,
+    primaryContainerSha256:plan.afterPrimaryContainerSha256}),true);
+  assert.equal(verifyGuidedResult(plan,after,f.request,f.publication,now).workerUnchanged,true);
+});
+test('guided observation refuses incomplete metadata, absent plan hashes and unplanned container changes',()=>{
+  const f=fixture(),plan=createGuidedPlan(f,now),after=completed(f,plan);
+  const ready={express:after.api.express,deployment:after.api.nativeDeployment,primaryContainerSha256:plan.afterPrimaryContainerSha256};
+  const mutations=[x=>delete x.express,x=>delete x.express.activeConfigurations,x=>x.express.activeConfigurations=[],
+    x=>delete x.express.activeConfigurations[0].primaryContainer,x=>x.express.activeConfigurations[0].primaryContainer=null,
+    x=>x.express.activeConfigurations[0].primaryContainer=[],x=>delete x.deployment,
+    x=>delete x.deployment.targetServiceRevision,x=>x.deployment.targetServiceRevision.arn='',
+    x=>delete x.primaryContainerSha256,x=>x.primaryContainerSha256='invalid',
+    x=>x.express.activeConfigurations[0].primaryContainer.command=['other'],
+    x=>x.express.activeConfigurations[0].primaryContainer.environment.push({name:'OTHER',value:'changed'})];
+  for(const mutate of mutations){const x=structuredClone(ready);mutate(x);assert.equal(guidedApiReadyForObservation(x),false);}
+});
 
 test('digest-only request refuses raw identities, caller-selected settings, wrong build, noncandidate pins and expiration',()=>{
   validateGuidedRequest(fixture().request,now);
