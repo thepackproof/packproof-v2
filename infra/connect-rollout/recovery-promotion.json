@@ -1,5 +1,5 @@
 {
-  "phase": "rehearse",
+  "phase": "apply",
   "source": "67e4f1df823b69052fb254e8fa240a3f03ef91b6",
   "expected": {
     "api": {
@@ -36,5 +36,10 @@
       ],
       "assignPublicIp": "ENABLED"
     }
+  },
+  "ownerReceipts": {
+    "reviewSha256": "a645b3a56c7268c1b4bc4fa45b5f91930539bb80858dbd4c9d4dcad51d0ec2d4",
+    "inspection": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/ccfeee586a694a329ba3fb9fbaf31b59",
+    "rehearsal": "arn:aws:ecs:us-east-1:784514617543:task/packproof-v2-staging-cluster/cf05e9f6498f4e4c94a800c37d35df87"
   }
 }
