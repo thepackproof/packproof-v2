@@ -106,6 +106,65 @@ test('full owner failure messages never reflect private stderr, properties or un
   }
 });
 
+test('owner diagnostics recognize the documented enhanced AWS CLI service prefix',()=>{
+  const cases=[
+    ['AccessDenied','SimulatePrincipalPolicy','simulate-principal-policy','ACCESSDENIED'],
+    ['InvalidInput','SimulatePrincipalPolicy','simulate-principal-policy','INVALIDINPUT'],
+    ['NoSuchEntity','GetRole','get-role','NOSUCHENTITY'],
+  ];
+  for(const [code,called,operation,expected] of cases)for(const retry of ['', ' (reached max retries: 4)']){
+    const stderr='\r\n \taws: [ERROR]: An error occurred ('+code+') when calling the '+called+' operation'+retry+': private details\r\n';
+    assert.equal(ownerReadFailureCode({stderr},operation),expected);
+    assert.equal(ownerReadFailureMessage({status:254,stderr},operation),
+      'OWNER_TASK_READ_'+operation.replaceAll('-','_').toUpperCase()+'_'+expected);
+  }
+});
+test('enhanced owner envelopes retain exact operation, allowlist and unique-envelope checks',()=>{
+  const operation='simulate-principal-policy',prefix='OWNER_TASK_READ_SIMULATE_PRINCIPAL_POLICY_FAILED_EXIT_254_SYSTEM_NONE_SIGNAL_NONE_STDERR_';
+  const standard='An error occurred (AccessDenied) when calling the SimulatePrincipalPolicy operation: private details';
+  const enhanced='aws: [ERROR]: '+standard;
+  assert.equal(ownerReadFailureMessage({status:254,stderr:enhanced.replace('AccessDenied','SyntheticPrivateValue')},operation),prefix+'AWS_UNKNOWN_CODE');
+  const rejected=[
+    enhanced.replace('SimulatePrincipalPolicy','GetRole'),
+    enhanced+'\n'+enhanced,
+    standard+'\n'+enhanced,
+    enhanced+'\n'+standard,
+    enhanced.replace('aws: [ERROR]: ','aws: [WARNING]: '),
+    enhanced.replace('aws: [ERROR]: ','aws: [error]: '),
+    enhanced.replace('aws: [ERROR]: ','aws: [ERROR]: aws: [ERROR]: '),
+  ];
+  for(const stderr of rejected){
+    assert.equal(ownerReadFailureCode({stderr},operation),'FAILED');
+    assert.equal(ownerReadFailureMessage({status:254,stderr},operation),prefix+'OTHER');
+  }
+});
+test('enhanced CLI formats expose only closed categories and never private input',()=>{
+  const operation='simulate-principal-policy',privateValue='SYNTHETIC_PRIVATE_VALUE_DO_NOT_REFLECT';
+  const prefix='OWNER_TASK_READ_SIMULATE_PRINCIPAL_POLICY_FAILED_EXIT_254_SYSTEM_NONE_SIGNAL_NONE_STDERR_';
+  const cases=[
+    ['Unknown options: --'+privateValue,'CLI_USAGE_OPTIONS'],
+    ['Invalid choice: '+privateValue,'CLI_USAGE_OPTIONS'],
+    ['Parameter validation failed: '+privateValue,'CLI_USAGE_OPTIONS'],
+    ['Could not connect to the endpoint URL: "https://private.invalid/'+privateValue+'"','NETWORK_TLS'],
+    ['SSL validation failed for https://private.invalid/'+privateValue,'NETWORK_TLS'],
+    ['Unable to locate credentials. '+privateValue,'CREDENTIALS'],
+    ['Error when retrieving credentials from '+privateValue,'CREDENTIALS'],
+    ['An error occurred ('+privateValue+') when calling the SimulatePrincipalPolicy operation: '+privateValue,'AWS_UNKNOWN_CODE'],
+    [privateValue,'OTHER'],
+  ];
+  for(const [details,format] of cases){
+    const stderr='aws: [ERROR]: '+details;
+    for(const value of [stderr,Buffer.from(stderr)]){
+      const message=ownerReadFailureMessage({status:254,stderr:value,message:privateValue},operation);
+      assert.equal(message,prefix+format);
+      assert.match(message,/^OWNER_TASK_READ_[A-Z0-9_]+$/);
+      assert.ok(!message.includes(privateValue));
+      assert.ok(!message.includes('private.invalid'));
+      assert.ok(!message.includes('ACCESSDENIED'));
+    }
+  }
+});
+
 function service(kind) {
   const isApi=kind==='api', name=isApi?'packproof-v2-staging-api':'packproof-records-worker',arn=cluster.replace(':cluster/',':service/')+'/'+name;
   const taskDefinitionArn=tdArn(name);
