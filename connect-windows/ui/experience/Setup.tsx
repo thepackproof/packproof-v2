@@ -94,21 +94,9 @@ export function Setup(props: SetupProps) {
  * discovery, sample success, or facility reassignment is available in this state. */
 function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps) {
   const [consent,setConsent] = useState(false), [busy,setBusy] = useState(false), [error,setError] = useState('');
-  const [reviewSavedFile, setReviewSavedFile] = useState(false);
   const [waitingForApproval, setWaitingForApproval] = useState(false);
-  const [confirmDigest, setConfirmDigest] = useState<string>();
-  const [receipt, setReceipt] = useState<{ original?: string; opened: string }>();
   const [, updateReviewTime] = useState(0);
   const fileReview = status.setupAccess?.pendingFileReview;
-  const digest = fileReview?.proposalSha256;
-  useEffect(() => {
-    setConfirmDigest(undefined);
-    setReceipt(previous => {
-      if (!previous || !digest) return undefined;
-      if (digest === previous.opened) return previous.original ? { opened: digest } : previous;
-      return digest === previous.original ? previous : undefined;
-    });
-  }, [digest]);
   const reviewDeadline = Date.parse(fileReview?.expiresAt ?? '');
   useEffect(() => {
     const remaining = reviewDeadline - Date.now();
@@ -129,53 +117,7 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
     catch (e) { if (alive.current) setError(message(e)); }
     finally { pending.current = false; if (alive.current) setBusy(false); onBusyChange?.(false); }
   }
-  // A CSV review cannot assign this installation to a facility. The connection
-  // prerequisite stays primary; an earlier report is explicitly secondary.
-  if (reviewSavedFile && fileReview && status.installationId && !canRecover) {
-    const renew = bridge.refreshPendingFileReview;
-    const current = reviewDeadline > Date.now();
-    const reviewOpened = current && receipt?.opened === digest;
-    const awaitingStatus = !!receipt?.original && receipt.original === digest && receipt.opened !== digest;
-    return <main className="setup-experience step-welcome" data-setup-screen="pending-file-review" aria-label="Export file review">
-      <div className="setup-left">
-        <button className="setup-link" disabled={busy} onClick={() => setReviewSavedFile(false)}>‹ Back to facility connection</button>
-        <span className="setup-tag">Export file review</span>
-        <h1>{reviewOpened ? 'Continue in your browser.' : awaitingStatus ? 'Checking your updated review.' : current ? 'Your export file review is ready.' : 'Renew your export file review.'}</h1>
-        <p className="setup-lead">{awaitingStatus
-          ? <>PackProof is checking the latest review for <strong>{fileReview.fileName}</strong>. If this message stays here, select <b>Check connection again</b>.</>
-          : reviewOpened
-          ? <>Check the file details and permissions for <strong>{fileReview.fileName}</strong> in your browser.</>
-          : current ? <>Open the current browser review for <strong>{fileReview.fileName}</strong> to check the file details and permissions.</>
-          : <>The review for <strong>{fileReview.fileName}</strong> expired. PackProof can check the saved file again and open a new review. Your current connection stays in place.</>}</p>
-        <div className="setup-actions">
-          {current && <button className="setup-primary" disabled={busy || !renew} onClick={() => renew && void run(async () => {
-            const opened = await renew({ wholeFileUploadApproved: false, expectedProposalSha256: fileReview.proposalSha256 });
-            if (alive.current && opened.proposalSha256 === fileReview.proposalSha256) setReceipt({ opened: opened.proposalSha256 });
-          })}>Open current file review</button>}
-          {!current && !awaitingStatus && <button className="setup-primary" disabled={busy || !renew || !Number.isFinite(reviewDeadline)} onClick={() => setConfirmDigest(fileReview.proposalSha256)}>Request a fresh file review</button>}
-          <button className="setup-secondary" disabled={busy} onClick={() => void run(() => bridge.getWorkspaceStatus())}>Check connection again</button>
-        </div>
-        {!renew && <p role="status">Update PackProof on this computer to request a fresh review.</p>}
-        {renew && !Number.isFinite(reviewDeadline) && <p role="status">Check the connection again to get the latest review details.</p>}
-        {busy && <p role="status">Checking this computer’s review…</p>}
-        {error && <p className="setup-error" role="alert">{error}</p>}
-      </div>
-      <Context label="Your saved report" title="You choose what to approve."
-        intro="PackProof reads the selected file on this computer. Upload and collection permissions are reviewed separately in your browser.">
-        <Row icon="records" title="Selected file" detail={fileReview.fileName} />
-      </Context>
-      {confirmDigest === digest && !current && renew && <SetupDialog title="Recheck the saved export file?" onClose={() => setConfirmDigest(undefined)}>
-        <p>PackProof will recheck the entire original <strong>{fileReview.fileName}</strong> on this computer and send a new configuration proposal for browser review. The file stays on this computer during this step.</p>
-        <div className="setup-actions"><button className="setup-primary" onClick={() => {
-          setConfirmDigest(undefined);
-          void run(async () => {
-            const opened = await renew({ wholeFileUploadApproved: true, expectedProposalSha256: fileReview.proposalSha256 });
-            if (alive.current) setReceipt({ original: fileReview.proposalSha256, opened: opened.proposalSha256 });
-          });
-        }}>Recheck file and open review</button></div>
-      </SetupDialog>}
-    </main>;
-  }
+  // A retained report is metadata only while the facility prerequisite is unresolved.
   const heading = needsEnrollment
     ? enrolling ? 'Finish connecting this computer.' : 'Connect this computer to a facility.'
     : canRecover ? 'Reconnect this computer.'
@@ -218,8 +160,12 @@ function InstallationRecovery({status,bridge,onStatus,onBusyChange}: SetupProps)
       {error && <p className="setup-error" role="alert">{error}</p>}
       {fileReview && !canRecover && <details className="eo-saved-report">
         <summary>Saved report</summary>
-        <p><strong>{fileReview.fileName}</strong> is still available. Connecting this computer comes first; renewing a report does not assign its facility.</p>
-        <button className="pp-first-run-secondary" disabled={busy} onClick={() => setReviewSavedFile(true)}>Review saved report separately</button>
+        <p><strong>{fileReview.fileName}</strong></p>
+        <p>{Number.isFinite(reviewDeadline)
+          ? <>{reviewDeadline > Date.now() ? 'Earlier review expires ' : 'Earlier review expired '}
+            <time dateTime={fileReview.expiresAt}>{stamp(fileReview.expiresAt)}</time>.</>
+          : 'The earlier review’s expiry has not been confirmed.'}</p>
+        <p>Choose this computer’s facility before starting a new source review. The original file and protected pending work stay in place.</p>
       </details>}
     </FirstRunContent>
   </main>;

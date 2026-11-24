@@ -208,28 +208,15 @@ export class HostedSession {
     return installationReviewPath(access.setup,true);
   }
   async openPendingFileReview(start:Authority,input:{wholeFileUploadApproved:boolean;expectedProposalSha256:string},
-    renew:(payload:Record<string,unknown>)=>Promise<unknown>,open:(path:string)=>Promise<void>) {
+    _renew:(payload:Record<string,unknown>)=>Promise<unknown>,_open:(path:string)=>Promise<void>):Promise<{proposalSha256:string}> {
     const pending=reviewMetadata(start), scope=start.setup;
     if (!scope || !pending || pending.proposalSha256!==input.expectedProposalSha256 || this.human.user()!==start.user || this.sessionEpoch!==start.epoch)
       throw Error('The saved file review changed. Check the connection again.');
-    let target=pending.proposalSha256;
-    if (Date.parse(pending.expiresAt)<=Date.now()) {
-      if(input.wholeFileUploadApproved!==true)throw Error('Confirm that PackProof may recheck this saved file before renewing its review.');
-      const result=await renew({installationId:scope.installationId,organizationId:scope.organizationId,environment:scope.environment,
-        expectedProposalSha256:target,wholeFileUploadApproved:true});
-      const updated=result as Partial<FacilityScope & {proposalSha256:string}>|null;
-      if(!updated||updated.installationId!==scope.installationId||updated.organizationId!==scope.organizationId||updated.environment!==scope.environment||
-         typeof updated.proposalSha256!=='string'||!/^[a-f0-9]{64}$/.test(updated.proposalSha256)||updated.proposalSha256===target)
-        throw Error('The renewed file review could not be verified. Check the connection again.');
-      target=updated.proposalSha256;
-    }
-    const end=await this.guard('refreshPendingFileReview');
-    this.assertTransition('refreshPendingFileReview',start,end);
-    const verified=reviewMetadata(end);
-    if(!end.setup||!verified||verified.proposalSha256!==target||verified.fileName!==pending.fileName||Date.parse(verified.expiresAt)<=Date.now())
-      throw Error('The current file review could not be verified. Check the connection again.');
-    await open(installationReviewPath(end.setup));
-    return {proposalSha256:verified.proposalSha256};
+    // reviewMetadata admits only an initial, unconfigured installation with no
+    // facility. Keep older renderer requests fail-closed before native file I/O
+    // or a browser approval handoff. Binding clears this unapproved proposal;
+    // the existing facility-scoped source flow creates its replacement.
+    throw Error('Choose this computer’s facility before starting a new source review. Your saved report and pending work are preserved.');
   }
   present(method: string, value: unknown, authority: Authority) {
     const offline = authority.offline;

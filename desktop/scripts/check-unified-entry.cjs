@@ -143,20 +143,14 @@ async function checkBootstrap(parent){
    setupAccess:{reason:'facility_required'},health:{serviceOnline:true,queueCount:null},
    workspace:{phase:'draft',step:'order',sources:[],canReadOrders:false}};
  const fileName='Fixture dispatch.csv',expiredDigest='a'.repeat(64),freshDigest='b'.repeat(64);
- let freshStatusReads=0;
+ let currentStatusReads=0;
  for(const method of ['getStatus','getWorkspaceStatus','pollEnrollment'])ipcMain.handle('connect:'+method,async()=>{
-   if(state.setupAccess?.pendingFileReview?.proposalSha256===freshDigest)freshStatusReads++;
+   if(state.setupAccess?.pendingFileReview?.proposalSha256===freshDigest)currentStatusReads++;
    return {ok:true,value:state};
  });
- ipcMain.handle('connect:refreshPendingFileReview',async(_event,...args)=>{
-   const first=bootstrapCalls.fileReview===0;
-   assert.ok(bootstrapCalls.fileReview<2,'A fresh review must not be requested twice');
-   assert.equal(state.installationId,'installation_fixture');
-   assert.deepEqual(args,[{wholeFileUploadApproved:first,expectedProposalSha256:first?expiredDigest:freshDigest}]);
+ ipcMain.handle('connect:refreshPendingFileReview',async()=>{
    bootstrapCalls.fileReview++;
-   if(first)state={...state,setupAccess:{...state.setupAccess,pendingFileReview:{fileName,proposalSha256:freshDigest,
-     expiresAt:new Date(Date.now()+30*60_000).toISOString()}}};
-   return {ok:true,value:{proposalSha256:freshDigest}};
+   return {ok:false,error:'Choose this computer’s facility before starting a new source review.'};
  });
  ipcMain.handle('connect:openWorkspaceApproval',async()=>{bootstrapCalls.review++;return{ok:true};});
  ipcMain.handle('connect:recoverEnrollment',async(_event,consent)=>{
@@ -179,27 +173,44 @@ async function checkBootstrap(parent){
    preload:setupPreload,sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:false
  }}),page=win.webContents,screenshots={};
  const click=label=>page.executeJavaScript(`[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(label)})?.click()`);
- async function capture(name){
+ async function capture(name,verify){
    for(const [w,h,scale,suffix]of[[1440,900,1,'1440x900'],[1024,640,1.25,'1280x800-125pct']]){
      await viewport(page,w,h,scale);await measure(page,w,h);
+     if(verify)await verify();
      screenshots[name+'-'+suffix+'.png']=await shoot(page,name+'-'+suffix,w,h,scale);
    }
    await viewport(page,1440,900,1);
  }
- async function captureConnectionThemes(name){
+ async function captureConnectionThemes(name,verify){
    for(const theme of ['dark','light']){
      await page.executeJavaScript(`document.querySelector('button[aria-label="Switch to ${theme} appearance"]')?.click()`);
      await until(page,`document.querySelector('.pp-evidence-os')?.dataset.appearance===${JSON.stringify(theme)}`);
      assert.equal(await page.executeJavaScript("document.querySelector('.pp-evidence-os .pp-sidebar')?.checkVisibility()"),true,'Connection recovery must remain inside the approved application shell');
-     await capture(name+'-'+theme);
+     await capture(name+'-'+theme,verify);
    }
  }
  async function openSavedReport(){
-   await page.executeJavaScript("[...document.querySelectorAll('summary')].find(e=>e.textContent.trim()==='Saved report')?.click()");
-   await pressFileReview('Review saved report separately');
-   await until(page,"!!document.querySelector('[data-setup-screen=pending-file-review]')");
+   await page.executeJavaScript("(()=>{const detail=document.querySelector('.eo-saved-report');if(detail&&!detail.open)detail.querySelector('summary')?.click();})()");
+   await until(page,"document.querySelector('.eo-saved-report')?.open===true");
  }
- async function pressFileReview(label){
+ async function assertSavedFacts(){
+   const facts=await page.executeJavaScript(`({
+     primary:document.querySelector('.setup-primary')?.textContent.trim(),
+     enabled:!!document.querySelector('.setup-primary:not(:disabled)'),
+     visible:document.querySelector('.setup-primary')?.checkVisibility()===true,
+     expanded:document.querySelector('.eo-saved-report')?.open===true,
+     report:document.querySelector('.eo-saved-report')?.innerText,
+     reviewActions:[...document.querySelectorAll('button')].filter(e=>/file review|Review saved report separately|Recheck file and open review/i.test(e.textContent)).map(e=>e.textContent.trim()),
+     oldPanel:!!document.querySelector('[data-setup-screen=pending-file-review]')
+   })`);
+   assert.equal(facts.primary,'Choose a facility');assert.equal(facts.enabled,true);assert.equal(facts.visible,true);
+   assert.equal(facts.expanded,true);assert.ok(facts.report.includes(fileName));
+   assert.deepEqual(facts.reviewActions,[],'Saved report facts must not offer renewal or browser report approval');
+   assert.equal(facts.oldPanel,false,'The saved report must stay in the existing connection screen');
+   assert.deepEqual({fileReview:bootstrapCalls.fileReview,source:bootstrapCalls.source,recover:bootstrapCalls.recover,enroll:bootstrapCalls.enroll},
+     {fileReview:0,source:0,recover:0,enroll:0},'Viewing a retained report must not perform source, renewal or enrollment work');
+ }
+ async function pressAction(label){
    const point=await page.executeJavaScript(`(()=>{
      const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(label)});
      if(!button || !button.checkVisibility() || button.disabled)return null;
@@ -217,7 +228,7 @@ async function checkBootstrap(parent){
    await until(page,"!!document.querySelector('[data-setup-screen=installation-recovery]') && [...document.querySelectorAll('button')].some(e=>e.textContent.trim()==='Choose a facility'&&!e.disabled)");
    await until(page,"[...document.images].filter(e=>e.checkVisibility()).every(e=>e.complete&&e.naturalWidth>0)");
    assert.equal(await page.executeJavaScript("[...document.querySelectorAll('button')].some(e=>/Discover my systems|Try a sample order/.test(e.textContent))"),false);
-   await pressFileReview('Choose a facility');await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Check connection again'&&!e.disabled)");
+   await pressAction('Choose a facility');await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Check connection again'&&!e.disabled)");
    assert.equal(bootstrapCalls.review,1);await capture('logistics-facility-required');
    // Reproduce the user's real combination after an upgrade/restart: a saved
    // expired report on a computer whose facility has never been assigned.
@@ -230,36 +241,30 @@ async function checkBootstrap(parent){
    assert.equal(bootstrapCalls.fileReview,0,'A pending review must not renew automatically');
    assert.equal(bootstrapCalls.source,0,'A missing facility must not receive source access');
    await captureConnectionThemes('logistics-facility-required-expired-review');
-   await pressFileReview('Choose a facility');
+   await openSavedReport();
+   await until(page,"document.querySelector('.eo-saved-report')?.innerText.includes('Earlier review expired')");
+   await captureConnectionThemes('logistics-expired-report-facts',assertSavedFacts);
+   await pressAction('Choose a facility');
    await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Check connection again'&&!e.disabled)");
    assert.equal(bootstrapCalls.review,2,'The missing-facility action must open the existing guarded connection review');
    assert.equal(bootstrapCalls.fileReview,0,'Choosing a facility must not renew the old report');
-   await openSavedReport();
-   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Renew your export file review.'");
-   assert.ok((await page.executeJavaScript('document.body.innerText')).includes(fileName));
-   assert.equal(await page.executeJavaScript("[...document.querySelectorAll('button')].some(e=>/revoke|disconnect|reconnect|enroll/i.test(e.textContent))"),false);
-   await capture('logistics-expired-file-review');
-   await pressFileReview('Request a fresh file review');
-   await until(page,"document.querySelector('[role=dialog],dialog')?.textContent.includes('Recheck the saved export file?')");
-   assert.equal(bootstrapCalls.fileReview,0,'Opening the confirmation must not send a file-review command');
-   await pressFileReview('Recheck file and open review');
-   // The immediate status read must show the replacement review while still acknowledging the exact browser handoff.
-   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Continue in your browser.' && [...document.querySelectorAll('button')].some(e=>e.textContent==='Open current file review'&&!e.disabled)");
-   assert.equal(bootstrapCalls.fileReview,1);
-   assert.ok(freshStatusReads>0,'Packaged UI must read the replacement proposal before restart');
-   await capture('logistics-file-review-opened');
-   // Restart must restore the unresolved facility prerequisite, while an
-   // explicitly reopened current proposal uses its replacement digest.
+   await assertSavedFacts();
+   // A current proposal observed by a later status read is still facts only.
+   // The fixture must not manufacture a successful native renewal to reach it.
+   state={...state,setupAccess:{reason:'facility_required',pendingFileReview:{fileName,proposalSha256:freshDigest,
+     expiresAt:new Date(Date.now()+30*60_000).toISOString()}}};
+   await pressAction('Check connection again');
+   await until(page,"document.querySelector('.eo-saved-report')?.innerText.includes('Earlier review expires') && !document.querySelector('.setup-primary')?.disabled");
+   assert.ok(currentStatusReads>0,'Packaged UI must read the current proposal as retained metadata');
+   await captureConnectionThemes('logistics-current-report-facts',assertSavedFacts);
+   // Restart restores the unresolved prerequisite and a collapsed disclosure.
    await page.loadURL('packproof-connect://app/index.html?facilitySetup=1');
    await until(page,"!!document.querySelector('[data-setup-screen=installation-recovery]') && [...document.querySelectorAll('button')].some(e=>e.textContent.trim()==='Choose a facility'&&!e.disabled)");
-   assert.equal(bootstrapCalls.fileReview,1,'Restart must not renew a saved review');
+   assert.equal(await page.executeJavaScript("document.querySelector('.eo-saved-report')?.open"),false);
+   assert.equal(bootstrapCalls.fileReview,0,'Restart must not renew a saved review');
    await openSavedReport();
-   await until(page,"document.querySelector('[data-setup-screen=pending-file-review] h1')?.textContent==='Your export file review is ready.'");
-   await pressFileReview('Open current file review');
-   await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Open current file review'&&!e.disabled)");
-   assert.deepEqual(bootstrapCalls,{review:2,recover:0,enroll:0,source:0,fileReview:2});
-   await pressFileReview('‹ Back to facility connection');
-   await until(page,"!!document.querySelector('[data-setup-screen=installation-recovery]') && document.querySelector('.setup-primary')?.textContent.trim()==='Choose a facility'");
+   await assertSavedFacts();
+   assert.deepEqual(bootstrapCalls,{review:2,recover:0,enroll:0,source:0,fileReview:0});
    state={...state,state:'revoked',recoveryAvailable:true,setupAccess:{reason:'reapproval_required'}};
    await click('Check connection again');
    await until(page,"document.querySelector('[data-setup-screen=installation-recovery] h1')?.textContent==='Reconnect this computer.'");
@@ -268,18 +273,18 @@ async function checkBootstrap(parent){
    await page.executeJavaScript("document.querySelector('input[type=checkbox]')?.click()");await click('Preserve work and reconnect');
    await until(page,"document.querySelector('[data-setup-screen=installation-recovery] h1')?.textContent==='Connect this computer to a facility.'");
    assert.equal(bootstrapCalls.recover,1);assert.equal(bootstrapCalls.enroll,0);await capture('logistics-facility-enrollment');
-   await pressFileReview('Connect this computer');
+   await pressAction('Connect this computer');
    await until(page,"document.body.textContent.includes('F1A2B3')");
    assert.equal(bootstrapCalls.enroll,1);await capture('logistics-pending-approval');
    await click('Reopen facility sign-in');await until(page,"[...document.querySelectorAll('button')].some(e=>e.textContent==='Reopen facility sign-in'&&!e.disabled)");
-   assert.equal(bootstrapCalls.review,3);assert.equal(bootstrapCalls.enroll,1);assert.equal(bootstrapCalls.source,0);
+   assert.equal(bootstrapCalls.review,3);assert.equal(bootstrapCalls.enroll,1);assert.equal(bootstrapCalls.source,0);assert.equal(bootstrapCalls.fileReview,0);
    return screenshots;
  }catch(error){
    // Report only the synthetic fixture's visible controls and IPC counters, including failures after a real pointer click.
    const screen=await page.executeJavaScript(`({heading:document.querySelector('h1')?.textContent,
      buttons:[...document.querySelectorAll('button')].filter(b=>b.checkVisibility()).map(b=>({label:b.textContent.trim(),disabled:b.disabled})),
      alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent.trim())})`).catch(()=>null);
-   const failure={screen,bootstrapCalls,freshStatusReads};
+   const failure={screen,bootstrapCalls,currentStatusReads};
    fs.mkdirSync(out,{recursive:true});
    fs.writeFileSync(path.join(out,'bootstrap-failure.json'),JSON.stringify(failure,null,2));
    console.error('Packaged bootstrap failure:',JSON.stringify(failure));
@@ -524,7 +529,7 @@ async function main(){
    screenshots:{'logistics-entry-1440x900.png':entryImage,'logistics-first-run-1280x800-125pct.png':firstRunScaledImage,'logistics-entry-1280x800-125pct.png':scaledImage,'logistics-access-recovery.png':recoveryImage,...bootstrapScreenshots,...commerceScreenshots},
     commerceCoverage:{scope:'Explicitly selected Commerce with scoped defect repairs; no approved Logistics design parity claim',themes:['light','dark'],routes:['Home','Packing Station','Orders','Settings'],studyConsent:'full statement; synthetic ungranted GET only',logoBlob,updaterStates:['unavailable','available','ready']},
    verified:['default Logistics route','official logo','Orders IPC','Setup IPC','error recovery','explicit Commerce switch','return to Logistics','exact viewport and PNG dimensions',
-     'packaged Connect renderer and preload','missing-facility review','missing facility stays primary with an expired report in both appearances and scales','saved report is explicitly secondary and can return to facility connection','fresh export review after restart and explicit file confirmation','current export review reopens without renewal','explicit preservation consent','recovery to new enrollment','exact pending approval return','no source action during bootstrap',
+     'packaged Connect renderer and preload','missing-facility review','missing facility stays primary with an expired report in both appearances and scales','expired and current saved reports expose retained facts only in both appearances and scales','facility action remains available while saved facts are expanded','status refresh and restart do not enable report renewal or browser report approval','explicit preservation consent','recovery to new enrollment','exact pending approval return','zero file-review IPC and no source action during bootstrap',
      'explicit Commerce Home, Packing Station, Orders and Settings at both scales and themes'],
    calls,bootstrapCalls
   },null,2));

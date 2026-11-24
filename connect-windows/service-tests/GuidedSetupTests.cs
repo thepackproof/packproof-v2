@@ -95,7 +95,7 @@ public sealed class GuidedSetupTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Unbound_historical_review_recovers_one_metadata_proposal_after_restart_or_a_lost_response(bool priorAttemptCommitted)
+    public async Task Assigned_historical_unpinned_review_recovers_one_metadata_proposal_after_restart_or_a_lost_response(bool priorAttemptCommitted)
     {
         var folder=Directory.CreateDirectory(Path.Combine(root,"shipping")).FullName;
         var file=Path.Combine(folder,"synthetic.csv");
@@ -114,7 +114,7 @@ public sealed class GuidedSetupTests : IDisposable
             installationId=state.InstallationId,organizationId="org-test",environment="sandbox",state="setup",
             configRevision=moved?1:0,pendingProposalSha256=serverDigest,
             pendingProposal=pending.ValueKind==JsonValueKind.Undefined?(JsonElement?)null:pending,
-            sourceName="Synthetic",integrationAccountId="source",operatorMembershipId="operator",locationId=(string?)null,
+            sourceName="Synthetic",integrationAccountId="source",operatorMembershipId="operator",locationId="facility-test",
             credentialExpiresAt=state.CredentialExpiresAt,capabilities=new {sourceContracts=new[]{"packproof.scheduled-csv/v2"},
                 rulesVersion=CsvSemantics.Version,interpretationVersions=new[]{CsvSemantics.InterpretationVersion}}
         });
@@ -194,6 +194,75 @@ public sealed class GuidedSetupTests : IDisposable
         expectedContract["historyPolicy"]!["baselineSha256"]=durable.BaselineSha256;
         expectedContract["historyPolicy"]!["observedAt"]=durable.BaselineObservedAt;
         Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expected),pending));
+    }
+    [Theory]
+    [InlineData(null,"unavailable",false,0,"FACILITY_REQUIRED")]
+    [InlineData(null,"available",false,0,"FACILITY_REQUIRED")]
+    [InlineData("facility-test","unavailable",false,0,"SOURCE_CONTRACT_UNSUPPORTED")]
+    [InlineData("facility-test","wrong-rules",false,0,"SOURCE_CONTRACT_UNSUPPORTED")]
+    [InlineData("facility-test","wrong-schema",false,0,"SOURCE_CONTRACT_UNSUPPORTED")]
+    [InlineData(null,"available",true,0,"FACILITY_REQUIRED")]
+    [InlineData("facility-test","unavailable",true,0,"SOURCE_CONTRACT_UNSUPPORTED")]
+    [InlineData("other-facility","available",true,0,"PREVIEW_CHANGED")]
+    [InlineData("facility-test","available",false,1,"PREVIEW_CHANGED")]
+    public async Task Saved_review_rechecks_current_prerequisites_before_each_source_read_or_proposal(
+        string? freshLocation,string support,bool changeOnSecondRead,int freshRevision,string expectedCode)
+    {
+        var folder=Directory.CreateDirectory(Path.Combine(root,"prerequisites")).FullName;
+        var file=Path.Combine(folder,"synthetic.csv");
+        File.WriteAllBytes(file,Original);
+        var store=Store();var state=State();
+        state.Folder=folder;
+        state.FolderDigest=Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(folder.ToUpperInvariant())));
+        state.GuidedProposalSha256=new string('a',64);
+        state.BaselineSha256=new string('b',64);
+        state.BaselineObservedAt=DateTimeOffset.UtcNow.AddDays(-4).ToString("O");
+        state.ExcludedFileNames=["synthetic.csv"];
+        var initialLocation=changeOnSecondRead?"facility-test":freshLocation;
+        var config=JsonNode.Parse(Configuration().GetRawText())!.AsObject();
+        config["folderDigest"]=state.FolderDigest;config["locationId"]=initialLocation;
+        var contract=config["sourceContract"]!.AsObject();
+        contract["exporterName"]=null;contract["exporterVersion"]=null;contract["expectedIntervalSeconds"]=null;
+        contract["analysisRevision"]=1;
+        contract["historyPolicy"]=JsonSerializer.SerializeToNode(new{mode="selected_then_new",baselineSha256=state.BaselineSha256,
+            observedAt=state.BaselineObservedAt,initialFileName=state.FileName,initialFileSha256=state.FileDigest});
+        var pending=JsonSerializer.SerializeToElement(config);
+        JsonElement PolicyView(string? location,string capability,int revision)=>Json.Element(new{
+            installationId=state.InstallationId,organizationId="org-test",environment="sandbox",state="setup",configRevision=revision,
+            pendingProposal=pending,pendingProposalSha256=state.GuidedProposalSha256,
+            sourceName="Synthetic",integrationAccountId="source",operatorMembershipId="operator",locationId=location,
+            credentialExpiresAt=state.CredentialExpiresAt,capabilities=new{
+                sourceContracts=capability=="wrong-schema"?new[]{"packproof.scheduled-csv/v1"}:new[]{"packproof.scheduled-csv/v2"},
+                rulesVersion=capability=="wrong-rules"?"unqualified":CsvSemantics.Version,
+                interpretationVersions=capability=="unavailable"?Array.Empty<string>():new[]{CsvSemantics.InterpretationVersion}}});
+        // Cached support cannot authorize a renewal after a fresh response withdraws it.
+        state.ServerConfig=PolicyView(initialLocation,"available",0);
+        int gets=0,posts=0,reads=0;
+        using var runtime=new AgentRuntime(Host(),store,new PackProofClient(Host(),new Handler(request=>{
+            if(request.Method!=HttpMethod.Get){posts++;throw new InvalidOperationException("Prerequisite failure must not publish a proposal.");}
+            Assert.Equal("/v1/partner/agent/config",request.RequestUri!.AbsolutePath);gets++;
+            return changeOnSecondRead&&gets==1?PolicyView(initialLocation,"available",0):PolicyView(freshLocation,support,freshRevision);
+        })),state,(source,name)=>{reads++;return File.ReadAllBytes(Path.Combine(source,name));});
+        // Establish the retained facility context before measuring this command's changes.
+        await runtime.Command("status",null,default);
+        var before=JsonSerializer.Serialize(state,Json.Options);
+        var persistedBefore=File.ReadAllBytes(Path.Combine(root,"state.bin"));
+        var args=Json.Element(new{installationId=state.InstallationId,organizationId="org-test",environment="sandbox",
+            expectedProposalSha256=state.GuidedProposalSha256,wholeFileUploadApproved=true});
+        var error=await Assert.ThrowsAsync<ConnectException>(()=>runtime.Command("refreshPendingFileReview",args,default));
+        Assert.Equal(expectedCode,error.Code);
+        Assert.Equal(changeOnSecondRead?2:1,gets);
+        Assert.Equal(changeOnSecondRead?1:0,reads);
+        Assert.Equal(0,posts);
+        Assert.Equal(before,JsonSerializer.Serialize(state,Json.Options));
+        Assert.Equal(persistedBefore,File.ReadAllBytes(Path.Combine(root,"state.bin")));
+        Assert.Equal(Original,File.ReadAllBytes(file));
+        Assert.Null(state.FileReviewRenewal);Assert.Null(state.SetupQueueId);
+        if(expectedCode=="SOURCE_CONTRACT_UNSUPPORTED"){
+            Assert.Contains("server",error.Message);Assert.Contains("Check the connection",error.Message);
+            Assert.DoesNotContain("manual review",error.Message);
+        }
+        if(expectedCode=="FACILITY_REQUIRED")Assert.Contains("Choose this computer's facility",error.Message);
     }
     [Fact] public async Task Guided_setup_survives_restart_and_requires_exact_batch_then_separate_recurring_approval()
     {

@@ -25,6 +25,13 @@ public sealed partial class AgentRuntime
     private void CaptureBaseline() => (state.ExcludedFileNames,state.BaselineSha256,state.BaselineObservedAt)=ReadBaseline();
     private static ConnectException ReviewChanged() => new("PREVIEW_CHANGED","This review no longer matches the saved report. Open the latest review or choose the original report again.");
     private static bool ReviewDigest(string? value) => value?.Length == 64 && value.All(c => c is >= 'a' and <= 'f' or >= '0' and <= '9');
+    private static void RequireFileReviewPrerequisites(JsonElement live,JsonElement contract)
+    {
+        if (Optional(live,"locationId") is not {ValueKind:JsonValueKind.String} location || string.IsNullOrWhiteSpace(location.GetString()))
+            throw new ConnectException("FACILITY_REQUIRED","Choose this computer's facility in PackProof before renewing the saved report. Your saved report is preserved.");
+        if (!CsvSemantics.AdmissionSupported(contract,Optional(live,"capabilities")))
+            throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The PackProof server does not currently support renewing this report for this computer. Your saved report is preserved. Check the connection again after server support is available.");
+    }
 
     private async Task<object> RefreshPendingFileReview(JsonElement input, CancellationToken ct)
     {
@@ -69,6 +76,15 @@ public sealed partial class AgentRuntime
         if (digest!=expected && !(isOurReplacement && expected==previous!.PreviousDigest)) throw ReviewChanged();
         if (DateTimeOffset.UtcNow<=oldObservation.AddMinutes(30) && !isOurReplacement) throw ReviewChanged();
 
+        // Renewal requires a current facility and the interpretation the renewed proposal will pin.
+        // Check the fresh server response before opening the original or changing protected state.
+        var candidate=JsonNode.Parse(proposal.GetRawText())!.AsObject();
+        var refreshed=candidate["sourceContract"]!.AsObject();
+        refreshed["interpretationVersion"]=CsvSemantics.InterpretationVersion;
+        refreshed["basedOnConfigRevision"]=0;
+        var currentContract=JsonSerializer.SerializeToElement(refreshed);
+        RequireFileReviewPrerequisites(live,currentContract);
+
         byte[] ReadSavedOriginal()
         {
             var bytes=setupSnapshot(state.Folder,state.FileName);
@@ -108,15 +124,9 @@ public sealed partial class AgentRuntime
             fingerprint!=result.HeaderFingerprint) throw ReviewChanged();
         var baseline=ReadBaseline();
         if (!baseline.Files.Contains(state.FileName,StringComparer.OrdinalIgnoreCase)) throw ReviewChanged();
-        var candidate=JsonNode.Parse(proposal.GetRawText())!.AsObject();
-        var refreshed=candidate["sourceContract"]!.AsObject();
-        refreshed["interpretationVersion"]=CsvSemantics.InterpretationVersion;
-        refreshed["basedOnConfigRevision"]=0;
         refreshed["historyPolicy"]!["observedAt"]=baseline.ObservedAt;
         refreshed["historyPolicy"]!["baselineSha256"]=baseline.Digest;
         var replacement=JsonSerializer.SerializeToElement(candidate);
-        if (!CsvSemantics.AdmissionSupported(replacement.GetProperty("sourceContract"),Optional(live,"capabilities")))
-            throw new ConnectException("SOURCE_CONTRACT_UNSUPPORTED","The server cannot verify the current report interpretation. Open the source for a new manual review.");
         var attempt=new FileReviewRenewal(installation,organization,environment,digest,replacement,baseline.Files);
         if (previous is not null && previous.InstallationId==installation && previous.OrganizationId==organization &&
             previous.Environment==environment && previous.PreviousDigest==digest && previous.ExcludedFileNames.SequenceEqual(baseline.Files))
@@ -129,6 +139,9 @@ public sealed partial class AgentRuntime
         if (Comparable(checkedPolicy,"pendingProposalSha256")!=digest || Comparable(checkedPolicy,"state")!="setup" ||
             Comparable(checkedPolicy,"installationId")!=installation || Comparable(checkedPolicy,"organizationId")!=organization ||
             Comparable(checkedPolicy,"environment")!=environment || checkedPolicy.GetProperty("configRevision").GetInt32()!=0)
+            throw ReviewChanged();
+        RequireFileReviewPrerequisites(checkedPolicy,currentContract);
+        if (new[]{"integrationAccountId","operatorMembershipId","sourceName","locationId"}.Any(field=>Comparable(proposal,field)!=Comparable(checkedPolicy,field)))
             throw ReviewChanged();
         _=ReadSavedOriginal();
         state.FileReviewRenewal=attempt;
